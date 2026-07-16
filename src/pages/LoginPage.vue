@@ -5,7 +5,7 @@
         <div class="login-logo">YBM</div>
         <div>
           <h1>{{ appConfig.productName }}</h1>
-          <p>{{ $t('Enter fields to sign in') }}</p>
+          <p>{{ gettext('Enter fields to sign in') }}</p>
         </div>
       </div>
 
@@ -15,16 +15,16 @@
           dense
           outlined
           autofocus
-          :label="$t('Username')"
-          :rules="[(value) => Boolean(value) || $t('Username is required')]"
+          :label="gettext('Username')"
+          :rules="[(value) => Boolean(value) || gettext('Username is required')]"
         />
         <q-input
           v-model="form.password"
           dense
           outlined
           :type="showPassword ? 'text' : 'password'"
-          :label="$t('Password')"
-          :rules="[(value) => Boolean(value) || $t('Password is required')]"
+          :label="gettext('Password')"
+          :rules="[(value) => Boolean(value) || gettext('Password is required')]"
         >
           <template #append>
             <q-btn
@@ -32,7 +32,7 @@
               round
               dense
               :icon="showPassword ? 'visibility_off' : 'visibility'"
-              :aria-label="$t('Toggle password visibility')"
+              :aria-label="gettext('Toggle password visibility')"
               @click="showPassword = !showPassword"
             />
           </template>
@@ -43,17 +43,17 @@
           outlined
           emit-value
           map-options
-          :label="$t('Realm')"
+          :label="gettext('Realm')"
           :options="realmOptions"
         />
-        <q-checkbox v-model="form.remember" dense :label="$t('Remember me')" />
+        <q-checkbox v-model="form.remember" dense :label="gettext('Remember me')" />
         <q-btn
           unelevated
           color="primary"
           class="full-width login-button"
           type="submit"
           :loading="loading"
-          :label="$t('Login')"
+          :label="gettext('Login')"
         />
       </q-form>
     </section>
@@ -64,14 +64,13 @@
 import { reactive, shallowRef } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Notify } from 'quasar';
-import { useI18n } from 'vue-i18n';
 import { appConfig } from '@/config/app';
+import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 
 const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();
-const { t } = useI18n();
 
 const loading = shallowRef(false);
 const showPassword = shallowRef(false);
@@ -97,7 +96,7 @@ async function submitLogin() {
       // remember: form.remember,
     });
     if (!response.success) {
-      Notify.create({ type: 'negative', message: response.message || t('Login failed') });
+      Notify.create({ type: 'negative', message: response.message || gettext('Login failed') });
       return;
     }
 
@@ -108,4 +107,3 @@ async function submitLogin() {
   }
 }
 </script>
-

@@ -2,7 +2,7 @@
   <q-layout view="hHh Lpr lFf" class="app-shell">
     <q-header elevated class="app-header">
       <q-toolbar class="app-toolbar">
-        <q-btn flat round dense icon="menu" :aria-label="$t('Menu')" @click="ui.toggleMenuMini" />
+        <q-btn flat round dense icon="menu" :aria-label="gettext('Menu')" @click="ui.toggleMenuMini" />
         <div class="brand-mark">YBM</div>
         <q-toolbar-title class="brand-title">{{ appConfig.productName }}</q-toolbar-title>
         <q-btn-dropdown flat dense no-caps icon="account_circle" :label="session.userid || session.username">
@@ -10,13 +10,13 @@
             <q-item>
               <q-item-section>
                 <q-item-label>{{ session.userid }}</q-item-label>
-                <q-item-label caption>{{ $t('Logged in') }}</q-item-label>
+                <q-item-label caption>{{ gettext('Logged in') }}</q-item-label>
               </q-item-section>
             </q-item>
             <q-separator />
             <q-item clickable v-close-popup @click="logout">
               <q-item-section avatar><q-icon name="logout" /></q-item-section>
-              <q-item-section>{{ $t('Logout') }}</q-item-section>
+              <q-item-section>{{ gettext('Logout') }}</q-item-section>
             </q-item>
           </q-list>
         </q-btn-dropdown>
@@ -43,14 +43,14 @@
               @click="go(item.path)"
             >
               <q-item-section avatar><q-icon :name="item.icon" /></q-item-section>
-              <q-item-section>{{ $t(item.titleKey) }}</q-item-section>
+              <q-item-section>{{ gettext(item.titleKey) }}</q-item-section>
             </q-item>
 
             <q-expansion-item
               v-else
               :default-opened="isGroupOpen(item)"
               :icon="item.icon"
-              :label="$t(item.titleKey)"
+              :label="gettext(item.titleKey)"
               expand-separator
             >
               <q-item
@@ -63,7 +63,7 @@
                 @click="go(child.path)"
               >
                 <q-item-section avatar><q-icon :name="child.icon" /></q-item-section>
-                <q-item-section>{{ $t(child.titleKey) }}</q-item-section>
+                <q-item-section>{{ gettext(child.titleKey) }}</q-item-section>
               </q-item>
             </q-expansion-item>
           </template>
@@ -82,6 +82,7 @@ import { onBeforeUnmount, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { appConfig } from '@/config/app';
 import { menuItems, type MenuItem } from '@/config/menu';
+import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 import { useUiStore } from '@/stores/ui';
 

@@ -220,3 +220,54 @@ body {
 .user-menu {
   min-width: 210px;
 }
+
+.q-table__card {
+  color: #333333 !important;
+}
+
+.q-table__top {
+  padding: 0 0 10px;
+}
+
+.q-table th,
+.q-table td {
+  padding: 0 16px !important;
+}
+
+.q-table thead tr,
+.q-table tbody td {
+  height: 40px;
+}
+
+.u-table-header {
+  width: 100%;
+  background: #f2f5fc;
+  border-bottom: 1px solid #dfe1e6;
+}
+
+.u-button {
+  border: 0 !important;
+  min-height: 28px !important;
+  border-radius: 0 !important;
+}
+
+.u-border {
+  border: 1px solid #cccccc;
+}
+
+.u-size-12 {
+  font-size: 12px !important;
+}
+
+.u-hidden-error .q-field__bottom {
+  display: none !important;
+}
+
+.u-dense .q-field__control,
+.u-dense .q-field__marginal {
+  height: 30px !important;
+}
+
+.q-dialog__inner > div {
+  border-radius: 0;
+}

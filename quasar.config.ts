@@ -3,9 +3,11 @@
 
 import { defineConfig } from '#q-app';
 
-export default defineConfig((ctx) => {
+export default defineConfig(() => {
+  const pveProxyTarget: string = process.env.VITE_PVE_PROXY_TARGET || 'https://192.168.2.111:8006';
+
   return {
-    boot: ['i18n', 'app-error'],
+    boot: ['locale', 'app-error'],
 
     css: ['app.scss'],
 
@@ -19,13 +21,6 @@ export default defineConfig((ctx) => {
       },
       vueRouterMode: 'hash',
       vitePlugins: [
-        [
-          '@intlify/unplugin-vue-i18n/vite',
-          {
-            ssr: ctx.modeName === 'ssr',
-            include: [ctx.appPaths.resolve.app('src/i18n')],
-          },
-        ],
         [
           'vite-plugin-checker',
           {
@@ -46,13 +41,13 @@ export default defineConfig((ctx) => {
       open: false,
       proxy: {
         '/api2': {
-          target: process.env.VITE_PVE_PROXY_TARGET || 'https://192.168.2.111:8006',
+          target: pveProxyTarget,
           ws: true,
           secure: false,
           changeOrigin: true,
         },
         '/shell': {
-          target: process.env.VITE_PVE_PROXY_TARGET || 'https://192.168.2.111:8006',
+          target: pveProxyTarget,
           secure: false,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/shell/, ''),
@@ -101,5 +96,4 @@ export default defineConfig((ctx) => {
     },
   };
 });
-
 

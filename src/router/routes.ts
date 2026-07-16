@@ -20,6 +20,12 @@ const routes: RouteRecordRaw[] = [
         meta: { auth: true, title: 'Dashboard' },
       },
       {
+        path: 'system/service',
+        name: 'system-service',
+        component: () => import('@/pages/system/ServicePage.vue'),
+        meta: { auth: true, title: 'Service' },
+      },
+      {
         path: ':section/:page',
         name: 'shell-placeholder',
         component: () => import('@/pages/shell/PlaceholderPage.vue'),
