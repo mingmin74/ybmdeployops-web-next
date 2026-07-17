@@ -134,8 +134,27 @@ src/router/routes.ts
 
 - `/login`：登录页
 - `/dashboard`：首页概览
+- `/system/service`：系统 / 服务
+- `/system/users`：系统 / 用户
+- `/system/permissions`：系统 / 权限
+- `/system/pools`：系统 / 资源池
+- `/storage/disks`：存储 / 硬盘管理
+- `/host/cluster`：主机 / 集群
 - `/:section/:page`：第一阶段占位路由，用来承接菜单点击
 - `/:catchAll(.*)*`：404
+
+当前已迁移但不直接出现在左侧菜单的内部 tab 路由：
+
+- `/system/permission/users`
+- `/system/permission/groups`
+- `/system/permission/roles`
+- `/system/permission/realm`
+- `/system/permission/api-tokens`
+- `/storage/disks/disk`
+- `/storage/disks/directory`
+- `/storage/disks/lvm`
+- `/storage/disks/lvmthin`
+- `/storage/disks/zfs`
 
 和旧项目不同：
 
@@ -327,6 +346,23 @@ src/css/app.scss
 - 全局错误处理
 - Dashboard 基础接口验证
 - 系统-服务页面迁移样板：`/system/service`
+- 系统-用户页面迁移：`/system/users`
+- 系统-用户组页面迁移：`/system/groups`
+- 简单表格页迁移：
+  - 系统-资源池：`/system/pools`
+  - 系统-权限：`/system/permissions`
+  - 权限-用户：`/system/permissions` 内部 tab
+  - 权限-用户组：`/system/permissions` 内部 tab
+  - 权限-角色：`/system/permissions` 内部 tab
+  - 权限-认证域：`/system/permissions` 内部 tab
+  - 权限-API Tokens：`/system/permissions` 内部 tab
+  - 存储-硬盘管理：`/storage/disks`
+  - 存储-磁盘：`/storage/disks` 内部 tab
+  - 存储-挂载点：`/storage/disks` 内部 tab
+  - 存储-LVM：`/storage/disks` 内部 tab
+  - 存储-LVM-Thin：`/storage/disks` 内部 tab
+  - 存储-ZFS：`/storage/disks` 内部 tab
+  - 主机-集群：`/host/cluster`
 
 系统-服务页面当前包含：
 
@@ -335,6 +371,33 @@ src/css/app.scss
 - 启动 / 停止 / 重启
 - 系统日志弹窗
 - 任务 UPID 提示弹窗
+
+系统-用户页面当前包含：
+
+- 用户列表
+- 搜索
+- 新增 / 编辑用户
+- 修改密码
+- 删除用户
+- 用户相关 PVE 接口封装
+
+系统-用户组页面当前包含：
+
+- 用户组列表
+- 搜索
+- 新增 / 编辑用户组
+- 删除用户组
+- 用户组相关 PVE 接口封装
+
+简单表格页当前包含：
+
+- 路由接入
+- 左侧菜单接入
+- 列表接口封装
+- 搜索
+- 刷新
+- 旧项目风格表格
+- 磁盘类页面节点筛选
 
 已验证：
 

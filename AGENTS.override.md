@@ -123,6 +123,30 @@
 }
 ```
 
+表格中的使用率/占用率进度条必须复用新项目公共组件 `src/components/UsageProgress.vue`，样式对齐老项目：
+
+```vue
+<q-linear-progress
+  rounded
+  size="20px"
+  style="width: 100px"
+  :value="percent / 100"
+  :color="progressColor(percent)"
+>
+  <div class="absolute-full flex flex-center">
+    <q-badge color="white" text-color="accent" style="padding: 1px 3px" :label="label" />
+  </div>
+</q-linear-progress>
+```
+
+进度条颜色规则必须保持统一：
+
+- `>= 90`：`red`
+- `>= 80`：`warning`
+- 其他：`primary`
+
+后续迁移任何表格里的 CPU、内存、磁盘、存储、资源池等使用率列时，不要再显示纯文本百分比，应使用 `UsageProgress.vue`。
+
 ## 常用按钮样式
 
 老项目按钮特点是小、方、低高度、无大圆角。
@@ -388,7 +412,7 @@
 
 ```scss
 .good {
-  color: #21BF4B;
+  color: #21bf4b;
 }
 
 .warning {
@@ -396,7 +420,7 @@
 }
 
 .critical {
-  color: #FF6C59;
+  color: #ff6c59;
 }
 
 .faded {
@@ -407,11 +431,14 @@
 表格状态列可使用 `q-badge`，例如服务状态：
 
 ```vue
-<q-badge
-  :color="row.state === 'running' ? 'green' : 'red'"
-  :label="statusLabel"
-/>
+<q-badge :color="row.state === 'running' ? 'green' : 'red'" :label="statusLabel" />
 ```
+
+节点、主机、服务等在线状态列默认规则：
+
+- `online` / `running`：绿色。
+- `offline` / `stopped` / 异常离线：红色。
+- `unknown` / 空值 / 其他未识别状态：灰色。
 
 不要随意替换旧状态色，除非源页面已有新规则。
 

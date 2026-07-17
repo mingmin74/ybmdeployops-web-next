@@ -71,20 +71,9 @@
             @click="openLogs"
           />
           <q-space />
-          <q-select
+          <NodeSelectTable
             v-model="selectedNode"
-            class="u-dense service-node-select"
-            square
-            outlined
-            dense
-            emit-value
-            map-options
-            color="grey-8"
-            options-dense
-            option-value="node"
-            option-label="label"
-            :options="nodeOptions"
-            :option-disable="disableOfflineNode"
+            disable-offline
             @update:model-value="loadServices(true)"
           />
         </template>
@@ -97,7 +86,12 @@
       </q-table>
     </q-card-section>
 
-    <q-dialog v-model="taskDialogVisible" persistent transition-show="scale" transition-hide="scale">
+    <q-dialog
+      v-model="taskDialogVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
       <q-card class="u-window-card task-dialog-card">
         <q-card-section class="row items-center bg-blue-8 text-grey-1 shadow-down-10 q-pa-sm">
           <q-spinner-bars size="14px" color="white" />
@@ -123,7 +117,12 @@
       </q-card>
     </q-dialog>
 
-    <q-dialog v-model="logsDialogVisible" persistent transition-show="scale" transition-hide="scale">
+    <q-dialog
+      v-model="logsDialogVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
       <q-card class="u-window-card service-log-dialog">
         <q-card-section class="row items-center bg-blue-8 text-grey-1 shadow-down-10 q-pa-sm">
           <q-spinner-bars size="14px" color="white" />
@@ -188,21 +187,16 @@
 import { Dialog } from 'quasar';
 import type { QTableColumn } from 'quasar';
 import { computed, onBeforeUnmount, onMounted, shallowRef } from 'vue';
+import NodeSelectTable from '@/components/NodeSelectTable.vue';
 import {
   getNodeJournal,
   getNodeServices,
-  getNodes,
   restartNodeService,
   startNodeService,
   stopNodeService,
-  type PveNode,
   type PveService,
 } from '@/api/host';
 import { gettext } from '@/locale';
-
-type NodeOption = PveNode & {
-  label: string;
-};
 
 type DateRangeValue = string | { from?: string; to?: string } | null;
 
@@ -222,7 +216,6 @@ const firstLoad = shallowRef(true);
 const selectedNode = shallowRef('');
 const selectedServices = shallowRef<PveService[]>([]);
 const serviceRows = shallowRef<PveService[]>([]);
-const nodeOptions = shallowRef<NodeOption[]>([]);
 const taskDialogVisible = shallowRef(false);
 const taskUpid = shallowRef('');
 const taskTitle = shallowRef('');
@@ -234,7 +227,9 @@ const logs = shallowRef<string[]>([]);
 let refreshHandler: ReturnType<typeof setInterval> | undefined;
 
 const selectedService = computed(() => selectedServices.value[0]);
-const canStart = computed(() => Boolean(selectedService.value && selectedService.value.state !== 'running'));
+const canStart = computed(() =>
+  Boolean(selectedService.value && selectedService.value.state !== 'running'),
+);
 const canStop = computed(() => selectedService.value?.state === 'running');
 const canRestart = computed(() => selectedService.value?.state === 'running');
 const logOutput = computed(() => logs.value.join('\n'));
@@ -247,32 +242,6 @@ function getCurrentDate(offsetDays = 0) {
   const day = String(date.getDate()).padStart(2, '0');
 
   return `${year}-${month}-${day}`;
-}
-
-function formatNodeOption(node: PveNode): NodeOption {
-  const status = node.status || 'unknown';
-  return {
-    ...node,
-    status,
-    label: status === 'online' ? node.node : `${node.node} (${nodeStatusText(status)})`,
-  };
-}
-
-function disableOfflineNode(option: unknown) {
-  return typeof option === 'object' && option !== null && 'status' in option
-    ? (option as NodeOption).status === 'offline'
-    : true;
-}
-
-function nodeStatusText(status?: string) {
-  const normalized = status || 'unknown';
-  const statusMap: Record<string, string> = {
-    online: gettext('Online'),
-    offline: gettext('Offline'),
-    unknown: gettext('Unknown'),
-  };
-
-  return statusMap[normalized] || gettext(normalized);
 }
 
 function serviceStatusText(status?: string) {
@@ -291,23 +260,12 @@ function rowClick(_: Event, row: PveService) {
   selectedServices.value = selectedService.value === row ? [] : [row];
 }
 
-function sortByName<T extends { name?: string; node?: string }>(items: T[]) {
+function sortByName<T extends { name?: string }>(items: T[]) {
   return [...items].sort((left, right) => {
-    const leftName = left.name || left.node || '';
-    const rightName = right.name || right.node || '';
+    const leftName = left.name || '';
+    const rightName = right.name || '';
     return leftName.localeCompare(rightName);
   });
-}
-
-async function loadNodes() {
-  const response = await getNodes();
-  const nodes = sortByName(response.data || []).map(formatNodeOption);
-  nodeOptions.value = nodes;
-
-  if (!selectedNode.value) {
-    const onlineNode = nodes.find((node) => node.status === 'online') || nodes[0];
-    selectedNode.value = onlineNode?.node || '';
-  }
 }
 
 async function loadServices(showLoading = false) {
@@ -326,14 +284,8 @@ async function loadServices(showLoading = false) {
 }
 
 async function loadInitialData() {
-  loading.value = true;
-  try {
-    await loadNodes();
-    await loadServices(false);
-  } finally {
-    loading.value = false;
-    firstLoad.value = false;
-  }
+  await loadServices(false);
+  firstLoad.value = false;
 }
 
 function showTaskProcess(upid?: string, title?: string) {
@@ -444,7 +396,7 @@ onMounted(() => {
   void loadInitialData();
   refreshHandler = setInterval(() => {
     if (!firstLoad.value && !logsDialogVisible.value && !taskDialogVisible.value) {
-      void loadNodes().then(() => loadServices(false));
+      void loadServices(false);
     }
   }, refreshInterval);
 });
@@ -457,10 +409,6 @@ onBeforeUnmount(() => {
 <style scoped>
 .service-page-card {
   position: relative;
-}
-
-.service-node-select {
-  min-width: 160px;
 }
 
 .u-window-card {

@@ -251,6 +251,10 @@ body {
   border-radius: 0 !important;
 }
 
+.q-btn {
+  font-weight: normal;
+}
+
 .u-border {
   border: 1px solid #cccccc;
 }
@@ -259,13 +263,69 @@ body {
   font-size: 12px !important;
 }
 
+.u-hidden-error .q-field__append .text-negative {
+  display: none !important;
+}
+
+.u-hidden-error .q-field__after,
+.u-hidden-error .q-field__append {
+  padding-left: 0;
+}
+
 .u-hidden-error .q-field__bottom {
   display: none !important;
+}
+
+.q-field--standard .q-field__control::after {
+  height: 1px !important;
+}
+
+.q-field__control-container .q-field__label {
+  color: #333333;
+}
+
+.q-field__native,
+.q-field__prefix,
+.q-field__suffix,
+.q-field__input {
+  color: #666666;
+  font-size: 12px;
+}
+
+.q-field--auto-height.q-field--dense.q-field--labeled .q-field__control-container {
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  word-break: break-all;
+}
+
+.q-field--with-bottom {
+  padding-bottom: 15px;
 }
 
 .u-dense .q-field__control,
 .u-dense .q-field__marginal {
   height: 30px !important;
+}
+
+.q-field--dense .q-field__control {
+  height: 30px;
+}
+
+.q-textarea .q-field__native {
+  padding: 0;
+}
+
+.q-menu {
+  overflow-x: hidden;
+  font-size: 13px;
+  border-radius: 0;
+}
+
+.q-menu .q-item.q-router-link--active,
+.q-menu .q-item--active {
+  background: #e6f1fc;
 }
 
 .q-dialog__inner > div {
