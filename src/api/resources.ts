@@ -59,6 +59,14 @@ export function getNodes() {
   return request<PveNode[]>('/api2/json/nodes', { method: 'GET', notifyOnError: true });
 }
 
+export function getClusterResources(params?: PveRecord) {
+  return request<PveRecord[]>('/api2/json/cluster/resources', {
+    method: 'GET',
+    ...(params ? { params } : {}),
+    notifyOnError: true,
+  });
+}
+
 export function getNodeDisks(node: string) {
   return request<PveRecord[]>(`/api2/json/nodes/${node}/disks/list`, {
     method: 'GET',
@@ -97,6 +105,10 @@ export function getNodeZfs(node: string) {
 
 export function getClusterConfig() {
   return request<PveRecord>('/api2/extjs/cluster/config', { method: 'GET', notifyOnError: true });
+}
+
+export function getClusterStatus() {
+  return request<PveRecord[]>('/api2/json/cluster/status', { method: 'GET', notifyOnError: true });
 }
 
 export function getClusterNodes() {

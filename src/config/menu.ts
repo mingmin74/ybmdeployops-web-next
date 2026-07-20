@@ -48,7 +48,12 @@ export const menuItems: MenuItem[] = [
       { titleKey: 'Pools', path: '/system/pools', icon: 'folder_shared' },
       { titleKey: 'Service', path: '/system/service', icon: 'miscellaneous_services' },
       { titleKey: 'Firewall', path: '/system/firewall', icon: 'security' },
+      { titleKey: 'SDN Zones', path: '/system/sdn/zones', icon: 'public' },
+      { titleKey: 'SDN VNets', path: '/system/sdn/vnets', icon: 'hub' },
+      { titleKey: 'SDN IPAM', path: '/system/sdn/ipam', icon: 'lan' },
+      { titleKey: 'SDN Options', path: '/system/sdn/options', icon: 'tune' },
       { titleKey: 'Options', path: '/system/options', icon: 'tune' },
+      { titleKey: 'Metric Server', path: '/system/metric-server', icon: 'monitor_heart' },
     ],
   },
   {
