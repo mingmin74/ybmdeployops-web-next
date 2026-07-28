@@ -56,15 +56,25 @@ watch(
   () => {
     void loadNotes();
   },
-  { immediate: true }
+  { immediate: true },
 );
 </script>
 
 <template>
   <section class="host-notes-panel">
     <div class="host-notes-heading">
-      <q-icon name="sticky_note_2" size="16px" /><span>{{ gettext('Notes') }}</span><q-space />
-      <q-btn round dense flat size="sm" color="primary" icon="edit" :aria-label="gettext('Edit Notes')" @click="openEditor">
+      <q-icon name="sticky_note_2" size="16px" /><span>{{ gettext('Notes') }}</span
+      ><q-space />
+      <q-btn
+        round
+        dense
+        flat
+        size="sm"
+        color="primary"
+        icon="edit"
+        :aria-label="gettext('Edit Notes')"
+        @click="openEditor"
+      >
         <q-tooltip>{{ gettext('Edit Notes') }}</q-tooltip>
       </q-btn>
     </div>
@@ -105,8 +115,37 @@ watch(
 </template>
 
 <style scoped>
-.host-notes-panel { position: relative; margin: 0 16px 14px; padding: 8px 10px; border: 1px solid #dce7f0; background: #f1f6fa; }
-.host-notes-heading { align-items: center; display: flex; gap: 5px; color: #526d84; font-size: 12px; font-weight: 600; line-height: 20px; }
-.host-notes-body { -webkit-box-orient: vertical; -webkit-line-clamp: 2; display: -webkit-box; margin-top: 2px; overflow: hidden; color: #41576a; font-size: 12px; line-height: 1.55; text-align: left; word-break: break-word; }
-.host-notes-tooltip { max-width: 420px; white-space: pre-wrap; word-break: break-word; }
+.host-notes-panel {
+  position: relative;
+  margin: 0 16px 14px;
+  padding: 8px 10px;
+  border: 1px solid #dce7f0;
+  background: #f1f6fa;
+}
+.host-notes-heading {
+  align-items: center;
+  display: flex;
+  gap: 5px;
+  color: #526d84;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.host-notes-body {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+  margin-top: 2px;
+  overflow: hidden;
+  color: #41576a;
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: left;
+  word-break: break-word;
+}
+.host-notes-tooltip {
+  max-width: 420px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 </style>

@@ -158,7 +158,9 @@ async function updateChart() {
   );
 }
 
-watch(() => [props.chartData.value, props.chartData.name, props.chartOptions], updateChart, { deep: true });
+watch(() => [props.chartData.value, props.chartData.name, props.chartOptions], updateChart, {
+  deep: true,
+});
 
 onMounted(() => {
   void updateChart();

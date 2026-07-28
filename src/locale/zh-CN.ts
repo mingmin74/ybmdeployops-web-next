@@ -440,7 +440,7 @@ export default {
   'Label management': '标签管理',
   Network: '网络',
   'Shutdown Policy': '关机策略',
-  'InfluxDB': 'InfluxDB',
+  InfluxDB: 'InfluxDB',
   Server: '服务器',
   Port: '端口',
   Protocol: '协议',

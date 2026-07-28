@@ -13,7 +13,14 @@ const tab = ref('summary');
 
 <template>
   <div class="q-ma-md bg-white">
-    <q-tabs v-model="tab" dense active-color="primary" indicator-color="primary" align="left" class="bg-grey-2 text-grey-8">
+    <q-tabs
+      v-model="tab"
+      dense
+      active-color="primary"
+      indicator-color="primary"
+      align="left"
+      class="bg-grey-2 text-grey-8"
+    >
       <q-tab name="summary" :label="gettext('Summary')" />
       <q-tab name="monitor" :label="gettext('Monitor')" />
       <q-tab name="pools" :label="gettext('Storage Pools')" />

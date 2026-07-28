@@ -6,7 +6,13 @@ import UsageProgress from '@/components/UsageProgress.vue';
 import type { PveRecord } from '@/api/resources';
 import { getStorageRrd } from '@/api/overview';
 import { gettext } from '@/locale';
-import { formatBytes, formatContent, textValue, timestampToTime, usedPercent } from '@/utils/pveFormat';
+import {
+  formatBytes,
+  formatContent,
+  textValue,
+  timestampToTime,
+  usedPercent,
+} from '@/utils/pveFormat';
 
 const props = defineProps<{
   node: string;
@@ -35,7 +41,10 @@ const rrdConsolidationOptions = computed(() => [
 
 const contentTabs = computed(() => {
   const content = textValue(props.storage.content);
-  const tokens = content.split(',').map((item) => item.trim()).filter(Boolean);
+  const tokens = content
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
   const map: Record<string, string> = {
     backup: 'Backup',
     images: 'VM Disks',
@@ -45,14 +54,14 @@ const contentTabs = computed(() => {
     snippets: 'Snippets',
   };
 
-  return tokens
-    .filter((item) => map[item])
-    .map((item) => ({ name: item, label: map[item] }));
+  return tokens.filter((item) => map[item]).map((item) => ({ name: item, label: map[item] }));
 });
 
 const usage = computed(() => usedPercent(Number(props.storage.used), Number(props.storage.total)));
 
-const chartXAxis = computed(() => chartRows.value.map((item) => timestampToTime(Number(item.time) * 1000)));
+const chartXAxis = computed(() =>
+  chartRows.value.map((item) => timestampToTime(Number(item.time) * 1000)),
+);
 
 const storageUsageSeries = computed(() => [
   {
@@ -98,7 +107,10 @@ function startChartRefresh() {
 
 onMounted(startChartRefresh);
 
-watch([() => props.node, () => props.storage.storage, timeType, rrdConsolidation], startChartRefresh);
+watch(
+  [() => props.node, () => props.storage.storage, timeType, rrdConsolidation],
+  startChartRefresh,
+);
 
 onBeforeUnmount(() => {
   if (chartTimer.value) window.clearInterval(chartTimer.value);
@@ -117,7 +129,13 @@ onBeforeUnmount(() => {
       class="storage-tabs text-grey-8"
     >
       <q-tab no-caps name="summary" :label="gettext('Summary')" />
-      <q-tab v-for="item in contentTabs" :key="item.name" no-caps :name="item.name" :label="gettext(item.label || '')" />
+      <q-tab
+        v-for="item in contentTabs"
+        :key="item.name"
+        no-caps
+        :name="item.name"
+        :label="gettext(item.label || '')"
+      />
     </q-tabs>
     <q-separator />
 
@@ -132,14 +150,38 @@ onBeforeUnmount(() => {
             </div>
           </header>
           <div class="summary-fields">
-            <div class="summary-field"><span>{{ gettext('Type') }}</span><strong>{{ storage.type || '-' }}</strong></div>
-            <div class="summary-field"><span>{{ gettext('Node') }}</span><strong>{{ node || '-' }}</strong></div>
-            <div class="summary-field"><span>{{ gettext('Content') }}</span><strong>{{ formatContent(storage.content) || '-' }}</strong></div>
-            <div class="summary-field"><span>{{ gettext('Enabled') }}</span><strong>{{ boolLabel(storage.enabled) }}</strong></div>
-            <div class="summary-field"><span>{{ gettext('Active') }}</span><strong>{{ boolLabel(storage.active) }}</strong></div>
-            <div class="summary-field"><span>{{ gettext('Shared') }}</span><strong>{{ boolLabel(storage.shared) }}</strong></div>
-            <div class="summary-field"><span>{{ gettext('Total Size') }}</span><strong>{{ formatBytes(storage.total as number) }}</strong></div>
-            <div class="summary-field"><span>{{ gettext('Avail Size') }}</span><strong>{{ formatBytes(storage.avail as number) }}</strong></div>
+            <div class="summary-field">
+              <span>{{ gettext('Type') }}</span
+              ><strong>{{ storage.type || '-' }}</strong>
+            </div>
+            <div class="summary-field">
+              <span>{{ gettext('Node') }}</span
+              ><strong>{{ node || '-' }}</strong>
+            </div>
+            <div class="summary-field">
+              <span>{{ gettext('Content') }}</span
+              ><strong>{{ formatContent(storage.content) || '-' }}</strong>
+            </div>
+            <div class="summary-field">
+              <span>{{ gettext('Enabled') }}</span
+              ><strong>{{ boolLabel(storage.enabled) }}</strong>
+            </div>
+            <div class="summary-field">
+              <span>{{ gettext('Active') }}</span
+              ><strong>{{ boolLabel(storage.active) }}</strong>
+            </div>
+            <div class="summary-field">
+              <span>{{ gettext('Shared') }}</span
+              ><strong>{{ boolLabel(storage.shared) }}</strong>
+            </div>
+            <div class="summary-field">
+              <span>{{ gettext('Total Size') }}</span
+              ><strong>{{ formatBytes(storage.total as number) }}</strong>
+            </div>
+            <div class="summary-field">
+              <span>{{ gettext('Avail Size') }}</span
+              ><strong>{{ formatBytes(storage.avail as number) }}</strong>
+            </div>
           </div>
           <UsageProgress :percent="usage" />
         </section>
@@ -184,7 +226,11 @@ onBeforeUnmount(() => {
       </q-tab-panel>
 
       <q-tab-panel v-for="item in contentTabs" :key="item.name" :name="item.name" class="q-pa-md">
-        <StorageContentTable :node="node" :storage="textValue(storage.storage)" :content="item.name" />
+        <StorageContentTable
+          :node="node"
+          :storage="textValue(storage.storage)"
+          :content="item.name"
+        />
       </q-tab-panel>
     </q-tab-panels>
   </div>

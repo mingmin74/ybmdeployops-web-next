@@ -10,7 +10,8 @@ export default {
   'Guest image': 'Guest image',
   'Delete backup task': 'Delete backup task',
   'Backup task deleted successfully': 'Backup task deleted successfully',
-  'A node-specific backup task is required to run now.': 'A node-specific backup task is required to run now.',
+  'A node-specific backup task is required to run now.':
+    'A node-specific backup task is required to run now.',
   'Backup task started successfully': 'Backup task started successfully',
   Dashboard: 'Dashboard',
   Computer: 'Computer',
@@ -390,7 +391,8 @@ export default {
   'Snapshot time': 'Snapshot time',
   'Include RAM': 'Include RAM',
   Rollback: 'Rollback',
-  'Rollback this virtual machine to the selected snapshot?': 'Rollback this virtual machine to the selected snapshot?',
+  'Rollback this virtual machine to the selected snapshot?':
+    'Rollback this virtual machine to the selected snapshot?',
   'Delete the selected snapshot?': 'Delete the selected snapshot?',
   'Required field': 'Required field',
   'Backup Tasks': 'Backup Tasks',
@@ -418,7 +420,8 @@ export default {
   Sunday: 'Sunday',
   'Replication Tasks': 'Replication Tasks',
   'Bks management': 'Bks management',
-  'This task page will be migrated in a later phase.': 'This task page will be migrated in a later phase.',
+  'This task page will be migrated in a later phase.':
+    'This task page will be migrated in a later phase.',
   MD5: 'MD5',
   Format: 'Format',
   VMID: 'VMID',

@@ -12,7 +12,13 @@
         <q-icon name="schema" size="32px" color="primary" />
         <div>
           <div class="placeholder-title">{{ gettext('Framework placeholder') }}</div>
-          <div class="placeholder-desc">{{ gettext('Business pages will be migrated after login, layout, request and permission contracts are stable.') }}</div>
+          <div class="placeholder-desc">
+            {{
+              gettext(
+                'Business pages will be migrated after login, layout, request and permission contracts are stable.',
+              )
+            }}
+          </div>
         </div>
       </q-card-section>
     </q-card>

@@ -53,5 +53,9 @@ export function updateAccessRule(data: Record<string, unknown>) {
 }
 
 export function getEnabledAccessUsers() {
-  return request<{ userid: string; enable?: number | boolean }[]>('/api2/json/access/users', { method: 'GET', params: { enabled: 1 }, notifyOnError: true });
+  return request<{ userid: string; enable?: number | boolean }[]>('/api2/json/access/users', {
+    method: 'GET',
+    params: { enabled: 1 },
+    notifyOnError: true,
+  });
 }

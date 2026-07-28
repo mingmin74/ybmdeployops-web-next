@@ -27,7 +27,8 @@ const defaultTimeout = 60_000;
 
 function stringifyParam(value: unknown) {
   if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint')
+    return String(value);
   if (value instanceof Date) return value.toISOString();
   return JSON.stringify(value);
 }
@@ -93,7 +94,10 @@ function notifyFailure(error: PveApiError | Error) {
     return;
   }
 
-  Notify.create({ type: 'negative', message: error.message || 'Connection error - server offline?' });
+  Notify.create({
+    type: 'negative',
+    message: error.message || 'Connection error - server offline?',
+  });
 }
 
 function createRequestInit(method: RequestMethod, options: RequestOptions, csrfToken: string) {
@@ -136,7 +140,10 @@ export async function request<T = unknown>(url: string, options: RequestOptions 
   requestInit.signal = controller.signal;
 
   try {
-    const response = await fetch(resolveUrl(url, method === 'GET' ? options.params : undefined), requestInit);
+    const response = await fetch(
+      resolveUrl(url, method === 'GET' ? options.params : undefined),
+      requestInit,
+    );
     const payload = parseResponseText(await response.text());
     const parsed = parsePveResponse<T>(response, payload);
 
@@ -151,7 +158,8 @@ export async function request<T = unknown>(url: string, options: RequestOptions 
 
     return parsed.result;
   } catch (error) {
-    const requestError = error instanceof PveApiError ? error : new Error(getUnknownErrorMessage(error));
+    const requestError =
+      error instanceof PveApiError ? error : new Error(getUnknownErrorMessage(error));
 
     if (shouldNotifyError(method, options)) {
       notifyFailure(requestError);

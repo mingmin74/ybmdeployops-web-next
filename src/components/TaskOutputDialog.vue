@@ -22,7 +22,11 @@ async function reload() {
   }
   loading.value = true;
   try {
-    const response = await getTaskLog(props.node, props.upid, { start: 0, limit: 500, _dc: Date.now() });
+    const response = await getTaskLog(props.node, props.upid, {
+      start: 0,
+      limit: 500,
+      _dc: Date.now(),
+    });
     lines.value = (response.data || []).map((item) => String(item.t || ''));
   } finally {
     loading.value = false;
@@ -44,8 +48,23 @@ watch(
         <pre class="task-output">{{ lines.join('\n') || gettext('No logs found') }}</pre>
       </div>
       <template #foot>
-        <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Refresh')" @click="reload" />
-        <q-btn v-close-popup no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :label="gettext('Close')" />
+        <q-btn
+          no-caps
+          outline
+          size="12px"
+          color="primary"
+          class="u-button"
+          :label="gettext('Refresh')"
+          @click="reload"
+        />
+        <q-btn
+          v-close-popup
+          no-caps
+          flat
+          size="12px"
+          class="bg-primary text-grey-1 u-button"
+          :label="gettext('Close')"
+        />
       </template>
     </UWindow>
   </q-dialog>

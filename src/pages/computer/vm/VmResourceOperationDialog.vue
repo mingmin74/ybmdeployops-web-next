@@ -31,8 +31,10 @@ const nodes = shallowRef<PveNode[]>([]);
 const target = shallowRef('');
 const nextId = shallowRef<number | string>('');
 const cloneName = shallowRef('');
-const fullClone = shallowRef(true);
+const cloneMode = shallowRef<'copy' | 'clone'>('copy');
 const migrateLocalDisks = shallowRef(false);
+const forceMigration = shallowRef(false);
+const migrateConntrackState = shallowRef(true);
 const targetStorage = shallowRef('');
 const cloneStorage = shallowRef('');
 const cloneFormat = shallowRef('');
@@ -40,8 +42,14 @@ const cloneSnapshot = shallowRef('current');
 const clonePool = shallowRef('');
 const storageOptions = shallowRef<string[]>([]);
 const snapshots = shallowRef<string[]>(['current']);
+const purge = shallowRef(false);
+const destroyUnreferencedDisks = shallowRef(false);
 
-const sourceName = computed(() => props.vm?.name || String(props.vm?.vmid || ''));
+function textValue(value: unknown) {
+  return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+}
+
+const sourceName = computed(() => textValue(props.vm?.name) || textValue(props.vm?.vmid));
 const title = computed(() => `${operationLabel.value}: ${sourceName.value}`);
 const operationLabel = computed(() => {
   if (props.operation === 'migrate') return gettext('Migrate');
@@ -55,13 +63,20 @@ const targetNodes = computed(() =>
     ? onlineNodes.value.filter((node) => node.node !== props.vm?.node)
     : onlineNodes.value,
 );
+const canCreateLinkedClone = computed(() => Boolean(props.vm?.template));
 const canSubmit = computed(() => {
-  if (props.operation === 'delete' || props.operation === 'template') return Boolean(props.vm?.node && props.vm?.vmid);
-  if (props.operation === 'migrate') return Boolean(props.vm?.node && props.vm?.vmid && target.value);
-  return Boolean(props.vm?.node && props.vm?.vmid && target.value && nextId.value && cloneName.value.trim());
+  if (props.operation === 'delete' || props.operation === 'template')
+    return Boolean(props.vm?.node && props.vm?.vmid);
+  if (props.operation === 'migrate')
+    return Boolean(props.vm?.node && props.vm?.vmid && target.value);
+  return Boolean(
+    props.vm?.node && props.vm?.vmid && target.value && nextId.value && cloneName.value.trim(),
+  );
 });
 const deleteMessage = computed(() =>
-  props.operation === 'template' ? `${gettext('Are you sure you want to convert')} ${sourceName.value} ${gettext('to template')}?` : `${gettext('Are you sure you want to destroy')}: ${sourceName.value} ?`,
+  props.operation === 'template'
+    ? `${gettext('Are you sure you want to convert')} ${sourceName.value} ${gettext('to template')}?`
+    : `${gettext('Are you sure you want to destroy')}: ${sourceName.value} ?`,
 );
 
 function defaultCloneName() {
@@ -75,31 +90,40 @@ async function initialize() {
   try {
     if (props.operation === 'delete' || props.operation === 'template') return;
 
-    const requests: [Promise<Awaited<ReturnType<typeof getNodes>>>, Promise<Awaited<ReturnType<typeof getNextVmId>>>?] =
-      props.operation === 'clone' ? [getNodes(), getNextVmId()] : [getNodes()];
-    const [nodesResponse, nextIdResponse] = await Promise.all(requests);
-    nodes.value = (nodesResponse.data || []).sort((left, right) => left.node.localeCompare(right.node));
+    const nodesResponse = await getNodes();
+    const nextIdResponse = props.operation === 'clone' ? await getNextVmId() : undefined;
+    nodes.value = (nodesResponse.data || []).sort((left, right) =>
+      left.node.localeCompare(right.node),
+    );
     target.value =
       (props.operation === 'clone' && onlineNodes.value.some((node) => node.node === props.vm?.node)
         ? props.vm.node
         : targetNodes.value[0]?.node) || '';
     if (nextIdResponse) nextId.value = nextIdResponse.data || '';
     cloneName.value = defaultCloneName();
-    fullClone.value = true;
+    cloneMode.value = canCreateLinkedClone.value ? 'clone' : 'copy';
     migrateLocalDisks.value = false;
+    forceMigration.value = false;
+    migrateConntrackState.value = true;
     targetStorage.value = '';
     cloneStorage.value = '';
     cloneFormat.value = '';
     cloneSnapshot.value = 'current';
     clonePool.value = '';
+    purge.value = false;
+    destroyUnreferencedDisks.value = false;
     const targetNode = target.value;
     if (targetNode) {
       const storageResponse = await getNodeStorage(targetNode, 'images');
-      storageOptions.value = (storageResponse.data || []).map((item) => String(item.storage || '')).filter(Boolean);
+      storageOptions.value = (storageResponse.data || [])
+        .map((item) => textValue(item.storage))
+        .filter(Boolean);
     }
     if (props.operation === 'clone') {
       const snapshotsResponse = await getVmSnapshots(props.vm.node!, props.vm.vmid);
-      snapshots.value = (snapshotsResponse.data || []).map((item) => String(item.name || '')).filter(Boolean);
+      snapshots.value = (snapshotsResponse.data || [])
+        .map((item) => textValue(item.name))
+        .filter(Boolean);
       if (!snapshots.value.includes('current')) snapshots.value.unshift('current');
     }
   } finally {
@@ -119,14 +143,20 @@ async function submit() {
         target: target.value,
         ...(vm.status === 'running' ? { online: 1 } : {}),
         ...(migrateLocalDisks.value ? { 'with-local-disks': 1 } : {}),
-        ...(migrateLocalDisks.value && targetStorage.value ? { targetstorage: targetStorage.value } : {}),
+        ...(migrateLocalDisks.value && vm.status === 'running' && targetStorage.value
+          ? { targetstorage: targetStorage.value }
+          : {}),
+        ...(forceMigration.value ? { force: 1 } : {}),
+        ...(vm.status === 'running' && migrateConntrackState.value
+          ? { 'with-conntrack-state': 1 }
+          : {}),
       });
     } else if (props.operation === 'clone') {
       response = await cloneVm(vm.node, vm.vmid, {
         newid: nextId.value,
         name: cloneName.value.trim(),
         target: target.value,
-        full: fullClone.value ? 1 : 0,
+        full: cloneMode.value === 'copy' ? 1 : 0,
         ...(cloneStorage.value ? { storage: cloneStorage.value } : {}),
         ...(cloneFormat.value ? { format: cloneFormat.value } : {}),
         ...(cloneSnapshot.value !== 'current' ? { snapname: cloneSnapshot.value } : {}),
@@ -135,12 +165,20 @@ async function submit() {
     } else if (props.operation === 'template') {
       response = await convertVmToTemplate(vm.node, vm.vmid);
     } else {
-      response = await deleteVm(vm.node, vm.vmid);
+      response = await deleteVm(vm.node, vm.vmid, {
+        ...(purge.value ? { purge: 1 } : {}),
+        ...(destroyUnreferencedDisks.value ? { 'destroy-unreferenced-disks': 1 } : {}),
+      });
     }
 
     model.value = false;
     emit('completed');
-    if (response.data) emit('task', { node: props.operation === 'clone' ? target.value : vm.node, upid: response.data, title: title.value });
+    if (response.data)
+      emit('task', {
+        node: props.operation === 'clone' ? target.value : vm.node,
+        upid: response.data,
+        title: title.value,
+      });
   } finally {
     loading.value = false;
   }
@@ -148,7 +186,9 @@ async function submit() {
 
 watch(
   () => [model.value, props.operation, props.vm?.node, props.vm?.vmid],
-  () => { void initialize(); },
+  () => {
+    void initialize();
+  },
 );
 </script>
 
@@ -158,10 +198,34 @@ watch(
       <div class="q-pa-md u-hidden-error">
         <template v-if="operation === 'delete' || operation === 'template'">
           <div class="u-size-12">{{ deleteMessage }}</div>
+          <div v-if="operation === 'delete'" class="q-mt-md column q-gutter-sm">
+            <q-checkbox
+              v-model="purge"
+              dense
+              color="primary"
+              :label="gettext('Purge from job configurations')"
+            />
+            <q-checkbox
+              v-model="destroyUnreferencedDisks"
+              dense
+              color="primary"
+              :label="gettext('Destroy unreferenced disks owned by guest')"
+            />
+            <div class="text-caption text-grey-7">
+              {{ gettext('Referenced disks will always be destroyed.') }}
+            </div>
+          </div>
         </template>
         <div v-else class="row q-col-gutter-md">
           <div class="col-12 col-sm-6">
-            <q-input dense outlined square readonly :model-value="vm?.node || ''" :label="gettext('Source Node')" />
+            <q-input
+              dense
+              outlined
+              square
+              readonly
+              :model-value="vm?.node || ''"
+              :label="gettext('Source Node')"
+            />
           </div>
           <div class="col-12 col-sm-6">
             <q-select
@@ -183,19 +247,109 @@ watch(
             <div class="col-12 col-sm-6">
               <q-input v-model="cloneName" dense outlined square :label="gettext('Name')" />
             </div>
-            <div class="col-12">
-              <q-checkbox v-model="fullClone" dense color="primary" :label="gettext('Full Clone')" />
+            <div v-if="canCreateLinkedClone" class="col-12">
+              <q-select
+                v-model="cloneMode"
+                dense
+                outlined
+                square
+                emit-value
+                map-options
+                :label="gettext('Mode')"
+                :options="[
+                  { label: gettext('Full Clone'), value: 'copy' },
+                  { label: gettext('Linked Clone'), value: 'clone' },
+                ]"
+              />
             </div>
-            <div class="col-12 col-sm-6"><q-select v-model="cloneSnapshot" dense outlined square :options="snapshots" :label="gettext('Snapshot')" /></div>
-            <div class="col-12 col-sm-6"><q-select v-model="cloneStorage" dense outlined square clearable :options="storageOptions" :label="gettext('Target Storage')" /></div>
-            <div class="col-12 col-sm-6"><q-select v-model="cloneFormat" dense outlined square clearable :options="['raw', 'qcow2', 'vmdk']" :label="gettext('Disk Format')" /></div>
-            <div class="col-12 col-sm-6"><q-input v-model="clonePool" dense outlined square :label="gettext('Resource Pool')" /></div>
+            <div class="col-12 col-sm-6">
+              <q-select
+                v-model="cloneSnapshot"
+                dense
+                outlined
+                square
+                :options="snapshots"
+                :label="gettext('Snapshot')"
+              />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-select
+                v-model="cloneStorage"
+                dense
+                outlined
+                square
+                clearable
+                :options="storageOptions"
+                :label="gettext('Target Storage')"
+              />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-select
+                v-model="cloneFormat"
+                dense
+                outlined
+                square
+                clearable
+                :options="['raw', 'qcow2', 'vmdk']"
+                :label="gettext('Disk Format')"
+              />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-input
+                v-model="clonePool"
+                dense
+                outlined
+                square
+                :label="gettext('Resource Pool')"
+              />
+            </div>
           </template>
-          <template v-else-if="operation === 'migrate'"><div class="col-12"><q-checkbox v-model="migrateLocalDisks" dense color="primary" :label="gettext('Migrate local disks')" /></div><div v-if="migrateLocalDisks" class="col-12"><q-select v-model="targetStorage" dense outlined square :options="storageOptions" :label="gettext('Target Storage')" /></div></template>
+          <template v-else-if="operation === 'migrate'"
+            ><div class="col-12">
+              <q-checkbox
+                v-model="migrateLocalDisks"
+                dense
+                color="primary"
+                :label="gettext('Migrate local disks')"
+              />
+            </div>
+            <div v-if="migrateLocalDisks && vm?.status === 'running'" class="col-12">
+              <q-select
+                v-model="targetStorage"
+                dense
+                outlined
+                square
+                :options="storageOptions"
+                :label="gettext('Target Storage')"
+              />
+            </div>
+            <div class="col-12">
+              <q-checkbox
+                v-model="forceMigration"
+                dense
+                color="primary"
+                :label="gettext('Force')"
+              /><q-checkbox
+                v-if="vm?.status === 'running'"
+                v-model="migrateConntrackState"
+                dense
+                color="primary"
+                class="q-ml-md"
+                :label="gettext('Conntrack state')"
+              /></div
+          ></template>
         </div>
       </div>
       <template #foot>
-        <q-btn v-close-popup no-caps flat size="12px" class="u-button q-mr-sm" :disable="loading" :label="gettext('Cancel')" />
+        <q-btn
+          v-close-popup
+          no-caps
+          flat
+          size="12px"
+          class="u-button q-mr-sm"
+          :disable="loading"
+          :label="gettext('Cancel')"
+        />
         <q-btn
           no-caps
           flat

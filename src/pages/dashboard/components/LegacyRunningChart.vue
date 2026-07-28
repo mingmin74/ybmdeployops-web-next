@@ -64,7 +64,9 @@ async function updateChart() {
           },
         },
         formatter: (params: unknown) => {
-          const first = Array.isArray(params) ? (params[0] as { name?: string; value?: number }) : undefined;
+          const first = Array.isArray(params)
+            ? (params[0] as { name?: string; value?: number })
+            : undefined;
           const value = Number(first?.value || 0);
           return `${props.chartData.xLabel}${first?.name || ''}<br />${props.chartData.yLabel}${props.iops ? value : formatBytes(value)}`;
         },

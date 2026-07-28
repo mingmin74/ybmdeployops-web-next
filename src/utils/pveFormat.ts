@@ -10,7 +10,8 @@ export function timestampToTime(value?: number | string) {
 
 export function textValue(value: unknown, fallback = '') {
   if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint')
+    return String(value);
   return fallback;
 }
 

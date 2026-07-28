@@ -13,7 +13,9 @@ const props = withDefaults(
   },
 );
 
-const points = computed(() => props.values.map((item) => Number(item)).filter((item) => Number.isFinite(item)));
+const points = computed(() =>
+  props.values.map((item) => Number(item)).filter((item) => Number.isFinite(item)),
+);
 const path = computed(() => {
   if (points.value.length < 2) return '';
   const width = 420;
@@ -36,7 +38,14 @@ const path = computed(() => {
   <div class="metric-sparkline" :style="{ height: `${height}px` }">
     <svg v-if="path" :viewBox="`0 0 420 ${height}`" preserveAspectRatio="none" aria-hidden="true">
       <line x1="0" :y1="height / 2" x2="420" :y2="height / 2" class="baseline" />
-      <path :d="path" fill="none" :stroke="color" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+      <path
+        :d="path"
+        fill="none"
+        :stroke="color"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
     </svg>
     <div v-else class="empty-line">--</div>
   </div>

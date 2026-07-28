@@ -143,9 +143,7 @@ async function refreshData() {
     }));
     treeExpanded.value = [
       'all',
-      ...new Set(
-        rows.value.map((item) => `type:${textValue(item.type) || gettext('Unknown')}`),
-      ),
+      ...new Set(rows.value.map((item) => `type:${textValue(item.type) || gettext('Unknown')}`)),
     ];
     selected.value = [];
     if (current.value) {

@@ -62,7 +62,15 @@ export default defineConfig(() => {
         loadingBar: { skipHijack: true },
         notify: { position: 'top', timeout: 2500 },
       },
-      plugins: ['Notify', 'Dialog', 'Loading', 'LoadingBar', 'Cookies', 'LocalStorage', 'SessionStorage'],
+      plugins: [
+        'Notify',
+        'Dialog',
+        'Loading',
+        'LoadingBar',
+        'Cookies',
+        'LocalStorage',
+        'SessionStorage',
+      ],
     },
 
     animations: [],

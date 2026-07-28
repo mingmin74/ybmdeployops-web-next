@@ -2,10 +2,23 @@
   <q-layout view="hHh Lpr lFf" class="app-shell">
     <q-header elevated class="app-header">
       <q-toolbar class="app-toolbar">
-        <q-btn flat round dense icon="menu" :aria-label="gettext('Menu')" @click="ui.toggleMenuMini" />
+        <q-btn
+          flat
+          round
+          dense
+          icon="menu"
+          :aria-label="gettext('Menu')"
+          @click="ui.toggleMenuMini"
+        />
         <div class="brand-mark">YBM</div>
         <q-toolbar-title class="brand-title">{{ appConfig.productName }}</q-toolbar-title>
-        <q-btn-dropdown flat dense no-caps icon="account_circle" :label="session.userid || session.username">
+        <q-btn-dropdown
+          flat
+          dense
+          no-caps
+          icon="account_circle"
+          :label="session.userid || session.username"
+        >
           <q-list dense class="user-menu">
             <q-item>
               <q-item-section>
@@ -127,7 +140,9 @@ function isActive(path?: string) {
 }
 
 function isGroupOpen(item: MenuItem): boolean {
-  return Boolean(item.children?.some((child) => child.path ? route.path === child.path : isGroupOpen(child)));
+  return Boolean(
+    item.children?.some((child) => (child.path ? route.path === child.path : isGroupOpen(child))),
+  );
 }
 
 function logout() {
@@ -145,4 +160,3 @@ onBeforeUnmount(() => {
   if (refreshHandler) clearInterval(refreshHandler);
 });
 </script>
-

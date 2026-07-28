@@ -70,10 +70,24 @@ watch(
       align="left"
       class="tag-tabs"
     >
-      <q-route-tab v-for="(tag, index) in tagView" :key="`${tag.path}-${index}`" class="tag-item" active-class="tag-item--active" :to="tag.path" :name="tag.path" no-caps>
+      <q-route-tab
+        v-for="(tag, index) in tagView"
+        :key="`${tag.path}-${index}`"
+        class="tag-item"
+        active-class="tag-item--active"
+        :to="tag.path"
+        :name="tag.path"
+        no-caps
+      >
         <q-icon name="widgets" size="16px" />
         <div class="tag-label">{{ gettext(tag.title) }}</div>
-        <q-icon v-if="index !== 0" name="close" size="16px" class="tag-close" @click.prevent.stop="removeTag(index, tag)" />
+        <q-icon
+          v-if="index !== 0"
+          name="close"
+          size="16px"
+          class="tag-close"
+          @click.prevent.stop="removeTag(index, tag)"
+        />
       </q-route-tab>
     </q-tabs>
   </div>

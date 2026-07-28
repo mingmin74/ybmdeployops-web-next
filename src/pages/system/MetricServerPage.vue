@@ -64,9 +64,21 @@ const isUdp = computed(() => form.influxdbproto === 'udp');
 const canSubmit = computed(() => Boolean(form.id && form.server && form.port));
 
 const columns: QTableColumn<PveRecord>[] = [
-  { name: 'id', required: true, label: gettext('Name'), align: 'left', field: 'id', sortable: true },
+  {
+    name: 'id',
+    required: true,
+    label: gettext('Name'),
+    align: 'left',
+    field: 'id',
+    sortable: true,
+  },
   { name: 'type', label: gettext('Type'), align: 'left', field: 'type' },
-  { name: 'enabled', label: gettext('Enabled'), align: 'left', field: (row) => (Number(row.disable) ? gettext('No') : gettext('Yes')) },
+  {
+    name: 'enabled',
+    label: gettext('Enabled'),
+    align: 'left',
+    field: (row) => (Number(row.disable) ? gettext('No') : gettext('Yes')),
+  },
   { name: 'server', label: gettext('Server'), align: 'left', field: 'server' },
   { name: 'port', label: gettext('Port'), align: 'left', field: 'port' },
 ];
@@ -94,7 +106,9 @@ async function reload() {
   loading.value = true;
   try {
     const response = await getMetricServers();
-    rows.value = [...(response.data || [])].sort((left, right) => textValue(left.id).localeCompare(textValue(right.id)));
+    rows.value = [...(response.data || [])].sort((left, right) =>
+      textValue(left.id).localeCompare(textValue(right.id)),
+    );
   } finally {
     loading.value = false;
   }
@@ -132,14 +146,12 @@ function buildSubmitData() {
     if (form.mtu) data.mtu = form.mtu;
   } else {
     data.influxdbproto = String(form.influxdbproto).toLowerCase();
-    const keys: Array<keyof Pick<MetricForm, 'organization' | 'bucket' | 'token' | 'api-path-prefix' | 'timeout' | 'max-body-size'>> = [
-      'organization',
-      'bucket',
-      'token',
-      'api-path-prefix',
-      'timeout',
-      'max-body-size',
-    ];
+    const keys: Array<
+      keyof Pick<
+        MetricForm,
+        'organization' | 'bucket' | 'token' | 'api-path-prefix' | 'timeout' | 'max-body-size'
+      >
+    > = ['organization', 'bucket', 'token', 'api-path-prefix', 'timeout', 'max-body-size'];
     keys.forEach((key) => {
       if (form[key]) data[key] = form[key];
     });
@@ -213,12 +225,44 @@ onMounted(() => {
         >
           <template #top>
             <div class="q-gutter-sm">
-              <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Add')" @click="openDialog('add')" />
-              <q-btn no-caps outline size="12px" class="u-button" :color="selected.length !== 1 ? 'grey' : 'primary'" :disable="selected.length !== 1" :label="gettext('Edit')" @click="openDialog('edit')" />
-              <q-btn no-caps outline size="12px" class="u-button" :color="selected.length !== 1 ? 'grey' : 'red'" :disable="selected.length !== 1" :label="gettext('Remove')" @click="removeSelected" />
+              <q-btn
+                no-caps
+                outline
+                size="12px"
+                color="primary"
+                class="u-button"
+                :label="gettext('Add')"
+                @click="openDialog('add')"
+              />
+              <q-btn
+                no-caps
+                outline
+                size="12px"
+                class="u-button"
+                :color="selected.length !== 1 ? 'grey' : 'primary'"
+                :disable="selected.length !== 1"
+                :label="gettext('Edit')"
+                @click="openDialog('edit')"
+              />
+              <q-btn
+                no-caps
+                outline
+                size="12px"
+                class="u-button"
+                :color="selected.length !== 1 ? 'grey' : 'red'"
+                :disable="selected.length !== 1"
+                :label="gettext('Remove')"
+                @click="removeSelected"
+              />
             </div>
             <q-space />
-            <q-input v-model="filter" borderless dense debounce="300" :placeholder="gettext('Search')">
+            <q-input
+              v-model="filter"
+              borderless
+              dense
+              debounce="300"
+              :placeholder="gettext('Search')"
+            >
               <template #append><q-icon name="search" /></template>
             </q-input>
           </template>
@@ -227,29 +271,100 @@ onMounted(() => {
     </q-card>
 
     <q-dialog v-model="dialogVisible" persistent transition-show="scale" transition-hide="scale">
-      <UWindow :title="`${gettext(form.action === 'add' ? 'Add' : 'Edit')}: ${gettext('InfluxDB')}`" width="580px" :loading="dialogLoading">
+      <UWindow
+        :title="`${gettext(form.action === 'add' ? 'Add' : 'Edit')}: ${gettext('InfluxDB')}`"
+        width="580px"
+        :loading="dialogLoading"
+      >
         <div class="q-pa-sm">
           <div class="row q-col-gutter-lg u-border q-pa-md">
             <div class="col">
-              <q-input v-model="form.id" dense :disable="form.action !== 'add'" :label="`${gettext('Name')}*`" />
+              <q-input
+                v-model="form.id"
+                dense
+                :disable="form.action !== 'add'"
+                :label="`${gettext('Name')}*`"
+              />
               <q-input v-model="form.server" dense :label="`${gettext('Server')}*`" />
-              <q-input v-model="form.port" dense type="number" min="1" :label="`${gettext('Port')}*`" />
-              <q-select v-model="form.influxdbproto" dense emit-value map-options options-dense :options="protoOptions" :label="gettext('Protocol')" />
-              <q-input v-model="form['api-path-prefix']" dense :disable="isUdp" :label="gettext('API Path Prefix')" />
-              <q-input v-model="form.timeout" dense type="number" min="1" :disable="isUdp" :label="`${gettext('Timeout')}(s)`" />
+              <q-input
+                v-model="form.port"
+                dense
+                type="number"
+                min="1"
+                :label="`${gettext('Port')}*`"
+              />
+              <q-select
+                v-model="form.influxdbproto"
+                dense
+                emit-value
+                map-options
+                options-dense
+                :options="protoOptions"
+                :label="gettext('Protocol')"
+              />
+              <q-input
+                v-model="form['api-path-prefix']"
+                dense
+                :disable="isUdp"
+                :label="gettext('API Path Prefix')"
+              />
+              <q-input
+                v-model="form.timeout"
+                dense
+                type="number"
+                min="1"
+                :disable="isUdp"
+                :label="`${gettext('Timeout')}(s)`"
+              />
             </div>
             <div class="col">
-              <q-checkbox v-model="form.enabled" dense color="primary" :label="gettext('Enabled')" />
-              <q-input v-model="form.organization" dense :disable="isUdp" :label="gettext('Organization')" />
+              <q-checkbox
+                v-model="form.enabled"
+                dense
+                color="primary"
+                :label="gettext('Enabled')"
+              />
+              <q-input
+                v-model="form.organization"
+                dense
+                :disable="isUdp"
+                :label="gettext('Organization')"
+              />
               <q-input v-model="form.bucket" dense :disable="isUdp" :label="gettext('Bucket')" />
               <q-input v-model="form.token" dense :disable="isUdp" :label="gettext('Token')" />
-              <q-input v-model="form['max-body-size']" dense type="number" :disable="isUdp" :label="gettext('Batch Size(b)')" />
-              <q-input v-model="form.mtu" dense type="number" min="512" max="65536" :disable="!isUdp" :label="gettext('MTU')" />
+              <q-input
+                v-model="form['max-body-size']"
+                dense
+                type="number"
+                :disable="isUdp"
+                :label="gettext('Batch Size(b)')"
+              />
+              <q-input
+                v-model="form.mtu"
+                dense
+                type="number"
+                min="512"
+                max="65536"
+                :disable="!isUdp"
+                :label="gettext('MTU')"
+              />
             </div>
           </div>
         </div>
         <template #foot>
-          <q-btn no-caps flat size="12px" :disable="!canSubmit || dialogLoading" :class="canSubmit && !dialogLoading ? 'bg-primary text-grey-1 u-button' : 'bg-grey-4 text-grey-6 u-button'" :label="gettext(form.action === 'add' ? 'Add' : 'OK')" @click="save" />
+          <q-btn
+            no-caps
+            flat
+            size="12px"
+            :disable="!canSubmit || dialogLoading"
+            :class="
+              canSubmit && !dialogLoading
+                ? 'bg-primary text-grey-1 u-button'
+                : 'bg-grey-4 text-grey-6 u-button'
+            "
+            :label="gettext(form.action === 'add' ? 'Add' : 'OK')"
+            @click="save"
+          />
         </template>
       </UWindow>
     </q-dialog>

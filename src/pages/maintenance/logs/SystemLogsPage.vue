@@ -131,13 +131,49 @@ onBeforeUnmount(() => {
   <div class="column q-ma-sm">
     <div class="col q-mb-sm">
       <div class="row q-gutter-sm items-center">
-        <q-btn-toggle v-model="liveMode" no-caps size="12px" class="u-button" toggle-color="primary" :options="modeOptions" />
+        <q-btn-toggle
+          v-model="liveMode"
+          no-caps
+          size="12px"
+          class="u-button"
+          toggle-color="primary"
+          :options="modeOptions"
+        />
         <template v-if="!liveMode">
-          <q-input v-model="since" square outlined dense class="u-dense date-input" :label="gettext('Since')" />
-          <q-input v-model="until" square outlined dense class="u-dense date-input" :label="gettext('Until')" />
+          <q-input
+            v-model="since"
+            square
+            outlined
+            dense
+            class="u-dense date-input"
+            :label="gettext('Since')"
+          />
+          <q-input
+            v-model="until"
+            square
+            outlined
+            dense
+            class="u-dense date-input"
+            :label="gettext('Until')"
+          />
         </template>
-        <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Export')" @click="exportData" />
-        <q-btn no-caps size="12px" color="primary" class="u-button" :label="gettext('Update')" @click="resetAndLoad" />
+        <q-btn
+          no-caps
+          outline
+          size="12px"
+          color="primary"
+          class="u-button"
+          :label="gettext('Export')"
+          @click="exportData"
+        />
+        <q-btn
+          no-caps
+          size="12px"
+          color="primary"
+          class="u-button"
+          :label="gettext('Update')"
+          @click="resetAndLoad"
+        />
         <q-space />
         <NodeSelectTable v-model="node" />
       </div>

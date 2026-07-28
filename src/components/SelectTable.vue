@@ -33,7 +33,12 @@ const filter = shallowRef('');
 function rowValue(row: PveRecord) {
   if (props.getRowValue) return props.getRowValue(row);
   const value = row[props.rowKey];
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint'
+  ) {
     return String(value);
   }
   return '';

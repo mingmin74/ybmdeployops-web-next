@@ -17,12 +17,23 @@ const props = withDefaults(
 </script>
 
 <template>
-  <q-card class="u-window-card" :style="{ maxWidth: props.width, width: props.width, height: props.height }">
+  <q-card
+    class="u-window-card"
+    :style="{ maxWidth: props.width, width: props.width, height: props.height }"
+  >
     <q-card-section class="row items-center bg-blue-8 text-grey-1 shadow-down-10 q-pa-sm">
       <q-spinner-bars size="14px" color="white" />
       <div class="text-weight-bold q-mx-sm text-overflow">{{ props.title }}</div>
       <q-space />
-      <q-btn v-close-popup class="bg-negative" icon="close" size="sm" flat dense :aria-label="gettext('Close')" />
+      <q-btn
+        v-close-popup
+        class="bg-negative"
+        icon="close"
+        size="sm"
+        flat
+        dense
+        :aria-label="gettext('Close')"
+      />
     </q-card-section>
     <q-card-section class="q-pa-none u-hidden-error">
       <slot />

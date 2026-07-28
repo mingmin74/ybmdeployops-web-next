@@ -48,28 +48,36 @@ export function getSystemJournal(node: string, params: Record<string, unknown>) 
 }
 
 export function getTaskLog(node: string, upid: string, params: Record<string, unknown>) {
-  return request<JournalRecord[]>(`/api2/extjs/nodes/${node}/tasks/${encodeURIComponent(upid)}/log`, {
-    method: 'GET',
-    params,
-    notifyOnError: true,
-  });
+  return request<JournalRecord[]>(
+    `/api2/extjs/nodes/${node}/tasks/${encodeURIComponent(upid)}/log`,
+    {
+      method: 'GET',
+      params,
+      notifyOnError: true,
+    },
+  );
 }
-
 
 export function getBackupTasks() {
   return request<BackupTask[]>('/api2/json/cluster/backup', { method: 'GET', notifyOnError: true });
 }
 
 export function getBackupTask(id: string) {
-  return request<BackupTask>(`/api2/extjs/cluster/backup/${encodeURIComponent(id)}`, { method: 'GET', notifyOnError: true });
+  return request<BackupTask>(`/api2/extjs/cluster/backup/${encodeURIComponent(id)}`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
 }
 
 export function getBackupIncludedVolumes(id: string) {
-  return request<PveRecord[]>(`/api2/extjs/cluster/backup/${encodeURIComponent(id)}/included_volumes`, {
-    method: 'GET',
-    params: { _dc: Date.now() },
-    notifyOnError: true,
-  });
+  return request<PveRecord[]>(
+    `/api2/extjs/cluster/backup/${encodeURIComponent(id)}/included_volumes`,
+    {
+      method: 'GET',
+      params: { _dc: Date.now() },
+      notifyOnError: true,
+    },
+  );
 }
 
 export function createBackupTask(data: Record<string, unknown>) {
@@ -77,7 +85,10 @@ export function createBackupTask(data: Record<string, unknown>) {
 }
 
 export function updateBackupTask(id: string, data: Record<string, unknown>) {
-  return request<string>(`/api2/extjs/cluster/backup/${encodeURIComponent(id)}`, { method: 'PUT', data });
+  return request<string>(`/api2/extjs/cluster/backup/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    data,
+  });
 }
 
 export function removeBackupTask(id: string) {
@@ -92,7 +103,10 @@ export function runBackupTask(node: string, data: Record<string, unknown>) {
 }
 
 export function getGuestsWithoutBackupTask() {
-  return request<PveRecord[]>('/api2/json/cluster/backup-info/not-backed-up', { method: 'GET', notifyOnError: true });
+  return request<PveRecord[]>('/api2/json/cluster/backup-info/not-backed-up', {
+    method: 'GET',
+    notifyOnError: true,
+  });
 }
 
 export function simulateBackupSchedule(schedule: string, iterations: number) {
@@ -104,11 +118,17 @@ export function simulateBackupSchedule(schedule: string, iterations: number) {
 }
 
 export function getSnapshotTasks() {
-  return request<SnapshotTask[]>('/api2/extjs/cluster/snapshots', { method: 'GET', notifyOnError: true });
+  return request<SnapshotTask[]>('/api2/extjs/cluster/snapshots', {
+    method: 'GET',
+    notifyOnError: true,
+  });
 }
 
 export function getSnapshotTask(id: string) {
-  return request<SnapshotTask>(`/api2/extjs/cluster/snapshots/${encodeURIComponent(id)}`, { method: 'GET', notifyOnError: true });
+  return request<SnapshotTask>(`/api2/extjs/cluster/snapshots/${encodeURIComponent(id)}`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
 }
 
 export function createSnapshotTask(data: Record<string, unknown>) {
@@ -116,17 +136,36 @@ export function createSnapshotTask(data: Record<string, unknown>) {
 }
 
 export function updateSnapshotTask(id: string, data: Record<string, unknown>) {
-  return request<string>(`/api2/extjs/cluster/snapshots/${encodeURIComponent(id)}`, { method: 'PUT', data });
+  return request<string>(`/api2/extjs/cluster/snapshots/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    data,
+  });
 }
 
 export function removeSnapshotTask(id: string) {
   return request(`/api2/extjs/cluster/snapshots/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
-export type ReplicationTask = PveRecord & { id: string; guest?: string | number; target?: string; schedule?: string; disable?: boolean | number; jobnum?: string | number; error?: string; last_sync?: number; next_sync?: number; duration?: number; rate?: number; comment?: string };
+export type ReplicationTask = PveRecord & {
+  id: string;
+  guest?: string | number;
+  target?: string;
+  schedule?: string;
+  disable?: boolean | number;
+  jobnum?: string | number;
+  error?: string;
+  last_sync?: number;
+  next_sync?: number;
+  duration?: number;
+  rate?: number;
+  comment?: string;
+};
 
 export function getReplicationTasks(node: string) {
-  return request<ReplicationTask[]>(`/api2/json/nodes/${encodeURIComponent(node)}/replication`, { method: 'GET', notifyOnError: true });
+  return request<ReplicationTask[]>(`/api2/json/nodes/${encodeURIComponent(node)}/replication`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
 }
 
 export function createReplicationTask(data: Record<string, unknown>) {
@@ -134,7 +173,10 @@ export function createReplicationTask(data: Record<string, unknown>) {
 }
 
 export function updateReplicationTask(id: string, data: Record<string, unknown>) {
-  return request<string>(`/api2/extjs/cluster/replication/${encodeURIComponent(id)}`, { method: 'PUT', data });
+  return request<string>(`/api2/extjs/cluster/replication/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    data,
+  });
 }
 
 export function removeReplicationTask(id: string) {
@@ -142,9 +184,15 @@ export function removeReplicationTask(id: string) {
 }
 
 export function runReplicationTask(node: string, id: string) {
-  return request<string>(`/api2/extjs/nodes/${encodeURIComponent(node)}/replication/${encodeURIComponent(id)}/schedule_now`, { method: 'POST' });
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/replication/${encodeURIComponent(id)}/schedule_now`,
+    { method: 'POST' },
+  );
 }
 
 export function getReplicationLogs(node: string, id: string) {
-  return request<JournalRecord[]>(`/api2/extjs/nodes/${encodeURIComponent(node)}/replication/${encodeURIComponent(id)}/log`, { method: 'GET', params: { _dc: Date.now(), start: 0, limit: 510 }, notifyOnError: true });
+  return request<JournalRecord[]>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/replication/${encodeURIComponent(id)}/log`,
+    { method: 'GET', params: { _dc: Date.now(), start: 0, limit: 510 }, notifyOnError: true },
+  );
 }

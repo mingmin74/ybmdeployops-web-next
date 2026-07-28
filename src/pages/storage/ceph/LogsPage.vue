@@ -13,7 +13,11 @@ const visibleRows = computed(() => rows.value.slice(Math.max(rows.value.length -
 function normalizeLogRows(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value
-    .map((item) => (typeof item === 'string' ? item : textValue((item as Record<string, unknown>).t || (item as Record<string, unknown>).msg)))
+    .map((item) =>
+      typeof item === 'string'
+        ? item
+        : textValue((item as Record<string, unknown>).t || (item as Record<string, unknown>).msg),
+    )
     .filter(Boolean);
 }
 
@@ -33,14 +37,37 @@ onMounted(refreshData);
 <template>
   <div>
     <div class="row items-center q-mb-sm">
-      <q-btn no-caps outline size="12px" color="primary" class="u-button" :loading="loading" :label="gettext('Refresh')" @click="refreshData" />
+      <q-btn
+        no-caps
+        outline
+        size="12px"
+        color="primary"
+        class="u-button"
+        :loading="loading"
+        :label="gettext('Refresh')"
+        @click="refreshData"
+      />
       <q-space />
-      <q-input v-model.number="limit" square outlined dense type="number" min="50" max="2000" class="log-limit" :label="gettext('Limit')" />
+      <q-input
+        v-model.number="limit"
+        square
+        outlined
+        dense
+        type="number"
+        min="50"
+        max="2000"
+        class="log-limit"
+        :label="gettext('Limit')"
+      />
     </div>
     <q-card flat bordered>
       <q-card-section class="ceph-log">
-        <div v-if="visibleRows.length === 0" class="text-grey-6">{{ gettext('No logs found') }}</div>
-        <div v-for="(row, index) in visibleRows" :key="`${index}-${row}`" class="ceph-log-line">{{ row }}</div>
+        <div v-if="visibleRows.length === 0" class="text-grey-6">
+          {{ gettext('No logs found') }}
+        </div>
+        <div v-for="(row, index) in visibleRows" :key="`${index}-${row}`" class="ceph-log-line">
+          {{ row }}
+        </div>
       </q-card-section>
     </q-card>
   </div>

@@ -33,13 +33,21 @@ async function reload() {
   }
 }
 
-watch(() => props.node, (node) => {
-  if (node !== undefined) selectedNode.value = node;
-}, { immediate: true });
+watch(
+  () => props.node,
+  (node) => {
+    if (node !== undefined) selectedNode.value = node;
+  },
+  { immediate: true },
+);
 
-watch(selectedNode, () => {
-  void reload();
-}, { immediate: true });
+watch(
+  selectedNode,
+  () => {
+    void reload();
+  },
+  { immediate: true },
+);
 </script>
 
 <template>

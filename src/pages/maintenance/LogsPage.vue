@@ -11,7 +11,14 @@ const activeTab = shallowRef('operation');
 <template>
   <div class="q-ma-md">
     <q-card class="q-mt-sm no-border-radius no-shadow">
-      <q-tabs v-model="activeTab" class="text-grey" active-color="primary" indicator-color="primary" align="left" narrow-indicator>
+      <q-tabs
+        v-model="activeTab"
+        class="text-grey"
+        active-color="primary"
+        indicator-color="primary"
+        align="left"
+        narrow-indicator
+      >
         <q-tab no-caps name="operation" :label="gettext('Operation Logs')" />
         <q-tab no-caps name="system" :label="gettext('System Logs')" />
         <q-tab no-caps name="cluster" :label="gettext('Cluster Logs')" />

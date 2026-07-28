@@ -91,7 +91,7 @@ const simulatorForm = reactive({ schedule: '', iterations: 10 });
 const selectedTask = computed(() => selectedTasks.value[0]);
 const canOperate = computed(() => selectedTasks.value.length === 1);
 const formTitle = computed(
-  () => `${gettext(formAction.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Backup Task')}`
+  () => `${gettext(formAction.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Backup Task')}`,
 );
 const filteredTasks = computed(() => {
   const keyword = filter.value.trim().toLowerCase();
@@ -101,18 +101,18 @@ const filteredTasks = computed(() => {
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
-      .includes(keyword)
+      .includes(keyword),
   );
 });
 const filteredVmOptions = computed(() => {
   const keyword = vmFilter.value.trim().toLowerCase();
   if (!keyword) return vmOptions.value;
   return vmOptions.value.filter((item) =>
-    [item.vmid, item.name, item.node, item.type].join(' ').toLowerCase().includes(keyword)
+    [item.vmid, item.name, item.node, item.type].join(' ').toLowerCase().includes(keyword),
   );
 });
 const selectedVmRows = computed(() =>
-  vmOptions.value.filter((item) => taskForm.selectedVmids.includes(textValue(item.vmid)))
+  vmOptions.value.filter((item) => taskForm.selectedVmids.includes(textValue(item.vmid))),
 );
 const planOptions = [
   ['*/30', 'Every 30 minutes'],
@@ -235,20 +235,20 @@ function detailSelectionMode(task: BackupTaskRow) {
   return task.vmid
     ? gettext('Include selected VMs')
     : task.all
-    ? gettext('All')
-    : task.exclude
-    ? gettext('Exclude selected VMs')
-    : task.pool
-    ? gettext('Pool based')
-    : '-';
+      ? gettext('All')
+      : task.exclude
+        ? gettext('Exclude selected VMs')
+        : task.pool
+          ? gettext('Pool based')
+          : '-';
 }
 function detailNotification(task: BackupTaskRow) {
   const mode = task['notification-mode'];
   return mode === 'notification-system' || (mode === 'auto' && !task.mailto)
     ? gettext('Use global notification settings')
     : task.mailnotification === 'failure'
-    ? gettext('Send email on failure')
-    : gettext('Always send email');
+      ? gettext('Send email on failure')
+      : gettext('Always send email');
 }
 function treeLabel(item: PveRecord) {
   const id = textValue(item.id);
@@ -272,9 +272,7 @@ function filterDetailTree(nodes: PveRecord[], filter: string): PveRecord[] {
     const matches =
       !keyword ||
       treeLabel(item).toLowerCase().includes(keyword) ||
-      textValue(item.type)
-        .toLowerCase()
-        .includes(keyword);
+      textValue(item.type).toLowerCase().includes(keyword);
     if (matches || children.length)
       result.push({ ...item, label: treeLabel(item), includedText: includedText(item), children });
     return result;
@@ -377,7 +375,10 @@ async function openTaskForm(action: 'add' | 'edit') {
         comment: textValue(data.comment),
         notificationMode: textValue(data['notification-mode'], '__default__'),
         mailto: textValue(data.mailto),
-        mailnotification: textValue(data.mailnotification, textValue(data['notification-policy'], 'always')),
+        mailnotification: textValue(
+          data.mailnotification,
+          textValue(data['notification-policy'], 'always'),
+        ),
         notesTemplate: textValue(data['notes-template'], '{{guestname}}'),
         bwlimit: textValue(data.bwlimit),
         zstd: textValue(data.zstd),
@@ -390,10 +391,10 @@ async function openTaskForm(action: 'add' | 'edit') {
       taskForm.selectionMode = data.exclude
         ? 'exclude'
         : data.all
-        ? 'all'
-        : data.pool
-        ? 'pool'
-        : 'include';
+          ? 'all'
+          : data.pool
+            ? 'pool'
+            : 'include';
       taskForm.pool = textValue(data.pool);
       taskForm.selectedVmids = textValue(data.exclude, textValue(data.vmid))
         .split(',')
@@ -481,11 +482,13 @@ function removeSelected() {
     message: `${gettext('Delete backup task')} ${task.id}?`,
     cancel: true,
     persistent: true,
-  }).onOk(() => { void (async () => {
-    await removeBackupTask(task.id);
-    Notify.create({ type: 'positive', message: gettext('Backup task deleted successfully') });
-    await reload();
-  })(); });
+  }).onOk(() => {
+    void (async () => {
+      await removeBackupTask(task.id);
+      Notify.create({ type: 'positive', message: gettext('Backup task deleted successfully') });
+      await reload();
+    })();
+  });
 }
 
 function createRunPayload(task: BackupTaskRow) {
@@ -511,7 +514,10 @@ function createRunPayload(task: BackupTaskRow) {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       payload[key] = Object.entries(value as Record<string, unknown>)
         .filter(([, item]) => item !== '')
-        .map(([name, item]) => `${name}=${Array.isArray(item) ? item.map((entry) => textValue(entry)).join(';') : textValue(item)}`)
+        .map(
+          ([name, item]) =>
+            `${name}=${Array.isArray(item) ? item.map((entry) => textValue(entry)).join(';') : textValue(item)}`,
+        )
         .sort()
         .join(',');
     }
@@ -528,39 +534,41 @@ function runSelected() {
     message: gettext('Start the selected backup job now?'),
     cancel: true,
     persistent: true,
-  }).onOk(() => { void (async () => {
-    runNowLoading.value = true;
-    try {
-      const response = await getNodes();
-      const onlineNodes = (response.data || [])
-        .filter((item) => item.status === 'online')
-        .map((item) => item.node);
-      const targetNodes = task.node ? [task.node] : onlineNodes;
-      if (task.node && !onlineNodes.includes(task.node)) {
-        Notify.create({
-          type: 'negative',
-          message: gettext('Node [%s] from backup job is not online!').replace('%s', task.node),
-        });
-        return;
+  }).onOk(() => {
+    void (async () => {
+      runNowLoading.value = true;
+      try {
+        const response = await getNodes();
+        const onlineNodes = (response.data || [])
+          .filter((item) => item.status === 'online')
+          .map((item) => item.node);
+        const targetNodes = task.node ? [task.node] : onlineNodes;
+        if (task.node && !onlineNodes.includes(task.node)) {
+          Notify.create({
+            type: 'negative',
+            message: gettext('Node [%s] from backup job is not online!').replace('%s', task.node),
+          });
+          return;
+        }
+        const results = await Promise.allSettled(
+          targetNodes.map((node) => runBackupTask(node, createRunPayload(task))),
+        );
+        const failedNodes = results.flatMap((result, index) =>
+          result.status === 'rejected' ? [targetNodes[index]] : [],
+        );
+        if (failedNodes.length) {
+          Notify.create({
+            type: 'negative',
+            message: `${gettext('Backup job failed on nodes')}: ${failedNodes.join(', ')}`,
+          });
+        } else {
+          Notify.create({ type: 'positive', message: gettext('Backup task started successfully') });
+        }
+      } finally {
+        runNowLoading.value = false;
       }
-      const results = await Promise.allSettled(
-        targetNodes.map((node) => runBackupTask(node, createRunPayload(task)))
-      );
-      const failedNodes = results.flatMap((result, index) =>
-        result.status === 'rejected' ? [targetNodes[index]] : []
-      );
-      if (failedNodes.length) {
-        Notify.create({
-          type: 'negative',
-          message: `${gettext('Backup job failed on nodes')}: ${failedNodes.join(', ')}`,
-        });
-      } else {
-        Notify.create({ type: 'positive', message: gettext('Backup task started successfully') });
-      }
-    } finally {
-      runNowLoading.value = false;
-    }
-  })(); });
+    })();
+  });
 }
 
 async function openGuestsWithoutBackup() {
@@ -1042,7 +1050,7 @@ onMounted(() => void reload());
             <div class="q-pa-sm bg-yellow-2 text-grey-8 q-my-sm">
               {{
                 gettext(
-                  "Without any keep option, the storage's configuration or node's vzdump.conf is used as fallback"
+                  "Without any keep option, the storage's configuration or node's vzdump.conf is used as fallback",
                 )
               }}
             </div></q-tab-panel
@@ -1129,7 +1137,7 @@ onMounted(() => void reload());
                 <p>
                   {{
                     gettext(
-                      'Backup write cache that can reduce IO pressure inside guests (VMs only).'
+                      'Backup write cache that can reduce IO pressure inside guests (VMs only).',
                     )
                   }}
                 </p>
@@ -1149,7 +1157,7 @@ onMounted(() => void reload());
                       allStorageOptions.filter((item) =>
                         String(item.content || '')
                           .split(',')
-                          .includes('images')
+                          .includes('images'),
                       )
                     "
                   />
@@ -1157,7 +1165,7 @@ onMounted(() => void reload());
                 <p>
                   {{
                     gettext(
-                      'Prefer a fast and local storage, ideally with support for discard and thin-provisioning or sparse files.'
+                      'Prefer a fast and local storage, ideally with support for discard and thin-provisioning or sparse files.',
                     )
                   }}
                 </p>
@@ -1174,7 +1182,7 @@ onMounted(() => void reload());
                 <p>
                   {{
                     gettext(
-                      "Run jobs as soon as possible if they couldn't start on schedule, for example, due to the node being offline."
+                      "Run jobs as soon as possible if they couldn't start on schedule, for example, due to the node being offline.",
                     )
                   }}
                 </p>
@@ -1198,7 +1206,7 @@ onMounted(() => void reload());
                 <p>
                   {{
                     gettext(
-                      'Mode to detect file changes and switch archive encoding format for container backups.'
+                      'Mode to detect file changes and switch archive encoding format for container backups.',
                     )
                   }}
                 </p>
@@ -1208,7 +1216,7 @@ onMounted(() => void reload());
               <span class="text-weight-bold text-amber-9">{{ gettext('Comment') }}: </span
               >{{
                 gettext(
-                  "The node-specific 'vzdump.conf' or, if this is not set, the default from the config schema is used to determine fallback values."
+                  "The node-specific 'vzdump.conf' or, if this is not set, the default from the config schema is used to determine fallback values.",
                 )
               }}
             </div></q-tab-panel

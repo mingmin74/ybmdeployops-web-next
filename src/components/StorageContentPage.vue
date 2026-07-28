@@ -59,7 +59,13 @@ const columns = computed<QTableColumn<PveRecord>[]>(() => {
   ];
 
   if (props.content === 'iso') {
-    base.push({ name: 'md5', label: gettext('MD5'), align: 'left', field: (row) => row.md5 || '-', sortable: true });
+    base.push({
+      name: 'md5',
+      label: gettext('MD5'),
+      align: 'left',
+      field: (row) => row.md5 || '-',
+      sortable: true,
+    });
   } else {
     base.push({
       name: 'vmid',
@@ -74,13 +80,37 @@ const columns = computed<QTableColumn<PveRecord>[]>(() => {
   }
 
   base.push(
-    { name: 'format', label: gettext('Format'), align: 'left', field: (row) => row.format || '-', sortable: true },
-    { name: 'content', label: gettext('Content'), align: 'left', field: (row) => formatContent(row.content), sortable: true },
-    { name: 'size', label: gettext('Size'), align: 'left', field: (row) => formatBytes(row.size as number), sortable: true },
+    {
+      name: 'format',
+      label: gettext('Format'),
+      align: 'left',
+      field: (row) => row.format || '-',
+      sortable: true,
+    },
+    {
+      name: 'content',
+      label: gettext('Content'),
+      align: 'left',
+      field: (row) => formatContent(row.content),
+      sortable: true,
+    },
+    {
+      name: 'size',
+      label: gettext('Size'),
+      align: 'left',
+      field: (row) => formatBytes(row.size as number),
+      sortable: true,
+    },
   );
 
   if (props.content === 'images') {
-    base.push({ name: 'used', label: gettext('Used'), align: 'left', field: (row) => formatBytes(row.used as number), sortable: true });
+    base.push({
+      name: 'used',
+      label: gettext('Used'),
+      align: 'left',
+      field: (row) => formatBytes(row.used as number),
+      sortable: true,
+    });
   }
 
   return base;
@@ -172,10 +202,16 @@ async function uploadSelectedFile() {
   if (!uploadFile.value || !node.value || !storage.value) return;
   uploading.value = true;
   try {
-    await uploadStorageContent(node.value, storage.value, uploadFile.value, props.content, (progress, total) => {
-      uploadProgress.value = progress;
-      uploadSize.value = total;
-    });
+    await uploadStorageContent(
+      node.value,
+      storage.value,
+      uploadFile.value,
+      props.content,
+      (progress, total) => {
+        uploadProgress.value = progress;
+        uploadSize.value = total;
+      },
+    );
     uploadDialog.value = false;
     await refreshData();
   } finally {
@@ -213,35 +249,68 @@ onMounted(() => {
           :options="storageOptions"
           :label="gettext('Storage')"
         />
-        <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Refresh')" @click="refreshData" />
+        <q-btn
+          no-caps
+          outline
+          size="12px"
+          color="primary"
+          class="u-button"
+          :label="gettext('Refresh')"
+          @click="refreshData"
+        />
       </div>
     </div>
 
     <div class="content-center u-main-area">
       <div class="bg-grey-3 q-py-md q-px-md text-grey-10">
         <div class="row q-ma-sm">
-          <div class="col">{{ gettext('Storage') }}: <span class="text-grey-8">{{ storage || '-' }}</span></div>
-          <div class="col">{{ gettext('Type') }}: <span class="text-grey-8">{{ status.type || '-' }}</span></div>
-          <div class="col">{{ gettext('Content') }}: <span class="text-grey-8">{{ formatContent(status.content) || '-' }}</span></div>
+          <div class="col">
+            {{ gettext('Storage') }}: <span class="text-grey-8">{{ storage || '-' }}</span>
+          </div>
+          <div class="col">
+            {{ gettext('Type') }}: <span class="text-grey-8">{{ status.type || '-' }}</span>
+          </div>
+          <div class="col">
+            {{ gettext('Content') }}:
+            <span class="text-grey-8">{{ formatContent(status.content) || '-' }}</span>
+          </div>
         </div>
         <div class="row q-ma-sm">
           <div class="col">
             {{ gettext('Enabled') }}:
-            <q-badge :color="status.enabled ? 'green' : 'red'" :label="status.enabled ? gettext('Yes') : gettext('No')" />
+            <q-badge
+              :color="status.enabled ? 'green' : 'red'"
+              :label="status.enabled ? gettext('Yes') : gettext('No')"
+            />
           </div>
           <div class="col">
             {{ gettext('Active') }}:
-            <q-badge :color="status.active ? 'green' : 'red'" :label="status.active ? gettext('Yes') : gettext('No')" />
+            <q-badge
+              :color="status.active ? 'green' : 'red'"
+              :label="status.active ? gettext('Yes') : gettext('No')"
+            />
           </div>
           <div class="col">
             {{ gettext('Shared') }}:
-            <q-badge :color="status.shared ? 'green' : 'red'" :label="status.shared ? gettext('Yes') : gettext('No')" />
+            <q-badge
+              :color="status.shared ? 'green' : 'red'"
+              :label="status.shared ? gettext('Yes') : gettext('No')"
+            />
           </div>
         </div>
         <div class="row q-ma-sm">
-          <div class="col">{{ gettext('Total Size') }}: <span class="text-grey-8">{{ formatBytes(status.total as number) }}</span></div>
-          <div class="col">{{ gettext('Avail Size') }}: <span class="text-grey-8">{{ formatBytes(status.avail as number) }}</span></div>
-          <div class="col">{{ gettext('Used Size') }}: <span class="text-grey-8">{{ formatBytes(status.used as number) }}</span></div>
+          <div class="col">
+            {{ gettext('Total Size') }}:
+            <span class="text-grey-8">{{ formatBytes(status.total as number) }}</span>
+          </div>
+          <div class="col">
+            {{ gettext('Avail Size') }}:
+            <span class="text-grey-8">{{ formatBytes(status.avail as number) }}</span>
+          </div>
+          <div class="col">
+            {{ gettext('Used Size') }}:
+            <span class="text-grey-8">{{ formatBytes(status.used as number) }}</span>
+          </div>
         </div>
       </div>
       <div class="q-my-md">
@@ -288,7 +357,13 @@ onMounted(() => {
             />
           </div>
           <q-space />
-          <q-input v-model="filter" borderless dense debounce="300" :placeholder="gettext('Search')">
+          <q-input
+            v-model="filter"
+            borderless
+            dense
+            debounce="300"
+            :placeholder="gettext('Search')"
+          >
             <template #append>
               <q-icon name="search" />
             </template>
@@ -302,17 +377,27 @@ onMounted(() => {
       </q-table>
     </div>
     <q-dialog v-model="uploadDialog" persistent transition-show="scale" transition-hide="scale">
-      <UWindow :title="`${gettext('Upload')}: ${gettext('ISO')}`" width="400px" :loading="uploading">
+      <UWindow
+        :title="`${gettext('Upload')}: ${gettext('ISO')}`"
+        width="400px"
+        :loading="uploading"
+      >
         <div class="q-pa-md">
           <div class="upload-border">
             <input type="file" accept=".iso" class="file-input" @change="selectUploadFile" />
             <div v-if="uploading" class="q-pa-md">
               <div class="column text-left u-size-12 text-grey-8 text-overflow q-gutter-sm">
-                <span class="text-overflow">{{ gettext('File Name') }}: {{ uploadFile?.name }}</span>
+                <span class="text-overflow"
+                  >{{ gettext('File Name') }}: {{ uploadFile?.name }}</span
+                >
                 <span>{{ gettext('Size') }}: {{ formatBytes(uploadSize) }}</span>
                 <q-linear-progress stripe size="20px" :value="uploadProgress" color="primary">
                   <div class="absolute-full flex flex-center">
-                    <q-badge class="bg-white" text-color="primary" :label="`${(uploadProgress * 100).toFixed(2)}%`" />
+                    <q-badge
+                      class="bg-white"
+                      text-color="primary"
+                      :label="`${(uploadProgress * 100).toFixed(2)}%`"
+                    />
                   </div>
                 </q-linear-progress>
               </div>
@@ -324,13 +409,24 @@ onMounted(() => {
           </div>
         </div>
         <template #foot>
-          <q-btn v-close-popup no-caps flat size="12px" class="u-button" :label="gettext('Cancel')" />
+          <q-btn
+            v-close-popup
+            no-caps
+            flat
+            size="12px"
+            class="u-button"
+            :label="gettext('Cancel')"
+          />
           <q-btn
             no-caps
             flat
             size="12px"
             :disable="!uploadFile || uploading"
-            :class="uploadFile && !uploading ? 'bg-primary text-grey-1 u-button' : 'bg-grey-4 text-grey-6 u-button'"
+            :class="
+              uploadFile && !uploading
+                ? 'bg-primary text-grey-1 u-button'
+                : 'bg-grey-4 text-grey-6 u-button'
+            "
             :label="gettext('Upload')"
             @click="uploadSelectedFile"
           />

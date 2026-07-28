@@ -51,10 +51,13 @@ export function shutdownNode(node: string) {
 }
 
 export function getNodeSpiceShell(node: string, proxy: string) {
-  return request<Record<string, string>>(`/api2/extjs/nodes/${encodeURIComponent(node)}/spiceshell`, {
-    method: 'POST',
-    data: { proxy },
-  });
+  return request<Record<string, string>>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/spiceshell`,
+    {
+      method: 'POST',
+      data: { proxy },
+    },
+  );
 }
 
 export function getNodeServices(node: string) {
@@ -111,17 +114,29 @@ export function getNodeTasks(node: string, params: Record<string, unknown>) {
 }
 
 export function getNodeNetwork(node: string) {
-  return request<Record<string, unknown>[]>(`/api2/extjs/nodes/${encodeURIComponent(node)}/network`, { method: 'GET', notifyOnError: true });
+  return request<Record<string, unknown>[]>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/network`,
+    { method: 'GET', notifyOnError: true },
+  );
 }
 
 export function getNodeDns(node: string) {
-  return request<PveNodeDns>(`/api2/json/nodes/${encodeURIComponent(node)}/dns`, { method: 'GET', notifyOnError: true });
+  return request<PveNodeDns>(`/api2/json/nodes/${encodeURIComponent(node)}/dns`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
 }
 
 export function getNodeHosts(node: string) {
-  return request<{ data?: string }>(`/api2/json/nodes/${encodeURIComponent(node)}/hosts`, { method: 'GET', notifyOnError: true });
+  return request<{ data?: string }>(`/api2/json/nodes/${encodeURIComponent(node)}/hosts`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
 }
 
 export function getNodeTime(node: string) {
-  return request<PveNodeTime>(`/api2/json/nodes/${encodeURIComponent(node)}/time`, { method: 'GET', notifyOnError: true });
+  return request<PveNodeTime>(`/api2/json/nodes/${encodeURIComponent(node)}/time`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
 }

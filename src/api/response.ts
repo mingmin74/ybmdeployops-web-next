@@ -46,7 +46,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringifyValue(value: unknown): string {
   if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint')
+    return String(value);
   if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) return value.map((item) => stringifyValue(item)).join(', ');
   if (isRecord(value) && typeof value.message === 'string') return value.message;
@@ -113,9 +114,10 @@ export function extractRequestError(result: PveEnvelope, verbose = true) {
     }
   }
 
-  const detailText = verbose && details.length > 0
-    ? details.map((detail) => `${detail.field}: ${detail.message}`).join('\n')
-    : '';
+  const detailText =
+    verbose && details.length > 0
+      ? details.map((detail) => `${detail.field}: ${detail.message}`).join('\n')
+      : '';
 
   return {
     message,
@@ -127,9 +129,10 @@ export function extractRequestError(result: PveEnvelope, verbose = true) {
 export function parsePveResponse<T>(response: Response, payload: unknown): ParsedResponse<T> {
   const result = toResult(payload) as PveEnvelope<T>;
   const apiSuccess = result.success !== false;
-  const transportMessage = response.status && response.statusText
-    ? `Connection error ${response.status}: ${response.statusText}`
-    : 'Connection error - server offline?';
+  const transportMessage =
+    response.status && response.statusText
+      ? `Connection error ${response.status}: ${response.statusText}`
+      : 'Connection error - server offline?';
 
   if (!response.ok) {
     const pveError = result.message || result.errors ? extractRequestError(result, true) : null;
@@ -175,7 +178,8 @@ export function parsePveResponse<T>(response: Response, payload: unknown): Parse
 
 export function getUnknownErrorMessage(error: unknown) {
   if (error instanceof PveApiError) return error.htmlStatus;
-  if (error instanceof DOMException && error.name === 'AbortError') return 'Connection error - Timeout.';
+  if (error instanceof DOMException && error.name === 'AbortError')
+    return 'Connection error - Timeout.';
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
   return 'Connection error - server offline?';

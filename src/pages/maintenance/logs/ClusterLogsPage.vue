@@ -12,12 +12,24 @@ const rows = shallowRef<PveRecord[]>([]);
 
 const columns: QTableColumn<PveRecord>[] = [
   { name: 'index', label: '#', align: 'left', field: 'pos' },
-  { name: 'time', label: gettext('Time'), align: 'left', field: (row) => timestampToTime(Number(row.time) * 1000), sortable: true },
+  {
+    name: 'time',
+    label: gettext('Time'),
+    align: 'left',
+    field: (row) => timestampToTime(Number(row.time) * 1000),
+    sortable: true,
+  },
   { name: 'node', label: gettext('Node'), align: 'left', field: 'node', sortable: true },
   { name: 'tag', label: gettext('Service'), align: 'left', field: 'tag', sortable: true },
   { name: 'pid', label: gettext('PID'), align: 'left', field: 'pid', sortable: true },
   { name: 'user', label: gettext('Username'), align: 'left', field: 'user', sortable: true },
-  { name: 'pri', label: gettext('Severity'), align: 'left', field: (row) => Number(row.pri), sortable: true },
+  {
+    name: 'pri',
+    label: gettext('Severity'),
+    align: 'left',
+    field: (row) => Number(row.pri),
+    sortable: true,
+  },
   { name: 'msg', label: gettext('Message'), align: 'left', field: 'msg' },
 ];
 
@@ -25,7 +37,9 @@ async function reload() {
   loading.value = true;
   try {
     const response = await getClusterLogs();
-    rows.value = [...(response.data || [])].sort((left, right) => Number(right.time || 0) - Number(left.time || 0));
+    rows.value = [...(response.data || [])].sort(
+      (left, right) => Number(right.time || 0) - Number(left.time || 0),
+    );
   } finally {
     loading.value = false;
   }
@@ -33,17 +47,18 @@ async function reload() {
 
 function exportData() {
   const data = rows.value
-    .map((item) =>
-      [
-        timestampToTime(Number(item.time) * 1000),
-        item.node,
-        item.tag,
-        item.pid,
-        item.user,
-        gettext(severityMap[Number(item.pri)] || textValue(item.pri)),
-      ]
-        .map((value) => `[${textValue(value)}]`)
-        .join('') + textValue(item.msg),
+    .map(
+      (item) =>
+        [
+          timestampToTime(Number(item.time) * 1000),
+          item.node,
+          item.tag,
+          item.pid,
+          item.user,
+          gettext(severityMap[Number(item.pri)] || textValue(item.pri)),
+        ]
+          .map((value) => `[${textValue(value)}]`)
+          .join('') + textValue(item.msg),
     )
     .join('\n');
   const blob = new Blob([data], { type: 'text/plain;charset=utf-8' });
@@ -74,7 +89,15 @@ onMounted(() => {
       :no-data-label="gettext('no record can be found')"
     >
       <template #top>
-        <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Export')" @click="exportData" />
+        <q-btn
+          no-caps
+          outline
+          size="12px"
+          color="primary"
+          class="u-button"
+          :label="gettext('Export')"
+          @click="exportData"
+        />
         <q-space />
         <q-input v-model="filter" borderless dense debounce="300" :placeholder="gettext('Search')">
           <template #append><q-icon name="search" /></template>
@@ -82,7 +105,10 @@ onMounted(() => {
       </template>
       <template #body-cell-pri="scope">
         <q-td :props="scope">
-          <q-badge :color="severityColor[Number(scope.value)] || 'grey'" :label="gettext(severityMap[Number(scope.value)] || String(scope.value))" />
+          <q-badge
+            :color="severityColor[Number(scope.value)] || 'grey'"
+            :label="gettext(severityMap[Number(scope.value)] || String(scope.value))"
+          />
         </q-td>
       </template>
       <template #body-cell-index="scope">

@@ -10,5 +10,8 @@ export function updateClusterOptions(data: Record<string, unknown>) {
 }
 
 export function getLocalNetworks() {
-  return request<PveRecord[]>('/api2/json/nodes/localhost/network', { method: 'GET', notifyOnError: true });
+  return request<PveRecord[]>('/api2/json/nodes/localhost/network', {
+    method: 'GET',
+    notifyOnError: true,
+  });
 }

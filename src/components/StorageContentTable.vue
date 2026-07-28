@@ -23,12 +23,49 @@ const rows = shallowRef<PveRecord[]>([]);
 const usage = computed(() => usedPercent(Number(status.value.used), Number(status.value.total)));
 
 const columns = computed<QTableColumn<PveRecord>[]>(() => [
-  { name: 'volid', required: true, label: gettext('Name'), align: 'left', field: (row) => row.volid || '-', sortable: true },
-  { name: 'format', label: gettext('Format'), align: 'left', field: (row) => row.format || '-', sortable: true },
-  { name: 'content', label: gettext('Content'), align: 'left', field: (row) => formatContent(row.content), sortable: true },
-  { name: 'vmid', label: gettext('VMID'), align: 'left', field: (row) => row.vmid || '-', sortable: true },
-  { name: 'size', label: gettext('Size'), align: 'left', field: (row) => formatBytes(row.size as number), sortable: true },
-  { name: 'used', label: gettext('Used'), align: 'left', field: (row) => formatBytes(row.used as number), sortable: true },
+  {
+    name: 'volid',
+    required: true,
+    label: gettext('Name'),
+    align: 'left',
+    field: (row) => row.volid || '-',
+    sortable: true,
+  },
+  {
+    name: 'format',
+    label: gettext('Format'),
+    align: 'left',
+    field: (row) => row.format || '-',
+    sortable: true,
+  },
+  {
+    name: 'content',
+    label: gettext('Content'),
+    align: 'left',
+    field: (row) => formatContent(row.content),
+    sortable: true,
+  },
+  {
+    name: 'vmid',
+    label: gettext('VMID'),
+    align: 'left',
+    field: (row) => row.vmid || '-',
+    sortable: true,
+  },
+  {
+    name: 'size',
+    label: gettext('Size'),
+    align: 'left',
+    field: (row) => formatBytes(row.size as number),
+    sortable: true,
+  },
+  {
+    name: 'used',
+    label: gettext('Used'),
+    align: 'left',
+    field: (row) => formatBytes(row.used as number),
+    sortable: true,
+  },
 ]);
 
 async function refreshData() {
@@ -83,14 +120,30 @@ watch(() => [props.node, props.storage, props.content], refreshData, { immediate
   <div>
     <div class="bg-grey-3 q-py-md q-px-md text-grey-10">
       <div class="row q-ma-sm">
-        <div class="col">{{ gettext('Storage') }}: <span class="text-grey-8">{{ storage || '-' }}</span></div>
-        <div class="col">{{ gettext('Type') }}: <span class="text-grey-8">{{ status.type || '-' }}</span></div>
-        <div class="col">{{ gettext('Content') }}: <span class="text-grey-8">{{ formatContent(status.content) || '-' }}</span></div>
+        <div class="col">
+          {{ gettext('Storage') }}: <span class="text-grey-8">{{ storage || '-' }}</span>
+        </div>
+        <div class="col">
+          {{ gettext('Type') }}: <span class="text-grey-8">{{ status.type || '-' }}</span>
+        </div>
+        <div class="col">
+          {{ gettext('Content') }}:
+          <span class="text-grey-8">{{ formatContent(status.content) || '-' }}</span>
+        </div>
       </div>
       <div class="row q-ma-sm">
-        <div class="col">{{ gettext('Total Size') }}: <span class="text-grey-8">{{ formatBytes(status.total as number) }}</span></div>
-        <div class="col">{{ gettext('Avail Size') }}: <span class="text-grey-8">{{ formatBytes(status.avail as number) }}</span></div>
-        <div class="col">{{ gettext('Used Size') }}: <span class="text-grey-8">{{ formatBytes(status.used as number) }}</span></div>
+        <div class="col">
+          {{ gettext('Total Size') }}:
+          <span class="text-grey-8">{{ formatBytes(status.total as number) }}</span>
+        </div>
+        <div class="col">
+          {{ gettext('Avail Size') }}:
+          <span class="text-grey-8">{{ formatBytes(status.avail as number) }}</span>
+        </div>
+        <div class="col">
+          {{ gettext('Used Size') }}:
+          <span class="text-grey-8">{{ formatBytes(status.used as number) }}</span>
+        </div>
       </div>
     </div>
     <div class="q-my-md">
@@ -114,7 +167,15 @@ watch(() => [props.node, props.storage, props.content], refreshData, { immediate
     >
       <template #top>
         <div class="row q-gutter-sm">
-          <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Refresh')" @click="refreshData" />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Refresh')"
+            @click="refreshData"
+          />
           <q-btn
             no-caps
             outline

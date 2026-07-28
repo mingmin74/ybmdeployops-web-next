@@ -26,11 +26,30 @@ export function getStorageContent(node: string, storage: string, content: string
 }
 
 export function deleteStorageContent(node: string, storage: string, volid: string) {
-  return request<string>(`/api2/extjs/nodes/${node}/storage/${storage}/content/${encodeURIComponent(volid)}`, {
-    method: 'DELETE',
-    params: { delay: 5 },
-    notifyOnError: true,
-  });
+  return request<string>(
+    `/api2/extjs/nodes/${node}/storage/${storage}/content/${encodeURIComponent(volid)}`,
+    {
+      method: 'DELETE',
+      params: { delay: 5 },
+      notifyOnError: true,
+    },
+  );
+}
+
+export function updateStorageContent(
+  node: string,
+  storage: string,
+  volid: string,
+  data: Record<string, unknown>,
+) {
+  return request(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content/${encodeURIComponent(volid)}`,
+    {
+      method: 'PUT',
+      data,
+      notifyOnError: true,
+    },
+  );
 }
 
 export function getVmResources() {
@@ -55,7 +74,10 @@ export function uploadStorageContent(
 
   return new Promise<string>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/api2/json/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/upload`);
+    xhr.open(
+      'POST',
+      `/api2/json/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/upload`,
+    );
     xhr.withCredentials = true;
     if (session.csrfToken) xhr.setRequestHeader('CSRFPreventionToken', session.csrfToken);
 
@@ -65,7 +87,11 @@ export function uploadStorageContent(
 
     xhr.onload = () => {
       try {
-        const payload = JSON.parse(xhr.responseText || '{}') as { data?: string; message?: string; success?: boolean };
+        const payload = JSON.parse(xhr.responseText || '{}') as {
+          data?: string;
+          message?: string;
+          success?: boolean;
+        };
         if (xhr.status >= 200 && xhr.status < 300 && payload.success !== false) {
           resolve(payload.data || '');
           return;

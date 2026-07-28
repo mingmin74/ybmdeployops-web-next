@@ -27,14 +27,46 @@ const ipsetForm = ref<Record<string, string | number | null | undefined>>({});
 const entryForm = ref<Record<string, string | number | null | undefined>>({});
 
 const ipsetColumns: QTableColumn<PveRecord>[] = [
-  { name: 'name', required: true, label: gettext('Name'), align: 'left', field: (row) => row.name || '-', sortable: true },
-  { name: 'comment', label: gettext('Comment'), align: 'left', field: (row) => row.comment || '-', sortable: true },
+  {
+    name: 'name',
+    required: true,
+    label: gettext('Name'),
+    align: 'left',
+    field: (row) => row.name || '-',
+    sortable: true,
+  },
+  {
+    name: 'comment',
+    label: gettext('Comment'),
+    align: 'left',
+    field: (row) => row.comment || '-',
+    sortable: true,
+  },
 ];
 
 const entryColumns: QTableColumn<PveRecord>[] = [
-  { name: 'cidr', required: true, label: 'CIDR', align: 'left', field: (row) => row.cidr || row.name || '-', sortable: true },
-  { name: 'nomatch', label: gettext('Match'), align: 'left', field: (row) => (row.nomatch ? gettext('No') : gettext('Yes')), sortable: true },
-  { name: 'comment', label: gettext('Comment'), align: 'left', field: (row) => row.comment || '-', sortable: true },
+  {
+    name: 'cidr',
+    required: true,
+    label: 'CIDR',
+    align: 'left',
+    field: (row) => row.cidr || row.name || '-',
+    sortable: true,
+  },
+  {
+    name: 'nomatch',
+    label: gettext('Match'),
+    align: 'left',
+    field: (row) => (row.nomatch ? gettext('No') : gettext('Yes')),
+    sortable: true,
+  },
+  {
+    name: 'comment',
+    label: gettext('Comment'),
+    align: 'left',
+    field: (row) => row.comment || '-',
+    sortable: true,
+  },
 ];
 
 async function refreshIpsets() {
@@ -67,11 +99,18 @@ async function refreshEntries() {
 function removeIpset() {
   const name = textValue(selectedIpset.value[0]?.name);
   if (!name) return;
-  Dialog.create({ title: gettext('Confirm'), message: gettext('Are you sure to delete [%s]?').replace('%s', name), cancel: true, persistent: true }).onOk(() => {
+  Dialog.create({
+    title: gettext('Confirm'),
+    message: gettext('Are you sure to delete [%s]?').replace('%s', name),
+    cancel: true,
+    persistent: true,
+  }).onOk(() => {
     loading.value = true;
-    void deleteFirewallIpset(name).then(refreshIpsets).finally(() => {
-      loading.value = false;
-    });
+    void deleteFirewallIpset(name)
+      .then(refreshIpsets)
+      .finally(() => {
+        loading.value = false;
+      });
   });
 }
 
@@ -79,11 +118,18 @@ function removeEntry() {
   const name = textValue(selectedIpset.value[0]?.name);
   const cidr = textValue(selectedEntry.value[0]?.cidr || selectedEntry.value[0]?.name);
   if (!name || !cidr) return;
-  Dialog.create({ title: gettext('Confirm'), message: gettext('Are you sure to delete [%s]?').replace('%s', cidr), cancel: true, persistent: true }).onOk(() => {
+  Dialog.create({
+    title: gettext('Confirm'),
+    message: gettext('Are you sure to delete [%s]?').replace('%s', cidr),
+    cancel: true,
+    persistent: true,
+  }).onOk(() => {
     entryLoading.value = true;
-    void deleteFirewallIpsetEntry(name, cidr).then(refreshEntries).finally(() => {
-      entryLoading.value = false;
-    });
+    void deleteFirewallIpsetEntry(name, cidr)
+      .then(refreshEntries)
+      .finally(() => {
+        entryLoading.value = false;
+      });
   });
 }
 
@@ -118,36 +164,164 @@ onMounted(refreshIpsets);
 <template>
   <div class="row q-col-gutter-md">
     <div class="col-4">
-      <q-table flat row-key="name" table-header-class="u-table-header" selection="single" :rows="ipsets" :columns="ipsetColumns" :selected="selectedIpset" :loading="loading" :pagination="{ page: 1, rowsPerPage: 10 }" :rows-per-page-options="[10]" @update:selected="selectedIpset = [...$event]">
+      <q-table
+        flat
+        row-key="name"
+        table-header-class="u-table-header"
+        selection="single"
+        :rows="ipsets"
+        :columns="ipsetColumns"
+        :selected="selectedIpset"
+        :loading="loading"
+        :pagination="{ page: 1, rowsPerPage: 10 }"
+        :rows-per-page-options="[10]"
+        @update:selected="selectedIpset = [...$event]"
+      >
         <template #top>
           <div class="row q-gutter-sm">
-            <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Add')" @click="ipsetForm = {}; ipsetDialog = true" />
-            <q-btn no-caps outline size="12px" :color="selectedIpset.length !== 1 ? 'grey' : 'red'" class="u-button" :disable="selectedIpset.length !== 1" :label="gettext('Remove')" @click="removeIpset" />
-            <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Refresh')" @click="refreshIpsets" />
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              color="primary"
+              class="u-button"
+              :label="gettext('Add')"
+              @click="
+                ipsetForm = {};
+                ipsetDialog = true;
+              "
+            />
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              :color="selectedIpset.length !== 1 ? 'grey' : 'red'"
+              class="u-button"
+              :disable="selectedIpset.length !== 1"
+              :label="gettext('Remove')"
+              @click="removeIpset"
+            />
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              color="primary"
+              class="u-button"
+              :label="gettext('Refresh')"
+              @click="refreshIpsets"
+            />
           </div>
         </template>
       </q-table>
     </div>
     <div class="col-8">
-      <q-table flat row-key="cidr" table-header-class="u-table-header" selection="single" :rows="entries" :columns="entryColumns" :selected="selectedEntry" :loading="entryLoading" :pagination="{ page: 1, rowsPerPage: 10 }" :rows-per-page-options="[10]" @update:selected="selectedEntry = [...$event]">
+      <q-table
+        flat
+        row-key="cidr"
+        table-header-class="u-table-header"
+        selection="single"
+        :rows="entries"
+        :columns="entryColumns"
+        :selected="selectedEntry"
+        :loading="entryLoading"
+        :pagination="{ page: 1, rowsPerPage: 10 }"
+        :rows-per-page-options="[10]"
+        @update:selected="selectedEntry = [...$event]"
+      >
         <template #top>
           <div class="row q-gutter-sm">
-            <q-btn no-caps outline size="12px" color="primary" class="u-button" :disable="selectedIpset.length !== 1" :label="gettext('Add')" @click="entryForm = {}; entryDialog = true" />
-            <q-btn no-caps outline size="12px" :color="selectedEntry.length !== 1 ? 'grey' : 'red'" class="u-button" :disable="selectedEntry.length !== 1" :label="gettext('Remove')" @click="removeEntry" />
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              color="primary"
+              class="u-button"
+              :disable="selectedIpset.length !== 1"
+              :label="gettext('Add')"
+              @click="
+                entryForm = {};
+                entryDialog = true;
+              "
+            />
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              :color="selectedEntry.length !== 1 ? 'grey' : 'red'"
+              class="u-button"
+              :disable="selectedEntry.length !== 1"
+              :label="gettext('Remove')"
+              @click="removeEntry"
+            />
           </div>
         </template>
       </q-table>
     </div>
     <q-dialog v-model="ipsetDialog" persistent>
       <UWindow :title="gettext('Add')" width="420px" :loading="loading">
-        <div class="q-pa-md q-gutter-sm"><q-input v-model="ipsetForm.name" square outlined dense :label="gettext('Name')" /><q-input v-model="ipsetForm.comment" square outlined dense :label="gettext('Comment')" /></div>
-        <template #foot><q-btn v-close-popup no-caps flat size="12px" class="u-button" :label="gettext('Cancel')" /><q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :label="gettext('OK')" @click="submitIpset" /></template>
+        <div class="q-pa-md q-gutter-sm">
+          <q-input
+            v-model="ipsetForm.name"
+            square
+            outlined
+            dense
+            :label="gettext('Name')"
+          /><q-input
+            v-model="ipsetForm.comment"
+            square
+            outlined
+            dense
+            :label="gettext('Comment')"
+          />
+        </div>
+        <template #foot
+          ><q-btn
+            v-close-popup
+            no-caps
+            flat
+            size="12px"
+            class="u-button"
+            :label="gettext('Cancel')" /><q-btn
+            no-caps
+            flat
+            size="12px"
+            class="bg-primary text-grey-1 u-button"
+            :label="gettext('OK')"
+            @click="submitIpset"
+        /></template>
       </UWindow>
     </q-dialog>
     <q-dialog v-model="entryDialog" persistent>
       <UWindow :title="gettext('Add')" width="420px" :loading="entryLoading">
-        <div class="q-pa-md q-gutter-sm"><q-input v-model="entryForm.cidr" square outlined dense label="CIDR" /><q-checkbox v-model="entryForm.nomatch" :true-value="1" :false-value="0" :label="gettext('No Match')" /><q-input v-model="entryForm.comment" square outlined dense :label="gettext('Comment')" /></div>
-        <template #foot><q-btn v-close-popup no-caps flat size="12px" class="u-button" :label="gettext('Cancel')" /><q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :label="gettext('OK')" @click="submitEntry" /></template>
+        <div class="q-pa-md q-gutter-sm">
+          <q-input v-model="entryForm.cidr" square outlined dense label="CIDR" /><q-checkbox
+            v-model="entryForm.nomatch"
+            :true-value="1"
+            :false-value="0"
+            :label="gettext('No Match')"
+          /><q-input
+            v-model="entryForm.comment"
+            square
+            outlined
+            dense
+            :label="gettext('Comment')"
+          />
+        </div>
+        <template #foot
+          ><q-btn
+            v-close-popup
+            no-caps
+            flat
+            size="12px"
+            class="u-button"
+            :label="gettext('Cancel')" /><q-btn
+            no-caps
+            flat
+            size="12px"
+            class="bg-primary text-grey-1 u-button"
+            :label="gettext('OK')"
+            @click="submitEntry"
+        /></template>
       </UWindow>
     </q-dialog>
   </div>

@@ -112,11 +112,11 @@ const selectedVm = computed(
   () =>
     vmOptions.value.find((item) => resourceId(item) === selectedId.value) ||
     vmOptions.value[0] ||
-    {}
+    {},
 );
 const selectedType = computed(() => (selectedVm.value.type === 'lxc' ? 'lxc' : 'qemu'));
 const overviewIllustration = computed(() =>
-  selectedType.value === 'lxc' ? lxcOverviewIcon : vmOverviewIcon
+  selectedType.value === 'lxc' ? lxcOverviewIcon : vmOverviewIcon,
 );
 const vmName = computed(() => textValue(current.value.name || selectedVm.value.name, '-'));
 const vmid = computed(() => textValue(current.value.vmid || selectedVm.value.vmid, '-'));
@@ -126,23 +126,23 @@ const currentStatus = computed(() =>
     current.value.qmpstatus && current.value.qmpstatus !== current.value.status
       ? `${textValue(current.value.status)}(${textValue(current.value.qmpstatus)})`
       : current.value.status || selectedVm.value.status,
-    '-'
-  )
+    '-',
+  ),
 );
 const cpuPercent = computed(() =>
-  Number((Number(current.value.cpu || selectedVm.value.cpu || 0) * 100).toFixed(2))
+  Number((Number(current.value.cpu || selectedVm.value.cpu || 0) * 100).toFixed(2)),
 );
 const memPercent = computed(() =>
   usedPercent(
     current.value.mem as number,
-    (current.value.maxmem || selectedVm.value.maxmem) as number
-  )
+    (current.value.maxmem || selectedVm.value.maxmem) as number,
+  ),
 );
 const diskPercent = computed(() =>
   usedPercent(
     current.value.disk as number,
-    (current.value.maxdisk || selectedVm.value.maxdisk) as number
-  )
+    (current.value.maxdisk || selectedVm.value.maxdisk) as number,
+  ),
 );
 const primaryIp = computed(() => {
   if (Array.isArray(agentText.value)) return agentText.value[0] || '-';
@@ -151,14 +151,14 @@ const primaryIp = computed(() => {
 const remark = computed(() => remarkText.value || '-');
 const currentNode = computed(() => nodes.value.find((item) => item.node === nodeName.value));
 const hostMemPercent = computed(() =>
-  usedPercent(currentNode.value?.mem as number, currentNode.value?.maxmem as number)
+  usedPercent(currentNode.value?.mem as number, currentNode.value?.maxmem as number),
 );
 const haStatus = computed(() => {
   const ha = current.value.ha as PveRecord | undefined;
   if (!ha || !ha.managed) return gettext('None');
   return `${textValue(ha.state, gettext('None'))}, ${gettext('Group')}:${textValue(
     ha.group,
-    gettext('None')
+    gettext('None'),
   )}`;
 });
 const agentHasMore = computed(() => Array.isArray(agentText.value) && agentText.value.length > 0);
@@ -170,29 +170,29 @@ const netOutValues = computed(() => rrdRows.value.map((item) => Number(item.neto
 const diskReadValues = computed(() => rrdRows.value.map((item) => Number(item.diskread || 0)));
 const diskWriteValues = computed(() => rrdRows.value.map((item) => Number(item.diskwrite || 0)));
 const cpuPressureSomeValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.pressurecpusome || 0))
+  rrdRows.value.map((item) => Number(item.pressurecpusome || 0)),
 );
 const cpuPressureFullValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.pressurecpufull || 0))
+  rrdRows.value.map((item) => Number(item.pressurecpufull || 0)),
 );
 const ioPressureSomeValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.pressureiosome || 0))
+  rrdRows.value.map((item) => Number(item.pressureiosome || 0)),
 );
 const ioPressureFullValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.pressureiofull || 0))
+  rrdRows.value.map((item) => Number(item.pressureiofull || 0)),
 );
 const memoryPressureSomeValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.pressurememorysome || 0))
+  rrdRows.value.map((item) => Number(item.pressurememorysome || 0)),
 );
 const memoryPressureFullValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.pressurememoryfull || 0))
+  rrdRows.value.map((item) => Number(item.pressurememoryfull || 0)),
 );
 const latestTime = computed(() => {
   const row = rrdRows.value[rrdRows.value.length - 1];
   return row?.time ? timestampToMinute(Number(row.time) * 1000) : '-';
 });
 const chartXAxis = computed(() =>
-  rrdRows.value.map((item) => (item.time ? timestampToMinute(Number(item.time) * 1000) : ''))
+  rrdRows.value.map((item) => (item.time ? timestampToMinute(Number(item.time) * 1000) : '')),
 );
 const cpuSeries = computed(() => [
   { name: gettext('CPU Usage'), data: cpuValues.value, color: '#1976d2' },
@@ -387,7 +387,11 @@ async function loadVmConfig() {
   if (!row.vmid || !row.node) return;
 
   try {
-    const response = await getVmConfig(textValue(row.node), textValue(row.vmid), selectedType.value);
+    const response = await getVmConfig(
+      textValue(row.node),
+      textValue(row.vmid),
+      selectedType.value,
+    );
     remarkText.value = textValue(response.data?.description, '');
     configDigest.value = textValue(response.data?.digest, '');
   } catch {
@@ -403,7 +407,7 @@ async function loadVMInfo(fromTimer = false) {
     const response = await getVmCurrent(
       textValue(row.node),
       textValue(row.vmid),
-      selectedType.value
+      selectedType.value,
     );
     current.value = response.data || {};
     await loadGuestAgentInfo();
@@ -429,7 +433,7 @@ async function loadGuestAgentInfo() {
     const response = await getVmGuestAgentInterfaces(
       textValue(row.node),
       textValue(row.vmid),
-      selectedType.value
+      selectedType.value,
     );
     const result = (response.data?.result || []) as PveRecord[];
     networkList.value = parseAgentInterfaces(result);
@@ -452,7 +456,7 @@ async function loadChartData(fromTimer = false) {
       textValue(row.vmid),
       timeType.value,
       rrdConsolidation.value,
-      selectedType.value
+      selectedType.value,
     );
     rrdRows.value = response.data || [];
   } finally {
@@ -561,7 +565,10 @@ onUnmounted(clearTimers);
       </div>
     </div> -->
 
-    <div class="top-overview-grid" :class="{ 'top-overview-grid--remark-collapsed': remarkCollapsed }">
+    <div
+      class="top-overview-grid"
+      :class="{ 'top-overview-grid--remark-collapsed': remarkCollapsed }"
+    >
       <q-card class="overview-panel base-info-panel no-shadow no-border-radius no-margin">
         <q-card-section class="panel-section">
           <div class="panel-header">
@@ -583,7 +590,12 @@ onUnmounted(clearTimers);
                 />
                 <div v-else-if="item.network" class="network-info-value">
                   <strong>{{ item.value }}</strong>
-                  <button v-if="agentHasMore" class="link-button" type="button" @click="agentWin = true">
+                  <button
+                    v-if="agentHasMore"
+                    class="link-button"
+                    type="button"
+                    @click="agentWin = true"
+                  >
                     {{ gettext('More') }}&gt;&gt;
                   </button>
                 </div>
@@ -660,28 +672,55 @@ onUnmounted(clearTimers);
             <section class="resource-card resource-card-compare">
               <div class="resource-card-title">{{ gettext('CPU Usage') }}</div>
               <strong>{{ textValue(current.cpus, '0') }} Core</strong>
-              <div class="resource-card-meta"><span>{{ gettext('Used') }}</span><span>{{ cpuPercent.toFixed(2) }}%</span></div>
-              <q-linear-progress rounded size="7px" :value="cpuPercent / 100" :color="progressColor(cpuPercent)" />
+              <div class="resource-card-meta">
+                <span>{{ gettext('Used') }}</span
+                ><span>{{ cpuPercent.toFixed(2) }}%</span>
+              </div>
+              <q-linear-progress
+                rounded
+                size="7px"
+                :value="cpuPercent / 100"
+                :color="progressColor(cpuPercent)"
+              />
               <q-icon class="resource-card-side-icon" name="developer_board" size="40px" />
             </section>
             <section class="resource-card resource-card-compare">
               <div class="resource-card-title">{{ gettext('RAM Usage') }}</div>
               <strong>{{ dataSize(current.maxmem || selectedVm.maxmem) }}</strong>
-              <div class="resource-card-meta"><span>{{ gettext('Used') }}</span><span>{{ dataSize(current.mem) }}</span></div>
-              <q-linear-progress rounded size="7px" :value="memPercent / 100" :color="progressColor(memPercent)" />
+              <div class="resource-card-meta">
+                <span>{{ gettext('Used') }}</span
+                ><span>{{ dataSize(current.mem) }}</span>
+              </div>
+              <q-linear-progress
+                rounded
+                size="7px"
+                :value="memPercent / 100"
+                :color="progressColor(memPercent)"
+              />
               <q-icon class="resource-card-side-icon" name="storage" size="40px" />
             </section>
             <section class="resource-card resource-card-compare">
               <div class="resource-card-title">{{ gettext('Bootdisk Size') }}</div>
               <strong>{{ dataSize(current.maxdisk || selectedVm.maxdisk) }}</strong>
-              <div class="resource-card-meta"><span>{{ gettext('Used') }}</span><span>{{ dataSize(current.disk) }}</span></div>
-              <q-linear-progress rounded size="7px" :value="diskPercent / 100" :color="progressColor(diskPercent)" />
+              <div class="resource-card-meta">
+                <span>{{ gettext('Used') }}</span
+                ><span>{{ dataSize(current.disk) }}</span>
+              </div>
+              <q-linear-progress
+                rounded
+                size="7px"
+                :value="diskPercent / 100"
+                :color="progressColor(diskPercent)"
+              />
               <q-icon class="resource-card-side-icon" name="save" size="40px" />
             </section>
             <section class="resource-card resource-card-compare">
               <div class="resource-card-title">{{ gettext('Host Memory Usage') }}</div>
               <strong>{{ hostMemPercent.toFixed(2) }}%</strong>
-              <div class="resource-card-meta"><span>{{ gettext('Used') }}</span><span>{{ dataSize(currentNode?.mem) }}</span></div>
+              <div class="resource-card-meta">
+                <span>{{ gettext('Used') }}</span
+                ><span>{{ dataSize(currentNode?.mem) }}</span>
+              </div>
               <q-linear-progress
                 rounded
                 size="7px"
@@ -768,11 +807,7 @@ onUnmounted(clearTimers);
             <div class="chart-header">
               <strong>{{ gettext('Network Traffic') }}</strong>
             </div>
-            <LineMetricChart
-              :x-data="chartXAxis"
-              :series="networkSeries"
-              :height="260"
-            />
+            <LineMetricChart :x-data="chartXAxis" :series="networkSeries" :height="260" />
           </q-card-section>
         </q-card>
       </div>
@@ -782,11 +817,7 @@ onUnmounted(clearTimers);
             <div class="chart-header">
               <strong>{{ gettext('Disk IO') }}</strong>
             </div>
-            <LineMetricChart
-              :x-data="chartXAxis"
-              :series="diskSeries"
-              :height="260"
-            />
+            <LineMetricChart :x-data="chartXAxis" :series="diskSeries" :height="260" />
           </q-card-section>
         </q-card>
       </div>
@@ -895,7 +926,9 @@ onUnmounted(clearTimers);
             no-caps
             flat
             size="12px"
-            :class="!remarkSaving ? 'bg-primary text-grey-1 u-button' : 'bg-grey-4 text-grey-6 u-button'"
+            :class="
+              !remarkSaving ? 'bg-primary text-grey-1 u-button' : 'bg-grey-4 text-grey-6 u-button'
+            "
             :disable="remarkSaving"
             :loading="remarkSaving"
             :label="gettext('Save')"

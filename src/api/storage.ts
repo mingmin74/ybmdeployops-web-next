@@ -30,5 +30,8 @@ export function createStorage(data: PveRecord) {
 }
 
 export function updateStorage(storage: string, data: PveRecord) {
-  return request<string>(`/api2/extjs/storage/${encodeURIComponent(storage)}`, { method: 'PUT', data });
+  return request<string>(`/api2/extjs/storage/${encodeURIComponent(storage)}`, {
+    method: 'PUT',
+    data,
+  });
 }

@@ -11,4 +11,3 @@ export const useUiStore = defineStore('ui', () => {
 
   return { menuMini, toggleMenuMini };
 });
-

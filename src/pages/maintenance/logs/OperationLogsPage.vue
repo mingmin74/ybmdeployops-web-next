@@ -17,17 +17,37 @@ let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
 const columns: QTableColumn<PveRecord>[] = [
   { name: 'index', label: '#', align: 'left', field: 'upid', sortable: false },
-  { name: 'starttime', label: gettext('Start Time'), align: 'left', field: (row) => timestampToTime(Number(row.starttime) * 1000), sortable: true },
-  { name: 'endtime', label: gettext('End Time'), align: 'left', field: (row) => timestampToTime(Number(row.endtime) * 1000), sortable: true },
+  {
+    name: 'starttime',
+    label: gettext('Start Time'),
+    align: 'left',
+    field: (row) => timestampToTime(Number(row.starttime) * 1000),
+    sortable: true,
+  },
+  {
+    name: 'endtime',
+    label: gettext('End Time'),
+    align: 'left',
+    field: (row) => timestampToTime(Number(row.endtime) * 1000),
+    sortable: true,
+  },
   { name: 'node', label: gettext('Node Name'), align: 'left', field: 'node', sortable: true },
   { name: 'user', label: gettext('Username'), align: 'left', field: 'user', sortable: true },
-  { name: 'desc', label: gettext('Description'), align: 'left', field: (row) => formatTaskDescription(row.type, row.id), sortable: true },
+  {
+    name: 'desc',
+    label: gettext('Description'),
+    align: 'left',
+    field: (row) => formatTaskDescription(row.type, row.id),
+    sortable: true,
+  },
   { name: 'status', label: gettext('Status'), align: 'left', field: 'status', sortable: true },
 ];
 
 async function reload() {
   const response = await getTaskLogs();
-  rows.value = [...(response.data || [])].sort((left, right) => Number(right.starttime || 0) - Number(left.starttime || 0));
+  rows.value = [...(response.data || [])].sort(
+    (left, right) => Number(right.starttime || 0) - Number(left.starttime || 0),
+  );
 }
 
 function rowClick(_: Event, row: PveRecord) {
@@ -96,11 +116,19 @@ onBeforeUnmount(() => {
       :loading="loading"
       :no-data-label="gettext('no record can be found')"
       @row-click="rowClick"
-        @update:selected="selected = [...$event]"
-      >
+      @update:selected="selected = [...$event]"
+    >
       <template #top>
         <div class="q-gutter-sm">
-          <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Export')" @click="exportData" />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Export')"
+            @click="exportData"
+          />
           <q-btn
             no-caps
             outline
@@ -119,7 +147,9 @@ onBeforeUnmount(() => {
       </template>
       <template #body-cell-status="scope">
         <q-td :props="scope">
-          <span :class="scope.value === 'OK' ? 'text-green' : 'text-red'">{{ scope.value || '-' }}</span>
+          <span :class="scope.value === 'OK' ? 'text-green' : 'text-red'">{{
+            scope.value || '-'
+          }}</span>
         </q-td>
       </template>
       <template #body-cell-index="scope">
@@ -131,6 +161,11 @@ onBeforeUnmount(() => {
         </div>
       </template>
     </q-table>
-    <TaskOutputDialog v-model="taskDialog" :node="taskParams.node" :upid="taskParams.upid" :title="taskParams.title" />
+    <TaskOutputDialog
+      v-model="taskDialog"
+      :node="taskParams.node"
+      :upid="taskParams.upid"
+      :title="taskParams.title"
+    />
   </div>
 </template>

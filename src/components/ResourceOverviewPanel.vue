@@ -29,14 +29,14 @@ const rrdTimeframe = shallowRef<'hour' | 'day' | 'week' | 'month' | 'year'>('hou
 const rrdConsolidation = shallowRef<'AVERAGE' | 'MAX'>('AVERAGE');
 
 const modeType = computed(() =>
-  props.mode === 'computer' ? 'vm' : props.mode === 'host' ? 'node' : 'storage'
+  props.mode === 'computer' ? 'vm' : props.mode === 'host' ? 'node' : 'storage',
 );
 const title = computed(() =>
   props.mode === 'computer'
     ? gettext('Computer')
     : props.mode === 'host'
-    ? gettext('Host')
-    : gettext('Storage')
+      ? gettext('Host')
+      : gettext('Storage'),
 );
 
 const options = computed(() =>
@@ -46,7 +46,7 @@ const options = computed(() =>
         ? `${textValue(item.vmid)} / ${textValue(item.name || item.type, '-')}`
         : textValue(item.node || item.storage || item.id),
     value: resourceId(item),
-  }))
+  })),
 );
 
 const selectedResource = computed(() => {
@@ -89,7 +89,7 @@ const statRows = computed(() => [
         selectedResource.value.node ||
         selectedResource.value.storage ||
         selectedResource.value.id,
-      '-'
+      '-',
     ),
   },
   {
@@ -105,13 +105,13 @@ const statRows = computed(() => [
   {
     label: gettext('Memory Usage'),
     value: `${formatBytes(current.value.mem as number)} / ${formatBytes(
-      (current.value.maxmem || selectedResource.value.maxmem) as number
+      (current.value.maxmem || selectedResource.value.maxmem) as number,
     )}`,
   },
   {
     label: gettext('Disk Usage'),
     value: `${formatBytes(
-      (current.value.disk || selectedResource.value.disk) as number
+      (current.value.disk || selectedResource.value.disk) as number,
     )} / ${formatBytes((current.value.maxdisk || selectedResource.value.maxdisk) as number)}`,
   },
 ]);
@@ -119,10 +119,10 @@ const statRows = computed(() => [
 const cpuValues = computed(() => rrdRows.value.map((item) => Number(item.cpu || 0) * 100));
 const memoryValues = computed(() => rrdRows.value.map((item) => item.mem as number));
 const networkValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.netin || 0) + Number(item.netout || 0))
+  rrdRows.value.map((item) => Number(item.netin || 0) + Number(item.netout || 0)),
 );
 const diskValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.diskread || 0) + Number(item.diskwrite || 0))
+  rrdRows.value.map((item) => Number(item.diskread || 0) + Number(item.diskwrite || 0)),
 );
 const hostMemory = computed(() => (current.value.memory || {}) as PveRecord);
 const hostRootfs = computed(() => (current.value.rootfs || {}) as PveRecord);
@@ -131,13 +131,13 @@ const hostCpuInfo = computed(() => (current.value.cpuinfo || {}) as PveRecord);
 const hostCpuPercent = computed(() => usedPercent(Number(current.value.cpu), 1));
 const hostIoDelayPercent = computed(() => usedPercent(Number(current.value.wait), 1));
 const hostMemoryPercent = computed(() =>
-  usedPercent(Number(hostMemory.value.used), Number(hostMemory.value.total))
+  usedPercent(Number(hostMemory.value.used), Number(hostMemory.value.total)),
 );
 const hostDiskPercent = computed(() =>
-  usedPercent(Number(hostRootfs.value.used), Number(hostRootfs.value.total))
+  usedPercent(Number(hostRootfs.value.used), Number(hostRootfs.value.total)),
 );
 const hostSwapPercent = computed(() =>
-  usedPercent(Number(hostSwap.value.used), Number(hostSwap.value.total))
+  usedPercent(Number(hostSwap.value.used), Number(hostSwap.value.total)),
 );
 const hostCpuDescription = computed(() => {
   const cpus = textValue(hostCpuInfo.value.cpus, textValue(selectedResource.value.maxcpu, '-'));
@@ -179,11 +179,11 @@ const hostInfoRows = computed(() => [
 const hostBasicTitle = computed(
   () =>
     `${textValue(selectedResource.value.node || selectedResource.value.name, '-')} (${formatUptime(
-      current.value.uptime
-    )})`
+      current.value.uptime,
+    )})`,
 );
 const nodeStatus = computed(() =>
-  textValue(current.value.status || selectedResource.value.status, 'unknown').toLowerCase()
+  textValue(current.value.status || selectedResource.value.status, 'unknown').toLowerCase(),
 );
 const nodeStatusLabel = computed(() => {
   if (nodeStatus.value === 'online') return gettext('Online');
@@ -204,7 +204,7 @@ const hostResourceCards = computed(() => [
     value: `${hostCpuPercent.value.toFixed(2)}%`,
     meta: `${textValue(
       hostCpuInfo.value.cpus,
-      textValue(selectedResource.value.maxcpu, '-')
+      textValue(selectedResource.value.maxcpu, '-'),
     )} CPU(s)`,
     percent: hostCpuPercent.value,
     icon: 'developer_board',
@@ -213,7 +213,7 @@ const hostResourceCards = computed(() => [
     title: gettext('Memory Usage'),
     value: `${hostMemoryPercent.value.toFixed(2)}%`,
     meta: `${formatBytes(Number(hostMemory.value.used))} / ${formatBytes(
-      Number(hostMemory.value.total)
+      Number(hostMemory.value.total),
     )}`,
     percent: hostMemoryPercent.value,
     icon: 'storage',
@@ -222,7 +222,7 @@ const hostResourceCards = computed(() => [
     title: gettext('HD Space'),
     value: `${hostDiskPercent.value.toFixed(2)}%`,
     meta: `${formatBytes(Number(hostRootfs.value.used))} / ${formatBytes(
-      Number(hostRootfs.value.total)
+      Number(hostRootfs.value.total),
     )}`,
     percent: hostDiskPercent.value,
     icon: 'save',
@@ -231,7 +231,7 @@ const hostResourceCards = computed(() => [
     title: gettext('SWAP Usage'),
     value: `${hostSwapPercent.value.toFixed(2)}%`,
     meta: `${formatBytes(Number(hostSwap.value.used))} / ${formatBytes(
-      Number(hostSwap.value.total)
+      Number(hostSwap.value.total),
     )}`,
     percent: hostSwapPercent.value,
     icon: 'swap_horiz',
@@ -246,7 +246,7 @@ const hostResourceCards = computed(() => [
   { title: gettext('Load Average'), loadValues: hostLoadAverageValues.value, icon: 'speed' },
 ]);
 const hostChartXAxis = computed(() =>
-  rrdRows.value.map((item) => (item.time ? timestampToMinute(Number(item.time) * 1000) : ''))
+  rrdRows.value.map((item) => (item.time ? timestampToMinute(Number(item.time) * 1000) : '')),
 );
 const hostCpuSeries = computed(() => [
   {
@@ -363,7 +363,7 @@ const tableColumns = computed<QTableColumn<PveRecord>[]>(() => {
 
 function resourceId(row: PveRecord) {
   const fallback = `${textValue(row.node)}:${textValue(
-    row.vmid || row.storage || row.node || row.name
+    row.vmid || row.storage || row.node || row.name,
   )}`;
   return textValue(row.id, fallback);
 }
@@ -431,7 +431,7 @@ async function loadSelected() {
         textValue(row.node, 'localhost'),
         textValue(row.storage),
         'hour',
-        'AVERAGE'
+        'AVERAGE',
       );
       current.value = row;
       rrdRows.value = rrdResponse.data || [];
@@ -449,7 +449,7 @@ watch(
   () => props.node,
   () => {
     if (props.mode === 'host') void loadResources();
-  }
+  },
 );
 
 onMounted(loadResources);
@@ -721,7 +721,7 @@ onMounted(loadResources);
                 :percent="
                   usedPercent(
                     Number(scope.row.mem || scope.row.disk),
-                    Number(scope.row.maxmem || scope.row.maxdisk)
+                    Number(scope.row.maxmem || scope.row.maxdisk),
                   )
                 "
               />

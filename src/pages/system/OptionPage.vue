@@ -6,7 +6,15 @@ import type { PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
 import { objectToText, textValue } from '@/utils/pveFormat';
 
-type OptionType = 'keyboard' | 'email_from' | 'mac_prefix' | 'migration' | 'ha' | 'bwlimit' | 'max_workers' | 'label';
+type OptionType =
+  | 'keyboard'
+  | 'email_from'
+  | 'mac_prefix'
+  | 'migration'
+  | 'ha'
+  | 'bwlimit'
+  | 'max_workers'
+  | 'label';
 
 const loading = ref(false);
 const dialogLoading = ref(false);
@@ -57,16 +65,47 @@ const networkOptions = computed(() =>
     })),
 );
 
-const rows = computed(() => [
-  { label: 'Keyboard Layout', type: 'keyboard', value: keyboardDisplay() },
-  { label: 'Email from address', type: 'email_from', value: showData.value.email_from || 'root@$hostname' },
-  { label: 'MAC address prefix', type: 'mac_prefix', value: showData.value.mac_prefix || gettext('None') },
-  { label: 'Migration Settings', type: 'migration', value: objectToText(showData.value.migration) || gettext('Default') },
-  { label: 'HA Settings', type: 'ha', value: objectToText(showData.value.ha) || gettext('Default') },
-  { label: 'Bandwidth Limits', type: 'bwlimit', value: formatBwlimit(showData.value.bwlimit) || gettext('None') },
-  { label: 'Maximal Workers/bulk-action', type: 'max_workers', value: showData.value.max_workers || '-' },
-  { label: `${gettext('VM')}${gettext('Label management')}`, type: 'label', value: showData.value.label ? gettext('Open') : gettext('Close') },
-] as { label: string; type: OptionType; value: unknown }[]);
+const rows = computed(
+  () =>
+    [
+      { label: 'Keyboard Layout', type: 'keyboard', value: keyboardDisplay() },
+      {
+        label: 'Email from address',
+        type: 'email_from',
+        value: showData.value.email_from || 'root@$hostname',
+      },
+      {
+        label: 'MAC address prefix',
+        type: 'mac_prefix',
+        value: showData.value.mac_prefix || gettext('None'),
+      },
+      {
+        label: 'Migration Settings',
+        type: 'migration',
+        value: objectToText(showData.value.migration) || gettext('Default'),
+      },
+      {
+        label: 'HA Settings',
+        type: 'ha',
+        value: objectToText(showData.value.ha) || gettext('Default'),
+      },
+      {
+        label: 'Bandwidth Limits',
+        type: 'bwlimit',
+        value: formatBwlimit(showData.value.bwlimit) || gettext('None'),
+      },
+      {
+        label: 'Maximal Workers/bulk-action',
+        type: 'max_workers',
+        value: showData.value.max_workers || '-',
+      },
+      {
+        label: `${gettext('VM')}${gettext('Label management')}`,
+        type: 'label',
+        value: showData.value.label ? gettext('Open') : gettext('Close'),
+      },
+    ] as { label: string; type: OptionType; value: unknown }[],
+);
 
 function keyboardDisplay() {
   const keyboard = textValue(showData.value.keyboard);
@@ -90,7 +129,10 @@ async function loadOptions() {
   loading.value = true;
   try {
     const response = await getClusterOptions();
-    showData.value = { ...(response.data || {}), label: Boolean(Number(response.data?.label || 0)) };
+    showData.value = {
+      ...(response.data || {}),
+      label: Boolean(Number(response.data?.label || 0)),
+    };
   } finally {
     loading.value = false;
   }
@@ -114,7 +156,8 @@ async function openEdit(type: OptionType) {
     .filter(Boolean)
     .forEach((item) => {
       const [key, raw] = item.split('=');
-      if (key && key in form.bwlimit) form.bwlimit[key as keyof typeof form.bwlimit] = String(Number(raw) / 1024 || '');
+      if (key && key in form.bwlimit)
+        form.bwlimit[key as keyof typeof form.bwlimit] = String(Number(raw) / 1024 || '');
     });
   dialogVisible.value = true;
   if (type === 'migration') {
@@ -134,7 +177,9 @@ function buildSubmitData() {
   if (type === 'ha') {
     data[form.ha ? 'ha' : 'delete'] = form.ha ? `shutdown_policy=${form.ha}` : 'ha';
   } else if (type === 'migration') {
-    data[form.migration ? 'migration' : 'delete'] = form.migration ? `network=${form.migration},type=secure` : 'migration';
+    data[form.migration ? 'migration' : 'delete'] = form.migration
+      ? `network=${form.migration},type=secure`
+      : 'migration';
   } else if (type === 'bwlimit') {
     const values = Object.entries(form.bwlimit)
       .filter(([, value]) => Number(value) > 0)
@@ -182,7 +227,11 @@ onMounted(() => {
     <q-inner-loading :showing="loading" />
 
     <q-dialog v-model="dialogVisible" persistent transition-show="scale" transition-hide="scale">
-      <UWindow :title="`${gettext('Edit')}: ${gettext(activeType)}`" width="420px" :loading="dialogLoading">
+      <UWindow
+        :title="`${gettext('Edit')}: ${gettext(activeType)}`"
+        width="420px"
+        :loading="dialogLoading"
+      >
         <div class="q-pa-md">
           <q-select
             v-if="activeType === 'keyboard'"
@@ -194,8 +243,18 @@ onMounted(() => {
             :options="keyboardOptions"
             :label="gettext('Keyboard Layout')"
           />
-          <q-input v-else-if="activeType === 'email_from'" v-model="form.email_from" dense :label="gettext('Email from address')" />
-          <q-input v-else-if="activeType === 'mac_prefix'" v-model="form.mac_prefix" dense :label="gettext('MAC address prefix')" />
+          <q-input
+            v-else-if="activeType === 'email_from'"
+            v-model="form.email_from"
+            dense
+            :label="gettext('Email from address')"
+          />
+          <q-input
+            v-else-if="activeType === 'mac_prefix'"
+            v-model="form.mac_prefix"
+            dense
+            :label="gettext('MAC address prefix')"
+          />
           <q-select
             v-else-if="activeType === 'migration'"
             v-model="form.migration"
@@ -218,16 +277,38 @@ onMounted(() => {
             :label="gettext('Shutdown Policy')"
           />
           <div v-else-if="activeType === 'bwlimit'" class="column q-gutter-sm">
-            <q-input v-for="(_, key) in form.bwlimit" :key="key" v-model="form.bwlimit[key]" dense type="number" suffix="Mib/s" :label="gettext(String(key))" />
+            <q-input
+              v-for="(_, key) in form.bwlimit"
+              :key="key"
+              v-model="form.bwlimit[key]"
+              dense
+              type="number"
+              suffix="Mib/s"
+              :label="gettext(String(key))"
+            />
           </div>
           <div v-else-if="activeType === 'label'" class="text-center">
             {{ gettext('Close') }}
             <q-toggle v-model="form.label" color="primary" :label="gettext('Open')" />
           </div>
-          <q-input v-else v-model="form.max_workers" dense type="number" min="1" :label="gettext('Maximal Workers/bulk-action')" />
+          <q-input
+            v-else
+            v-model="form.max_workers"
+            dense
+            type="number"
+            min="1"
+            :label="gettext('Maximal Workers/bulk-action')"
+          />
         </div>
         <template #foot>
-          <q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :label="gettext('OK')" @click="saveOption" />
+          <q-btn
+            no-caps
+            flat
+            size="12px"
+            class="bg-primary text-grey-1 u-button"
+            :label="gettext('OK')"
+            @click="saveOption"
+          />
         </template>
       </UWindow>
     </q-dialog>

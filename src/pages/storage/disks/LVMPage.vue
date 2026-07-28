@@ -51,5 +51,11 @@ async function loadRows(node: string) {
 </script>
 
 <template>
-  <NodeDiskTablePage :columns="columns" :load-rows="loadRows" row-key="name" :embedded="embedded" :node="node" />
+  <NodeDiskTablePage
+    :columns="columns"
+    :load-rows="loadRows"
+    row-key="name"
+    :embedded="embedded"
+    :node="node"
+  />
 </template>

@@ -38,7 +38,8 @@ export function getVmResources() {
   });
 }
 
-export type VmPowerCommand = 'start' | 'shutdown' | 'stop' | 'reboot' | 'reset' | 'suspend' | 'resume';
+export type VmPowerCommand =
+  'start' | 'shutdown' | 'stop' | 'reboot' | 'reset' | 'suspend' | 'resume';
 
 export function runVmPowerCommand(
   node: string,
@@ -53,10 +54,24 @@ export function runVmPowerCommand(
 }
 
 export function getNextVmId() {
-  return request<number | string>('/api2/extjs/cluster/nextid', { method: 'GET', notifyOnError: true });
+  return request<number | string>('/api2/extjs/cluster/nextid', {
+    method: 'GET',
+    notifyOnError: true,
+  });
 }
 
-export function migrateVm(node: string, vmid: number | string, data: { target: string; online?: 1; 'with-local-disks'?: 1; targetstorage?: string }) {
+export function migrateVm(
+  node: string,
+  vmid: number | string,
+  data: {
+    target: string;
+    online?: 1;
+    'with-local-disks'?: 1;
+    targetstorage?: string;
+    force?: 1;
+    'with-conntrack-state'?: 1;
+  },
+) {
   return request<string>(
     `/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/migrate`,
     { method: 'POST', data, notifyOnError: true },
@@ -66,7 +81,16 @@ export function migrateVm(node: string, vmid: number | string, data: { target: s
 export function cloneVm(
   node: string,
   vmid: number | string,
-  data: { newid: number | string; name?: string; target?: string; full?: 0 | 1; storage?: string; format?: string; snapname?: string; pool?: string },
+  data: {
+    newid: number | string;
+    name?: string;
+    target?: string;
+    full?: 0 | 1;
+    storage?: string;
+    format?: string;
+    snapname?: string;
+    pool?: string;
+  },
 ) {
   return request<string>(
     `/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/clone`,
@@ -74,23 +98,40 @@ export function cloneVm(
   );
 }
 
-export function deleteVm(node: string, vmid: number | string) {
+export function deleteVm(
+  node: string,
+  vmid: number | string,
+  data?: { purge?: 0 | 1; 'destroy-unreferenced-disks'?: 0 | 1 },
+) {
   return request<string>(
     `/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}`,
-    { method: 'DELETE', notifyOnError: true },
+    { method: 'DELETE', ...(data ? { data } : {}), notifyOnError: true },
   );
 }
 
 export function convertVmToTemplate(node: string, vmid: number | string) {
-  return request<string>(`/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/template`, { method: 'POST', notifyOnError: true });
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/template`,
+    { method: 'POST', notifyOnError: true },
+  );
 }
 
 export function resizeVmDisk(node: string, vmid: number | string, disk: string, size: string) {
-  return request<string>(`/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/resize`, { method: 'PUT', data: { disk, size }, notifyOnError: true });
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/resize`,
+    { method: 'PUT', data: { disk, size }, notifyOnError: true },
+  );
 }
 
-export function moveVmDisk(node: string, vmid: number | string, data: { disk: string; storage: string; delete?: 0 | 1; format?: string }) {
-  return request<string>(`/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/move_disk`, { method: 'POST', data, notifyOnError: true });
+export function moveVmDisk(
+  node: string,
+  vmid: number | string,
+  data: { disk: string; storage: string; delete?: 0 | 1; format?: string },
+) {
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/move_disk`,
+    { method: 'POST', data, notifyOnError: true },
+  );
 }
 
 export function createVm(node: string, data: Record<string, unknown>) {
@@ -104,7 +145,12 @@ export function createVm(node: string, data: Record<string, unknown>) {
 export function runVmBackup(
   node: string,
   vmid: number | string,
-  data: { storage: string; mode: 'snapshot' | 'suspend' | 'stop'; compress?: 'zstd' | 'lzo' | 'gzip' | '0'; protected?: 0 | 1 },
+  data: {
+    storage: string;
+    mode: 'snapshot' | 'suspend' | 'stop';
+    compress?: 'zstd' | 'lzo' | 'gzip' | '0';
+    protected?: 0 | 1;
+  },
 ) {
   return request<string>(`/api2/json/nodes/${encodeURIComponent(node)}/vzdump`, {
     method: 'POST',
@@ -125,8 +171,29 @@ export function getVmTaskHistory(
   });
 }
 
-export function restoreVmBackup(node: string, data: { vmid: number | string; archive: string; storage?: string; bwlimit?: number; unique?: 0 | 1; force?: 0 | 1; name?: string; cores?: number; memory?: number; sockets?: number; start?: 0 | 1; 'live-restore'?: 0 | 1 }) {
-  return request<string>(`/api2/json/nodes/${encodeURIComponent(node)}/qemu`, { method: 'POST', data, notifyOnError: true });
+export function restoreVmBackup(
+  node: string,
+  data: {
+    vmid: number | string;
+    archive: string;
+    storage?: string;
+    bwlimit?: number;
+    unique?: 0 | 1;
+    force?: 0 | 1;
+    name?: string;
+    cores?: number;
+    memory?: number;
+    sockets?: number;
+    start?: 0 | 1;
+    'live-restore'?: 0 | 1;
+    'ha-managed'?: 0 | 1;
+  },
+) {
+  return request<string>(`/api2/json/nodes/${encodeURIComponent(node)}/qemu`, {
+    method: 'POST',
+    data,
+    notifyOnError: true,
+  });
 }
 
 export function getVmBackupConfiguration(node: string, volume: string) {
@@ -138,12 +205,29 @@ export function getVmBackupConfiguration(node: string, volume: string) {
 }
 
 export function getVmSpiceProxy(node: string, vmid: number | string, proxy: string) {
-  return request<Record<string, string>>(`/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/spiceproxy`, { method: 'POST', data: { proxy }, notifyOnError: true });
+  return request<Record<string, string>>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/spiceproxy`,
+    { method: 'POST', data: { proxy }, notifyOnError: true },
+  );
 }
 
 export function regenerateVmCloudInitImage(node: string, vmid: number | string) {
-  return request<string>(`/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/cloudinit`, {
-    method: 'PUT',
-    notifyOnError: true,
-  });
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/cloudinit`,
+    {
+      method: 'PUT',
+      notifyOnError: true,
+    },
+  );
+}
+
+export function runVmMonitorCommand(node: string, vmid: number | string, command: string) {
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/monitor`,
+    {
+      method: 'POST',
+      data: { command },
+      notifyOnError: true,
+    },
+  );
 }

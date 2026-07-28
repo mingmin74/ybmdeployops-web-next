@@ -3,7 +3,15 @@ import { LineChart } from 'echarts/charts';
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
 import { getInstanceByDom, init, use, type ECharts, type EChartsCoreOption } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
-import { computed, nextTick, onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  shallowRef,
+  useTemplateRef,
+  watch,
+} from 'vue';
 
 use([LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
 
@@ -35,7 +43,9 @@ const chartRef = useTemplateRef<HTMLDivElement>('chart');
 const chartInstance = shallowRef<ECharts | null>(null);
 let resizeTimer: number | undefined;
 
-const hasData = computed(() => props.series.some((item) => item.data.some((value) => Number.isFinite(Number(value)))));
+const hasData = computed(() =>
+  props.series.some((item) => item.data.some((value) => Number.isFinite(Number(value)))),
+);
 const xAxisData = computed(() => (props.xData.length ? props.xData : ['', '', '', '', '']));
 
 function convertToUnits(value: number) {
@@ -208,7 +218,11 @@ async function updateChart() {
   chart.setOption(option, true);
 }
 
-watch(() => [props.xData, props.series, props.yUnit, props.unitType, props.powerOfTwo], updateChart, { deep: true });
+watch(
+  () => [props.xData, props.series, props.yUnit, props.unitType, props.powerOfTwo],
+  updateChart,
+  { deep: true },
+);
 
 onMounted(() => {
   void updateChart();

@@ -39,14 +39,37 @@ const flatRows = computed(() => {
 
 const visibleRows = computed(() => {
   if (!selectedKey.value) return flatRows.value;
-  return flatRows.value.filter((item) => textValue(item.id || item.name || item.vnet || item.subnet || item.ip || item.mac) === selectedKey.value);
+  return flatRows.value.filter(
+    (item) =>
+      textValue(item.id || item.name || item.vnet || item.subnet || item.ip || item.mac) ===
+      selectedKey.value,
+  );
 });
 
 const columns: QTableColumn<PveRecord>[] = [
-  { name: 'name', required: true, label: gettext('Name'), align: 'left', field: (row) => row.name || row.vmid || row.vnet || '-', sortable: true },
-  { name: 'ip', label: 'IP Address', align: 'left', field: (row) => row.ip || row.address || '-', sortable: true },
+  {
+    name: 'name',
+    required: true,
+    label: gettext('Name'),
+    align: 'left',
+    field: (row) => row.name || row.vmid || row.vnet || '-',
+    sortable: true,
+  },
+  {
+    name: 'ip',
+    label: 'IP Address',
+    align: 'left',
+    field: (row) => row.ip || row.address || '-',
+    sortable: true,
+  },
   { name: 'mac', label: 'MAC', align: 'left', field: (row) => row.mac || '-', sortable: true },
-  { name: 'gateway', label: gettext('Gateway'), align: 'left', field: (row) => row.gateway || '-', sortable: true },
+  {
+    name: 'gateway',
+    label: gettext('Gateway'),
+    align: 'left',
+    field: (row) => row.gateway || '-',
+    sortable: true,
+  },
 ];
 
 async function refreshData() {
@@ -65,11 +88,36 @@ onMounted(refreshData);
 <template>
   <div class="q-ma-md row no-wrap sdn-ipam">
     <div class="sdn-tree bg-white q-pa-sm">
-      <q-tree v-model:selected="selectedKey" :nodes="treeNodes" node-key="id" selected-color="primary" default-expand-all />
+      <q-tree
+        v-model:selected="selectedKey"
+        :nodes="treeNodes"
+        node-key="id"
+        selected-color="primary"
+        default-expand-all
+      />
     </div>
     <div class="col q-ml-md bg-white">
-      <q-table flat row-key="id" table-header-class="u-table-header" :rows="visibleRows" :columns="columns" :loading="loading" :pagination="{ page: 1, rowsPerPage: 10 }" :rows-per-page-options="[10]" :no-data-label="gettext('no record can be found')">
-        <template #top><q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Refresh')" @click="refreshData" /></template>
+      <q-table
+        flat
+        row-key="id"
+        table-header-class="u-table-header"
+        :rows="visibleRows"
+        :columns="columns"
+        :loading="loading"
+        :pagination="{ page: 1, rowsPerPage: 10 }"
+        :rows-per-page-options="[10]"
+        :no-data-label="gettext('no record can be found')"
+      >
+        <template #top
+          ><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Refresh')"
+            @click="refreshData"
+        /></template>
       </q-table>
     </div>
   </div>

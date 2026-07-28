@@ -19,9 +19,16 @@ export const useSessionStore = defineStore('session', () => {
 
   const ticket = computed(() => Cookies.get(appConfig.cookieName) || '');
   const isAuthenticated = computed(() => Boolean(username.value && realm.value && ticket.value));
-  const userid = computed(() => (username.value && realm.value ? `${username.value}@${realm.value}` : ''));
+  const userid = computed(() =>
+    username.value && realm.value ? `${username.value}@${realm.value}` : '',
+  );
 
-  function persistSession(data: { username: string; csrfToken: string; cap?: Record<string, unknown>; ticket: string }) {
+  function persistSession(data: {
+    username: string;
+    csrfToken: string;
+    cap?: Record<string, unknown>;
+    ticket: string;
+  }) {
     username.value = data.username.split('@')[0] || data.username;
     realm.value = data.username.split('@')[1] || realm.value;
     csrfToken.value = data.csrfToken;
@@ -89,4 +96,3 @@ export const useSessionStore = defineStore('session', () => {
     clearSession,
   };
 });
-

@@ -143,10 +143,7 @@ onMounted(() => {
     </template>
 
     <template #body-cell="scope">
-      <UsageProgress
-        v-if="isUsageColumn(scope.col.name)"
-        :percent="Number(scope.value)"
-      />
+      <UsageProgress v-if="isUsageColumn(scope.col.name)" :percent="Number(scope.value)" />
       <q-badge
         v-else-if="scope.col.name === 'status'"
         :color="nodeStatusColor(scope.row.status as string | undefined)"

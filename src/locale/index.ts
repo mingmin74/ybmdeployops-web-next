@@ -1,12 +1,15 @@
 import type { App } from 'vue';
-import pveZhCNSource from './pve-lang-zh_CN.js?raw';
+import {
+  __proxmox_i18n_msgcat__,
+  __proxmox_i18n_plurals_msgcat__,
+} from './pve-lang-zh_CN';
 import enUS from './en-US';
 import zhCN from './zh-CN';
 
 export type LocaleName = 'en-US' | 'zh-CN';
 
 type MessageMap = Record<string, string>;
-type PveCatalog = Record<string, [string]>;
+type PveCatalog = Record<string, string[]>;
 type PvePluralCatalog = Record<string, string[]>;
 
 const localeStorageKey = 'locale';
@@ -16,11 +19,8 @@ const localMessages: Record<LocaleName, MessageMap> = {
 };
 
 let activeLocale = normalizeLocale(localStorage.getItem(localeStorageKey));
-const pveZhCNCatalog = parseCatalog<PveCatalog>(pveZhCNSource, '__proxmox_i18n_msgcat__');
-const pveZhCNPluralCatalog = parseCatalog<PvePluralCatalog>(
-  pveZhCNSource,
-  '__proxmox_i18n_plurals_msgcat__',
-);
+const pveZhCNCatalog = __proxmox_i18n_msgcat__ as PveCatalog;
+const pveZhCNPluralCatalog = __proxmox_i18n_plurals_msgcat__ as PvePluralCatalog;
 
 function normalizeLocale(locale: string | null): LocaleName {
   if (!locale) {
@@ -32,16 +32,6 @@ function normalizeLocale(locale: string | null): LocaleName {
   }
 
   return 'en-US';
-}
-
-function parseCatalog<T>(source: string, variableName: string): T {
-  const match = new RegExp(`${variableName}\\s*=\\s*(\\{[\\s\\S]*?\\n\\});`).exec(source);
-
-  if (!match?.[1]) {
-    return {} as T;
-  }
-
-  return JSON.parse(match[1]) as T;
 }
 
 function hasOwnMessage(messages: MessageMap, message: string) {
