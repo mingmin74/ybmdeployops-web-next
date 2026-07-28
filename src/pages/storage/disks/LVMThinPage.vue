@@ -7,6 +7,7 @@ import { formatBytes } from '@/utils/format';
 
 defineProps<{
   embedded?: boolean;
+  node?: string;
 }>();
 
 const columns: QTableColumn<PveRecord>[] = [
@@ -61,5 +62,5 @@ async function loadRows(node: string) {
 </script>
 
 <template>
-  <NodeDiskTablePage :columns="columns" :load-rows="loadRows" row-key="lv" :embedded="embedded" />
+  <NodeDiskTablePage :columns="columns" :load-rows="loadRows" row-key="lv" :embedded="embedded" :node="node" />
 </template>

@@ -24,7 +24,8 @@ export const menuItems: MenuItem[] = [
     titleKey: 'Storage',
     icon: 'dns',
     children: [
-      { titleKey: 'Overview', path: '/storage/overview', icon: 'dashboard' },
+      // 暂不开放存储概览模块。
+      // { titleKey: 'Overview', path: '/storage/overview', icon: 'dashboard' },
       { titleKey: 'Disks Management', path: '/storage/disks', icon: 'storage' },
       { titleKey: 'Cluster Storage', path: '/storage/udos', icon: 'cloud_queue' },
       { titleKey: 'Storage Services', path: '/storage/list', icon: 'view_list' },
@@ -48,10 +49,16 @@ export const menuItems: MenuItem[] = [
       { titleKey: 'Pools', path: '/system/pools', icon: 'folder_shared' },
       { titleKey: 'Service', path: '/system/service', icon: 'miscellaneous_services' },
       { titleKey: 'Firewall', path: '/system/firewall', icon: 'security' },
-      { titleKey: 'SDN Zones', path: '/system/sdn/zones', icon: 'public' },
-      { titleKey: 'SDN VNets', path: '/system/sdn/vnets', icon: 'hub' },
-      { titleKey: 'SDN IPAM', path: '/system/sdn/ipam', icon: 'lan' },
-      { titleKey: 'SDN Options', path: '/system/sdn/options', icon: 'tune' },
+      {
+        titleKey: 'SDN',
+        icon: 'account_tree',
+        children: [
+          { titleKey: 'SDN Zones', path: '/system/sdn/zones', icon: 'public' },
+          { titleKey: 'SDN VNets', path: '/system/sdn/vnets', icon: 'hub' },
+          { titleKey: 'SDN IPAM', path: '/system/sdn/ipam', icon: 'lan' },
+          { titleKey: 'SDN Options', path: '/system/sdn/options', icon: 'tune' },
+        ],
+      },
       { titleKey: 'Options', path: '/system/options', icon: 'tune' },
       { titleKey: 'Metric Server', path: '/system/metric-server', icon: 'monitor_heart' },
     ],

@@ -127,12 +127,13 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/storage/DisksPage.vue'),
         meta: { auth: true, title: 'Disks Management' },
       },
-      {
-        path: 'storage/overview',
-        name: 'storage-overview',
-        component: () => import('@/pages/storage/OverviewPage.vue'),
-        meta: { auth: true, title: 'Overview' },
-      },
+      // 暂不开放存储概览模块。
+      // {
+      //   path: 'storage/overview',
+      //   name: 'storage-overview',
+      //   component: () => import('@/pages/storage/OverviewPage.vue'),
+      //   meta: { auth: true, title: 'Overview' },
+      // },
       {
         path: 'storage/udos',
         name: 'storage-ceph',
@@ -188,10 +189,28 @@ const routes: RouteRecordRaw[] = [
         meta: { auth: true, title: 'Overview' },
       },
       {
+        path: 'computer/list',
+        name: 'computer-vm-list',
+        component: () => import('@/pages/computer/VMListPage.vue'),
+        meta: { auth: true, title: 'Virtual Machine' },
+      },
+      {
+        path: 'computer/list/:node/:vmid',
+        name: 'computer-vm-detail',
+        component: () => import('@/pages/computer/VmDetailPage.vue'),
+        meta: { auth: true, title: 'Virtual Machine' },
+      },
+      {
         path: 'computer/images',
         name: 'computer-images',
         component: () => import('@/pages/computer/ImagesPage.vue'),
         meta: { auth: true, title: 'Disk Image' },
+      },
+      {
+        path: 'computer/ha',
+        name: 'computer-ha',
+        component: () => import('@/pages/computer/HaPage.vue'),
+        meta: { auth: true, title: 'HA' },
       },
       {
         path: 'host/cluster',
@@ -204,6 +223,18 @@ const routes: RouteRecordRaw[] = [
         name: 'host-overview',
         component: () => import('@/pages/host/OverviewPage.vue'),
         meta: { auth: true, title: 'Overview' },
+      },
+      {
+        path: 'host/nodes/:node',
+        name: 'host-node-detail',
+        component: () => import('@/pages/host/NodeDetailPage.vue'),
+        meta: { auth: true, title: 'Node Details' },
+      },
+      {
+        path: 'host/nodes',
+        name: 'host-nodes',
+        component: () => import('@/pages/host/NodesPage.vue'),
+        meta: { auth: true, title: 'Nodes' },
       },
       {
         path: 'maintenance/tasks',

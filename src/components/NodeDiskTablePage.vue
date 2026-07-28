@@ -11,11 +11,12 @@ const props = defineProps<{
   rowKey: string;
   visibleColumns?: string[];
   embedded?: boolean;
+  node?: string | undefined;
 }>();
 
 const loading = ref(false);
 const filter = ref('');
-const selectedNode = ref('');
+const selectedNode = ref(props.node || '');
 const rows = shallowRef<PveRecord[]>([]);
 
 async function reload() {
@@ -32,9 +33,13 @@ async function reload() {
   }
 }
 
+watch(() => props.node, (node) => {
+  if (node !== undefined) selectedNode.value = node;
+}, { immediate: true });
+
 watch(selectedNode, () => {
   void reload();
-});
+}, { immediate: true });
 </script>
 
 <template>
@@ -58,7 +63,7 @@ watch(selectedNode, () => {
       >
         <template #top>
           <div class="row q-gutter-sm items-center">
-            <NodeSelectTable v-model="selectedNode" />
+            <NodeSelectTable v-if="!props.node" v-model="selectedNode" />
             <q-btn
               no-caps
               outline

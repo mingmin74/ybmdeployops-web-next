@@ -1,6 +1,106 @@
 import { request } from './request';
 import type { PveRecord } from './resources';
 
+export function getNodeFirewallRules(node: string) {
+  return request<PveRecord[]>(`/api2/json/nodes/${node}/firewall/rules`, { method: 'GET', notifyOnError: true });
+}
+
+function vmFirewallBase(node: string, vmid: string | number) {
+  return `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/firewall`;
+}
+
+export function getVmFirewallRules(node: string, vmid: string | number) {
+  return request<PveRecord[]>(`${vmFirewallBase(node, vmid)}/rules`, { method: 'GET', notifyOnError: true });
+}
+
+export function createVmFirewallRule(node: string, vmid: string | number, data: PveRecord) {
+  return request(`${vmFirewallBase(node, vmid)}/rules`, { method: 'POST', data });
+}
+
+export function updateVmFirewallRule(node: string, vmid: string | number, pos: string | number, data: PveRecord) {
+  return request(`${vmFirewallBase(node, vmid)}/rules/${encodeURIComponent(String(pos))}`, { method: 'PUT', data });
+}
+
+export function deleteVmFirewallRule(node: string, vmid: string | number, pos: string | number, digest?: unknown) {
+  return request(`${vmFirewallBase(node, vmid)}/rules/${encodeURIComponent(String(pos))}`, { method: 'DELETE', ...(digest ? { data: { digest } } : {}) });
+}
+
+export function getVmFirewallOptions(node: string, vmid: string | number) {
+  return request<PveRecord>(`${vmFirewallBase(node, vmid)}/options`, { method: 'GET', notifyOnError: true });
+}
+
+export function updateVmFirewallOptions(node: string, vmid: string | number, data: PveRecord) {
+  return request(`${vmFirewallBase(node, vmid)}/options`, { method: 'PUT', data });
+}
+
+export function getVmFirewallLogs(node: string, vmid: string | number, params: PveRecord) {
+  return request<{ data?: PveRecord[]; total?: number }>(`${vmFirewallBase(node, vmid)}/log`, { method: 'GET', params, notifyOnError: true });
+}
+
+export function getVmFirewallAliases(node: string, vmid: string | number) {
+  return request<PveRecord[]>(`${vmFirewallBase(node, vmid)}/aliases`, { method: 'GET', notifyOnError: true });
+}
+
+export function createVmFirewallAlias(node: string, vmid: string | number, data: PveRecord) {
+  return request(`${vmFirewallBase(node, vmid)}/aliases`, { method: 'POST', data });
+}
+
+export function updateVmFirewallAlias(node: string, vmid: string | number, name: string, data: PveRecord) {
+  return request(`${vmFirewallBase(node, vmid)}/aliases/${encodeURIComponent(name)}`, { method: 'PUT', data });
+}
+
+export function deleteVmFirewallAlias(node: string, vmid: string | number, name: string) {
+  return request(`${vmFirewallBase(node, vmid)}/aliases/${encodeURIComponent(name)}`, { method: 'DELETE' });
+}
+
+export function getVmFirewallIpsets(node: string, vmid: string | number) {
+  return request<PveRecord[]>(`${vmFirewallBase(node, vmid)}/ipset`, { method: 'GET', notifyOnError: true });
+}
+
+export function createVmFirewallIpset(node: string, vmid: string | number, data: PveRecord) {
+  return request(`${vmFirewallBase(node, vmid)}/ipset`, { method: 'POST', data });
+}
+
+export function deleteVmFirewallIpset(node: string, vmid: string | number, name: string) {
+  return request(`${vmFirewallBase(node, vmid)}/ipset/${encodeURIComponent(name)}`, { method: 'DELETE' });
+}
+
+export function getVmFirewallIpsetEntries(node: string, vmid: string | number, name: string) {
+  return request<PveRecord[]>(`${vmFirewallBase(node, vmid)}/ipset/${encodeURIComponent(name)}`, { method: 'GET', notifyOnError: true });
+}
+
+export function createVmFirewallIpsetEntry(node: string, vmid: string | number, name: string, data: PveRecord) {
+  return request(`${vmFirewallBase(node, vmid)}/ipset/${encodeURIComponent(name)}`, { method: 'POST', data });
+}
+
+export function deleteVmFirewallIpsetEntry(node: string, vmid: string | number, name: string, cidr: string) {
+  return request(`${vmFirewallBase(node, vmid)}/ipset/${encodeURIComponent(name)}/${encodeURIComponent(cidr)}`, { method: 'DELETE' });
+}
+
+export function createNodeFirewallRule(node: string, data: PveRecord) {
+  return request(`/api2/extjs/nodes/${node}/firewall/rules`, { method: 'POST', data });
+}
+
+export function updateNodeFirewallRule(node: string, pos: string | number, data: PveRecord) {
+  return request(`/api2/extjs/nodes/${node}/firewall/rules/${pos}`, { method: 'PUT', data });
+}
+
+export function deleteNodeFirewallRule(node: string, pos: string | number, digest?: unknown) {
+  return request(`/api2/extjs/nodes/${node}/firewall/rules/${pos}`, { method: 'DELETE', ...(digest ? { data: { digest } } : {}) });
+}
+
+export function getNodeFirewallOptions(node: string) {
+  return request<PveRecord>(`/api2/json/nodes/${node}/firewall/options`, { method: 'GET', notifyOnError: true });
+}
+
+export function updateNodeFirewallOptions(node: string, data: PveRecord) {
+  return request(`/api2/extjs/nodes/${node}/firewall/options`, { method: 'PUT', data });
+}
+
+export function getNodeFirewallLogs(node: string, params: PveRecord) {
+  return request<{ data?: PveRecord[]; total?: number }>(`/api2/extjs/nodes/${node}/firewall/log`, { method: 'GET', params, notifyOnError: true });
+}
+
 export function getFirewallRules() {
   return request<PveRecord[]>('/api2/json/cluster/firewall/rules', { method: 'GET', notifyOnError: true });
 }

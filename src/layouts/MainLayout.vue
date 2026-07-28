@@ -53,18 +53,42 @@
               :label="gettext(item.titleKey)"
               expand-separator
             >
-              <q-item
-                v-for="child in item.children"
-                :key="child.path || child.titleKey"
-                clickable
-                class="menu-child"
-                :active="isActive(child.path)"
-                active-class="menu-active"
-                @click="go(child.path)"
-              >
-                <q-item-section avatar><q-icon :name="child.icon" /></q-item-section>
-                <q-item-section>{{ gettext(child.titleKey) }}</q-item-section>
-              </q-item>
+              <template v-for="child in item.children" :key="child.path || child.titleKey">
+                <q-item
+                  v-if="!child.children"
+                  clickable
+                  class="menu-child"
+                  :active="isActive(child.path)"
+                  active-class="menu-active"
+                  @click="go(child.path)"
+                >
+                  <q-item-section avatar><q-icon :name="child.icon" /></q-item-section>
+                  <q-item-section>{{ gettext(child.titleKey) }}</q-item-section>
+                </q-item>
+
+                <q-expansion-item
+                  v-else
+                  header-class="menu-child"
+                  :default-opened="isGroupOpen(child)"
+                  :icon="child.icon"
+                  :label="gettext(child.titleKey)"
+                  :content-inset-level="1"
+                  expand-separator
+                >
+                  <q-item
+                    v-for="grandchild in child.children"
+                    :key="grandchild.path || grandchild.titleKey"
+                    clickable
+                    class="menu-child"
+                    :active="isActive(grandchild.path)"
+                    active-class="menu-active"
+                    @click="go(grandchild.path)"
+                  >
+                    <q-item-section avatar><q-icon :name="grandchild.icon" /></q-item-section>
+                    <q-item-section>{{ gettext(grandchild.titleKey) }}</q-item-section>
+                  </q-item>
+                </q-expansion-item>
+              </template>
             </q-expansion-item>
           </template>
         </q-list>
@@ -72,6 +96,7 @@
     </q-drawer>
 
     <q-page-container class="page-container">
+      <AppTagView />
       <router-view />
     </q-page-container>
   </q-layout>
@@ -80,6 +105,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import AppTagView from '@/components/AppTagView.vue';
 import { appConfig } from '@/config/app';
 import { menuItems, type MenuItem } from '@/config/menu';
 import { gettext } from '@/locale';
@@ -100,8 +126,8 @@ function isActive(path?: string) {
   return Boolean(path && route.path === path);
 }
 
-function isGroupOpen(item: MenuItem) {
-  return Boolean(item.children?.some((child) => child.path && route.path.startsWith(child.path.split('/').slice(0, 2).join('/'))));
+function isGroupOpen(item: MenuItem): boolean {
+  return Boolean(item.children?.some((child) => child.path ? route.path === child.path : isGroupOpen(child)));
 }
 
 function logout() {

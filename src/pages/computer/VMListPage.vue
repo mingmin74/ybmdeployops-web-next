@@ -1,0 +1,703 @@
+<script setup lang="ts">
+import type { QTableColumn, QTreeNode } from 'quasar';
+import { computed, onMounted, shallowRef, watch } from 'vue';
+import { useRouter } from 'vue-router';
+import {
+  getVmResources,
+  getVmSpiceProxy,
+  migrateVm,
+  runVmPowerCommand,
+  type VmPowerCommand,
+  type VmResource,
+} from '@/api/vm';
+import { getNodes, type PveNode } from '@/api/resources';
+import UWindow from '@/components/UWindow.vue';
+import UsageProgress from '@/components/UsageProgress.vue';
+import VmResourceOperationDialog from '@/pages/computer/vm/VmResourceOperationDialog.vue';
+import CreateVmDialog from '@/pages/computer/vm/CreateVmDialog.vue';
+import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
+import { gettext } from '@/locale';
+import { useSessionStore } from '@/stores/session';
+import { usagePercent } from '@/utils/format';
+import { getVmConfig, updateVmConfig } from '@/api/overview';
+
+type VmTreeNode = QTreeNode & {
+  kind: 'node' | 'vm';
+  node?: string;
+  vmid?: string;
+  status?: string;
+};
+
+const loading = shallowRef(false);
+const resources = shallowRef<VmResource[]>([]);
+const selectedRows = shallowRef<VmResource[]>([]);
+const selectedTreeNode = shallowRef('');
+const search = shallowRef('');
+const tagFilter = shallowRef<string | null>(null);
+const statusFilter = shallowRef<string | null>(null);
+const confirmVisible = shallowRef(false);
+const pendingCommand = shallowRef<VmPowerCommand>();
+const pendingCommandData = shallowRef<Record<string, unknown>>();
+const pendingCommandTitle = shallowRef('');
+const commandLoading = shallowRef(false);
+const session = useSessionStore();
+const router = useRouter();
+const operationDialogVisible = shallowRef(false);
+const operation = shallowRef<'migrate' | 'clone' | 'delete' | 'template'>();
+const taskDialogVisible = shallowRef(false);
+const taskNode = shallowRef('');
+const taskUpid = shallowRef('');
+const taskTitle = shallowRef('');
+const createDialogVisible = shallowRef(false);
+const tagsDialogVisible = shallowRef(false);
+const tagsSaving = shallowRef(false);
+const tagValue = shallowRef('');
+const bulkMigrateVisible = shallowRef(false);
+const bulkMigrateLoading = shallowRef(false);
+const bulkMigrateTarget = shallowRef('');
+const migrationNodes = shallowRef<PveNode[]>([]);
+const defaultVisibleColumns = ['vmid', 'name', 'status', 'node', 'cpu', 'memory', 'disk', 'uptime'];
+const visibleColumnNames = shallowRef<string[]>((() => {
+  try { const saved = JSON.parse(window.localStorage.getItem('vm-list-visible-columns') || '[]'); return Array.isArray(saved) && saved.length ? saved.filter((value): value is string => typeof value === 'string') : defaultVisibleColumns; } catch { return defaultVisibleColumns; }
+})());
+
+const statusOptions = computed(() => [
+  { label: gettext('All'), value: null },
+  { label: gettext('Running'), value: 'running' },
+  { label: gettext('Stopped'), value: 'stopped' },
+  { label: gettext('Unknown'), value: 'unknown' },
+]);
+
+const tagOptions = computed(() => [
+  { label: gettext('All'), value: null },
+  ...availableTags.value.map((tag) => ({ label: tag, value: tag })),
+]);
+
+const availableTags = computed(() =>
+  [...new Set(resources.value.flatMap((row) => resourceTags(row)))].sort((left, right) =>
+    left.localeCompare(right),
+  ),
+);
+
+const treeNodes = computed<VmTreeNode[]>(() => {
+  const nodeGroups = new Map<string, VmResource[]>();
+  resources.value.forEach((row) => {
+    const node = String(row.node || gettext('Unknown'));
+    const entries = nodeGroups.get(node) || [];
+    entries.push(row);
+    nodeGroups.set(node, entries);
+  });
+
+  return [...nodeGroups.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([node, rows]) => ({
+      key: `node:${node}`,
+      label: node,
+      kind: 'node',
+      node,
+      children: [...rows]
+        .sort((left, right) => String(left.name || left.vmid).localeCompare(String(right.name || right.vmid)))
+        .map((row) => ({
+          key: vmKey(row),
+          label: `${row.name || '-'} (${row.vmid})`,
+          kind: 'vm' as const,
+          node: row.node,
+          vmid: String(row.vmid),
+          status: String(row.status || 'unknown'),
+        })),
+    }));
+});
+
+const selectedNode = computed(() =>
+  selectedTreeNode.value.startsWith('node:') ? selectedTreeNode.value.slice(5) : '',
+);
+
+const selectedVm = computed(() => selectedRows.value[0]);
+const isStopped = computed(() => selectedVm.value?.status === 'stopped');
+const isSuspended = computed(() => ['paused', 'suspended'].includes(String(selectedVm.value?.status || '')));
+const isTemplate = computed(() => Boolean(selectedVm.value?.template));
+const canPowerManage = computed(() => hasCapability('VM.PowerMgmt'));
+const canUseConsole = computed(() => hasCapability('VM.Console') && !isTemplate.value);
+const canStart = computed(() => Boolean(selectedVm.value) && canPowerManage.value && isStopped.value && !isTemplate.value);
+const canStop = computed(() => Boolean(selectedVm.value) && canPowerManage.value && !isStopped.value);
+const canReboot = computed(() => Boolean(selectedVm.value) && canPowerManage.value && selectedVm.value?.status === 'running' && !isTemplate.value);
+const canSuspend = computed(() => Boolean(selectedVm.value) && canPowerManage.value && selectedVm.value?.status === 'running' && !isTemplate.value);
+const canResume = computed(() => Boolean(selectedVm.value) && canPowerManage.value && isSuspended.value && !isTemplate.value);
+const canMigrate = computed(() => Boolean(selectedVm.value) && hasCapability('VM.Migrate') && !isTemplate.value);
+const canClone = computed(() => Boolean(selectedVm.value) && hasCapability('VM.Clone'));
+const canDelete = computed(() => Boolean(selectedVm.value) && hasCapability('VM.Allocate') && isStopped.value);
+const canConvertTemplate = computed(() => Boolean(selectedVm.value) && hasCapability('VM.Allocate') && isStopped.value && !isTemplate.value);
+const canCreate = computed(() => hasCapability('VM.Allocate'));
+const pendingCommandLabel = computed(() => pendingCommandTitle.value || commandLabel(pendingCommand.value));
+const confirmationText = computed(() => {
+  const vm = selectedVm.value;
+  if (!vm || !pendingCommand.value) return '';
+  return `${gettext('Are you sure you want to')} ${pendingCommandLabel.value}: ${vm.name || vm.vmid} ?`;
+});
+const canBulkPower = computed(() => canPowerManage.value && selectedRows.value.some((row) => !row.template));
+
+const filteredRows = computed(() => {
+  const keyword = search.value.trim().toLocaleLowerCase();
+  return resources.value.filter((row) => {
+    const matchesNode = !selectedNode.value || row.node === selectedNode.value;
+    const matchesTag = !tagFilter.value || resourceTags(row).includes(tagFilter.value);
+    const status = String(row.status || 'unknown');
+    const matchesStatus = !statusFilter.value || status === statusFilter.value;
+    const matchesSearch =
+      !keyword ||
+      `${row.name || ''} ${row.vmid} ${row.node || ''}`.toLocaleLowerCase().includes(keyword);
+    return matchesNode && matchesTag && matchesStatus && matchesSearch;
+  });
+});
+
+const columns = computed<QTableColumn<VmResource>[]>(() => [
+  { name: 'vmid', label: gettext('VMID'), field: 'vmid', align: 'left', sortable: true },
+  { name: 'name', label: gettext('Name'), field: (row) => row.name || '-', align: 'left', sortable: true },
+  { name: 'status', label: gettext('Status'), field: (row) => statusText(row.status), align: 'left', sortable: true },
+  { name: 'node', label: gettext('Node'), field: (row) => row.node || '-', align: 'left', sortable: true },
+  {
+    name: 'cpu',
+    label: gettext('CPU Usage'),
+    field: (row) => cpuPercent(row),
+    align: 'left',
+    sortable: true,
+  },
+  {
+    name: 'memory',
+    label: gettext('Memory Usage'),
+    field: (row) => usagePercent(row.mem, row.maxmem),
+    align: 'left',
+    sortable: true,
+  },
+  {
+    name: 'disk',
+    label: gettext('Disk Usage'),
+    field: (row) => usagePercent(row.disk, row.maxdisk),
+    align: 'left',
+    sortable: true,
+  },
+  { name: 'uptime', label: gettext('Uptime'), field: (row) => formatUptime(row.uptime), align: 'left', sortable: true },
+]);
+watch(visibleColumnNames, (value) => { window.localStorage.setItem('vm-list-visible-columns', JSON.stringify(value)); }, { deep: true });
+
+function vmKey(row: VmResource) {
+  return `vm:${row.node || ''}:${row.vmid}`;
+}
+
+function resourceTags(row: VmResource) {
+  return String(row.tags || '')
+    .split(/[;,]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+function cpuPercent(row: VmResource) {
+  const value = Number(row.cpu);
+  return Number.isFinite(value) ? Math.min(Math.max(value * 100, 0), 100) : 0;
+}
+
+function statusText(status: unknown) {
+  const value = String(status || 'unknown');
+  if (value === 'running') return gettext('Running');
+  if (value === 'stopped') return gettext('Stopped');
+  return gettext('Unknown');
+}
+
+function statusColor(status: unknown) {
+  if (status === 'running') return 'green';
+  if (status === 'stopped') return 'red';
+  return 'grey';
+}
+
+function hasCapability(capability: string) {
+  const caps = session.caps as { vms?: Record<string, unknown> };
+  return Boolean(caps.vms?.[capability]);
+}
+
+function commandLabel(command?: VmPowerCommand) {
+  if (command === 'start') return gettext('Start');
+  if (command === 'shutdown') return gettext('Shutdown');
+  if (command === 'stop') return gettext('Stop');
+  if (command === 'reboot') return gettext('Reboot');
+  if (command === 'reset') return gettext('Reset');
+  if (command === 'suspend') return gettext('Suspend');
+  if (command === 'resume') return gettext('Resume');
+  return '';
+}
+
+function formatUptime(value: unknown) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds <= 0) return '-';
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return `${days}d ${hours}h ${minutes}m`;
+}
+
+function onTreeSelection(key: string) {
+  selectedTreeNode.value = key;
+  if (!key.startsWith('vm:')) return;
+  const selected = resources.value.find((row) => vmKey(row) === key);
+  selectedRows.value = selected ? [selected] : [];
+}
+
+function requestCommand(command: VmPowerCommand, data?: Record<string, unknown>, title = '') {
+  if (!selectedVm.value) return;
+  pendingCommand.value = command;
+  pendingCommandData.value = data;
+  pendingCommandTitle.value = title;
+  confirmVisible.value = true;
+}
+
+async function confirmCommand() {
+  const vm = selectedVm.value;
+  const command = pendingCommand.value;
+  if (!vm?.node || !vm.vmid || !command) return;
+
+  commandLoading.value = true;
+  try {
+    const taskCommandLabel = pendingCommandLabel.value || commandLabel(command);
+    const response = await runVmPowerCommand(vm.node, vm.vmid, command, pendingCommandData.value);
+    confirmVisible.value = false;
+    pendingCommandData.value = undefined;
+    pendingCommandTitle.value = '';
+    await reload();
+    if (response.data) openTask(vm.node, response.data, `${vm.name || vm.vmid}: ${taskCommandLabel}`);
+  } finally {
+    commandLoading.value = false;
+  }
+}
+
+async function bulkCommand(command: 'start' | 'shutdown' | 'stop') {
+  const targets = selectedRows.value.filter((row) => !row.template && row.node && row.vmid && (command === 'start' ? row.status === 'stopped' : row.status !== 'stopped'));
+  if (!targets.length) return;
+  commandLoading.value = true;
+  try {
+    const results = await Promise.allSettled(targets.map((row) => runVmPowerCommand(String(row.node), row.vmid, command)));
+    const first = results.find((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof runVmPowerCommand>>> => result.status === 'fulfilled');
+    await reload();
+    if (first?.value.data) openTask(String(targets[0]?.node || ''), first.value.data, `${gettext('Bulk')} ${commandLabel(command)}`);
+  } finally { commandLoading.value = false; }
+}
+
+function openTags() {
+  tagValue.value = selectedRows.value.length === 1 ? String(selectedRows.value[0]?.tags || '') : '';
+  tagsDialogVisible.value = true;
+}
+
+async function saveTags() {
+  const targets = selectedRows.value.filter((row) => row.node && row.vmid && !row.template);
+  if (!targets.length) return;
+  tagsSaving.value = true;
+  try {
+    await Promise.all(targets.map(async (row) => {
+      const config = await getVmConfig(String(row.node), row.vmid);
+      await updateVmConfig(String(row.node), row.vmid, { digest: config.data?.digest, tags: tagValue.value.trim() || undefined });
+    }));
+    tagsDialogVisible.value = false;
+    await reload();
+  } finally { tagsSaving.value = false; }
+}
+
+async function openBulkMigrate() {
+  bulkMigrateLoading.value = true;
+  try { const response = await getNodes(); migrationNodes.value = (response.data || []).filter((node) => node.status === 'online'); bulkMigrateTarget.value = migrationNodes.value.find((node) => !selectedRows.value.every((row) => row.node === node.node))?.node || ''; bulkMigrateVisible.value = true; } finally { bulkMigrateLoading.value = false; }
+}
+async function runBulkMigrate() {
+  const targets = selectedRows.value.filter((row) => row.node && row.vmid && !row.template && row.node !== bulkMigrateTarget.value);
+  if (!bulkMigrateTarget.value || !targets.length) return;
+  bulkMigrateLoading.value = true;
+  try { const results = await Promise.allSettled(targets.map((row) => migrateVm(String(row.node), row.vmid, { target: bulkMigrateTarget.value, ...(row.status === 'running' ? { online: 1 } : {}) }))); const first = results.find((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof migrateVm>>> => result.status === 'fulfilled'); bulkMigrateVisible.value = false; await reload(); if (first?.value.data) openTask(String(targets[0]?.node || ''), first.value.data, gettext('Bulk Migrate')); } finally { bulkMigrateLoading.value = false; }
+}
+
+function openOperation(nextOperation: 'migrate' | 'clone' | 'delete' | 'template') {
+  if (!selectedVm.value) return;
+  operation.value = nextOperation;
+  operationDialogVisible.value = true;
+}
+
+function openTask(node: string, upid: string, title: string) {
+  taskNode.value = node;
+  taskUpid.value = upid;
+  taskTitle.value = title;
+  taskDialogVisible.value = true;
+}
+
+function openDetail(row: VmResource) {
+  if (!row.node || row.vmid === undefined || row.vmid === null) return;
+  void router.push({ name: 'computer-vm-detail', params: { node: row.node, vmid: String(row.vmid) } });
+}
+
+function openConsole(type: 'noVNC' | 'xterm.js' = 'noVNC') {
+  const vm = selectedVm.value;
+  if (!vm?.node || !vm.vmid || !canUseConsole.value) return;
+
+  const params = new URLSearchParams({
+    console: 'kvm',
+    vmid: String(vm.vmid),
+    vmname: String(vm.name || ''),
+    node: vm.node,
+  });
+  if (type === 'noVNC') { params.set('novnc', '1'); params.set('resize', 'scale'); params.set('autoconnect', '1'); params.set('reconnect', '1'); window.open(`/?${params.toString()}`, `vm-console-${vm.vmid}`, 'innerWidth=745,innerHeight=427'); return; }
+  params.set('xtermjs', '1');
+  window.open(`/?${params.toString()}`, '_blank', 'toolbar=no,location=no,status=no,menubar=no,resizable=yes,width=1024,height=600');
+}
+
+async function downloadSpice() {
+  const vm = selectedVm.value;
+  if (!vm?.node || !vm.vmid || !canUseConsole.value) return;
+  commandLoading.value = true;
+  try {
+    const response = await getVmSpiceProxy(vm.node, vm.vmid, window.location.hostname);
+    const content = ['[virt-viewer]', ...Object.entries(response.data || {}).map(([key, value]) => `${key}=${value}`)].join('\n');
+    const url = URL.createObjectURL(new Blob([content], { type: 'application/x-virt-viewer' }));
+    const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${vm.name || vm.vmid}.vv`; anchor.click(); URL.revokeObjectURL(url);
+  } finally { commandLoading.value = false; }
+}
+
+async function reload() {
+  loading.value = true;
+  try {
+    const response = await getVmResources();
+    resources.value = (response.data || []).filter((row) => row.type === 'qemu');
+    selectedRows.value = selectedRows.value
+      .map((selected) => resources.value.find((row) => vmKey(row) === vmKey(selected)))
+      .filter((row): row is VmResource => Boolean(row));
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(() => {
+  void reload();
+});
+</script>
+
+<template>
+  <div class="vm-list-page q-ma-md">
+    <q-card class="no-shadow no-border-radius vm-list-card">
+      <q-card-section class="q-pa-md">
+        <div class="row no-wrap vm-list-layout">
+          <aside class="vm-resource-tree">
+            <div class="vm-tree-title">{{ gettext('Resource Tree') }}</div>
+            <q-tree
+              v-model:selected="selectedTreeNode"
+              :nodes="treeNodes"
+              node-key="key"
+              label-key="label"
+              selected-color="primary"
+              default-expand-all
+              dense
+              @update:selected="onTreeSelection"
+            >
+              <template #default-header="scope">
+                <div class="row items-center no-wrap vm-tree-node">
+                  <q-icon
+                    :name="scope.node.kind === 'node' ? 'dns' : 'desktop_windows'"
+                    :color="scope.node.kind === 'node' ? 'primary' : statusColor(scope.node.status)"
+                    size="16px"
+                    class="q-mr-xs"
+                  />
+                  <span class="ellipsis">{{ scope.node.label }}</span>
+                </div>
+              </template>
+            </q-tree>
+          </aside>
+
+          <section class="vm-table-panel">
+            <q-table
+              v-model:selected="selectedRows"
+              flat
+              selection="multiple"
+              row-key="id"
+              table-header-class="u-table-header"
+              :rows="filteredRows"
+              :columns="columns"
+              :visible-columns="visibleColumnNames"
+              :loading="loading"
+              :rows-per-page-options="[0]"
+              :no-data-label="gettext('no record can be found')"
+            >
+              <template #top>
+                <div class="full-width row items-center q-gutter-sm">
+                  <q-btn-dropdown no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Columns')"><q-list dense><q-item v-for="column in columns" :key="column.name" tag="label"><q-item-section avatar><q-checkbox v-model="visibleColumnNames" :val="column.name" dense /></q-item-section><q-item-section>{{ column.label }}</q-item-section></q-item></q-list></q-btn-dropdown>
+                  <q-btn no-caps outline size="12px" color="primary" class="u-button" icon="add" :label="gettext('Create')" :disable="!canCreate" @click="createDialogVisible = true" />
+                  <q-btn
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    icon="play_arrow"
+                    :label="gettext('Start')"
+                    :disable="!canStart || commandLoading"
+                    @click="requestCommand('start')"
+                  />
+                  <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Suspend')" :disable="!canSuspend || commandLoading" @click="requestCommand('suspend')" />
+                  <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Hibernate')" :disable="!canSuspend || commandLoading" @click="requestCommand('suspend', { todisk: 1 }, gettext('Hibernate'))" />
+                  <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Resume')" :disable="!canResume || commandLoading" @click="requestCommand('resume')" />
+                  <q-btn
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    icon="power_settings_new"
+                    :label="gettext('Shutdown')"
+                    :disable="!canStop || commandLoading"
+                    @click="requestCommand('shutdown')"
+                  />
+                  <q-btn
+                    no-caps
+                    outline
+                    size="12px"
+                    color="red"
+                    class="u-button"
+                    icon="stop"
+                    :label="gettext('Stop')"
+                    :disable="!canStop || commandLoading"
+                    @click="requestCommand('stop')"
+                  />
+                  <q-btn
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    icon="restart_alt"
+                    :label="gettext('Reboot')"
+                    :disable="!canReboot || commandLoading"
+                    @click="requestCommand('reboot')"
+                  />
+                  <q-btn
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    icon="restart_alt"
+                    :label="gettext('Reset')"
+                    :disable="!canStop || commandLoading"
+                    @click="requestCommand('reset')"
+                  />
+                  <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Bulk Start')" :disable="!canBulkPower || commandLoading" @click="bulkCommand('start')" />
+                  <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Bulk Shutdown')" :disable="!canBulkPower || commandLoading" @click="bulkCommand('shutdown')" />
+                  <q-btn no-caps outline size="12px" color="negative" class="u-button" :label="gettext('Bulk Stop')" :disable="!canBulkPower || commandLoading" @click="bulkCommand('stop')" />
+                  <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Bulk Migrate')" :disable="!selectedRows.length || !hasCapability('VM.Migrate')" @click="openBulkMigrate" />
+                  <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Tags')" :disable="!selectedRows.length" @click="openTags" />
+                  <q-btn
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    icon="terminal"
+                    :label="gettext('Console')"
+                    :disable="!selectedVm || !canUseConsole"
+                    @click="() => openConsole('noVNC')"
+                  />
+                  <q-btn-dropdown no-caps outline size="12px" color="primary" class="u-button" :disable="!selectedVm || !canUseConsole || commandLoading" dropdown-icon="arrow_drop_down"><q-list dense><q-item v-close-popup clickable @click="openConsole('noVNC')"><q-item-section>noVNC</q-item-section></q-item><q-item v-close-popup clickable @click="downloadSpice"><q-item-section>SPICE</q-item-section></q-item><q-item v-close-popup clickable @click="openConsole('xterm.js')"><q-item-section>xterm.js</q-item-section></q-item></q-list></q-btn-dropdown>
+                  <q-btn-dropdown
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    icon="more_vert"
+                    :label="gettext('More')"
+                    :disable="!selectedVm || commandLoading"
+                  >
+                    <q-list dense>
+                      <q-item v-close-popup clickable :disable="!canMigrate" @click="openOperation('migrate')">
+                        <q-item-section>{{ gettext('Migrate') }}</q-item-section>
+                      </q-item>
+                      <q-item v-close-popup clickable :disable="!canClone" @click="openOperation('clone')">
+                        <q-item-section>{{ gettext('Clone') }}</q-item-section>
+                      </q-item>
+                      <q-item v-close-popup clickable :disable="!canConvertTemplate" @click="openOperation('template')"><q-item-section>{{ gettext('Convert to template') }}</q-item-section></q-item>
+                      <q-separator />
+                      <q-item v-close-popup clickable :disable="!canDelete" @click="openOperation('delete')">
+                        <q-item-section class="text-red">{{ gettext('Delete') }}</q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-btn-dropdown>
+                  <q-btn
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    icon="refresh"
+                    :label="gettext('Refresh')"
+                    :loading="loading"
+                    @click="reload"
+                  />
+                  <q-space />
+                  <q-select
+                    v-model="tagFilter"
+                    dense
+                    outlined
+                    square
+                    options-dense
+                    emit-value
+                    map-options
+                    clearable
+                    class="vm-filter"
+                    :options="tagOptions"
+                    :label="gettext('Tags')"
+                  />
+                  <q-select
+                    v-model="statusFilter"
+                    dense
+                    outlined
+                    square
+                    options-dense
+                    emit-value
+                    map-options
+                    clearable
+                    class="vm-filter"
+                    :options="statusOptions"
+                    :label="gettext('Status')"
+                  />
+                  <q-input
+                    v-model="search"
+                    dense
+                    outlined
+                    square
+                    clearable
+                    class="vm-search"
+                    :placeholder="gettext('Search')"
+                  >
+                    <template #append><q-icon name="search" /></template>
+                  </q-input>
+                </div>
+              </template>
+
+              <template #body-cell-status="scope">
+                <q-td :props="scope">
+                  <q-badge :color="statusColor(scope.row.status)" :label="statusText(scope.row.status)" />
+                </q-td>
+              </template>
+              <template #body-cell-name="scope">
+                <q-td :props="scope"><q-btn no-caps flat dense color="primary" class="vm-name-button" :label="String(scope.value || '-')" @click="openDetail(scope.row)" /></q-td>
+              </template>
+              <template #body-cell-cpu="scope">
+                <q-td :props="scope"><UsageProgress :percent="Number(scope.value)" /></q-td>
+              </template>
+              <template #body-cell-memory="scope">
+                <q-td :props="scope"><UsageProgress :percent="Number(scope.value)" /></q-td>
+              </template>
+              <template #body-cell-disk="scope">
+                <q-td :props="scope"><UsageProgress :percent="Number(scope.value)" /></q-td>
+              </template>
+            </q-table>
+          </section>
+        </div>
+      </q-card-section>
+    </q-card>
+
+    <q-dialog v-model="confirmVisible" persistent transition-show="scale" transition-hide="scale">
+      <UWindow :title="gettext('Confirm')" width="420px" :loading="commandLoading">
+        <div class="q-pa-md u-size-12">{{ confirmationText }}</div>
+        <template #foot>
+          <q-btn
+            v-close-popup
+            no-caps
+            flat
+            size="12px"
+            class="u-button q-mr-sm"
+            :disable="commandLoading"
+            :label="gettext('Cancel')"
+          />
+          <q-btn
+            no-caps
+            flat
+            size="12px"
+            class="bg-primary text-grey-1 u-button"
+            :loading="commandLoading"
+            :label="gettext('Confirm')"
+            @click="confirmCommand"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
+
+    <VmResourceOperationDialog
+      v-model="operationDialogVisible"
+      :operation="operation"
+      :vm="selectedVm"
+      @completed="reload"
+      @task="openTask($event.node, $event.upid, $event.title)"
+    />
+    <CreateVmDialog v-model="createDialogVisible" @completed="reload" @task="openTask($event.node, $event.upid, $event.title)" />
+    <TaskOutputDialog v-model="taskDialogVisible" :node="taskNode" :upid="taskUpid" :title="taskTitle" />
+    <q-dialog v-model="tagsDialogVisible" persistent><UWindow :title="gettext('Tags')" width="460px" :loading="tagsSaving"><div class="q-pa-md"><q-input v-model="tagValue" dense square outlined :label="gettext('Tags')" hint="tag1;tag2" /></div><template #foot><q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" /><q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :loading="tagsSaving" :label="gettext('Save')" @click="saveTags" /></template></UWindow></q-dialog>
+    <q-dialog v-model="bulkMigrateVisible" persistent><UWindow :title="gettext('Bulk Migrate')" width="460px" :loading="bulkMigrateLoading"><div class="q-pa-md"><q-select v-model="bulkMigrateTarget" dense square outlined emit-value map-options :label="gettext('Target Node')" :options="migrationNodes.map((node) => ({ label: node.node, value: node.node }))" /></div><template #foot><q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" /><q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :disable="!bulkMigrateTarget" :loading="bulkMigrateLoading" :label="gettext('Migrate')" @click="runBulkMigrate" /></template></UWindow></q-dialog>
+  </div>
+</template>
+
+<style scoped>
+.vm-list-card {
+  min-height: calc(100vh - 120px);
+}
+
+.vm-list-layout {
+  align-items: stretch;
+  min-height: calc(100vh - 152px);
+}
+
+.vm-resource-tree {
+  width: 230px;
+  flex: 0 0 230px;
+  padding-right: 12px;
+  overflow: auto;
+  border-right: 1px solid #cccccc;
+}
+
+.vm-tree-title {
+  height: 30px;
+  padding: 7px 8px;
+  background: #f2f5fc;
+  border: 1px solid #dfe1e6;
+  color: #333333;
+  font-size: 12px;
+}
+
+.vm-tree-node {
+  max-width: 190px;
+  font-size: 12px;
+}
+
+.vm-table-panel {
+  min-width: 0;
+  flex: 1;
+  padding-left: 12px;
+}
+
+.vm-filter {
+  width: 130px;
+}
+
+.vm-search {
+  width: 210px;
+}
+
+:deep(.q-table__top) {
+  padding: 0 0 10px;
+}
+
+:deep(.q-table th),
+:deep(.q-table td) {
+  padding: 0 16px !important;
+}
+
+:deep(.q-table thead tr),
+:deep(.q-table tbody td) {
+  height: 40px;
+}
+
+:deep(.q-field__control),
+:deep(.q-field__marginal) {
+  height: 28px;
+}
+</style>

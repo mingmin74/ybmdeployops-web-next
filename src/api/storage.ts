@@ -24,3 +24,11 @@ export function getStorageConfig(storage: string) {
     notifyOnError: true,
   });
 }
+
+export function createStorage(data: PveRecord) {
+  return request<string>('/api2/extjs/storage', { method: 'POST', data });
+}
+
+export function updateStorage(storage: string, data: PveRecord) {
+  return request<string>(`/api2/extjs/storage/${encodeURIComponent(storage)}`, { method: 'PUT', data });
+}

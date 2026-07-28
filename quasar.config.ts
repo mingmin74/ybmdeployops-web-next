@@ -4,14 +4,14 @@
 import { defineConfig } from '#q-app';
 
 export default defineConfig(() => {
-  const pveProxyTarget: string = process.env.VITE_PVE_PROXY_TARGET || 'https://192.168.2.111:8006';
+  const pveProxyTarget: string = process.env.VITE_PVE_PROXY_TARGET || 'https://192.168.1.228:8006';
 
   return {
     boot: ['locale', 'app-error'],
 
     css: ['app.scss'],
 
-    extras: ['roboto-font', 'material-icons'],
+    extras: ['roboto-font', 'material-icons', 'fontawesome-v7'],
 
     build: {
       target: {},
@@ -96,4 +96,3 @@ export default defineConfig(() => {
     },
   };
 });
-

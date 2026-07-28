@@ -6,6 +6,7 @@ import PermissionUsersPage from './permission/PermissionUsersPage.vue';
 import APITokensPage from './permission/APITokensPage.vue';
 import RealmPage from './permission/RealmPage.vue';
 import RolesPage from './permission/RolesPage.vue';
+import RulesPage from './permission/RulesPage.vue';
 
 const activeTab = shallowRef('rule');
 </script>
@@ -31,9 +32,7 @@ const activeTab = shallowRef('rule');
         </q-tabs>
         <q-separator />
         <q-tab-panels v-model="activeTab" animated>
-          <q-tab-panel name="rule">
-            <div class="q-pa-md text-grey-7">{{ gettext('Framework placeholder') }}</div>
-          </q-tab-panel>
+          <q-tab-panel name="rule" class="q-pa-none"><RulesPage /></q-tab-panel>
           <q-tab-panel name="user">
             <PermissionUsersPage />
           </q-tab-panel>

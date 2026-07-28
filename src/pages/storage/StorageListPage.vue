@@ -17,17 +17,67 @@ const rows = shallowRef<PveRecord[]>([]);
 const current = ref<PveRecord | null>(null);
 const storageNodes = shallowRef<Record<string, string>>({});
 const treeSelected = ref('all');
+const treeExpanded = ref<string[]>([]);
 
 const columns: QTableColumn<PveRecord>[] = [
-  { name: 'storage', required: true, label: gettext('Name'), align: 'left', field: (row) => row.storage || '-', sortable: true },
-  { name: 'active', label: gettext('Active'), align: 'left', field: (row) => (row.active ? gettext('Yes') : gettext('No')), sortable: true },
-  { name: 'avail', label: gettext('Avail Size'), align: 'left', field: (row) => formatBytes(row.avail as number), sortable: true },
+  {
+    name: 'storage',
+    required: true,
+    label: gettext('Name'),
+    align: 'left',
+    field: (row) => row.storage || '-',
+    sortable: true,
+  },
+  {
+    name: 'active',
+    label: gettext('Active'),
+    align: 'left',
+    field: (row) => (row.active ? gettext('Yes') : gettext('No')),
+    sortable: true,
+  },
+  {
+    name: 'avail',
+    label: gettext('Avail Size'),
+    align: 'left',
+    field: (row) => formatBytes(row.avail as number),
+    sortable: true,
+  },
   { name: 'usage', label: gettext('Usage'), align: 'left', field: 'usage' },
-  { name: 'type', label: gettext('Type'), align: 'left', field: (row) => row.type || '-', sortable: true },
-  { name: 'content', label: gettext('Content'), align: 'left', field: (row) => formatContent(row.content), sortable: true },
-  { name: 'path', label: gettext('Path'), align: 'left', field: (row) => row.path || row.target_path || '-', sortable: true },
-  { name: 'shared', label: gettext('Shared'), align: 'left', field: (row) => (row.shared ? gettext('Yes') : gettext('No')), sortable: true },
-  { name: 'enabled', label: gettext('Enabled'), align: 'left', field: (row) => (row.enabled ? gettext('Yes') : gettext('No')), sortable: true },
+  {
+    name: 'type',
+    label: gettext('Type'),
+    align: 'left',
+    field: (row) => row.type || '-',
+    sortable: true,
+  },
+  {
+    name: 'content',
+    label: gettext('Content'),
+    align: 'left',
+    field: (row) => formatContent(row.content),
+    sortable: true,
+  },
+  {
+    name: 'path',
+    label: gettext('Path'),
+    align: 'left',
+    field: (row) => row.path || row.target_path || '-',
+    sortable: true,
+  },
+  {
+    name: 'shared',
+    label: gettext('Shared'),
+    align: 'left',
+    field: (row) => (row.shared ? gettext('Yes') : gettext('No')),
+    sortable: true,
+  },
+  {
+    name: 'enabled',
+    label: gettext('Enabled'),
+    align: 'left',
+    field: (row) => (row.enabled ? gettext('Yes') : gettext('No')),
+    sortable: true,
+  },
 ];
 
 const treeNodes = computed(() => {
@@ -41,12 +91,15 @@ const treeNodes = computed(() => {
     {
       label: gettext('Storage Services'),
       id: 'all',
+      icon: 'storage',
       children: [...byType.entries()].map(([type, items]) => ({
         label: type,
         id: `type:${type}`,
+        icon: 'folder',
         children: items.map((item) => ({
           label: textValue(item.storage),
           id: `storage:${textValue(item.storage)}`,
+          icon: 'dns',
         })),
       })),
     },
@@ -56,6 +109,12 @@ const treeNodes = computed(() => {
 const detailNode = computed(() => {
   const storage = textValue(current.value?.storage);
   return storageNodes.value[storage] || textValue(current.value?.node) || 'localhost';
+});
+
+const tableRows = computed(() => {
+  if (!treeSelected.value.startsWith('type:')) return rows.value;
+  const type = treeSelected.value.replace(/^type:/, '');
+  return rows.value.filter((row) => (textValue(row.type) || gettext('Unknown')) === type);
 });
 
 async function refreshData() {
@@ -82,6 +141,12 @@ async function refreshData() {
       ...item,
       ...(nodeMap[textValue(item.storage)] || {}),
     }));
+    treeExpanded.value = [
+      'all',
+      ...new Set(
+        rows.value.map((item) => `type:${textValue(item.type) || gettext('Unknown')}`),
+      ),
+    ];
     selected.value = [];
     if (current.value) {
       current.value = rows.value.find((item) => item.storage === current.value?.storage) || null;
@@ -122,13 +187,20 @@ function removeSelected() {
 }
 
 function onTreeSelect(id: string) {
-  if (!id.startsWith('storage:')) {
+  if (id === 'all' || id.startsWith('type:')) {
     current.value = null;
+    selected.value = [];
     return;
   }
   const storage = id.replace(/^storage:/, '');
   const row = rows.value.find((item) => textValue(item.storage) === storage);
   if (row) openDetail(row);
+}
+
+function backToStorageList() {
+  current.value = null;
+  selected.value = [];
+  treeSelected.value = 'all';
 }
 
 onMounted(refreshData);
@@ -137,12 +209,27 @@ onMounted(refreshData);
 <template>
   <div class="q-ma-md row no-wrap storage-page">
     <div class="storage-tree bg-white q-pa-sm">
-      <q-tree v-model:selected="treeSelected" :nodes="treeNodes" node-key="id" selected-color="primary" default-expand-all @update:selected="onTreeSelect" />
+      <q-tree
+        v-model:selected="treeSelected"
+        v-model:expanded="treeExpanded"
+        :nodes="treeNodes"
+        node-key="id"
+        selected-color="primary"
+        @update:selected="onTreeSelect"
+      />
     </div>
-    <div class="col q-ml-md bg-white">
-      <div v-if="current" class="q-pa-sm">
+    <div class="col q-ml-md bg-white q-pa-md">
+      <div v-if="current">
         <div class="row items-center q-mb-sm">
-          <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Back')" @click="current = null" />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Back')"
+            @click="backToStorageList"
+          />
           <div class="text-subtitle2 q-ml-sm">{{ current.storage }}</div>
         </div>
         <StorageDetailPage :node="detailNode" :storage="current" />
@@ -153,7 +240,7 @@ onMounted(refreshData);
         row-key="storage"
         table-header-class="u-table-header"
         selection="single"
-        :rows="rows"
+        :rows="tableRows"
         :columns="columns"
         :selected="selected"
         :filter="filter"
@@ -167,12 +254,44 @@ onMounted(refreshData);
       >
         <template #top>
           <div class="row q-gutter-sm">
-            <q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Refresh')" @click="refreshData" />
-            <q-btn no-caps outline size="12px" color="primary" class="u-button" :disable="selected.length !== 1" :label="gettext('Detail')" @click="openDetail()" />
-            <q-btn no-caps outline size="12px" :color="selected.length !== 1 ? 'grey' : 'red'" class="u-button" :disable="selected.length !== 1" :label="gettext('Remove')" @click="removeSelected" />
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              color="primary"
+              class="u-button"
+              :label="gettext('Refresh')"
+              @click="refreshData"
+            />
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              color="primary"
+              class="u-button"
+              :disable="selected.length !== 1"
+              :label="gettext('Detail')"
+              @click="openDetail()"
+            />
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              :color="selected.length !== 1 ? 'grey' : 'red'"
+              class="u-button"
+              :disable="selected.length !== 1"
+              :label="gettext('Remove')"
+              @click="removeSelected"
+            />
           </div>
           <q-space />
-          <q-input v-model="filter" borderless dense debounce="300" :placeholder="gettext('Search')">
+          <q-input
+            v-model="filter"
+            borderless
+            dense
+            debounce="300"
+            :placeholder="gettext('Search')"
+          >
             <template #append>
               <q-icon name="search" />
             </template>
@@ -180,7 +299,10 @@ onMounted(refreshData);
         </template>
         <template #body-cell-usage="scope">
           <q-td :props="scope">
-            <UsageProgress class="storage-usage" :percent="usedPercent(Number(scope.row.used), Number(scope.row.total))" />
+            <UsageProgress
+              class="storage-usage"
+              :percent="usedPercent(Number(scope.row.used), Number(scope.row.total))"
+            />
           </q-td>
         </template>
       </q-table>

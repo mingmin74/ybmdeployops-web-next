@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { QTableColumn } from 'quasar';
-import { computed, onMounted, ref, shallowRef } from 'vue';
-import MetricSparkline from '@/components/MetricSparkline.vue';
+import { computed, onMounted, shallowRef } from 'vue';
 import UsageProgress from '@/components/UsageProgress.vue';
+import LegacyGaugeChart from './components/LegacyGaugeChart.vue';
+import LegacyRingChart from './components/LegacyRingChart.vue';
+import LegacyRunningChart from './components/LegacyRunningChart.vue';
 import type { PveRecord } from '@/api/resources';
 import { getClusterResources, getClusterStatus } from '@/api/resources';
-import { getCephStatus } from '@/api/ceph';
+import { getCephMetadata, getCephStatus } from '@/api/ceph';
 import { getTaskLogs } from '@/api/maintenance';
 import { gettext } from '@/locale';
 import { formatBytes, formatTaskDescription, textValue, timestampToTime, usedPercent } from '@/utils/pveFormat';
@@ -22,22 +24,36 @@ type GuestStats = {
   template: number;
 };
 
-type RingSlice = {
-  key: string;
-  color: string;
-  dash: string;
-  offset: string;
+type RunningChartData = {
+  xList: string[];
+  yList: number[];
+  xLabel: string;
+  yLabel: string;
 };
 
-const loading = ref(false);
-const cephTab = ref('read');
+type PgStateClass = 'faded' | 'good' | 'warning' | 'critical';
+type ServiceHealth = 'HEALTH_UNKNOWN' | 'HEALTH_ERR' | 'HEALTH_WARN' | 'HEALTH_UPGRADE' | 'HEALTH_OLD' | 'HEALTH_OK';
+
+type CephServiceItem = {
+  id: string;
+  name: string;
+  health: ServiceHealth;
+  text: string;
+};
+
+const loading = shallowRef(false);
+const cephTab = shallowRef('read');
+const cephVersion = shallowRef<'hammer' | 'jewel'>('hammer');
 const resources = shallowRef<PveRecord[]>([]);
 const clusterStatusRows = shallowRef<PveRecord[]>([]);
 const tasks = shallowRef<PveRecord[]>([]);
 const cephStatus = shallowRef<PveRecord>({});
-const readSeries = ref<number[]>([0, 0]);
-const writeSeries = ref<number[]>([0, 0]);
-const iopsSeries = ref<number[]>([0, 0]);
+const cephMetadata = shallowRef<PveRecord>({});
+const iopsChart = shallowRef(initRunningChart());
+const readsChart = shallowRef(initRunningChart());
+const writesChart = shallowRef(initRunningChart());
+const readIopsChart = shallowRef(initRunningChart());
+const writeIopsChart = shallowRef(initRunningChart());
 
 const nodes = computed(() => resources.value.filter((item) => item.type === 'node'));
 const storages = computed(() => resources.value.filter((item) => item.type === 'storage'));
@@ -52,6 +68,13 @@ const cephHealth = computed(() => textValue((cephStatus.value.health as PveRecor
 const pgmap = computed(() => (cephStatus.value.pgmap || {}) as PveRecord);
 const osdmap = computed(() => ((cephStatus.value.osdmap as PveRecord | undefined)?.osdmap || {}) as PveRecord);
 const pgsByState = computed(() => (Array.isArray(pgmap.value.pgs_by_state) ? (pgmap.value.pgs_by_state as PveRecord[]) : []));
+const pgsByStateRows = computed<{ state_name: string; count: number; cls: PgStateClass }[]>(() =>
+  pgsByState.value.map((item) => ({
+    state_name: textValue(item.state_name),
+    count: Number(item.count || 0),
+    cls: pgStateClass(textValue(item.state_name)),
+  })),
+);
 
 const clusterCpu = computed(() => {
   const used = nodes.value.reduce((sum, item) => sum + Number(item.cpu || 0) * Number(item.maxcpu || 0), 0);
@@ -61,11 +84,12 @@ const clusterCpu = computed(() => {
 const clusterMem = computed(() => sumUsage(nodes.value, 'mem', 'maxmem'));
 const clusterStorage = computed(() => sumUsage(dedupeStorage(storages.value), 'disk', 'maxdisk'));
 const cephCapacity = computed(() => makeUsage(Number(pgmap.value.bytes_used || 0), Number(pgmap.value.bytes_total || 0)));
+const cephCapacityName = computed(() => `${formatBytes(cephCapacity.value.used)} of ${formatBytes(cephCapacity.value.total)}`);
 
 const vmStats = computed(() => countGuests(qemus.value));
 const lxcStats = computed(() => countGuests(lxcs.value));
-const vmRingSlices = computed(() => makeRingSlices(vmStats.value));
-const lxcRingSlices = computed(() => makeRingSlices(lxcStats.value));
+const vmCount = computed(() => makeGuestChartData(vmStats.value));
+const lxcCount = computed(() => makeGuestChartData(lxcStats.value));
 const osdStats = computed(() => {
   const total = Number(osdmap.value.num_osds || 0);
   const up = Number(osdmap.value.num_up_osds || 0);
@@ -79,6 +103,11 @@ const osdStats = computed(() => {
     downout: Math.max(down - Math.max(inCount - up, 0), 0),
   };
 });
+const cephServices = computed(() => ({
+  mon: buildServiceItems('mon'),
+  mgr: buildServiceItems('mgr'),
+  mds: buildServiceItems('mds'),
+}));
 
 const nodeColumns: QTableColumn<PveRecord>[] = [
   { name: 'node', required: true, label: gettext('Node'), align: 'left', field: (row) => row.node || '-', sortable: true },
@@ -129,29 +158,173 @@ function countGuests(rows: PveRecord[]): GuestStats {
   );
 }
 
-function makeRingSlices(stats: GuestStats): RingSlice[] {
-  const values = [
-    { key: 'online', value: stats.online, color: '#21BF4B' },
-    { key: 'offline', value: stats.offline, color: '#FF6C59' },
-    { key: 'template', value: stats.template, color: '#cfcfcf' },
+function makeGuestChartData(stats: GuestStats) {
+  return [
+    { state_name: gettext('Running'), count: stats.online, cls: 'good' as const },
+    { state_name: gettext('Stopped'), count: stats.offline, cls: 'critical' as const },
+    { state_name: gettext('Templates'), count: stats.template, cls: 'faded' as const },
   ];
-  const total = values.reduce((sum, item) => sum + item.value, 0);
-  if (total <= 0) return [{ key: 'empty', color: '#cfcfcf', dash: '100 0', offset: '25' }];
+}
 
-  let offset = 25;
-  return values
-    .filter((item) => item.value > 0)
-    .map((item) => {
-      const percent = (item.value / total) * 100;
-      const slice = {
-        key: item.key,
-        color: item.color,
-        dash: `${percent} ${100 - percent}`,
-        offset: String(offset),
+function buildServiceItems(type: 'mon' | 'mgr' | 'mds'): CephServiceItem[] {
+  const group = (cephMetadata.value[type] || {}) as Record<string, PveRecord>;
+  return Object.keys(group)
+    .map((id) => {
+      const item = group[id] || {};
+      const name = textValue(item.name || id.split('@')[0] || id);
+      const host = textValue(id.split('@')[1] || item.host || gettext('Unknown'));
+      const addr = textValue(item.addr || item.addrs || gettext('Unknown'));
+      const version = serviceVersion(item);
+      return {
+        id,
+        name,
+        health: serviceHealth(item),
+        text: serviceTooltipText(type, name, host, addr, version, item),
       };
-      offset -= percent;
-      return slice;
-    });
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function serviceVersion(item: PveRecord) {
+  if (typeof item.version === 'string') return item.version;
+  const cephVersion = item.ceph_version as PveRecord | undefined;
+  return textValue(cephVersion?.version || cephVersion?.release || item.version);
+}
+
+function serviceTooltipText(type: 'mon' | 'mgr' | 'mds', name: string, host: string, addr: string, version: string, item: PveRecord) {
+  const lines = [`${gettext('Host')}: ${host}`, `${gettext('Address')}: ${addr}`];
+  const status = serviceStatusText(type, name, item);
+  if (status) lines.push(`${gettext('Status')}: ${status}`);
+  if (version) lines.push(`${gettext('Version')}: ${version}`);
+  return lines.join('<br>');
+}
+
+function serviceStatusText(type: 'mon' | 'mgr' | 'mds', name: string, item: PveRecord) {
+  if (type === 'mgr') {
+    const mgrmap = cephStatus.value.mgrmap as PveRecord | undefined;
+    if (mgrmap?.active_name === name) return 'active';
+    const standbys = Array.isArray(mgrmap?.standbys) ? (mgrmap.standbys as PveRecord[]) : [];
+    if (standbys.some((mgr) => mgr.name === name)) return 'standby';
+  }
+
+  if (type === 'mds') {
+    const fsmap = cephStatus.value.fsmap as PveRecord | undefined;
+    const ranks = Array.isArray(fsmap?.by_rank) ? (fsmap.by_rank as PveRecord[]) : [];
+    const mds = ranks.find((rank) => rank.name === name);
+    if (mds) return `rank: ${textValue(mds.rank)}; ${textValue(mds.status)}`;
+    if (textValue(item.addr || item.addrs) !== gettext('Unknown')) return 'standby';
+  }
+
+  return textValue(item.status || item.state);
+}
+
+function serviceHealth(item: PveRecord): ServiceHealth {
+  const health = textValue(item.health || item.status || item.state).toUpperCase();
+  if (health.includes('ERR') || health.includes('CRITICAL') || health.includes('DOWN')) return 'HEALTH_ERR';
+  if (health.includes('WARN')) return 'HEALTH_WARN';
+  if (health.includes('UPGRADE')) return 'HEALTH_UPGRADE';
+  if (health.includes('OLD')) return 'HEALTH_OLD';
+  if (item.service && !item.version) return 'HEALTH_UNKNOWN';
+  return 'HEALTH_OK';
+}
+
+function serviceIcon(health: ServiceHealth) {
+  if (health === 'HEALTH_OK') return 'fa-solid fa-check';
+  if (health === 'HEALTH_ERR') return 'fa-solid fa-xmark';
+  if (health === 'HEALTH_WARN') return 'fa-solid fa-exclamation';
+  if (health === 'HEALTH_UPGRADE') return 'fa-solid fa-upload';
+  if (health === 'HEALTH_OLD') return 'fa-solid fa-rotate-right';
+  return 'fa-solid fa-question';
+}
+
+function serviceIconClass(health: ServiceHealth) {
+  if (health === 'HEALTH_OK') return 'good';
+  if (health === 'HEALTH_ERR') return 'critical';
+  if (health === 'HEALTH_WARN' || health === 'HEALTH_UPGRADE' || health === 'HEALTH_OLD') return 'warning';
+  return 'faded';
+}
+
+function initRunningChart(): RunningChartData {
+  return {
+    xList: initChartXTime(30, 3),
+    yList: Array.from({ length: 30 }, () => 0),
+    xLabel: `${gettext('Time')}: `,
+    yLabel: `${gettext('Speed')}: `,
+  };
+}
+
+function initChartXTime(count: number, step: number) {
+  const times: string[] = [];
+  const date = new Date();
+  for (let i = 0; i < count; i += 1) {
+    const item = new Date(date.getTime() - (count - i) * step * 1000);
+    times[i] = `${item.getHours()}:${item.getMinutes()}:${item.getSeconds()}`;
+  }
+  return times;
+}
+
+function currentTimeText() {
+  const date = new Date();
+  return `${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
+}
+
+function appendRunningChart(chart: typeof readsChart, value: number) {
+  chart.value = {
+    ...chart.value,
+    xList: [...chart.value.xList.slice(-29), currentTimeText()],
+    yList: [...chart.value.yList.slice(-29), Number.isFinite(value) ? value : 0],
+  };
+}
+
+function latestValue(chart: RunningChartData) {
+  return chart.yList[chart.yList.length - 1] || 0;
+}
+
+function rateLabel(chart: RunningChartData) {
+  return `${formatBytes(latestValue(chart))}/S`;
+}
+
+function iopsLabel(chart: RunningChartData) {
+  return formatBytes(latestValue(chart)).replace('B', '');
+}
+
+function pgStateClass(stateName: string): PgStateClass {
+  const pgstates: Record<string, number> = {
+    clean: 1,
+    active: 1,
+    activating: 2,
+    backfill_wait: 2,
+    backfilling: 2,
+    creating: 2,
+    deep: 2,
+    degraded: 2,
+    forced_backfill: 2,
+    forced_recovery: 2,
+    peered: 2,
+    peering: 2,
+    recovering: 2,
+    recovery_wait: 2,
+    repair: 2,
+    scrubbing: 2,
+    snaptrim: 2,
+    snaptrim_wait: 2,
+    backfill_toofull: 3,
+    backfill_unfound: 3,
+    down: 3,
+    incomplete: 3,
+    inconsistent: 3,
+    recovery_toofull: 3,
+    recovery_unfound: 3,
+    remapped: 3,
+    snaptrim_error: 3,
+    stale: 3,
+    undersized: 3,
+  };
+  const level = stateName.split(/[^a-z]+/).reduce((result, item) => Math.max(result, pgstates[item] || 0), 0);
+  if (level === 1) return 'good';
+  if (level === 2) return 'warning';
+  if (level === 3) return 'critical';
+  return 'faded';
 }
 
 function statusColor(value: unknown) {
@@ -161,29 +334,33 @@ function statusColor(value: unknown) {
   return 'grey';
 }
 
-function appendMetricSeries(series: typeof readSeries, value: number) {
-  if (series.value.length >= 30) series.value.shift();
-  series.value.push(value);
-}
-
 async function loadData() {
   loading.value = true;
   try {
-    const [resourceResponse, clusterResponse, taskResponse, cephStatusResponse] = await Promise.allSettled([
+    const [resourceResponse, clusterResponse, taskResponse, cephStatusResponse, cephMetadataResponse] = await Promise.allSettled([
       getClusterResources(),
       getClusterStatus(),
       getTaskLogs(),
       getCephStatus(),
+      getCephMetadata(),
     ]);
 
     if (resourceResponse.status === 'fulfilled') resources.value = resourceResponse.value.data || [];
     if (clusterResponse.status === 'fulfilled') clusterStatusRows.value = clusterResponse.value.data || [];
     if (taskResponse.status === 'fulfilled') tasks.value = taskResponse.value.data || [];
+    if (cephMetadataResponse.status === 'fulfilled') cephMetadata.value = cephMetadataResponse.value.data || {};
     if (cephStatusResponse.status === 'fulfilled') {
       cephStatus.value = cephStatusResponse.value.data || {};
-      appendMetricSeries(readSeries, Number(pgmap.value.read_bytes_sec || 0));
-      appendMetricSeries(writeSeries, Number(pgmap.value.write_bytes_sec || 0));
-      appendMetricSeries(iopsSeries, Number(pgmap.value.op_per_sec || 0));
+      const iops = Number(pgmap.value.op_per_sec || 0);
+      const readIops = Number(pgmap.value.read_op_per_sec || 0);
+      const writeIops = Number(pgmap.value.write_op_per_sec || 0);
+      appendRunningChart(iopsChart, iops);
+      appendRunningChart(readsChart, Number(pgmap.value.read_bytes_sec || 0));
+      appendRunningChart(writesChart, Number(pgmap.value.write_bytes_sec || 0));
+      appendRunningChart(readIopsChart, readIops);
+      appendRunningChart(writeIopsChart, writeIops);
+      if (pgmap.value.op_per_sec !== undefined) cephVersion.value = 'hammer';
+      else if (pgmap.value.read_op_per_sec !== undefined || pgmap.value.write_op_per_sec !== undefined) cephVersion.value = 'jewel';
     }
   } finally {
     loading.value = false;
@@ -197,7 +374,7 @@ onMounted(loadData);
   <div class="dashboard-old q-pa-sm">
     <div class="row q-col-gutter-sm">
       <div class="col-4">
-        <q-card class="dashboard-card no-shadow no-border-radius">
+        <q-card class="dashboard-card">
           <q-card-section class="dashboard-card-title">
             <q-icon name="leaderboard" class="text-blue q-mr-xs" />
             {{ gettext('System Status') }}
@@ -207,12 +384,16 @@ onMounted(loadData);
             <div class="row">
               <div class="col">
                 <div class="text-weight-bold q-py-sm">{{ gettext('Cluster Status') }}</div>
-                <q-icon :name="clusterQuorate ? 'check_circle' : 'error'" :color="clusterQuorate ? 'green' : 'red'" size="64px" class="q-py-md" />
+                <div class="q-py-md">
+                  <q-icon :name="clusterQuorate ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'" :class="clusterQuorate ? 'good' : 'critical'" class="legacy-status-icon" />
+                </div>
                 <div class="q-py-sm">{{ gettext('Cluster') }}: {{ clusterName }}，{{ gettext('Quorate') }}: {{ clusterQuorate ? gettext('Yes') : gettext('No') }}</div>
               </div>
               <div class="col">
                 <div class="text-weight-bold q-py-sm">{{ gettext('Storage Status') }}</div>
-                <q-icon :name="cephHealth.includes('OK') ? 'check_circle' : 'error'" :color="cephHealth.includes('OK') ? 'green' : 'red'" size="64px" class="q-py-md" />
+                <div class="q-py-md">
+                  <q-icon :name="cephHealth.includes('OK') ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'" :class="cephHealth.includes('OK') ? 'good' : 'critical'" class="legacy-status-icon" />
+                </div>
                 <div class="q-py-sm">{{ cephHealth }}</div>
               </div>
             </div>
@@ -221,7 +402,7 @@ onMounted(loadData);
       </div>
 
       <div class="col-5">
-        <q-card class="dashboard-card no-shadow no-border-radius">
+        <q-card class="dashboard-card">
           <q-card-section class="dashboard-card-title">
             <q-icon name="leaderboard" class="text-blue q-mr-xs" />
             {{ gettext('System Resources') }}
@@ -229,16 +410,25 @@ onMounted(loadData);
           <q-separator />
           <q-card-section class="q-py-none q-pt-md text-center">
             <div class="row">
-              <div class="col"><q-circular-progress class="legacy-gauge" show-value font-size="14px" :value="clusterCpu.percent" size="124px" :thickness="0.18" color="blue" track-color="blue-1">{{ clusterCpu.percent.toFixed(0) }}%</q-circular-progress><div class="q-pb-sm">{{ gettext('of') }} {{ clusterCpu.total }} CPU(s)</div></div>
-              <div class="col"><q-circular-progress class="legacy-gauge" show-value font-size="14px" :value="clusterMem.percent" size="124px" :thickness="0.18" color="blue" track-color="blue-1">{{ clusterMem.percent.toFixed(0) }}%</q-circular-progress><div class="q-pb-sm">{{ gettext('Used') }} {{ formatBytes(clusterMem.used) }}，{{ gettext('of') }} {{ formatBytes(clusterMem.total) }}</div></div>
-              <div class="col"><q-circular-progress class="legacy-gauge" show-value font-size="14px" :value="clusterStorage.percent" size="124px" :thickness="0.18" color="blue" track-color="blue-1">{{ clusterStorage.percent.toFixed(0) }}%</q-circular-progress><div class="q-pb-sm">{{ gettext('Used') }} {{ formatBytes(clusterStorage.used) }}，{{ gettext('of') }} {{ formatBytes(clusterStorage.total) }}</div></div>
+              <div class="col">
+                <div class="legacy-gauge-box"><LegacyGaugeChart :chart-data="{ value: clusterCpu.percent }" :chart-options="{ textPosition: 'top', center: ['50%', '55%'] }" /></div>
+                <div class="q-pb-sm">{{ gettext('of') }} {{ clusterCpu.total }} CPU(s)</div>
+              </div>
+              <div class="col">
+                <div class="legacy-gauge-box"><LegacyGaugeChart :chart-data="{ value: clusterMem.percent }" :chart-options="{ textPosition: 'top', center: ['50%', '55%'] }" /></div>
+                <div class="q-pb-sm">{{ gettext('Used') }} {{ formatBytes(clusterMem.used) }}，{{ gettext('of') }} {{ formatBytes(clusterMem.total) }}</div>
+              </div>
+              <div class="col">
+                <div class="legacy-gauge-box"><LegacyGaugeChart :chart-data="{ value: clusterStorage.percent }" :chart-options="{ textPosition: 'top', center: ['50%', '55%'] }" /></div>
+                <div class="q-pb-sm">{{ gettext('Used') }} {{ formatBytes(clusterStorage.used) }}，{{ gettext('of') }} {{ formatBytes(clusterStorage.total) }}</div>
+              </div>
             </div>
           </q-card-section>
         </q-card>
       </div>
 
       <div class="col-3">
-        <q-card class="dashboard-card no-shadow no-border-radius">
+        <q-card class="dashboard-card">
           <q-card-section class="dashboard-card-title">
             <q-icon name="leaderboard" class="text-blue q-mr-xs" />
             {{ gettext('Client Statistics') }}
@@ -252,10 +442,10 @@ onMounted(loadData);
                 <span class="text-red q-ml-xs">{{ gettext('Stopped') }}({{ vmStats.offline }})</span>
                 <span class="text-grey q-ml-xs">{{ gettext('Templates') }}({{ vmStats.template }})</span>
               </div>
-              <svg class="client-ring" viewBox="0 0 42 42" aria-hidden="true">
-                <circle class="ring-track" cx="21" cy="21" r="15.9155" />
-                <circle v-for="slice in vmRingSlices" :key="slice.key" class="ring-slice" cx="21" cy="21" r="15.9155" :stroke="slice.color" :stroke-dasharray="slice.dash" :stroke-dashoffset="slice.offset" />
-              </svg>
+              <LegacyRingChart
+                :chart-data="vmCount"
+                :chart-option="{ radius: '45%', legend: { bottom: '8%', left: 'center', icon: 'circle', itemWidth: 10, itemHeight: 10, itemGap: 10, textStyle: { fontSize: 12 } } }"
+              />
             </div>
             <div class="col chart-card">
               <div class="client-stat">
@@ -264,10 +454,10 @@ onMounted(loadData);
                 <span class="text-red q-ml-xs">{{ gettext('Stopped') }}({{ lxcStats.offline }})</span>
                 <span class="text-grey q-ml-xs">{{ gettext('Templates') }}({{ lxcStats.template }})</span>
               </div>
-              <svg class="client-ring" viewBox="0 0 42 42" aria-hidden="true">
-                <circle class="ring-track" cx="21" cy="21" r="15.9155" />
-                <circle v-for="slice in lxcRingSlices" :key="slice.key" class="ring-slice" cx="21" cy="21" r="15.9155" :stroke="slice.color" :stroke-dasharray="slice.dash" :stroke-dashoffset="slice.offset" />
-              </svg>
+              <LegacyRingChart
+                :chart-data="lxcCount"
+                :chart-option="{ radius: '45%', legend: { bottom: '8%', left: 'center', icon: 'circle', itemWidth: 10, itemHeight: 10, itemGap: 10, textStyle: { fontSize: 12 } } }"
+              />
             </div>
           </q-card-section>
         </q-card>
@@ -276,20 +466,22 @@ onMounted(loadData);
 
     <div class="row q-col-gutter-sm q-mt-sm">
       <div class="col-2">
-        <q-card class="dashboard-card no-shadow no-border-radius">
+        <q-card class="dashboard-card">
           <q-card-section class="dashboard-card-title">
             <q-icon name="leaderboard" class="text-blue q-mr-xs" />
             {{ gettext('Cluster Storage Capacity') }}
           </q-card-section>
           <q-separator />
           <q-card-section class="text-center dashboard-capacity">
-            <q-circular-progress class="legacy-gauge" show-value font-size="14px" :value="cephCapacity.percent" size="150px" :thickness="0.18" color="blue" track-color="blue-1">{{ cephCapacity.percent.toFixed(0) }}%</q-circular-progress>
+            <div class="legacy-capacity-gauge">
+              <LegacyGaugeChart :chart-data="{ value: cephCapacity.percent, name: cephCapacityName }" :chart-options="{ textPosition: 'top', center: ['50%', '55%'] }" />
+            </div>
           </q-card-section>
         </q-card>
       </div>
 
       <div class="col-6">
-        <q-card class="dashboard-card no-shadow no-border-radius">
+        <q-card class="dashboard-card">
           <q-card-section class="dashboard-card-title">
             <q-icon name="leaderboard" class="text-blue q-mr-xs" />
             {{ gettext('Storage Status') }}
@@ -299,19 +491,19 @@ onMounted(loadData);
             <div class="row storage-status-row">
               <div class="col q-ma-sm">
                 <div class="status-title">{{ gettext('OSDs') }}</div>
-                <div class="q-pa-md">
+                <div class="osd-table q-pa-md">
                   <div class="row text-center">
                     <div class="col q-pa-sm u-border-right u-border-bottom"></div>
-                    <div class="col q-pa-sm u-border-right u-border-bottom"><q-icon name="circle" class="good" />{{ gettext('Cluster In') }}</div>
-                    <div class="col q-pa-sm u-border-bottom"><q-icon name="radio_button_unchecked" class="warning" />{{ gettext('Cluster Out') }}</div>
+                    <div class="col q-pa-sm u-border-right u-border-bottom"><q-icon name="fa-solid fa-circle" class="good fa-fw" />{{ gettext('Cluster In') }}</div>
+                    <div class="col q-pa-sm u-border-bottom"><q-icon name="fa-regular fa-circle" class="warning fa-fw" />{{ gettext('Cluster Out') }}</div>
                   </div>
                   <div class="row text-center">
-                    <div class="col q-pa-sm u-border-right u-border-bottom"><q-icon name="arrow_circle_up" class="good" />{{ gettext('Up') }}</div>
+                    <div class="col q-pa-sm u-border-right u-border-bottom"><q-icon name="fa-solid fa-circle-up" class="good fa-fw" />{{ gettext('Up') }}</div>
                     <div class="col q-pa-sm text-grey-8 u-border-right u-border-bottom">{{ osdStats.upin }}</div>
                     <div class="col q-pa-sm text-grey-8 u-border-bottom">{{ osdStats.upout }}</div>
                   </div>
                   <div class="row text-center">
-                    <div class="col q-pa-sm u-border-right"><q-icon name="arrow_circle_down" class="critical" />{{ gettext('Down') }}</div>
+                    <div class="col q-pa-sm u-border-right"><q-icon name="fa-solid fa-circle-down" class="critical fa-fw" />{{ gettext('Down') }}</div>
                     <div class="col q-pa-sm text-grey-8 u-border-right">{{ osdStats.downin }}</div>
                     <div class="col q-pa-sm text-grey-8">{{ osdStats.downout }}</div>
                   </div>
@@ -319,14 +511,14 @@ onMounted(loadData);
                 <div class="total-osd">{{ gettext('Total') }}: {{ osdStats.total }}</div>
               </div>
               <div class="col">
-                <q-circular-progress class="legacy-gauge pg-gauge" show-value font-size="13px" :value="usedPercent(Number(pgmap.num_pgs || 0), Math.max(Number(pgmap.num_pgs || 0), 1))" size="150px" :thickness="0.18" color="blue" track-color="blue-1">{{ pgmap.num_pgs || 0 }}</q-circular-progress>
+                <LegacyRingChart :chart-data="pgsByStateRows" />
               </div>
               <div class="col q-ma-sm">
                 <div class="status-title">{{ gettext('PG Number') }}</div>
                 <q-scroll-area class="pg-list q-mt-sm">
-                  <div v-for="item in pgsByState" :key="textValue(item.state_name)" class="row">
-                    <div class="col-9 text-left text-overflow"><q-icon name="circle" color="primary" size="10px" /> {{ item.state_name }}</div>
-                    <div class="col-3 text-right">{{ item.count }}</div>
+                  <div v-for="item in pgsByStateRows" :key="textValue(item.state_name)" class="row">
+                    <div class="col-10 text-left text-overflow"><q-icon name="fa-solid fa-circle" :class="item.cls" size="10px" /> {{ item.state_name }}</div>
+                    <div class="col-2 text-right">{{ item.count }}</div>
                   </div>
                 </q-scroll-area>
               </div>
@@ -336,25 +528,30 @@ onMounted(loadData);
       </div>
 
       <div class="col-4">
-        <q-card class="dashboard-card no-shadow no-border-radius">
-          <q-tabs v-model="cephTab" dense class="text-grey" active-color="primary" indicator-color="primary" align="left" narrow-indicator>
-            <q-tab name="read" :label="`${gettext('Read')} (${formatBytes(pgmap.read_bytes_sec as number)})`" />
-            <q-tab name="write" :label="`${gettext('Write')} (${formatBytes(pgmap.write_bytes_sec as number)})`" />
-            <q-tab name="iops" :label="`IOPS (${pgmap.op_per_sec || 0})`" />
+        <q-card class="dashboard-card">
+          <q-tabs v-model="cephTab" dense class="text-grey" active-color="primary" indicator-color="primary" align="left" :breakpoint="0" narrow-indicator>
+            <q-tab name="read" :label="`${gettext('Read')} (${rateLabel(readsChart)})`" />
+            <q-tab name="write" :label="`${gettext('Write')} (${rateLabel(writesChart)})`" />
+            <q-tab name="readIOPS" :label="`${gettext('Read')}IOPS (${iopsLabel(readIopsChart)})`" />
+            <q-tab name="writeIOPS" :label="`${gettext('Write')}IOPS (${iopsLabel(writeIopsChart)})`" />
+            <q-tab v-if="cephVersion === 'hammer'" name="hammerIOPS" :label="`IOPS (${rateLabel(iopsChart)})`" />
           </q-tabs>
           <q-separator />
           <q-tab-panels v-model="cephTab" animated class="running-panels">
+            <q-tab-panel v-if="cephVersion === 'hammer'" name="hammerIOPS">
+              <div class="row u-border-bottom running-chart"><LegacyRunningChart :chart-data="iopsChart" /></div>
+            </q-tab-panel>
             <q-tab-panel name="read">
-              <div class="running-chart u-border-bottom"><MetricSparkline :values="readSeries" :height="180" color="#1976d2" /></div>
-              <div class="running-current text-grey-8">{{ gettext('Read') }}: {{ formatBytes(Number(pgmap.read_bytes_sec || 0)) }}</div>
+              <div class="row running-chart"><LegacyRunningChart :chart-data="readsChart" /></div>
             </q-tab-panel>
             <q-tab-panel name="write">
-              <div class="running-chart u-border-bottom"><MetricSparkline :values="writeSeries" :height="180" color="#1976d2" /></div>
-              <div class="running-current text-grey-8">{{ gettext('Write') }}: {{ formatBytes(Number(pgmap.write_bytes_sec || 0)) }}</div>
+              <div :class="`row running-chart ${cephVersion === 'jewel' ? 'u-border-bottom' : ''}`"><LegacyRunningChart :chart-data="writesChart" /></div>
             </q-tab-panel>
-            <q-tab-panel name="iops">
-              <div class="running-chart u-border-bottom"><MetricSparkline :values="iopsSeries" :height="180" color="#1976d2" /></div>
-              <div class="running-current text-grey-8">IOPS: {{ pgmap.op_per_sec || 0 }}</div>
+            <q-tab-panel name="readIOPS">
+              <div v-if="cephVersion === 'jewel'" class="row running-chart"><LegacyRunningChart :chart-data="readIopsChart" iops /></div>
+            </q-tab-panel>
+            <q-tab-panel name="writeIOPS">
+              <div v-if="cephVersion === 'jewel'" class="row running-chart"><LegacyRunningChart :chart-data="writeIopsChart" iops /></div>
             </q-tab-panel>
           </q-tab-panels>
         </q-card>
@@ -362,8 +559,57 @@ onMounted(loadData);
     </div>
 
     <div class="row q-col-gutter-sm q-mt-sm">
-      <div class="col-6">
-        <q-card class="dashboard-table-card no-shadow no-border-radius">
+      <div class="col-5">
+        <q-card class="dashboard-service-card">
+          <q-card-section class="dashboard-card-title">
+            <q-icon name="leaderboard" class="text-blue q-mr-xs" />
+            {{ gettext('Cluster Storage Services') }}
+          </q-card-section>
+          <q-separator />
+          <q-card-section class="dashboard-services-body text-center">
+            <div class="row no-padding">
+              <div class="col">
+                <div class="text-weight-medium service-title q-pa-sm text-center">{{ gettext('Monitors') }}</div>
+                <div class="row justify-center q-gutter-sm q-px-sm">
+                  <div v-for="item in cephServices.mon" :key="item.id" class="u-border q-px-sm service-badge">
+                    {{ item.name }}:
+                    <q-icon :name="serviceIcon(item.health)" :class="serviceIconClass(item.health)" class="fa-fw" />
+                    <q-tooltip class="bg-primary service-tooltip">
+                      <div v-html="item.text"></div>
+                    </q-tooltip>
+                  </div>
+                </div>
+              </div>
+              <div class="col">
+                <div class="text-weight-medium service-title q-pa-sm text-center">{{ gettext('Managers') }}</div>
+                <div class="row justify-center q-gutter-sm q-px-sm">
+                  <div v-for="item in cephServices.mgr" :key="item.id" class="u-border q-px-sm service-badge">
+                    {{ item.name }}:
+                    <q-icon :name="serviceIcon(item.health)" :class="serviceIconClass(item.health)" class="fa-fw" />
+                    <q-tooltip class="bg-primary service-tooltip">
+                      <div v-html="item.text"></div>
+                    </q-tooltip>
+                  </div>
+                </div>
+              </div>
+              <div class="col">
+                <div class="text-weight-medium service-title q-pa-sm text-center">{{ gettext('Metadata Servers') }}</div>
+                <div class="row justify-center q-gutter-sm q-px-sm">
+                  <div v-for="item in cephServices.mds" :key="item.id" class="u-border q-px-sm service-badge">
+                    {{ item.name }}:
+                    <q-icon :name="serviceIcon(item.health)" :class="serviceIconClass(item.health)" class="fa-fw" />
+                    <q-tooltip class="bg-primary service-tooltip">
+                      <div v-html="item.text"></div>
+                    </q-tooltip>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+      </div>
+      <div class="col-7">
+        <q-card class="dashboard-node-card">
           <q-card-section class="dashboard-card-title">
             <q-icon name="leaderboard" class="text-blue q-mr-xs" />
             {{ gettext('Nodes') }} <span class="text-blue">( {{ nodeTableRows.length }} )</span>
@@ -381,8 +627,11 @@ onMounted(loadData);
           </q-card-section>
         </q-card>
       </div>
-      <div class="col-6">
-        <q-card class="dashboard-table-card no-shadow no-border-radius">
+    </div>
+
+    <div class="row q-col-gutter-sm q-mt-sm">
+      <div class="col-12">
+        <q-card class="dashboard-table-card">
           <q-card-section class="dashboard-card-title">
             <q-icon name="leaderboard" class="text-blue q-mr-xs" />
             {{ gettext('Running tasks') }} (<span class="text-blue">{{ taskTableRows.length }}</span>)
@@ -402,11 +651,37 @@ onMounted(loadData);
 
 <style scoped>
 .dashboard-old {
+  /* background: #ffffff; */
+  color: #333333;
+}
+
+.dashboard-old :deep(.text-grey-8) {
+  color: #333333 !important;
+}
+
+.dashboard-old :deep(.q-card) {
+  background: #ffffff;
+  color: #333333;
+}
+
+.dashboard-old :deep(.q-table tbody td),
+.dashboard-old :deep(.q-table thead th),
+.dashboard-old :deep(.q-tab__label) {
   color: #333333;
 }
 
 .dashboard-card {
   height: 250px;
+}
+
+.dashboard-service-card {
+  height: 250px;
+  overflow: hidden;
+}
+
+.dashboard-node-card {
+  height: 250px;
+  overflow: hidden;
 }
 
 .dashboard-table-card {
@@ -427,13 +702,28 @@ onMounted(loadData);
 .dashboard-status-body,
 .dashboard-client-body {
   height: 212px;
-  color: #666666;
+  color: #333333;
 }
 
-.dashboard-capacity,
 .dashboard-storage-status {
   height: 212px;
-  color: #666666;
+  color: #333333;
+}
+
+.dashboard-capacity {
+  height: 220px;
+  color: #333333;
+}
+
+.legacy-capacity-gauge {
+  height: 100%;
+}
+
+.dashboard-services-body {
+  box-sizing: border-box;
+  height: 200px;
+  padding: 16px;
+  color: #333333;
 }
 
 .chart-card {
@@ -458,35 +748,19 @@ onMounted(loadData);
   font-size: 13px;
 }
 
-.client-ring {
-  display: block;
-  width: 100%;
+.legacy-status-icon {
+  font-size: 5em;
+  line-height: 1;
+}
+
+.legacy-gauge-box {
   height: 160px;
-  margin-top: 42px;
-  transform: rotate(-90deg);
-}
-
-.ring-track,
-.ring-slice {
-  fill: none;
-  stroke-width: 8;
-}
-
-.ring-track {
-  stroke: #f1f1f1;
-}
-
-.ring-slice {
-  transition: stroke-dasharray 0.2s ease;
-}
-
-.legacy-gauge {
-  color: #1976d2;
 }
 
 .storage-status-row {
   height: 200px;
   font-size: 12px;
+  color: #333333;
 }
 
 .status-title {
@@ -497,6 +771,41 @@ onMounted(loadData);
 .total-osd {
   font-size: 13px;
   text-align: center;
+}
+
+.osd-table {
+  padding: 16px !important;
+}
+
+.osd-table .q-pa-sm {
+  min-height: 32px;
+  padding: 8px !important;
+  line-height: 16px;
+}
+
+.osd-table .q-icon {
+  width: 1.25em;
+  margin-right: 4px;
+  font-size: 12px;
+  vertical-align: baseline;
+}
+
+.service-title {
+  font-size: 16px;
+}
+
+.service-badge {
+  padding: 4px 8px !important;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.service-tooltip {
+  font-size: 13px;
+}
+
+.u-border {
+  border: 1px solid #cccccc;
 }
 
 .u-border-right {

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { QTableColumn } from 'quasar';
-import { computed, onMounted, shallowRef, useTemplateRef, watch } from 'vue';
-import { getNodes, type PveNode } from '@/api/resources';
+import { computed, onMounted, shallowRef, watch } from 'vue';
+import { getNodes, type PveNode, type PveRecord } from '@/api/resources';
+import SelectTable from '@/components/SelectTable.vue';
 import UsageProgress from '@/components/UsageProgress.vue';
 import { gettext } from '@/locale';
 import { usagePercent } from '@/utils/format';
@@ -24,16 +25,14 @@ const emit = defineEmits<{
   loaded: [nodes: PveNode[]];
 }>();
 
-const popupRef = useTemplateRef<{ hide: () => void }>('popup');
 const loading = shallowRef(false);
-const filter = shallowRef('');
 const nodes = shallowRef<PveNode[]>([]);
 
 const selectedNode = computed(() => nodes.value.find((item) => item.node === model.value));
 const displayNode = computed(() => selectedNode.value?.node || model.value || '');
 const displayStatus = computed(() => nodeStatusText(selectedNode.value?.status));
 
-const columns: QTableColumn<PveNode>[] = [
+const columns: QTableColumn<PveRecord>[] = [
   { name: 'node', label: gettext('Name'), field: 'node', align: 'left', sortable: true },
   {
     name: 'diskUsage',
@@ -59,7 +58,7 @@ const columns: QTableColumn<PveNode>[] = [
   {
     name: 'status',
     label: gettext('Status'),
-    field: (row) => nodeStatusText(row.status),
+    field: (row) => nodeStatusText(row.status as string | undefined),
     align: 'left',
   },
 ];
@@ -87,13 +86,6 @@ function isUsageColumn(name: string) {
 
 function canSelect(row: PveNode) {
   return !props.disableOffline || row.status !== 'offline';
-}
-
-function selectRow(_: Event, row: PveNode) {
-  if (!canSelect(row)) return;
-  model.value = row.node;
-  filter.value = '';
-  popupRef.value?.hide();
 }
 
 function sortNodes(items: PveNode[]) {
@@ -133,123 +125,40 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="u-hidden-error node-select-table">
-    <q-select
-      v-model="model"
-      square
-      outlined
-      dense
-      map-options
-      color="grey-8"
-      options-dense
-      class="u-dense node-select-table__field"
-      :display-value="displayNode"
-      :loading="loading"
-      :options="[]"
-    >
-      <template #selected>
-        <span class="text-primary text-weight-medium q-mr-xs">{{ displayNode }}</span>
-        <span v-if="displayNode">: {{ displayStatus }}</span>
-      </template>
+  <SelectTable
+    v-model="model"
+    row-key="node"
+    class="node-select-table"
+    :rows="nodes"
+    :columns="columns"
+    :display-value="displayNode"
+    :loading="loading"
+    :width="width"
+    :get-row-value="(row) => String(row.node || '')"
+    :can-select="(row) => canSelect(row as PveNode)"
+  >
+    <template #selected>
+      <span class="text-primary text-weight-medium q-mr-xs">{{ displayNode }}</span>
+      <span v-if="displayNode">: {{ displayStatus }}</span>
+    </template>
 
-      <q-popup-proxy ref="popup" transition-show="jump-down" transition-hide="jump-up">
-        <div class="q-px-sm u-border-bottom bg-grey-2 text-grey">
-          <q-input
-            v-model="filter"
-            borderless
-            dense
-            debounce="300"
-            class="u-dense-m"
-            input-class="bg-grey-2 text-grey q-py-none"
-            :placeholder="gettext('Search')"
-          >
-            <template #append>
-              <q-icon name="search" size="20px" class="text-grey" />
-            </template>
-          </q-input>
-        </div>
-        <q-scroll-area class="node-select-table__scroll" :style="{ width }">
-          <q-table
-            flat
-            dense
-            hide-bottom
-            row-key="node"
-            table-header-class="u-table-header"
-            :rows="nodes"
-            :columns="columns"
-            :filter="filter"
-            :pagination="{ rowsPerPage: 0 }"
-            :loading="loading"
-            :no-data-label="gettext('no record can be found')"
-            @row-click="selectRow"
-          >
-            <template #body-cell="scope">
-              <q-td
-                :props="scope"
-                class="text-grey-8"
-                :class="{ 'node-select-table__disabled': !canSelect(scope.row) }"
-              >
-                <UsageProgress
-                  v-if="isUsageColumn(scope.col.name)"
-                  :percent="Number(scope.value)"
-                />
-                <q-badge
-                  v-else-if="scope.col.name === 'status'"
-                  :color="nodeStatusColor(scope.row.status)"
-                  :label="scope.value"
-                />
-                <template v-else>{{ scope.value }}</template>
-              </q-td>
-            </template>
-
-            <template #no-data="{ message }">
-              <div class="full-width row flex-center text-accent q-gutter-sm">
-                <span class="text-grey-6">{{ message }}</span>
-              </div>
-            </template>
-          </q-table>
-        </q-scroll-area>
-      </q-popup-proxy>
-    </q-select>
-  </div>
+    <template #body-cell="scope">
+      <UsageProgress
+        v-if="isUsageColumn(scope.col.name)"
+        :percent="Number(scope.value)"
+      />
+      <q-badge
+        v-else-if="scope.col.name === 'status'"
+        :color="nodeStatusColor(scope.row.status as string | undefined)"
+        :label="scope.value"
+      />
+      <template v-else>{{ scope.value }}</template>
+    </template>
+  </SelectTable>
 </template>
 
 <style scoped>
 .node-select-table {
   min-width: 160px;
-}
-
-.node-select-table :deep(.node-select-table__field .q-field__control),
-.node-select-table :deep(.node-select-table__field .q-field__marginal) {
-  height: 28px !important;
-  min-height: 28px !important;
-}
-
-.node-select-table :deep(.node-select-table__field .q-field__native),
-.node-select-table :deep(.node-select-table__field .q-field__input) {
-  min-height: 28px !important;
-  line-height: 28px;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-
-.node-select-table :deep(.node-select-table__field.q-field--outlined .q-field__control::before),
-.node-select-table :deep(.node-select-table__field.q-field--outlined .q-field__control::after) {
-  border: 1px solid #cccccc !important;
-}
-
-.node-select-table
-  :deep(.node-select-table__field.q-field--outlined.q-field--highlighted .q-field__control::after) {
-  transform: scale3d(1, 1, 1);
-}
-
-.node-select-table__scroll {
-  min-height: 150px;
-  height: 250px;
-}
-
-.node-select-table__disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 </style>

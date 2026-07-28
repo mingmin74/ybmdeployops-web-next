@@ -6,6 +6,7 @@ import { gettext } from '@/locale';
 
 defineProps<{
   embedded?: boolean;
+  node?: string;
 }>();
 
 const columns: QTableColumn<PveRecord>[] = [
@@ -26,5 +27,5 @@ async function loadRows(node: string) {
 </script>
 
 <template>
-  <NodeDiskTablePage :columns="columns" :load-rows="loadRows" row-key="path" :embedded="embedded" />
+  <NodeDiskTablePage :columns="columns" :load-rows="loadRows" row-key="path" :embedded="embedded" :node="node" />
 </template>

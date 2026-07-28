@@ -35,7 +35,7 @@ export default defineRouter(() => {
     history: createHistory(import.meta.env.QUASAR_VUE_ROUTER_BASE),
   });
 
-  Router.beforeEach((to) => {
+  Router.beforeEach(async (to) => {
     LoadingBar.start();
     const session = useSessionStore();
 
@@ -45,6 +45,13 @@ export default defineRouter(() => {
 
     if (to.matched.some((record) => record.meta.auth) && !session.isAuthenticated) {
       return { name: 'user-login', query: { redirect: to.fullPath } };
+    }
+
+    // The ticket response is the source of GuiCap in Proxmox. Restore it before
+    // rendering protected pages after a browser refresh, because Pinia state is
+    // in-memory and capabilities are not retained across reloads.
+    if (to.matched.some((record) => record.meta.auth) && !Object.keys(session.caps).length) {
+      await session.refreshTicket();
     }
 
     return true;
