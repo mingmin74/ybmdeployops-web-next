@@ -91,82 +91,96 @@ watch(
 </script>
 
 <template>
-  <q-table
-    v-model:selected="selected"
-    flat
-    bordered
-    square
-    dense
-    row-key="name"
-    selection="single"
-    :rows="rows"
-    :columns="columns"
-    :filter="filter"
-    :loading="loading"
-    :pagination="{ rowsPerPage: 0 }"
-    hide-bottom
-    class="u-compact-table"
-  >
-    <template #top
-      ><q-btn
-        no-caps
-        outline
-        size="12px"
-        color="primary"
-        class="u-button"
-        :disable="!editable"
-        :label="gettext('Add')"
-        @click="openDialog()" /><q-btn
-        no-caps
-        outline
-        size="12px"
-        color="primary"
-        class="u-button q-ml-sm"
-        :disable="!editable || !selectedAlias"
-        :label="gettext('Edit')"
-        @click="openDialog(true)" /><q-btn
-        no-caps
-        outline
-        size="12px"
-        color="negative"
-        class="u-button q-ml-sm"
-        :disable="!editable || !selectedAlias"
-        :label="gettext('Remove')"
-        @click="remove" /><q-space /><q-input
-        v-model="filter"
-        dense
-        borderless
-        debounce="300"
-        :placeholder="gettext('Search')"
-        ><template #append><q-icon name="search" /></template></q-input
-      ><q-btn
-        no-caps
-        outline
-        size="12px"
-        color="primary"
-        class="u-button q-ml-sm"
-        :label="gettext('Refresh')"
-        @click="reload"
-    /></template>
-  </q-table>
+  <q-card class="no-border-radius no-shadow q-ma-none">
+    <q-card-section class="q-pa-none">
+      <q-table
+        v-model:selected="selected"
+        flat
+        row-key="name"
+        selection="single"
+        table-header-class="u-table-header"
+        :rows="rows"
+        :columns="columns"
+        :filter="filter"
+        :loading="loading"
+        :rows-per-page-options="[10]"
+        :pagination="{ page: 1, rowsPerPage: 10 }"
+        :no-data-label="gettext('no record can be found')"
+      >
+        <template #top
+          ><div class="q-gutter-sm">
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              color="primary"
+              class="u-button"
+              :disable="!editable"
+              :label="gettext('Add')"
+              @click="openDialog()" /><q-btn
+              no-caps
+              outline
+              size="12px"
+              color="primary"
+              class="u-button"
+              :disable="!editable || !selectedAlias"
+              :label="gettext('Edit')"
+              @click="openDialog(true)" /><q-btn
+              no-caps
+              outline
+              size="12px"
+              color="negative"
+              class="u-button"
+              :disable="!editable || !selectedAlias"
+              :label="gettext('Remove')"
+              @click="remove" /><q-btn
+              no-caps
+              outline
+              size="12px"
+              color="primary"
+              class="u-button"
+              :label="gettext('Refresh')"
+              @click="reload"
+            />
+          </div>
+          <q-space />
+          <q-input
+            v-model="filter"
+            dense
+            borderless
+            debounce="300"
+            :placeholder="gettext('Search')"
+            ><template #append><q-icon name="search" /></template></q-input
+          ></template>
+        <template #body-cell-comment="scope"
+          ><q-td :props="scope"
+            ><div class="text-overflow firewall-alias-comment" :title="String(scope.value || '')">
+              {{ scope.value }}
+            </div></q-td
+          ></template
+        >
+        <template #no-data="{ message }">
+          <div class="full-width row flex-center text-accent q-gutter-sm">
+            <span class="text-grey-6">{{ message }}</span>
+          </div>
+        </template>
+      </q-table>
+    </q-card-section>
+  </q-card>
   <q-dialog v-model="visible" persistent
     ><UWindow :title="gettext(editing ? 'Edit' : 'Add')" width="480px" :loading="loading"
-      ><div class="q-pa-md q-gutter-sm">
+      ><q-form class="firewall-alias-form u-border q-ma-sm q-pa-md u-dense" @submit.prevent="save">
         <q-input
           v-model="form.name"
           dense
-          square
-          outlined
           :disable="editing"
           :label="gettext('Name')"
-        /><q-input v-model="form.cidr" dense square outlined label="CIDR" /><q-input
+        /><q-input v-model="form.cidr" dense label="CIDR" /><q-input
           v-model="form.comment"
           dense
-          square
-          outlined
           :label="gettext('Comment')"
         />
-      </div>
+      </q-form>
       <template #foot
         ><q-btn
           v-close-popup
@@ -185,8 +199,12 @@ watch(
 </template>
 
 <style scoped>
-.u-compact-table :deep(tbody td) {
-  height: 40px;
-  font-size: 12px;
+.firewall-alias-form {
+  display: grid;
+  gap: 10px;
+}
+
+.firewall-alias-comment {
+  max-width: 520px;
 }
 </style>

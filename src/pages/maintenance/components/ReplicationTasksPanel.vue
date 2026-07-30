@@ -3,6 +3,7 @@ import { Dialog, Notify, type QTableColumn } from 'quasar';
 import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import {
   createReplicationTask,
+  getReplicationTask,
   getReplicationLogs,
   getReplicationTasks,
   removeReplicationTask,
@@ -17,8 +18,8 @@ import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 
 type Row = ReplicationTask & {
-  enabledText: string;
-  stateText: string;
+  enabled: boolean;
+  statusText: string;
   lastSyncText: string;
   nextSyncText: string;
   durationText: string;
@@ -45,6 +46,7 @@ const logsVisible = ref(false);
 const logsLoading = ref(false);
 const logs = ref<string[]>([]);
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
+let logsTimer: ReturnType<typeof setInterval> | undefined;
 const form = reactive({
   id: '',
   guest: '',
@@ -52,10 +54,11 @@ const form = reactive({
   schedule: '*/15',
   rate: '',
   comment: '',
-  disable: false,
+  enabled: true,
 });
 const onlineNodes = computed(() => nodes.value.filter((item) => item.status === 'online'));
 const standalone = computed(() => onlineNodes.value.length < 2);
+const showNodeSelector = computed(() => !props.node);
 const selectedTask = computed(() => selected.value[0]);
 const canManageReplication = computed(() =>
   Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Backup']),
@@ -66,32 +69,44 @@ const canOperate = computed(
 const filteredTasks = computed(() => {
   const key = filter.value.trim().toLowerCase();
   return tasks.value
-    .filter((row) => !props.vmid || String(row.guest || '') === props.vmid)
     .filter(
       (row) =>
         !key ||
-        [row.guest, row.jobnum, row.target, row.stateText, row.schedule, row.comment]
+        [row.id, row.guest, row.jobnum, row.target, row.statusText, row.schedule, row.comment]
           .join(' ')
           .toLowerCase()
           .includes(key),
     );
 });
 const formTitle = computed(
-  () => `${gettext(action.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Replication Task')}`,
+  () => `${gettext(action.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Replication Job')}`,
 );
 const columns: QTableColumn<Row>[] = [
-  { name: 'enabled', label: gettext('Enabled'), field: 'enabledText', align: 'left' },
-  { name: 'guest', label: gettext('Client'), field: 'guest', align: 'left', sortable: true },
+  { name: 'enabled', label: gettext('Enabled'), field: 'enabled', align: 'center', sortable: true },
+  { name: 'id', label: 'ID', field: 'id', align: 'left', sortable: true },
+  { name: 'guest', label: gettext('Guest'), field: 'guest', align: 'left', sortable: true },
   { name: 'job', label: gettext('Job'), field: 'jobnum', align: 'left' },
   { name: 'target', label: gettext('Target'), field: 'target', align: 'left' },
-  { name: 'state', label: gettext('State'), field: 'stateText', align: 'left' },
+  { name: 'status', label: gettext('Status'), field: 'statusText', align: 'left' },
   { name: 'last', label: gettext('Last Sync'), field: 'lastSyncText', align: 'left' },
   { name: 'duration', label: gettext('Duration'), field: 'durationText', align: 'left' },
   { name: 'next', label: gettext('Next Sync'), field: 'nextSyncText', align: 'left' },
   { name: 'schedule', label: gettext('Schedule'), field: 'schedule', align: 'left' },
-  { name: 'rate', label: gettext('Rate'), field: 'rateText', align: 'left' },
+  { name: 'rate', label: gettext('Rate limit'), field: 'rateText', align: 'left' },
   { name: 'comment', label: gettext('Comment'), field: 'comment', align: 'left' },
 ];
+const visibleColumns = computed(() => [
+  'enabled',
+  'guest',
+  'job',
+  'target',
+  'status',
+  'last',
+  'duration',
+  'next',
+  'schedule',
+  'comment',
+]);
 function timestamp(value?: number) {
   return value
     ? new Intl.DateTimeFormat(undefined, {
@@ -112,20 +127,23 @@ function duration(value?: number) {
   return `${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${(value % 60).toFixed(1)}s`;
 }
 function row(task: ReplicationTask): Row {
+  const nextSync = Number(task.next_sync) || 0;
+  let statusText = gettext('OK');
+  if (task.remove_job) statusText = gettext('Removal Scheduled');
+  else if (task.error) statusText = task.error;
+
   return {
     ...task,
-    enabledText:
-      Number(task.disable) === 1 || task.disable === true
-        ? gettext('Disabled')
-        : gettext('Enabled'),
-    stateText: task.error || 'OK',
-    lastSyncText: timestamp(task.last_sync),
-    nextSyncText:
-      task.next_sync && String(task.next_sync).length < 10
-        ? gettext('Waiting')
-        : timestamp(task.next_sync),
+    enabled: !(Number(task.disable) === 1 || task.disable === true),
+    statusText,
+    lastSyncText: task.pid ? gettext('syncing') : timestamp(task.last_sync),
+    nextSyncText: !nextSync
+      ? '-'
+      : new Date(nextSync * 1000) < new Date()
+        ? gettext('pending')
+        : timestamp(nextSync),
     durationText: duration(task.duration),
-    rateText: task.rate ? `${task.rate}MB/s` : gettext('No Limit'),
+    rateText: task.rate ? `${task.rate} MB/s` : gettext('unlimited'),
   };
 }
 function rowClick(_: Event, value: Row) {
@@ -135,10 +153,14 @@ async function reload() {
   if (!node.value) return;
   loading.value = true;
   try {
-    const response = await getReplicationTasks(node.value);
+    const response = await getReplicationTasks(node.value, props.vmid || undefined);
     tasks.value = [...(response.data || [])]
       .map(row)
-      .sort((a, b) => String(a.jobnum || '').localeCompare(String(b.jobnum || '')));
+      .sort(
+        (a, b) =>
+          Number(a.guest || 0) - Number(b.guest || 0) ||
+          Number(a.jobnum || 0) - Number(b.jobnum || 0),
+      );
     selected.value = [];
   } finally {
     loading.value = false;
@@ -162,7 +184,7 @@ function resetForm() {
     schedule: '*/15',
     rate: '',
     comment: '',
-    disable: false,
+    enabled: true,
   });
 }
 function openForm(nextAction: 'add' | 'edit') {
@@ -178,26 +200,50 @@ function openForm(nextAction: 'add' | 'edit') {
       schedule: String(selectedTask.value.schedule || '*/15'),
       rate: String(selectedTask.value.rate || ''),
       comment: String(selectedTask.value.comment || ''),
-      disable: Number(selectedTask.value.disable) === 1 || selectedTask.value.disable === true,
+      enabled: !(Number(selectedTask.value.disable) === 1 || selectedTask.value.disable === true),
     });
   formVisible.value = true;
+  if (nextAction === 'edit' && selectedTask.value?.id) {
+    void loadForm(selectedTask.value.id);
+  }
+}
+async function loadForm(id: string) {
+  formLoading.value = true;
+  try {
+    const response = await getReplicationTask(id);
+    const task: Partial<ReplicationTask> = response.data || {};
+    Object.assign(form, {
+      id: task.id || id,
+      guest: String(task.guest || selectedTask.value?.guest || ''),
+      target: String(task.target || selectedTask.value?.target || ''),
+      schedule: String(task.schedule || '*/15'),
+      rate: String(task.rate || ''),
+      comment: String(task.comment || ''),
+      enabled: !(Number(task.disable) === 1 || task.disable === true),
+    });
+  } finally {
+    formLoading.value = false;
+  }
 }
 async function save() {
   if (!canManageReplication.value || !form.guest || !form.target || !form.schedule) return;
   formSaving.value = true;
   try {
+    const jobNums = tasks.value
+      .filter((task) => String(task.guest || '') === String(form.guest))
+      .map((task) => Number(task.jobnum))
+      .filter((value) => Number.isFinite(value));
     const data = {
       id:
         action.value === 'add'
-          ? `${form.guest}-${Math.max(0, ...tasks.value.map((task) => Number(task.jobnum) || 0)) + 1}`
+          ? `${form.guest}-${Math.max(-1, ...jobNums) + 1}`
           : form.id,
-      guest: form.guest,
       target: action.value === 'add' ? form.target : undefined,
       schedule: form.schedule,
       rate: form.rate || undefined,
       comment: form.comment,
       type: action.value === 'add' ? 'local' : undefined,
-      disable: form.disable ? 1 : 0,
+      disable: form.enabled ? 0 : 1,
     };
     if (action.value === 'add') await createReplicationTask(data);
     else await updateReplicationTask(form.id, data);
@@ -238,6 +284,13 @@ async function openLogs() {
   const task = selectedTask.value;
   if (!task) return;
   logsVisible.value = true;
+  await loadLogs();
+  if (logsTimer) clearInterval(logsTimer);
+  logsTimer = setInterval(() => void loadLogs(), 1000);
+}
+async function loadLogs() {
+  const task = selectedTask.value;
+  if (!task) return;
   logsLoading.value = true;
   try {
     const response = await getReplicationLogs(node.value, task.id);
@@ -245,6 +298,12 @@ async function openLogs() {
   } finally {
     logsLoading.value = false;
   }
+}
+function closeLogs() {
+  if (logsTimer) clearInterval(logsTimer);
+  logsTimer = undefined;
+  logsVisible.value = false;
+  void reload();
 }
 watch(node, (value) => {
   if (props.node && value !== props.node) {
@@ -255,24 +314,21 @@ watch(node, (value) => {
 });
 onMounted(() => {
   void loadInitial();
-  refreshTimer = setInterval(() => void reload(), 5000);
+  refreshTimer = setInterval(() => void reload(), 3000);
 });
 onBeforeUnmount(() => {
   if (refreshTimer) clearInterval(refreshTimer);
+  if (logsTimer) clearInterval(logsTimer);
 });
 </script>
 
 <template>
-  <div class="row column q-px-md q-py-sm">
-    <div v-if="standalone" class="q-pa-md text-center bg-yellow-2 text-grey-8 q-mb-md">
-      <q-icon name="warning" class="text-red q-mr-sm" size="24px" />{{
-        gettext('Replication needs at least two nodes')
-      }}
-    </div>
+  <div class="replication-tasks-panel row column q-px-md q-py-sm">
     <q-table
       flat
       :rows="filteredTasks"
       :columns="columns"
+      :visible-columns="visibleColumns"
       row-key="id"
       selection="single"
       v-model:selected="selected"
@@ -284,6 +340,7 @@ onBeforeUnmount(() => {
       ><template #top
         ><div class="row q-gutter-sm">
           <q-select
+            v-if="showNodeSelector"
             v-model="node"
             dense
             options-dense
@@ -319,7 +376,7 @@ onBeforeUnmount(() => {
             color="negative"
             class="u-button"
             :disable="!canOperate"
-            :label="gettext('Delete')"
+            :label="gettext('Remove')"
             @click="removeSelected"
           /><q-btn
             no-caps
@@ -328,7 +385,7 @@ onBeforeUnmount(() => {
             color="primary"
             class="u-button"
             :disable="!canOperate"
-            :label="gettext('Logs')"
+            :label="gettext('Log')"
             @click="openLogs"
           /><q-btn
             no-caps
@@ -337,7 +394,7 @@ onBeforeUnmount(() => {
             color="primary"
             class="u-button"
             :disable="!canOperate"
-            :label="gettext('Immediately arrange')"
+            :label="gettext('Schedule now')"
             @click="runNow"
           />
         </div>
@@ -350,19 +407,34 @@ onBeforeUnmount(() => {
           ><template #append><q-icon name="search" /></template></q-input></template
       ><template #body-cell-enabled="props"
         ><q-td :props="props"
-          ><q-badge
-            :color="props.value === gettext('Enabled') ? 'green' : 'red'"
-            :label="props.value" /></q-td></template
-      ><template #body-cell-state="props"
-        ><q-td :props="props"
           ><q-icon
-            :name="props.row.error ? 'close' : 'check'"
-            :class="props.row.error ? 'text-red' : 'text-green'"
-          />
-          {{ props.value }}</q-td
+            :name="props.value ? 'check' : 'close'"
+            :class="props.value ? 'text-green' : 'text-red'"
+        /></q-td></template
+      ><template #body-cell-status="props"
+        ><q-td :props="props" :class="{ 'replication-row-loading': props.row.pid }"
+          ><template v-if="!props.row.pid"
+            ><q-icon
+              v-if="props.row.remove_job"
+              name="block"
+              class="text-warning q-mr-xs"
+              :title="gettext('Removal Scheduled')"
+            /><q-icon
+              v-else-if="props.row.error"
+              name="close"
+              class="text-red q-mr-xs"
+              :title="gettext('Error')"
+            /><q-icon v-else name="check" class="text-green q-mr-xs" />{{ props.value }}</template
+          ></q-td
         ></template
       ></q-table
     >
+    <q-inner-loading :showing="standalone" class="replication-standalone-mask">
+      <div class="replication-standalone-mask__content row items-center no-wrap">
+        <q-icon name="warning" size="22px" class="q-mr-sm" />
+        <span>{{ gettext('Replication needs at least two nodes') }}</span>
+      </div>
+    </q-inner-loading>
   </div>
   <q-dialog v-model="formVisible" persistent transition-show="scale" transition-hide="scale"
     ><UWindow :title="formTitle" width="580px" :loading="formLoading"
@@ -370,6 +442,7 @@ onBeforeUnmount(() => {
         ><div class="row q-col-gutter-lg">
           <div class="col-12 col-sm-6">
             <q-select
+              v-if="action === 'add' && !props.vmid"
               v-model="form.guest"
               dense
               options-dense
@@ -378,10 +451,17 @@ onBeforeUnmount(() => {
               option-value="vmid"
               :option-label="(item) => `${item.name || ''}--${item.vmid}`"
               :options="vms.filter((item) => item.node === node)"
-              :disable="action === 'edit'"
               class="q-field--with-bottom"
-              :label="gettext('KVM')"
+              label="CT/VM ID"
+            /><q-input
+              v-else
+              v-model="form.guest"
+              dense
+              readonly
+              class="q-field--with-bottom"
+              label="CT/VM ID"
             /><q-select
+              v-if="action === 'add'"
               v-model="form.target"
               dense
               options-dense
@@ -389,8 +469,14 @@ onBeforeUnmount(() => {
               map-options
               option-value="node"
               option-label="node"
-              :options="nodes.filter((item) => item.node !== node)"
-              :disable="action === 'edit'"
+              :options="onlineNodes.filter((item) => item.node !== node)"
+              class="q-field--with-bottom"
+              :label="gettext('Target')"
+            /><q-input
+              v-else
+              v-model="form.target"
+              dense
+              readonly
               class="q-field--with-bottom"
               :label="gettext('Target')"
             /><q-input
@@ -398,6 +484,7 @@ onBeforeUnmount(() => {
               dense
               class="q-field--with-bottom"
               :label="gettext('Schedule')"
+              :placeholder="`*/15 - ${gettext('Every {0} minutes').replace('{0}', '15')}`"
             />
           </div>
           <div class="col-12 col-sm-6">
@@ -412,12 +499,10 @@ onBeforeUnmount(() => {
               class="q-field--with-bottom"
               :label="gettext('Comment')"
             /><q-checkbox
-              v-model="form.disable"
+              v-model="form.enabled"
               dense
               color="primary"
               :label="gettext('Enabled')"
-              :true-value="false"
-              :false-value="true"
             />
           </div></div></q-form
       ><template #foot
@@ -432,7 +517,7 @@ onBeforeUnmount(() => {
           @click="save" /></template></UWindow
   ></q-dialog>
   <q-dialog v-model="logsVisible" persistent transition-show="scale" transition-hide="scale"
-    ><UWindow :title="gettext('Replication Logs')" width="780px" :loading="logsLoading"
+    ><UWindow :title="gettext('Replication Log')" width="800px" :loading="logsLoading"
       ><q-scroll-area style="height: 400px; max-width: 750px"
         ><div class="column q-ma-md text-caption">
           <div v-for="(log, index) in logs" :key="index">{{ log }}</div>
@@ -444,14 +529,47 @@ onBeforeUnmount(() => {
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :label="gettext('Close')" /></template></UWindow
+          :label="gettext('Close')"
+          @click="closeLogs" /></template></UWindow
   ></q-dialog>
 </template>
 <style scoped>
+.replication-tasks-panel {
+  position: relative;
+  min-height: 160px;
+}
 .replication-form :deep(.q-field--with-bottom) {
   padding-bottom: 15px;
 }
 .replication-form :deep(.q-field__bottom) {
   display: none;
+}
+.replication-standalone-mask {
+  background: rgba(241, 245, 249, 0.8);
+  backdrop-filter: blur(1px);
+}
+.replication-standalone-mask__content {
+  padding: 12px 18px;
+  color: #52606d;
+  font-size: 13px;
+  font-weight: 500;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  box-shadow: 0 4px 12px rgba(51, 65, 85, 0.14);
+}
+.replication-row-loading {
+  background:
+    linear-gradient(90deg, rgba(25, 118, 210, 0.08) 25%, rgba(25, 118, 210, 0.18) 37%, rgba(25, 118, 210, 0.08) 63%)
+    0 0 / 400% 100%;
+  animation: replication-row-loading 1.4s ease infinite;
+}
+@keyframes replication-row-loading {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
 }
 </style>

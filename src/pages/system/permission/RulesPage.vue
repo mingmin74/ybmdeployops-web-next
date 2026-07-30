@@ -14,6 +14,7 @@ import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 
 type RuleRow = AccessRule & { index: number; propagateText: string };
+type AclType = 'user' | 'group' | 'apitoken';
 const props = withDefaults(defineProps<{ resourcePath?: string }>(), { resourcePath: '' });
 
 const loading = ref(false);
@@ -29,7 +30,7 @@ const tokenOptions = ref<string[]>([]);
 const roleOptions = ref<{ roleid: string }[]>([]);
 const form = reactive({
   path: '',
-  type: 'user',
+  type: 'user' as AclType,
   user: '',
   group: '',
   token: '',
@@ -37,6 +38,7 @@ const form = reactive({
   propagate: true,
 });
 
+const isFixedPath = computed(() => Boolean(props.resourcePath));
 const selectedRule = computed(() => selectedRules.value[0]);
 const canRemove = computed(() => selectedRules.value.length === 1);
 const filteredRules = computed(() => {
@@ -44,9 +46,7 @@ const filteredRules = computed(() => {
   return rules.value
     .filter(
       (rule) =>
-        !props.resourcePath ||
-        props.resourcePath === rule.path ||
-        props.resourcePath.startsWith(`${rule.path}/`),
+        !props.resourcePath || props.resourcePath === rule.path,
     )
     .filter(
       (rule) =>
@@ -61,32 +61,54 @@ const canSubmit = computed(() =>
     (form.type === 'user' ? form.user : form.type === 'group' ? form.group : form.token),
   ),
 );
-const columns: QTableColumn<RuleRow>[] = [
-  { name: 'path', label: gettext('Path'), field: 'path', align: 'left', sortable: true },
-  {
-    name: 'ugid',
-    label: `${gettext('User')}/${gettext('Group')}`,
-    field: 'ugid',
-    align: 'left',
-    sortable: true,
-  },
-  { name: 'roleid', label: gettext('Role'), field: 'roleid', align: 'left', sortable: true },
-  {
-    name: 'propagate',
-    label: gettext('Propagate'),
-    field: 'propagateText',
-    align: 'left',
-    sortable: true,
-  },
-];
+const formTitle = computed(() => {
+  if (!isFixedPath.value) return `${gettext('Add')}: ${gettext('Permission Rule')}`;
+  if (form.type === 'group') return `${gettext('Add')}: ${gettext('Group Permission')}`;
+  if (form.type === 'apitoken') return `${gettext('Add')}: ${gettext('API Token Permission')}`;
+  return `${gettext('Add')}: ${gettext('User Permission')}`;
+});
+const columns = computed<QTableColumn<RuleRow>[]>(() => {
+  const aclColumns: QTableColumn<RuleRow>[] = [
+    {
+      name: 'ugid',
+      label: `${gettext('User')}/${gettext('Group')}/${gettext('API Token')}`,
+      field: (row) => formatAclSubject(row),
+      align: 'left',
+      sortable: true,
+    },
+    { name: 'roleid', label: gettext('Role'), field: 'roleid', align: 'left', sortable: true },
+  ];
+
+  if (!isFixedPath.value) {
+    aclColumns.unshift({
+      name: 'path',
+      label: gettext('Path'),
+      field: 'path',
+      align: 'left',
+      sortable: true,
+    });
+    aclColumns.push({
+      name: 'propagate',
+      label: gettext('Propagate'),
+      field: 'propagateText',
+      align: 'left',
+      sortable: true,
+    });
+  }
+
+  return aclColumns;
+});
 
 function rowClick(_: Event, row: RuleRow) {
   selectedRules.value = selectedRule.value === row ? [] : [row];
 }
-function resetForm() {
+function formatAclSubject(rule: AccessRule) {
+  return rule.type === 'group' ? `@${rule.ugid}` : rule.ugid;
+}
+function resetForm(type: AclType = 'user') {
   Object.assign(form, {
     path: props.resourcePath,
-    type: 'user',
+    type,
     user: '',
     group: '',
     token: '',
@@ -120,13 +142,16 @@ async function reload() {
     loading.value = false;
   }
 }
-async function openForm() {
-  resetForm();
+async function openForm(type: AclType = 'user') {
+  resetForm(type);
   formVisible.value = true;
   dialogLoading.value = true;
   try {
+    const resourceRequest = isFixedPath.value
+      ? Promise.resolve({ data: [] as PveRecord[] })
+      : getClusterResources();
     const [resources, roles, groups, users, tokens] = await Promise.all([
-      getClusterResources(),
+      resourceRequest,
       getRoles(),
       getGroups(),
       getEnabledAccessUsers(),
@@ -223,14 +248,36 @@ onMounted(() => void reload());
       <template #top
         ><div class="q-gutter-sm">
           <q-btn
+            v-if="!isFixedPath"
             no-caps
             outline
             size="12px"
             color="primary"
             class="u-button"
             :label="gettext('Add')"
-            @click="openForm"
-          /><q-btn
+            @click="openForm()"
+          /><q-btn-dropdown
+            v-else
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Add')"
+          >
+            <q-list dense>
+              <q-item v-close-popup clickable @click="openForm('group')">
+                <q-item-section>{{ gettext('Group Permission') }}</q-item-section>
+              </q-item>
+              <q-item v-close-popup clickable @click="openForm('user')">
+                <q-item-section>{{ gettext('User Permission') }}</q-item-section>
+              </q-item>
+              <q-item v-close-popup clickable @click="openForm('apitoken')">
+                <q-item-section>{{ gettext('API Token Permission') }}</q-item-section>
+              </q-item>
+            </q-list>
+          </q-btn-dropdown>
+          <q-btn
             no-caps
             outline
             size="12px"
@@ -258,12 +305,10 @@ onMounted(() => void reload());
     </q-table>
   </div>
   <q-dialog v-model="formVisible" persistent transition-show="scale" transition-hide="scale"
-    ><UWindow
-      :title="`${gettext('Add')}: ${gettext('Permission Rule')}`"
-      width="400px"
-      :loading="dialogLoading"
+    ><UWindow :title="formTitle" width="400px" :loading="dialogLoading"
       ><div class="u-border q-ma-sm q-pa-md u-dense permission-rule-form">
         <q-select
+          v-if="!isFixedPath"
           v-model="form.path"
           dense
           options-dense
@@ -271,6 +316,7 @@ onMounted(() => void reload());
           :options="pathOptions"
           class="q-field--with-bottom"
         /><q-select
+          v-if="!isFixedPath"
           v-model="form.type"
           dense
           options-dense
@@ -325,6 +371,7 @@ onMounted(() => void reload());
           :label="gettext('Role')"
           :options="roleOptions"
         /><q-checkbox
+          v-if="!isFixedPath"
           v-model="form.propagate"
           left-label
           color="primary"

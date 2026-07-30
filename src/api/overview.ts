@@ -8,11 +8,19 @@ export function getVmCurrent(node: string, vmid: string | number, type = 'qemu')
   });
 }
 
-export function getVmConfig(node: string, vmid: string | number, type = 'qemu') {
-  return request<PveRecord>(`/api2/json/nodes/${node}/${type}/${vmid}/config`, {
+export function getVmConfig(
+  node: string,
+  vmid: string | number,
+  type = 'qemu',
+  params?: PveRecord,
+) {
+  const options = {
     method: 'GET',
     notifyOnError: false,
-  });
+    ...(params ? { params } : {}),
+  } as const;
+
+  return request<PveRecord>(`/api2/json/nodes/${node}/${type}/${vmid}/config`, options);
 }
 
 export function updateVmConfig(
@@ -53,6 +61,14 @@ export function getVmSnapshots(node: string, vmid: string | number) {
   return request<PveRecord[]>(`/api2/json/nodes/${node}/qemu/${vmid}/snapshot`, {
     method: 'GET',
     notifyOnError: true,
+  });
+}
+
+export function getVmSnapshotFeature(node: string, vmid: string | number, type = 'qemu') {
+  return request<PveRecord>(`/api2/extjs/nodes/${node}/${type}/${vmid}/feature`, {
+    method: 'GET',
+    params: { feature: 'snapshot' },
+    notifyOnError: false,
   });
 }
 

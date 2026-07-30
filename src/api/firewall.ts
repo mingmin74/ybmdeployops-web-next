@@ -59,11 +59,14 @@ export function updateVmFirewallOptions(node: string, vmid: string | number, dat
 }
 
 export function getVmFirewallLogs(node: string, vmid: string | number, params: PveRecord) {
-  return request<{ data?: PveRecord[]; total?: number }>(`${vmFirewallBase(node, vmid)}/log`, {
-    method: 'GET',
-    params,
-    notifyOnError: true,
-  });
+  return request<PveRecord[]>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/firewall/log`,
+    {
+      method: 'GET',
+      params,
+      notifyOnError: true,
+    },
+  ) as Promise<{ data?: PveRecord[]; total?: number }>;
 }
 
 export function getVmFirewallAliases(node: string, vmid: string | number) {

@@ -13,10 +13,14 @@ const props = withDefaults(
   defineProps<{
     disableOffline?: boolean;
     width?: string;
+    label?: string;
+    fieldStyle?: 'outlined' | 'standard';
   }>(),
   {
     disableOffline: false,
     width: '580px',
+    label: '',
+    fieldStyle: 'outlined',
   },
 );
 
@@ -134,6 +138,8 @@ onMounted(() => {
     :display-value="displayNode"
     :loading="loading"
     :width="width"
+    :label="label"
+    :field-style="fieldStyle"
     :get-row-value="(row) => String(row.node || '')"
     :can-select="(row) => canSelect(row as PveNode)"
   >

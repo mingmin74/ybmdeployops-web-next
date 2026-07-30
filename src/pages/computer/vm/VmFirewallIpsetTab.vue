@@ -142,101 +142,121 @@ watch(
 <template>
   <div class="row q-col-gutter-md">
     <div class="col-12 col-md-4">
-      <q-table
-        v-model:selected="selectedIpset"
-        flat
-        bordered
-        square
-        dense
-        row-key="name"
-        selection="single"
-        :rows="ipsets"
-        :columns="ipsetColumns"
-        :loading="loading"
-        :pagination="{ rowsPerPage: 0 }"
-        hide-bottom
-        class="u-compact-table"
-        ><template #top
-          ><q-btn
-            no-caps
-            outline
-            size="12px"
-            color="primary"
-            class="u-button"
-            :disable="!editable"
-            :label="gettext('Add')"
-            @click="openIpset" /><q-btn
-            no-caps
-            outline
-            size="12px"
-            color="negative"
-            class="u-button q-ml-sm"
-            :disable="!editable || !activeName"
-            :label="gettext('Remove')"
-            @click="removeIpset" /><q-space /><q-btn
-            no-caps
-            outline
-            size="12px"
-            color="primary"
-            class="u-button"
-            :label="gettext('Refresh')"
-            @click="reloadIpsets" /></template
-      ></q-table>
+      <q-card class="no-border-radius no-shadow q-ma-none">
+        <q-card-section class="q-pa-none">
+          <q-table
+            v-model:selected="selectedIpset"
+            flat
+            row-key="name"
+            selection="single"
+            table-header-class="u-table-header"
+            :rows="ipsets"
+            :columns="ipsetColumns"
+            :loading="loading"
+            :rows-per-page-options="[10]"
+            :pagination="{ page: 1, rowsPerPage: 10 }"
+            :no-data-label="gettext('no record can be found')"
+            ><template #top
+              ><div class="q-gutter-sm">
+                <q-btn
+                  no-caps
+                  outline
+                  size="12px"
+                  color="primary"
+                  class="u-button"
+                  :disable="!editable"
+                  :label="gettext('Add')"
+                  @click="openIpset"
+                /><q-btn
+                  no-caps
+                  outline
+                  size="12px"
+                  color="negative"
+                  class="u-button"
+                  :disable="!editable || !activeName"
+                  :label="gettext('Remove')"
+                  @click="removeIpset"
+                /></div
+              ><q-space /><q-btn
+                no-caps
+                outline
+                size="12px"
+                color="primary"
+                class="u-button"
+                :label="gettext('Refresh')"
+                @click="reloadIpsets" /></template
+            ><template #no-data
+              ><div class="full-width row flex-center text-grey q-gutter-sm">
+                <span>{{ gettext('no record can be found') }}</span>
+              </div></template
+            ></q-table
+          >
+        </q-card-section>
+      </q-card>
     </div>
     <div class="col-12 col-md-8">
-      <q-table
-        v-model:selected="selectedEntry"
-        flat
-        bordered
-        square
-        dense
-        row-key="cidr"
-        selection="single"
-        :rows="entries"
-        :columns="entryColumns"
-        :loading="entryLoading"
-        :pagination="{ rowsPerPage: 0 }"
-        hide-bottom
-        class="u-compact-table"
-        ><template #top
-          ><q-btn
-            no-caps
-            outline
-            size="12px"
-            color="primary"
-            class="u-button"
-            :disable="!editable || !activeName"
-            :label="gettext('Add')"
-            @click="openEntry" /><q-btn
-            no-caps
-            outline
-            size="12px"
-            color="negative"
-            class="u-button q-ml-sm"
-            :disable="!editable || !selectedEntry.length"
-            :label="gettext('Remove')"
-            @click="removeEntry" /><q-space /><q-btn
-            no-caps
-            outline
-            size="12px"
-            color="primary"
-            class="u-button"
-            :label="gettext('Refresh')"
-            @click="reloadEntries" /></template
-      ></q-table>
+      <q-card class="no-border-radius no-shadow q-ma-none">
+        <q-card-section class="q-pa-none">
+          <q-table
+            v-model:selected="selectedEntry"
+            flat
+            row-key="cidr"
+            selection="single"
+            table-header-class="u-table-header"
+            :rows="entries"
+            :columns="entryColumns"
+            :loading="entryLoading"
+            :rows-per-page-options="[10]"
+            :pagination="{ page: 1, rowsPerPage: 10 }"
+            :no-data-label="gettext('no record can be found')"
+            ><template #top
+              ><div class="q-gutter-sm">
+                <q-btn
+                  no-caps
+                  outline
+                  size="12px"
+                  color="primary"
+                  class="u-button"
+                  :disable="!editable || !activeName"
+                  :label="gettext('Add')"
+                  @click="openEntry"
+                /><q-btn
+                  no-caps
+                  outline
+                  size="12px"
+                  color="negative"
+                  class="u-button"
+                  :disable="!editable || !selectedEntry.length"
+                  :label="gettext('Remove')"
+                  @click="removeEntry"
+                /></div
+              ><q-space /><q-btn
+                no-caps
+                outline
+                size="12px"
+                color="primary"
+                class="u-button"
+                :label="gettext('Refresh')"
+                @click="reloadEntries" /></template
+            ><template #no-data
+              ><div class="full-width row flex-center text-grey q-gutter-sm">
+                <span>{{ gettext('no record can be found') }}</span>
+              </div></template
+            ></q-table
+          >
+        </q-card-section>
+      </q-card>
     </div>
   </div>
   <q-dialog v-model="ipsetVisible" persistent
     ><UWindow :title="gettext('Add')" width="420px" :loading="loading"
-      ><div class="q-pa-md q-gutter-sm">
-        <q-input v-model="ipsetForm.name" dense square outlined :label="gettext('Name')" /><q-input
+      ><q-form class="firewall-ipset-form u-border q-ma-sm q-pa-md u-dense" @submit.prevent="saveIpset">
+        <q-input v-model="ipsetForm.name" dense :label="gettext('Name')" /><q-input
           v-model="ipsetForm.comment"
           dense
-          square
-          outlined
           :label="gettext('Comment')"
         />
-      </div>
+      </q-form>
       <template #foot
         ><q-btn
           v-close-popup
@@ -254,14 +274,16 @@ watch(
   ></q-dialog>
   <q-dialog v-model="entryVisible" persistent
     ><UWindow :title="gettext('Add')" width="420px" :loading="entryLoading"
-      ><div class="q-pa-md q-gutter-sm">
-        <q-input v-model="entryForm.cidr" dense square outlined label="CIDR" /><q-checkbox
+      ><q-form class="firewall-ipset-form u-border q-ma-sm q-pa-md u-dense" @submit.prevent="saveEntry">
+        <q-input v-model="entryForm.cidr" dense label="CIDR" /><q-checkbox
           v-model="entryForm.nomatch"
+          dense
+          color="primary"
           :true-value="1"
           :false-value="0"
           :label="gettext('No Match')"
-        /><q-input v-model="entryForm.comment" dense square outlined :label="gettext('Comment')" />
-      </div>
+        /><q-input v-model="entryForm.comment" dense :label="gettext('Comment')" />
+      </q-form>
       <template #foot
         ><q-btn
           v-close-popup
@@ -280,8 +302,12 @@ watch(
 </template>
 
 <style scoped>
-.u-compact-table :deep(tbody td) {
-  height: 40px;
-  font-size: 12px;
+.firewall-ipset-form {
+  display: grid;
+  gap: 10px;
+}
+
+.firewall-ipset-form :deep(.q-checkbox) {
+  min-height: 30px;
 }
 </style>

@@ -4,6 +4,9 @@ export type VmResource = {
   id?: string;
   vmid: number | string;
   name?: string;
+  rawName?: string;
+  displayName?: string;
+  description?: string;
   node?: string;
   type?: string;
   status?: string;
@@ -53,11 +56,64 @@ export function runVmPowerCommand(
   );
 }
 
-export function getNextVmId() {
+export function runCtPowerCommand(
+  node: string,
+  vmid: number | string,
+  command: VmPowerCommand,
+  data?: Record<string, unknown>,
+) {
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/lxc/${encodeURIComponent(String(vmid))}/status/${command}`,
+    { method: 'POST', ...(data ? { data } : {}), notifyOnError: true },
+  );
+}
+
+/**
+ * Without a VMID this returns the next free ID. With a VMID it verifies that
+ * the requested ID is still available, matching PVE.form.GuestIDSelector.
+ */
+export function getNextVmId(vmid?: number | string) {
   return request<number | string>('/api2/extjs/cluster/nextid', {
     method: 'GET',
+    ...(vmid === undefined ? {} : { params: { vmid } }),
     notifyOnError: true,
   });
+}
+
+export type VmCpuModel = { name?: string; displayname?: string; vendor?: string };
+export type VmCpuFlag = {
+  name?: string;
+  description?: string;
+  'supported-on'?: string[];
+};
+export type VmMachineType = { id?: string; type?: string; version?: string };
+
+/** CPU models supplied by the selected PVE node. */
+export function getVmCpuModels(node: string) {
+  return request<VmCpuModel[]>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/capabilities/qemu/cpu`,
+    { method: 'GET', notifyOnError: true },
+  );
+}
+
+/** CPU flags supplied by the selected PVE node. */
+export function getVmCpuFlags(node: string) {
+  return request<Array<VmCpuFlag | string>>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/capabilities/qemu/cpu-flags`,
+    { method: 'GET', notifyOnError: true },
+  );
+}
+
+/** QEMU machine versions supplied by the selected PVE node. */
+export function getVmMachineTypes(node: string, arch?: string) {
+  return request<VmMachineType[]>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/capabilities/qemu/machines`,
+    {
+      method: 'GET',
+      ...(arch ? { params: { arch } } : {}),
+      notifyOnError: true,
+    },
+  );
 }
 
 export function migrateVm(
@@ -150,6 +206,10 @@ export function runVmBackup(
     mode: 'snapshot' | 'suspend' | 'stop';
     compress?: 'zstd' | 'lzo' | 'gzip' | '0';
     protected?: 0 | 1;
+    remove?: 0 | 1;
+    mailto?: string;
+    'notification-mode'?: string;
+    'notes-template'?: string;
   },
 ) {
   return request<string>(`/api2/json/nodes/${encodeURIComponent(node)}/vzdump`, {
@@ -157,6 +217,17 @@ export function runVmBackup(
     data: { ...data, vmid },
     notifyOnError: true,
   });
+}
+
+export function getVmBackupDefaults(node: string, storage: string) {
+  return request<Record<string, unknown>>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/vzdump/defaults`,
+    {
+      method: 'GET',
+      params: { storage },
+      notifyOnError: true,
+    },
+  );
 }
 
 export function getVmTaskHistory(

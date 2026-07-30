@@ -5,6 +5,17 @@ export type JournalRecord = {
   t?: string;
 };
 
+export type TaskStatus = {
+  status?: string;
+  exitstatus?: string;
+  type?: string;
+  user?: string;
+  node?: string;
+  pid?: number | string;
+  starttime?: number;
+  upid?: string;
+};
+
 export type BackupTask = PveRecord & {
   id: string;
   enabled?: boolean | number;
@@ -56,6 +67,20 @@ export function getTaskLog(node: string, upid: string, params: Record<string, un
       notifyOnError: true,
     },
   );
+}
+
+export function getTaskStatus(node: string, upid: string) {
+  return request<TaskStatus>(`/api2/json/nodes/${node}/tasks/${encodeURIComponent(upid)}/status`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
+}
+
+export function stopTask(node: string, upid: string) {
+  return request(`/api2/json/nodes/${node}/tasks/${encodeURIComponent(upid)}`, {
+    method: 'DELETE',
+    notifyOnError: true,
+  });
 }
 
 export function getBackupTasks() {
@@ -159,10 +184,25 @@ export type ReplicationTask = PveRecord & {
   duration?: number;
   rate?: number;
   comment?: string;
+  pid?: string | number;
+  remove_job?: boolean | number;
 };
 
-export function getReplicationTasks(node: string) {
-  return request<ReplicationTask[]>(`/api2/json/nodes/${encodeURIComponent(node)}/replication`, {
+export function getReplicationTasks(node: string, guest?: string | number) {
+  const options = {
+    method: 'GET',
+    notifyOnError: true,
+    ...(guest ? { params: { guest } } : {}),
+  } as const;
+
+  return request<ReplicationTask[]>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/replication`,
+    options,
+  );
+}
+
+export function getReplicationTask(id: string) {
+  return request<ReplicationTask>(`/api2/extjs/cluster/replication/${encodeURIComponent(id)}`, {
     method: 'GET',
     notifyOnError: true,
   });

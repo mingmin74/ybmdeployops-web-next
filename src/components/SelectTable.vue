@@ -14,12 +14,24 @@ const props = withDefaults(
     displayValue: string;
     loading?: boolean;
     width?: string;
+    label?: string;
+    fieldStyle?: 'outlined' | 'standard';
+    disable?: boolean;
+    error?: boolean;
+    errorMessage?: string;
+    fixedLayout?: boolean;
     getRowValue?: (row: PveRecord) => string;
     canSelect?: (row: PveRecord) => boolean;
   }>(),
   {
     loading: false,
     width: '580px',
+    label: '',
+    fieldStyle: 'outlined',
+    disable: false,
+    error: false,
+    errorMessage: '',
+    fixedLayout: false,
   },
 );
 
@@ -58,19 +70,30 @@ function selectRow(_: Event, row: PveRecord) {
 </script>
 
 <template>
-  <div class="u-hidden-error select-table">
+  <div
+    class="u-hidden-error select-table"
+    :class="{
+      'select-table--outlined': fieldStyle === 'outlined',
+      'select-table--fixed': fixedLayout,
+    }"
+  >
     <q-select
       v-model="model"
-      square
-      outlined
+      :square="fieldStyle === 'outlined'"
+      :outlined="fieldStyle === 'outlined'"
       dense
+      hide-bottom-space
       map-options
       color="grey-8"
       options-dense
-      class="u-dense select-table__field"
+      :class="['select-table__field', { 'u-dense': fieldStyle === 'outlined' }]"
       :display-value="displayValue"
       :loading="loading"
       :options="[]"
+      :label="label"
+      :disable="disable"
+      :error="error"
+      :error-message="errorMessage"
     >
       <template #selected>
         <slot name="selected">
@@ -138,26 +161,40 @@ function selectRow(_: Event, row: PveRecord) {
   min-width: 160px;
 }
 
-.select-table :deep(.select-table__field .q-field__control),
-.select-table :deep(.select-table__field .q-field__marginal) {
+.select-table :deep(.q-field--with-bottom) {
+  padding-bottom: 0 !important;
+}
+
+.select-table--outlined :deep(.select-table__field .q-field__control),
+.select-table--outlined :deep(.select-table__field .q-field__marginal) {
   height: 28px !important;
   min-height: 28px !important;
+  display: flex;
+  align-items: center;
 }
 
-.select-table :deep(.select-table__field .q-field__native),
-.select-table :deep(.select-table__field .q-field__input) {
+.select-table--outlined :deep(.select-table__field .q-field__control-container) {
+  display: flex;
+  align-items: center;
+  height: 28px !important;
   min-height: 28px !important;
-  line-height: 28px;
-  padding-top: 0;
-  padding-bottom: 0;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
 }
 
-.select-table :deep(.select-table__field.q-field--outlined .q-field__control::before),
-.select-table :deep(.select-table__field.q-field--outlined .q-field__control::after) {
+.select-table :deep(.q-select__control) {
+  height: 28px !important;
+  display: flex;
+  align-items: center;
+}
+
+
+.select-table--outlined :deep(.select-table__field.q-field--outlined .q-field__control::before),
+.select-table--outlined :deep(.select-table__field.q-field--outlined .q-field__control::after) {
   border: 1px solid #cccccc !important;
 }
 
-.select-table
+.select-table--outlined
   :deep(.select-table__field.q-field--outlined.q-field--highlighted .q-field__control::after) {
   transform: scale3d(1, 1, 1);
 }
@@ -170,5 +207,14 @@ function selectRow(_: Event, row: PveRecord) {
 .select-table__disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.select-table--fixed :deep(.q-table__middle) {
+  overflow-x: hidden;
+}
+
+.select-table--fixed :deep(.q-table) {
+  table-layout: fixed;
+  width: 100%;
 }
 </style>

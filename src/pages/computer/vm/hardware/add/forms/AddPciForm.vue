@@ -1,0 +1,2 @@
+<script setup lang="ts">import { gettext } from '@/locale'; const form = defineModel<{ pciAddress: string; pcie: boolean }>('form', { required: true });</script>
+<template><div class="row q-col-gutter-md"><div class="col-12"><q-input v-model="form.pciAddress" dense square outlined :label="gettext('PCI Device')" /></div><div class="col-12"><q-checkbox v-model="form.pcie" :label="gettext('PCI-Express')" /></div></div></template>

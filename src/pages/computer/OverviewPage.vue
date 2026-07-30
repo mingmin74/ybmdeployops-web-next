@@ -30,6 +30,12 @@ type NetworkInterface = {
   ipInfo: string[];
 };
 
+const props = defineProps<{
+  fixedNode?: string;
+  fixedVmid?: string;
+  hideVmSelector?: boolean;
+}>();
+
 const loading = shallowRef(false);
 const isExistVM = shallowRef(true);
 const selectedId = shallowRef('');
@@ -108,13 +114,23 @@ const vmColumns = computed<QTableColumn<PveRecord>[]>(() => [
   },
 ]);
 
+const isFixedVm = computed(() => Boolean(props.fixedNode && props.fixedVmid));
+const fixedVm = computed<PveRecord>(() => ({
+  id: `qemu/${props.fixedVmid || ''}`,
+  type: 'qemu',
+  node: props.fixedNode,
+  vmid: props.fixedVmid,
+}));
 const selectedVm = computed(
   () =>
+    (isFixedVm.value && fixedVm.value) ||
     vmOptions.value.find((item) => resourceId(item) === selectedId.value) ||
     vmOptions.value[0] ||
     {},
 );
-const selectedType = computed(() => (selectedVm.value.type === 'lxc' ? 'lxc' : 'qemu'));
+const selectedType = computed(() =>
+  isFixedVm.value || selectedVm.value.type !== 'lxc' ? 'qemu' : 'lxc',
+);
 const overviewIllustration = computed(() =>
   selectedType.value === 'lxc' ? lxcOverviewIcon : vmOverviewIcon,
 );
@@ -350,6 +366,14 @@ function scheduleChartRefresh() {
 async function loadVmList() {
   loading.value = true;
   try {
+    if (isFixedVm.value) {
+      vmOptions.value = [fixedVm.value];
+      isExistVM.value = true;
+      selectedId.value = resourceId(fixedVm.value);
+      await Promise.all([refreshData(), loadNodes()]);
+      return;
+    }
+
     const resourceResponse = await getClusterResources({ type: 'vm' });
     vmOptions.value = (resourceResponse.data || [])
       .filter((item) => !item.template)
@@ -492,6 +516,7 @@ onUnmounted(clearTimers);
     <div class="overview-toolbar">
       <div class="toolbar-controls">
         <SelectTable
+          v-if="!hideVmSelector"
           v-model="selectedId"
           row-key="id"
           class="vm-select"

@@ -6,8 +6,8 @@
 
 迁移页面时必须遵守：
 
-**技术实现升级，业务逻辑和页面视觉尽量保持老项目一致。**
-
+**技术实现升级，业务逻辑和页面视觉要保持老项目一致。**
+本次是旧项目的等价迁移，不是参考旧项目重新设计。旧项目页面是唯一的功能和视觉基准。禁止改变字段顺序、区域结构、按钮位置和交互形式；禁止因为新版 Quasar 的默认布局而重新排列页面。修改前必须给出旧文件依据和字段映射。
 不要把页面重做成新的产品风格。老项目是 PVE 管理台式后台界面，视觉关键词是：
 
 - 信息密度高
@@ -316,6 +316,33 @@
   height: 30px;
 }
 ```
+
+### 旧项目弹窗表单基准
+
+旧项目的 `FormTem.vue` 是弹窗配置表单的直接参考。除非原页面明确需要工具栏式边框控件，弹窗内的 `q-input`、`q-select` 使用 Quasar 默认的下划线型 `standard` 字段，**不要添加 `outlined` 或 `square`**。
+
+所有弹窗和页面表单内的表单项，默认必须直接使用本节的标准表单项样式：`u-border q-ma-sm q-pa-md u-dense` 表单容器、`q-col-gutter-lg` 网格间距、字段 `dense`、`q-select` 加 `options-dense`，并优先使用默认 `standard` 字段外观。以后只要修改或新增表单内样式，不要先做页面局部变体，除非旧项目源码明确使用了不同样式。
+
+表单内容容器使用：
+
+```vue
+<div class="u-border q-ma-sm q-pa-md u-dense">
+  <div class="row q-col-gutter-lg">
+    <div class="col-12 col-sm-6">
+      <q-input dense class="q-field--with-bottom" :label="gettext('Name')" />
+    </div>
+  </div>
+</div>
+```
+
+具体约定：
+
+- `u-border`：1px `#cccccc` 的表单分组边框；`q-ma-sm q-pa-md` 保持旧弹窗内外留白。
+- `u-dense`：统一字段控件与边缘区为 30px，并微调下拉箭头位置。
+- 字段默认 `dense`；`q-select` 同时使用 `options-dense`，需要提交值时再加 `emit-value`、`map-options`。
+- 单列连续字段加 `q-field--with-bottom`，使用全局 15px 底部间距；网格中的独立字段使用 `q-col-gutter-lg` 保持分栏间距。
+- 标签、输入文字、焦点线均由 `src/css/app.scss` 全局规则接管，不在页面 scoped style 中重复设置。
+- 只把 `u-hidden-error` 用于确实需要压缩校验提示的专用界面；它会隐藏字段底部区域，不可作为普通弹窗表单的默认容器类。
 
 隐藏错误区域：
 

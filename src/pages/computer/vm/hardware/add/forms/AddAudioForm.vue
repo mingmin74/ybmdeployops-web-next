@@ -1,0 +1,2 @@
+<script setup lang="ts">import { gettext } from '@/locale'; const form = defineModel<{ audioDevice: string; audioDriver: string }>('form', { required: true });</script>
+<template><div class="row q-col-gutter-md"><div class="col-6"><q-input v-model="form.audioDevice" dense square outlined :label="gettext('Device')" /></div><div class="col-6"><q-input v-model="form.audioDriver" dense square outlined :label="gettext('Driver')" /></div></div></template>

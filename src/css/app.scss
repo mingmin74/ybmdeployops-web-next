@@ -259,8 +259,20 @@ body {
   border: 1px solid #cccccc;
 }
 
+.u-border-dotted-blue {
+  border: 1px dotted #2196f3;
+}
+
 .u-size-12 {
   font-size: 12px !important;
+}
+
+.u-size-13 {
+  font-size: 13px !important;
+}
+
+.u-border-bottom {
+  border-bottom: 1px solid #cccccc;
 }
 
 .u-hidden-error .q-field__append .text-negative {
@@ -313,6 +325,16 @@ body {
   height: 30px;
 }
 
+// Standard fields use floating labels, so they need enough vertical room for the label and value.
+.q-field--standard.q-field--dense .q-field__control,
+.q-field--standard.q-field--dense .q-field__marginal {
+  height: 40px;
+}
+
+.q-field--outlined.q-field--focused .q-field__control::after {
+  border-width: 1px !important;
+}
+
 .q-textarea .q-field__native {
   padding: 0;
 }
@@ -326,6 +348,26 @@ body {
 .q-menu .q-item.q-router-link--active,
 .q-menu .q-item--active {
   background: #e6f1fc;
+}
+
+.u-dense .q-select__dropdown-icon {
+  margin-top: -4px;
+}
+
+.u-dense .rotate-180 {
+  margin-top: -5px !important;
+}
+
+.q-stepper--horizontal .q-stepper__step-inner {
+  padding: 0;
+}
+
+.q-stepper__tab {
+  padding: 8px !important;
+}
+
+.q-stepper__header--standard-labels .q-stepper__tab {
+  min-height: 50px !important;
 }
 
 .q-dialog__inner > div {

@@ -1,0 +1,213 @@
+import type { QTableColumn } from 'quasar';
+import type { ComputedRef, Ref } from 'vue';
+import type { VmCpuFlag, VmCpuModel } from '@/api/vm';
+import type { PveNode, PvePool, PveRecord } from '@/api/resources';
+
+export type CreateVmStepName =
+  | 'general'
+  | 'os'
+  | 'system'
+  | 'disks'
+  | 'cpu'
+  | 'memory'
+  | 'network'
+  | 'confirm';
+
+export type DiskBus = 'scsi' | 'virtio' | 'sata' | 'ide';
+export type ActiveDiskId = number | 'primary';
+export type ActiveDiskTab = 'disk' | 'bandwidth';
+export type WizardOption = { label: string; value: string };
+
+export type DiskSettings = {
+  format: string;
+  cache: string;
+  discard: boolean;
+  iothread: boolean;
+  ssd: boolean;
+  readOnly: boolean;
+  backup: boolean;
+  skipReplication: boolean;
+  aio: string;
+  mbpsRead: string;
+  mbpsWrite: string;
+  iopsRead: string;
+  iopsWrite: string;
+  mbpsReadMax: string;
+  mbpsWriteMax: string;
+  iopsReadMax: string;
+  iopsWriteMax: string;
+};
+
+export type ExtraDisk = DiskSettings & {
+  id: number;
+  bus: DiskBus;
+  slot: number;
+  storage: string;
+  size: number;
+  isImport: boolean;
+  importSourceStorage: string;
+  importFrom: string;
+};
+
+export type CreateVmForm = DiskSettings & {
+  node: string;
+  vmid: string;
+  name: string;
+  pool: string;
+  haManaged: boolean;
+  onboot: boolean;
+  startupOrder: string;
+  startupUp: string;
+  startupDown: string;
+  tags: string;
+  arch: string;
+  ostype: string;
+  osbase: string;
+  mediaType: string;
+  isoStorage: string;
+  cdrom: string;
+  enableVirtioDrivers: boolean;
+  virtioDriversCdrom: string;
+  agent: boolean;
+  vga: string;
+  bios: string;
+  machine: string;
+  scsihw: string;
+  addEfiDisk: boolean;
+  efiStorage: string;
+  efiFormat: string;
+  preEnrolledKeys: boolean;
+  addTpm: boolean;
+  tpmStorage: string;
+  tpmFormat: string;
+  tpmVersion: string;
+  storage: string;
+  diskBus: DiskBus;
+  diskSlot: number;
+  diskSize: number;
+  cores: number;
+  sockets: number;
+  cpu: string;
+  cpuFlags: string;
+  vcpus: string;
+  cpulimit: string;
+  cpuunits: string;
+  affinity: string;
+  numa: boolean;
+  memory: number;
+  ballooning: boolean;
+  balloon: number;
+  shares: string;
+  allowKsm: boolean;
+  noNetwork: boolean;
+  bridge: string;
+  model: string;
+  vlanTag: string;
+  firewall: boolean;
+  macaddr: string;
+  disconnect: boolean;
+  rate: string;
+  queues: string;
+  mtu: string;
+};
+
+export type CreateVmWizardContext = {
+  state: {
+    loading: Ref<boolean>;
+    step: Ref<CreateVmStepName>;
+    advanced: Ref<boolean>;
+    activeDiskId: Ref<ActiveDiskId>;
+    activeDiskTab: Ref<ActiveDiskTab>;
+    diskSplitter: Ref<number>;
+  };
+  form: CreateVmForm;
+  resources: {
+    nodes: Ref<PveNode[]>;
+    pools: Ref<PvePool[]>;
+    storageNames: Ref<string[]>;
+    isoStorageNames: Ref<string[]>;
+    isoImages: Ref<string[]>;
+    imageStorageRows: Ref<PveRecord[]>;
+    isoStorageRows: Ref<PveRecord[]>;
+    isoImageRows: Ref<PveRecord[]>;
+    importStorageRows: Ref<PveRecord[]>;
+    importImageRows: Record<string, PveRecord[]>;
+    cpuModels: Ref<VmCpuModel[]>;
+    cpuFlags: Ref<VmCpuFlag[]>;
+    bridges: Ref<PveRecord[]>;
+  };
+  errors: {
+    vmidError: Ref<string>;
+    tagInput: Ref<string>;
+    tagError: Ref<string>;
+    validationErrors: Record<string, string>;
+    validationErrorEntries: ComputedRef<[string, string][]>;
+  };
+  options: {
+    steps: ComputedRef<{ name: CreateVmStepName; title: string; icon: string }[]>;
+    onlineNodes: ComputedRef<PveNode[]>;
+    osBaseOptions: ComputedRef<WizardOption[]>;
+    osVersionOptions: ComputedRef<WizardOption[]>;
+    diskBusOptions: ComputedRef<WizardOption[]>;
+    diskBusSlotLimits: Record<DiskBus, number>;
+    cacheOptions: WizardOption[];
+    aioOptions: WizardOption[];
+    vgaOptions: WizardOption[];
+    machineOptions: ComputedRef<WizardOption[]>;
+    scsiControllerOptions: ComputedRef<WizardOption[]>;
+    tpmFormatOptions: ComputedRef<WizardOption[]>;
+    cpuFlagStateOptions: WizardOption[];
+    isoStorageColumns: QTableColumn<PveRecord>[];
+    isoImageColumns: QTableColumn<PveRecord>[];
+    importImageColumns: QTableColumn<PveRecord>[];
+    cpuModelColumns: QTableColumn<PveRecord>[];
+    cpuFlagColumns: QTableColumn<VmCpuFlag>[];
+    bridgeColumns: QTableColumn<PveRecord>[];
+  };
+  disks: {
+    extraDisks: ExtraDisk[];
+    primaryDiskKey: ComputedRef<string>;
+    diskCount: ComputedRef<number>;
+    diskAddDisabled: ComputedRef<boolean>;
+    diskValidation: ComputedRef<{ primary: boolean; extras: Record<number, boolean> }>;
+    addExtraDisk: () => void;
+    addImportDisk: () => Promise<void>;
+    removeExtraDisk: (id: number) => void;
+    removePrimaryDisk: () => void;
+    loadImportImages: (storage: string) => Promise<void>;
+    diskFormatOptions: (storage: string) => WizardOption[];
+    diskFormatDisabled: (storage: string) => boolean;
+    tpmFormatDisabled: (storage: string) => boolean;
+  };
+  actions: {
+    initialize: () => Promise<void>;
+    validateStep: (step: CreateVmStepName) => Promise<boolean>;
+    validateAllSteps: () => Promise<boolean>;
+    validateVmid: () => Promise<boolean>;
+    moveStep: (offset: number) => Promise<void>;
+    submit: () => Promise<void>;
+    addTag: () => void;
+    removeTag: (tag: string) => void;
+    setCpuFlagState: (name: string, state: string | number | null) => void;
+  };
+  derived: {
+    tags: ComputedRef<string[]>;
+    cdromDevice: ComputedRef<string>;
+    cdromValue: ComputedRef<string>;
+    diskStorageRows: ComputedRef<PveRecord[]>;
+    scsiControllerLabel: ComputedRef<string>;
+    totalCores: ComputedRef<number>;
+    cpuModelRows: ComputedRef<PveRecord[]>;
+    bridgeRows: ComputedRef<PveRecord[]>;
+    cpuModelDisplayValue: ComputedRef<string>;
+    cpuValue: ComputedRef<string>;
+    memoryPayload: ComputedRef<Record<string, string | number>>;
+    canCreate: ComputedRef<boolean>;
+    summaryRows: ComputedRef<[string, string][]>;
+    networkValue: ComputedRef<string>;
+    bootOrder: ComputedRef<string>;
+    stepContentHeight: (step: CreateVmStepName) => string;
+    cpuFlagState: (name: string) => string;
+    isoImageName: (value: unknown) => string;
+  };
+};

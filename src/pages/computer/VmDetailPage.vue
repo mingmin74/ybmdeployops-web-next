@@ -2,10 +2,10 @@
 import { computed, onMounted, onUnmounted, shallowRef } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getVmConfig, getVmCurrent } from '@/api/overview';
-import { getVmSpiceProxy } from '@/api/vm';
+import { getVmSpiceProxy, runVmPowerCommand, type VmPowerCommand, type VmResource } from '@/api/vm';
 import type { PveRecord } from '@/api/resources';
-import UsageProgress from '@/components/UsageProgress.vue';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
+import OverviewPage from '@/pages/computer/OverviewPage.vue';
 import VmHardwareTab from '@/pages/computer/vm/VmHardwareTab.vue';
 import VmOptionsTab from '@/pages/computer/vm/VmOptionsTab.vue';
 import VmSnapshotsTab from '@/pages/computer/vm/VmSnapshotsTab.vue';
@@ -16,10 +16,11 @@ import VmMonitorTab from '@/pages/computer/vm/VmMonitorTab.vue';
 import VmFirewallTab from '@/pages/computer/vm/VmFirewallTab.vue';
 import VmPermissionsTab from '@/pages/computer/vm/VmPermissionsTab.vue';
 import VmCloudInitTab from '@/pages/computer/vm/VmCloudInitTab.vue';
+import VmResourceOperationDialog from '@/pages/computer/vm/VmResourceOperationDialog.vue';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
-import { usagePercent } from '@/utils/format';
 import { textValue } from '@/utils/pveFormat';
+import { toChineseStr } from '@/utils/unicode';
 
 const route = useRoute();
 const router = useRouter();
@@ -48,14 +49,12 @@ const taskDialogVisible = shallowRef(false);
 const taskNode = shallowRef('');
 const taskUpid = shallowRef('');
 const taskTitle = shallowRef('');
+const powerCommandLoading = shallowRef(false);
+const operationDialogVisible = shallowRef(false);
+const operation = shallowRef<'migrate' | 'clone' | 'delete' | 'template'>();
 
-const name = computed(
-  () => textValue(current.value.name) || textValue(config.value.name) || vmid.value,
-);
+const name = computed(() => decodeVmName(current.value.name || config.value.name) || vmid.value);
 const status = computed(() => textValue(current.value.status) || 'unknown');
-const cpuPercent = computed(() => Math.max(0, Math.min(Number(current.value.cpu || 0) * 100, 100)));
-const memoryPercent = computed(() => usagePercent(current.value.mem, current.value.maxmem));
-const diskPercent = computed(() => usagePercent(current.value.disk, current.value.maxdisk));
 const consoleUrl = computed(() => {
   if (!node.value || !vmid.value) return '';
   const params = new URLSearchParams({
@@ -92,15 +91,27 @@ const canViewSnapshots = computed(
 );
 const canViewFirewall = computed(() => Boolean(vmCaps.value['VM.Audit']));
 const canManagePermissions = computed(() => Boolean(vmCaps.value['Permissions.Modify']));
-const basicRows = computed(() => [
-  [gettext('Node'), node.value],
-  [gettext('VMID'), vmid.value],
-  [gettext('Status'), statusText(status.value)],
-  [gettext('Uptime'), formatUptime(current.value.uptime)],
-  [gettext('OS Type'), textValue(config.value.ostype) || '-'],
-  [gettext('Memory'), `${Number(current.value.mem || 0)} / ${Number(current.value.maxmem || 0)}`],
-]);
-
+const canPowerManage = computed(() => Boolean(vmCaps.value['VM.PowerMgmt']) && !isTemplate.value);
+const canStart = computed(() => canPowerManage.value && status.value === 'stopped');
+const canShutdown = computed(() => canPowerManage.value && status.value === 'running');
+const canStop = computed(() => canPowerManage.value && status.value !== 'stopped');
+const canSuspend = computed(() => canPowerManage.value && status.value === 'running');
+const canResume = computed(() => canPowerManage.value && status.value === 'suspended');
+const canMigrate = computed(() => Boolean(vmCaps.value['VM.Migrate']) && !isTemplate.value);
+const canClone = computed(() => Boolean(vmCaps.value['VM.Clone']));
+const canDelete = computed(() => Boolean(vmCaps.value['VM.Allocate']));
+const canConvertTemplate = computed(
+  () => Boolean(vmCaps.value['VM.Allocate']) && !isTemplate.value,
+);
+const detailVm = computed<VmResource>(() => ({
+  id: `qemu/${vmid.value}`,
+  type: 'qemu',
+  node: node.value,
+  vmid: vmid.value,
+  name: name.value,
+  status: status.value,
+  template: isTemplate.value ? 1 : 0,
+}));
 function statusText(value: string) {
   if (value === 'running') return gettext('Running');
   if (value === 'stopped') return gettext('Stopped');
@@ -111,6 +122,16 @@ function statusColor(value: string) {
   if (value === 'running') return 'green';
   if (value === 'stopped') return 'red';
   return 'grey';
+}
+
+function decodeVmName(value: unknown) {
+  const rawName = textValue(value);
+  if (!rawName) return '';
+  try {
+    return toChineseStr(rawName);
+  } catch {
+    return rawName;
+  }
 }
 
 function formatUptime(value: unknown) {
@@ -135,6 +156,23 @@ async function reload() {
   } finally {
     loading.value = false;
   }
+}
+
+async function runPowerCommand(command: VmPowerCommand, data?: Record<string, unknown>) {
+  if (!node.value || !vmid.value) return;
+  powerCommandLoading.value = true;
+  try {
+    const response = await runVmPowerCommand(node.value, vmid.value, command, data);
+    if (response.data) openTask(node.value, response.data, `${name.value}: ${gettext(command)}`);
+    await reload();
+  } finally {
+    powerCommandLoading.value = false;
+  }
+}
+
+function openOperation(nextOperation: 'migrate' | 'clone' | 'delete' | 'template') {
+  operation.value = nextOperation;
+  operationDialogVisible.value = true;
 }
 
 function openTask(taskNodeValue: string, upid: string, title: string) {
@@ -205,184 +243,267 @@ onUnmounted(() => {
 
 <template>
   <div class="q-ma-md vm-detail-page">
-    <q-card class="no-shadow no-border-radius">
-      <q-card-section class="q-pa-md">
-        <div class="row items-center q-gutter-sm vm-detail-toolbar">
-          <q-btn
-            no-caps
-            outline
-            size="12px"
-            color="primary"
-            class="u-button"
-            icon="arrow_back"
-            :label="gettext('Back')"
-            @click="router.push('/computer/list')"
-          />
-          <q-btn
-            no-caps
-            outline
-            size="12px"
-            color="primary"
-            class="u-button"
-            icon="refresh"
-            :label="gettext('Refresh')"
-            :loading="loading"
-            @click="reload"
-          />
-          <q-space />
-          <span class="text-weight-medium">{{ name }}</span>
-          <q-badge :color="statusColor(status)" :label="statusText(status)" />
-        </div>
-        <q-tabs
-          v-model="tab"
+    <section class="vm-detail">
+      <header class="vm-detail__header row items-center no-wrap">
+        <q-btn
+          flat
           dense
-          align="left"
-          active-color="primary"
-          indicator-color="primary"
-          class="vm-detail-tabs"
-        >
-          <q-tab name="summary" icon="summarize" :label="gettext('Summary')" />
-          <q-tab v-if="canViewConsole" name="console" icon="terminal" :label="gettext('Console')" />
-          <q-tab name="hardware" icon="memory" :label="gettext('Hardware')" />
-          <q-tab name="options" icon="settings" :label="gettext('Options')" />
-          <q-tab name="cloudinit" icon="cloud" :label="gettext('Cloud-Init')" />
-          <q-tab
-            v-if="canViewSnapshots"
-            name="snapshots"
-            icon="camera"
-            :label="gettext('Snapshots')"
+          round
+          icon="arrow_back"
+          color="primary"
+          size="sm"
+          class="q-mr-sm"
+          :aria-label="gettext('Back')"
+          @click="router.push('/computer/list')"
+        />
+        <q-icon
+          :name="isTemplate ? 'article' : 'desktop_windows'"
+          size="21px"
+          color="primary"
+          class="q-mr-sm"
+        />
+        <div class="vm-detail__title">
+          <span class="vm-detail__title-name">{{ `${name} · ${vmid}` }}</span>
+        </div>
+        <q-badge class="q-ml-sm" :color="statusColor(status)" :label="statusText(status)" />
+        <q-space />
+        <div class="row q-gutter-sm no-wrap">
+          <q-btn-dropdown
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Power')"
+            :disable="!canPowerManage || powerCommandLoading"
+          >
+            <q-list dense>
+              <q-item v-close-popup clickable :disable="!canStart" @click="runPowerCommand('start')"
+                ><q-item-section>{{ gettext('Start') }}</q-item-section></q-item
+              >
+              <q-item
+                v-close-popup
+                clickable
+                :disable="!canShutdown"
+                @click="runPowerCommand('shutdown')"
+                ><q-item-section>{{ gettext('Shutdown') }}</q-item-section></q-item
+              >
+              <q-item v-close-popup clickable :disable="!canStop" @click="runPowerCommand('stop')"
+                ><q-item-section class="text-red">{{ gettext('Stop') }}</q-item-section></q-item
+              >
+              <q-item
+                v-close-popup
+                clickable
+                :disable="!canShutdown"
+                @click="runPowerCommand('reboot')"
+                ><q-item-section>{{ gettext('Reboot') }}</q-item-section></q-item
+              >
+              <q-item
+                v-close-popup
+                clickable
+                :disable="!canSuspend"
+                @click="runPowerCommand('suspend')"
+                ><q-item-section>{{ gettext('Suspend') }}</q-item-section></q-item
+              >
+              <q-item
+                v-close-popup
+                clickable
+                :disable="!canSuspend"
+                @click="runPowerCommand('suspend', { todisk: 1 })"
+                ><q-item-section>{{ gettext('Hibernate') }}</q-item-section></q-item
+              >
+              <q-item
+                v-close-popup
+                clickable
+                :disable="!canResume"
+                @click="runPowerCommand('resume')"
+                ><q-item-section>{{ gettext('Resume') }}</q-item-section></q-item
+              >
+              <q-item v-close-popup clickable :disable="!canStop" @click="runPowerCommand('reset')"
+                ><q-item-section>{{ gettext('Reset') }}</q-item-section></q-item
+              >
+            </q-list>
+          </q-btn-dropdown>
+          <q-btn-dropdown
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Console')"
+            :disable="!canViewConsole || powerCommandLoading"
+          >
+            <q-list dense>
+              <q-item v-close-popup clickable @click="openConsole('noVNC')"
+                ><q-item-section>noVNC</q-item-section></q-item
+              >
+              <q-item v-close-popup clickable :disable="!canSpice" @click="downloadSpice"
+                ><q-item-section>SPICE</q-item-section></q-item
+              >
+              <q-item v-close-popup clickable :disable="!canXterm" @click="openConsole('xterm.js')"
+                ><q-item-section>xterm.js</q-item-section></q-item
+              >
+            </q-list>
+          </q-btn-dropdown>
+          <q-btn-dropdown
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('More')"
+          >
+            <q-list dense>
+              <q-item
+                v-close-popup
+                clickable
+                :disable="!canMigrate"
+                @click="openOperation('migrate')"
+                ><q-item-section>{{ gettext('Migrate') }}</q-item-section></q-item
+              >
+              <q-item v-close-popup clickable :disable="!canClone" @click="openOperation('clone')"
+                ><q-item-section>{{ gettext('Clone') }}</q-item-section></q-item
+              >
+              <q-item
+                v-close-popup
+                clickable
+                :disable="!canViewSnapshots"
+                @click="tab = 'snapshots'"
+                ><q-item-section>{{ gettext('Take Snapshot') }}</q-item-section></q-item
+              >
+              <q-item v-close-popup clickable :disable="!canViewBackup" @click="tab = 'backup'"
+                ><q-item-section>{{ gettext('Backup now') }}</q-item-section></q-item
+              >
+              <q-item
+                v-close-popup
+                clickable
+                :disable="!canConvertTemplate"
+                @click="openOperation('template')"
+                ><q-item-section>{{ gettext('Convert to template') }}</q-item-section></q-item
+              >
+              <q-separator />
+              <q-item v-close-popup clickable :disable="!canDelete" @click="openOperation('delete')"
+                ><q-item-section class="text-red">{{ gettext('Delete') }}</q-item-section></q-item
+              >
+            </q-list>
+          </q-btn-dropdown>
+        </div>
+        <q-btn
+          flat
+          dense
+          round
+          icon="refresh"
+          color="primary"
+          size="sm"
+          :aria-label="gettext('Refresh')"
+          :loading="loading"
+          @click="reload"
+        />
+      </header>
+      <q-tabs
+        v-model="tab"
+        dense
+        align="left"
+        active-color="primary"
+        indicator-color="primary"
+        class="vm-detail-tabs"
+      >
+        <q-tab name="summary" icon="summarize" :label="gettext('Summary')" />
+        <q-tab v-if="canViewConsole" name="console" icon="terminal" :label="gettext('Console')" />
+        <q-tab name="hardware" icon="memory" :label="gettext('Hardware')" />
+        <q-tab name="options" icon="settings" :label="gettext('Options')" />
+        <q-tab name="cloudinit" icon="cloud" :label="gettext('Cloud-Init')" />
+        <q-tab
+          v-if="canViewSnapshots"
+          name="snapshots"
+          icon="camera"
+          :label="gettext('Snapshots')"
+        />
+        <q-tab v-if="canViewBackup" name="backup" icon="backup" :label="gettext('Backup')" />
+        <q-tab
+          v-if="canViewBackup"
+          name="replication"
+          icon="sync"
+          :label="gettext('Replication')"
+        />
+        <q-tab name="tasks" icon="history" :label="gettext('Task History')" />
+        <q-tab
+          v-if="canViewMonitor"
+          name="monitor"
+          icon="monitor"
+          class="vm-detail-tabs__monitor"
+          :label="gettext('Monitor')"
+        />
+        <q-tab
+          v-if="canViewFirewall"
+          name="firewall"
+          icon="security"
+          :label="gettext('Firewall')"
+        />
+        <q-tab
+          v-if="canManagePermissions"
+          name="permissions"
+          icon="manage_accounts"
+          :label="gettext('Permissions')"
+        />
+      </q-tabs>
+      <q-separator />
+      <q-tab-panels v-model="tab" animated>
+        <q-tab-panel name="summary" class="q-pa-none">
+          <OverviewPage :fixed-node="node" :fixed-vmid="vmid" hide-vm-selector />
+        </q-tab-panel>
+        <q-tab-panel v-if="canViewConsole" name="console" class="q-pa-none">
+          <iframe
+            v-if="consoleUrl"
+            :src="consoleUrl"
+            class="vm-console"
+            frameborder="0"
+            :title="`${name} ${gettext('Console')}`"
           />
-          <q-tab v-if="canViewBackup" name="backup" icon="backup" :label="gettext('Backup')" />
-          <q-tab
-            v-if="canViewBackup"
-            name="replication"
-            icon="sync"
-            :label="gettext('Replication')"
-          />
-          <q-tab name="tasks" icon="history" :label="gettext('Task History')" />
-          <q-tab
-            v-if="canViewMonitor"
-            name="monitor"
-            icon="monitoring"
-            :label="gettext('Monitor')"
-          />
-          <q-tab
-            v-if="canViewFirewall"
-            name="firewall"
-            icon="security"
-            :label="gettext('Firewall')"
-          />
-          <q-tab
-            v-if="canManagePermissions"
-            name="permissions"
-            icon="manage_accounts"
-            :label="gettext('Permissions')"
-          />
-        </q-tabs>
-        <q-separator />
-        <q-tab-panels v-model="tab" animated>
-          <q-tab-panel name="summary" class="q-pa-md">
-            <div class="row q-col-gutter-md">
-              <div class="col-12 col-md-6">
-                <q-markup-table flat bordered dense
-                  ><tbody>
-                    <tr v-for="row in basicRows" :key="row[0]">
-                      <td>{{ row[0] }}</td>
-                      <td>{{ row[1] }}</td>
-                    </tr>
-                  </tbody></q-markup-table
-                >
-              </div>
-              <div class="col-12 col-md-6">
-                <div class="vm-usage-row">
-                  <span>{{ gettext('CPU Usage') }}</span
-                  ><UsageProgress :percent="cpuPercent" />
-                </div>
-                <div class="vm-usage-row">
-                  <span>{{ gettext('Memory Usage') }}</span
-                  ><UsageProgress :percent="memoryPercent" />
-                </div>
-                <div class="vm-usage-row">
-                  <span>{{ gettext('Disk Usage') }}</span
-                  ><UsageProgress :percent="diskPercent" />
-                </div>
-              </div>
-            </div>
-          </q-tab-panel>
-          <q-tab-panel v-if="canViewConsole" name="console" class="q-pa-none"
-            ><div class="q-pa-sm row justify-end q-gutter-sm">
-              <q-btn
-                no-caps
-                outline
-                size="12px"
-                color="primary"
-                class="u-button"
-                label="noVNC"
-                @click="openConsole('noVNC')"
-              /><q-btn
-                no-caps
-                outline
-                size="12px"
-                color="primary"
-                class="u-button"
-                label="SPICE"
-                :disable="!canSpice"
-                @click="downloadSpice"
-              /><q-btn
-                no-caps
-                outline
-                size="12px"
-                color="primary"
-                class="u-button"
-                label="xterm.js"
-                :disable="!canXterm"
-                @click="openConsole('xterm.js')"
-              />
-            </div>
-            <iframe
-              v-if="consoleUrl"
-              :src="consoleUrl"
-              class="vm-console"
-              frameborder="0"
-              :title="`${name} ${gettext('Console')}`"
-          /></q-tab-panel>
-          <q-tab-panel name="hardware" class="q-pa-md"
-            ><VmHardwareTab :node="node" :vmid="vmid" :config="config" @updated="reload"
-          /></q-tab-panel>
-          <q-tab-panel name="options" class="q-pa-none"
-            ><VmOptionsTab :node="node" :vmid="vmid" :config="config" @updated="reload"
-          /></q-tab-panel>
-          <q-tab-panel name="cloudinit" class="q-pa-none"
-            ><VmCloudInitTab :node="node" :vmid="vmid" :config="config" @updated="reload"
-          /></q-tab-panel>
-          <q-tab-panel v-if="canViewSnapshots" name="snapshots" class="q-pa-none"
-            ><VmSnapshotsTab
-              :node="node"
-              :vmid="vmid"
-              :running="status === 'running'"
-              @task="openTask"
-          /></q-tab-panel>
-          <q-tab-panel v-if="canViewBackup" name="backup" class="q-pa-none"
-            ><VmBackupTab :node="node" :vmid="vmid" @task="openTask"
-          /></q-tab-panel>
-          <q-tab-panel v-if="canViewBackup" name="replication" class="q-pa-none"
-            ><ReplicationTasksPanel :node="node" :vmid="vmid" embedded
-          /></q-tab-panel>
-          <q-tab-panel name="tasks" class="q-pa-none"
-            ><VmTaskHistoryTab :node="node" :vmid="vmid" @task="openTask"
-          /></q-tab-panel>
-          <q-tab-panel v-if="canViewMonitor" name="monitor" class="q-pa-none"
-            ><VmMonitorTab :node="node" :vmid="vmid"
-          /></q-tab-panel>
-          <q-tab-panel v-if="canViewFirewall" name="firewall" class="q-pa-none"
-            ><VmFirewallTab :node="node" :vmid="vmid"
-          /></q-tab-panel>
-          <q-tab-panel v-if="canManagePermissions" name="permissions" class="q-pa-none"
-            ><VmPermissionsTab :vmid="vmid"
-          /></q-tab-panel>
-        </q-tab-panels>
-      </q-card-section>
-    </q-card>
+        </q-tab-panel>
+        <q-tab-panel name="hardware" class="q-pa-none vm-config-tab-panel"
+          ><VmHardwareTab :node="node" :vmid="vmid" :config="config" @updated="reload"
+        /></q-tab-panel>
+        <q-tab-panel name="options" class="q-pa-none vm-config-tab-panel"
+          ><VmOptionsTab :node="node" :vmid="vmid" :config="config" @updated="reload"
+        /></q-tab-panel>
+        <q-tab-panel name="cloudinit" class="q-pa-none"
+          ><VmCloudInitTab :node="node" :vmid="vmid" :config="config" @updated="reload"
+        /></q-tab-panel>
+        <q-tab-panel v-if="canViewSnapshots" name="snapshots" class="q-pa-none"
+          ><VmSnapshotsTab
+            :node="node"
+            :vmid="vmid"
+            :running="status === 'running'"
+            @task="openTask"
+        /></q-tab-panel>
+        <q-tab-panel v-if="canViewBackup" name="backup" class="q-pa-none"
+          ><VmBackupTab :node="node" :vmid="vmid" @task="openTask"
+        /></q-tab-panel>
+        <q-tab-panel v-if="canViewBackup" name="replication" class="q-pa-none"
+          ><ReplicationTasksPanel :node="node" :vmid="vmid" embedded
+        /></q-tab-panel>
+        <q-tab-panel name="tasks" class="q-pa-none"
+          ><VmTaskHistoryTab :node="node" :vmid="vmid" @task="openTask"
+        /></q-tab-panel>
+        <q-tab-panel v-if="canViewMonitor" name="monitor" class="q-pa-none"
+          ><VmMonitorTab :node="node" :vmid="vmid"
+        /></q-tab-panel>
+        <q-tab-panel v-if="canViewFirewall" name="firewall" class="q-pa-none"
+          ><VmFirewallTab :node="node" :vmid="vmid"
+        /></q-tab-panel>
+        <q-tab-panel v-if="canManagePermissions" name="permissions" class="q-pa-none"
+          ><VmPermissionsTab :vmid="vmid"
+        /></q-tab-panel>
+      </q-tab-panels>
+    </section>
+    <VmResourceOperationDialog
+      v-model="operationDialogVisible"
+      :operation="operation"
+      :vm="detailVm"
+      @completed="reload"
+      @task="({ node: taskNodeValue, upid, title }) => openTask(taskNodeValue, upid, title)"
+    />
     <TaskOutputDialog
       v-model="taskDialogVisible"
       :node="taskNode"
@@ -393,21 +514,48 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.vm-detail-toolbar {
-  min-height: 30px;
-  font-size: 13px;
+.vm-detail {
+  min-height: calc(100vh - 154px);
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #dfe1e6;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(34, 51, 84, 0.05);
+}
+.vm-detail__header {
+  min-height: 62px;
+  padding: 0 16px;
+  background: linear-gradient(90deg, #f8fbff 0%, #fff 44%);
+  border-bottom: 1px solid #e5eaf1;
+}
+.vm-detail__title {
+  color: #1f2937;
+  font-size: 16px;
+  font-weight: 600;
+}
+.vm-detail__title-name {
+  margin-left: 10px;
+  color: var(--q-primary);
+  font-weight: 500;
 }
 .vm-detail-tabs {
-  margin-top: 12px;
+  padding: 2px 8px 0;
 }
-.vm-usage-row {
+.vm-detail-tabs :deep(.q-tabs__arrow) {
+  display: none !important;
+}
+.vm-detail-tabs :deep(.q-tab) {
+  padding: 0 10px;
+  min-height: 40px;
+}
+.vm-detail-tabs :deep(.q-tab__content) {
+  align-items: center;
+}
+.vm-detail-tabs :deep(.q-tab__icon) {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  min-height: 42px;
-  padding: 0 8px;
-  border-bottom: 1px solid #eeeeee;
-  font-size: 12px;
+  justify-content: center;
+  width: 24px;
 }
 .vm-console {
   width: 100%;
