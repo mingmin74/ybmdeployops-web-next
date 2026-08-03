@@ -16,3 +16,11 @@ export function getUsbMappings(node: string) {
     notifyOnError: true,
   });
 }
+
+export function getDirectoryMappings(node: string) {
+  return request<PveRecord[]>('/api2/json/cluster/mapping/dir', {
+    method: 'GET',
+    params: { 'check-node': node },
+    notifyOnError: true,
+  });
+}

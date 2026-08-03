@@ -207,7 +207,6 @@ const hostResourceCards = computed(() => [
       textValue(selectedResource.value.maxcpu, '-'),
     )} CPU(s)`,
     percent: hostCpuPercent.value,
-    icon: 'developer_board',
   },
   {
     title: gettext('Memory Usage'),
@@ -216,7 +215,6 @@ const hostResourceCards = computed(() => [
       Number(hostMemory.value.total),
     )}`,
     percent: hostMemoryPercent.value,
-    icon: 'storage',
   },
   {
     title: gettext('HD Space'),
@@ -225,7 +223,6 @@ const hostResourceCards = computed(() => [
       Number(hostRootfs.value.total),
     )}`,
     percent: hostDiskPercent.value,
-    icon: 'save',
   },
   {
     title: gettext('SWAP Usage'),
@@ -234,16 +231,14 @@ const hostResourceCards = computed(() => [
       Number(hostSwap.value.total),
     )}`,
     percent: hostSwapPercent.value,
-    icon: 'swap_horiz',
   },
   {
     title: gettext('IO Delay'),
     value: `${hostIoDelayPercent.value.toFixed(2)}%`,
     meta: gettext('IO Delay'),
     percent: hostIoDelayPercent.value,
-    icon: 'schedule',
   },
-  { title: gettext('Load Average'), loadValues: hostLoadAverageValues.value, icon: 'speed' },
+  { title: gettext('Load Average'), loadValues: hostLoadAverageValues.value },
 ]);
 const hostChartXAxis = computed(() =>
   rrdRows.value.map((item) => (item.time ? timestampToMinute(Number(item.time) * 1000) : '')),
@@ -550,14 +545,18 @@ onMounted(loadResources);
                   <span>{{ gettext('Used') }}</span
                   ><span>{{ card.meta }}</span>
                 </div>
-                <q-linear-progress
-                  rounded
-                  size="7px"
-                  :value="card.percent / 100"
+                <q-circular-progress
+                  show-value
+                  class="resource-card-progress"
+                  size="68px"
+                  :thickness="0.18"
+                  :value="card.percent"
                   :color="progressColor(card.percent)"
-                />
+                  track-color="blue-grey-1"
+                >
+                  {{ card.percent.toFixed(0) }}%
+                </q-circular-progress>
               </template>
-              <q-icon class="resource-card-side-icon" :name="card.icon" size="40px" />
             </section>
           </div>
         </q-card-section>
@@ -995,7 +994,7 @@ onMounted(loadResources);
   border: 1px solid #e1e6ee;
   border-radius: 4px;
   min-height: 124px;
-  padding: 12px 68px 12px 14px;
+  padding: 12px 82px 12px 14px;
   position: relative;
   flex: 1 1 calc((100% - 20px) / 3);
   min-width: 160px;
@@ -1024,7 +1023,7 @@ onMounted(loadResources);
 
 .resource-card-meta {
   display: flex;
-  justify-content: space-between;
+  /* justify-content: space-between; */
 }
 
 .resource-card-meta span:last-child {
@@ -1035,42 +1034,51 @@ onMounted(loadResources);
   white-space: nowrap;
 }
 
-.resource-card .q-linear-progress {
-  margin-top: 8px;
-}
-
 .resource-card.is-load-average {
-  padding-right: 54px;
+  padding-right: 14px;
 }
 .load-average-values {
-  display: flex;
-  gap: 8px;
-  margin-top: 14px;
+  align-items: stretch;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 16px;
 }
 .load-average-values > div {
   min-width: 0;
-  flex: 1;
+  padding: 3px 8px 2px;
+  text-align: center;
+}
+.load-average-values > div:not(:last-child) {
+  border-right: 1px solid #e1e6ee;
 }
 .load-average-values strong {
   display: block;
   margin: 0;
   color: #27384d;
-  font-size: 18px;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
   line-height: 1.25;
 }
 .load-average-values span {
   display: block;
-  margin-top: 5px;
+  margin-top: 6px;
   color: #667788;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.resource-card-side-icon {
-  color: #89a9c8;
+.resource-card-progress {
+  color: #52657d;
+  font-size: 11px;
+  font-weight: 600;
   position: absolute;
   right: 16px;
-  top: 30px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .chart-grid {

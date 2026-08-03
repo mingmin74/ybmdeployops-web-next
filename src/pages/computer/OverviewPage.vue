@@ -631,62 +631,7 @@ onUnmounted(clearTimers);
         </q-card-section>
       </q-card>
 
-      <!-- Current system-resource version retained for visual comparison.
-      <q-card class="overview-panel resource-grid-panel no-shadow no-border-radius no-margin">
-        <q-card-section class="panel-section">
-          <div class="panel-header">
-            <span>{{ gettext('System Resources') }}</span>
-          </div>
-          <div class="resource-card-grid">
-            <section class="resource-card cpu-resource">
-              <div class="resource-card-heading">
-                <q-icon name="memory" size="24px" />
-                <div class="resource-card-title">{{ gettext('CPU Usage') }}</div>
-                <span>{{ cpuPercent.toFixed(2) }}%</span>
-              </div>
-              <strong>{{ textValue(current.cpus, '0') }} Core</strong>
-              <div class="resource-card-meta"><span>{{ gettext('Used') }}</span><span>{{ cpuPercent.toFixed(2) }}%</span></div>
-              <q-linear-progress rounded size="7px" :value="cpuPercent / 100" :color="progressColor(cpuPercent)" />
-            </section>
-            <section class="resource-card memory-resource">
-              <div class="resource-card-heading">
-                <q-icon name="storage" size="24px" />
-                <div class="resource-card-title">{{ gettext('RAM Usage') }}</div>
-                <span>{{ memPercent.toFixed(2) }}%</span>
-              </div>
-              <strong>{{ dataSize(current.maxmem || selectedVm.maxmem) }}</strong>
-              <div class="resource-card-meta"><span>{{ gettext('Used') }}</span><span>{{ dataSize(current.mem) }}</span></div>
-              <q-linear-progress rounded size="7px" :value="memPercent / 100" :color="progressColor(memPercent)" />
-            </section>
-            <section class="resource-card disk-resource">
-              <div class="resource-card-heading">
-                <q-icon name="save" size="24px" />
-                <div class="resource-card-title">{{ gettext('Bootdisk Size') }}</div>
-                <span>{{ diskPercent.toFixed(2) }}%</span>
-              </div>
-              <strong>{{ dataSize(current.maxdisk || selectedVm.maxdisk) }}</strong>
-              <div class="resource-card-meta"><span>{{ gettext('Used') }}</span><span>{{ dataSize(current.disk) }}</span></div>
-              <q-linear-progress rounded size="7px" :value="diskPercent / 100" :color="progressColor(diskPercent)" />
-            </section>
-            <section class="resource-card host-memory-resource">
-              <div class="resource-card-heading">
-                <q-icon name="memory" size="24px" />
-                <div class="resource-card-title">{{ gettext('Host Memory Usage') }}</div>
-                <span>{{ hostMemPercent.toFixed(2) }}%</span>
-              </div>
-              <strong>{{ hostMemPercent.toFixed(2) }}%</strong>
-              <div class="resource-card-meta"><span>{{ gettext('Used') }}</span><span>{{ dataSize(currentNode?.mem) }}</span></div>
-              <q-linear-progress
-                rounded
-                size="7px"
-                :value="hostMemPercent / 100"
-                :color="progressColor(hostMemPercent)"
-              />
-            </section>
-          </div>
-        </q-card-section>
-      </q-card>
-      -->
+
 
       <q-card class="overview-panel resource-grid-panel no-shadow no-border-radius no-margin">
         <q-card-section class="panel-section">
@@ -701,13 +646,17 @@ onUnmounted(clearTimers);
                 <span>{{ gettext('Used') }}</span
                 ><span>{{ cpuPercent.toFixed(2) }}%</span>
               </div>
-              <q-linear-progress
-                rounded
-                size="7px"
-                :value="cpuPercent / 100"
+              <q-circular-progress
+                show-value
+                class="resource-card-progress"
+                size="68px"
+                :thickness="0.18"
+                :value="cpuPercent"
                 :color="progressColor(cpuPercent)"
-              />
-              <q-icon class="resource-card-side-icon" name="developer_board" size="40px" />
+                track-color="blue-grey-1"
+              >
+                {{ cpuPercent.toFixed(0) }}%
+              </q-circular-progress>
             </section>
             <section class="resource-card resource-card-compare">
               <div class="resource-card-title">{{ gettext('RAM Usage') }}</div>
@@ -716,13 +665,17 @@ onUnmounted(clearTimers);
                 <span>{{ gettext('Used') }}</span
                 ><span>{{ dataSize(current.mem) }}</span>
               </div>
-              <q-linear-progress
-                rounded
-                size="7px"
-                :value="memPercent / 100"
+              <q-circular-progress
+                show-value
+                class="resource-card-progress"
+                size="68px"
+                :thickness="0.18"
+                :value="memPercent"
                 :color="progressColor(memPercent)"
-              />
-              <q-icon class="resource-card-side-icon" name="storage" size="40px" />
+                track-color="blue-grey-1"
+              >
+                {{ memPercent.toFixed(0) }}%
+              </q-circular-progress>
             </section>
             <section class="resource-card resource-card-compare">
               <div class="resource-card-title">{{ gettext('Bootdisk Size') }}</div>
@@ -731,13 +684,17 @@ onUnmounted(clearTimers);
                 <span>{{ gettext('Used') }}</span
                 ><span>{{ dataSize(current.disk) }}</span>
               </div>
-              <q-linear-progress
-                rounded
-                size="7px"
-                :value="diskPercent / 100"
+              <q-circular-progress
+                show-value
+                class="resource-card-progress"
+                size="68px"
+                :thickness="0.18"
+                :value="diskPercent"
                 :color="progressColor(diskPercent)"
-              />
-              <q-icon class="resource-card-side-icon" name="save" size="40px" />
+                track-color="blue-grey-1"
+              >
+                {{ diskPercent.toFixed(0) }}%
+              </q-circular-progress>
             </section>
             <section class="resource-card resource-card-compare">
               <div class="resource-card-title">{{ gettext('Host Memory Usage') }}</div>
@@ -746,13 +703,17 @@ onUnmounted(clearTimers);
                 <span>{{ gettext('Used') }}</span
                 ><span>{{ dataSize(currentNode?.mem) }}</span>
               </div>
-              <q-linear-progress
-                rounded
-                size="7px"
-                :value="hostMemPercent / 100"
+              <q-circular-progress
+                show-value
+                class="resource-card-progress"
+                size="68px"
+                :thickness="0.18"
+                :value="hostMemPercent"
                 :color="progressColor(hostMemPercent)"
-              />
-              <q-icon class="resource-card-side-icon" name="memory" size="40px" />
+                track-color="blue-grey-1"
+              >
+                {{ hostMemPercent.toFixed(0) }}%
+              </q-circular-progress>
             </section>
           </div>
         </q-card-section>
@@ -1198,7 +1159,6 @@ onUnmounted(clearTimers);
   color: #718096;
   display: flex;
   font-size: 12px;
-  justify-content: space-between;
   min-width: 0;
 }
 
@@ -1210,16 +1170,12 @@ onUnmounted(clearTimers);
   white-space: nowrap;
 }
 
-.resource-card .q-linear-progress {
-  margin-top: 8px;
-}
-
 .resource-card:hover {
   border-color: #bfd1e4;
 }
 
 .resource-card-compare {
-  padding-right: 68px;
+  padding-right: 82px;
 }
 
 .resource-card-compare .resource-card-title {
@@ -1227,11 +1183,14 @@ onUnmounted(clearTimers);
   line-height: 24px;
 }
 
-.resource-card-side-icon {
-  color: #89a9c8;
+.resource-card-progress {
+  color: #52657d;
+  font-size: 11px;
+  font-weight: 600;
   position: absolute;
   right: 16px;
-  top: 30px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .network-info-value {
@@ -1254,10 +1213,12 @@ onUnmounted(clearTimers);
 }
 
 .remark-panel {
+  max-height: 320px;
   min-height: 216px;
 }
 
 .remark-panel--collapsed {
+  max-height: none;
   min-height: 216px;
 }
 
@@ -1289,7 +1250,9 @@ onUnmounted(clearTimers);
   color: #333333;
   font-size: 13px;
   line-height: 1.6;
+  max-height: 272px;
   min-height: 160px;
+  overflow-y: auto;
   padding: 16px;
   white-space: pre-wrap;
   word-break: break-word;

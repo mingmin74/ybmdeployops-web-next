@@ -7,7 +7,9 @@ import SystemHardwareEditor from '../editors/SystemHardwareEditor.vue';
 import DisplayHardwareEditor from '../editors/DisplayHardwareEditor.vue';
 import MachineHardwareEditor from '../editors/MachineHardwareEditor.vue';
 import ScsiControllerHardwareEditor from '../editors/ScsiControllerHardwareEditor.vue';
+import DiskHardwareEditor from '../editors/DiskHardwareEditor.vue';
 import CdromHardwareEditor from '../editors/CdromHardwareEditor.vue';
+import NetworkHardwareEditor from '../editors/NetworkHardwareEditor.vue';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
 
 const { selectedDevice } = useVmHardwareContext();
@@ -20,7 +22,9 @@ const activeEditor = computed(() => {
     display: DisplayHardwareEditor,
     machine: MachineHardwareEditor,
     'scsi-controller': ScsiControllerHardwareEditor,
+    disk: DiskHardwareEditor,
     cdrom: CdromHardwareEditor,
+    network: NetworkHardwareEditor,
   };
   const type = selectedDevice.value?.type;
   return type ? editors[type as keyof typeof editors] : undefined;

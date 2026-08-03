@@ -266,21 +266,60 @@
 }
 ```
 
-## 表单样式
+## 表单项样式
 
-老项目表单偏紧凑，字段间距小，常用 `dense`。
+弹窗表单项以新增模块 `src/pages/computer/vm/create-vm` 和 `CreateVmDialog.vue` 为当前标准；旧项目 `FormTem.vue` 仍是来源依据，但后续新模块应优先对齐这个 VM 创建弹窗已经落地的 Vue3 + Quasar 写法。除非旧项目源码明确使用了工具栏式边框控件，弹窗内的 `q-input`、`q-select`、`SelectTable`、`NodeSelectTable` 默认使用 Quasar 下划线型 `standard` 外观，**不要添加 `outlined` 或 `square`**。
 
-通用表单规则：
+表单区域结构：
 
-- 输入框使用 `dense`。
-- 下拉框使用 `dense`、`options-dense`、`emit-value`、`map-options`。
-- 表单字段 label 和输入文字字号偏小，约 `12px`。
-- 字段错误提示通常隐藏或压缩，保持弹窗高度稳定。
-- 表单外层常用 `u-border q-ma-sm q-pa-md`。
-- 保存/添加按钮放在弹窗 footer 或右下角。
-- 表单配置型页面可以参考老项目 `FormTem.vue`，但 Vue3 中应重写，不直接复制 Vue2 Options API 逻辑。
+```vue
+<q-scroll-area class="q-pa-sm" :style="{ height: stepContentHeight('general') }">
+  <div class="q-px-md q-py-sm u-border-dotted-blue bg-white">
+    <div class="row q-gutter-lg">
+      <div class="col">
+        <q-input dense class="q-field--with-bottom" :label="gettext('Name')" />
+      </div>
+      <div class="col">
+        <q-select dense options-dense emit-value map-options class="q-field--with-bottom" />
+      </div>
+    </div>
+  </div>
+</q-scroll-area>
+```
 
-字段样式应接近：
+通用规则：
+
+- 弹窗正文内分组使用 `q-px-md q-py-sm u-border-dotted-blue bg-white`，高级区域在外层追加 `q-mt-sm`；这类创建/编辑向导不再默认使用 `u-border q-ma-sm q-pa-md`。
+- 步骤内容外层使用 `q-scroll-area class="q-pa-sm"`，高度由页面逻辑控制，保持弹窗主体稳定。
+- 两列表单使用 `row q-gutter-lg` + 两个 `col`；小字段同排时用 `row q-gutter-sm`，固定短字段可设置明确宽度，例如设备 ID `style="width: 100px"`。
+- 连续字段使用 `class="q-field--with-bottom"`，由全局样式提供 15px 底部间距；不要在 scoped style 中重复写字段 margin。
+- 标签、输入文字、焦点线、字段高度由 `src/css/app.scss` 全局规则接管；页面 scoped style 只处理特殊业务布局。
+- `u-hidden-error` 只用于 `SelectTable` 这类需要压缩底部区域的封装控件，不作为普通弹窗表单容器默认类。
+
+输入框规则：
+
+- `q-input` 默认只加 `dense`，保持 `standard` 下划线外观。
+- 数字字段使用 `type="number"`，并按接口/旧页面补齐 `min`、`max`、`step`；需要数字模型时用 `v-model.number`。
+- 必填或校验字段使用 `:error`、`:error-message`，错误内容可以显示，但控件高度通过 `q-field--with-bottom` 保持紧凑稳定。
+- 只读展示字段仍用 `q-input dense readonly`，例如 SCSI Controller、Total cores，保持和可编辑字段同一视觉密度。
+- 占位文案用于默认值提示，例如 `gettext('default')`、`gettext('auto')`、`gettext('unlimited')`。
+
+下拉选择规则：
+
+- 普通 `q-select` 默认：`dense options-dense`；提交值与显示文本分离时追加 `emit-value map-options`。
+- 需要允许清空时才加 `clearable`；禁用态使用 `:disable`，不要用局部样式制造禁用效果。
+- 普通弹窗表单下拉不加 `outlined`、`square`、页面局部高度样式；工具栏下拉才使用后文“概览工具栏下拉规范”。
+- 表格式选择必须复用 `SelectTable` / `NodeSelectTable`，在弹窗表单中传 `field-style="standard"`，宽度按旧页面取值，常见为 `500px`。
+- `SelectTable` 弹层内表格保持 `flat dense hide-bottom`、`table-header-class="u-table-header"`、搜索框 `borderless dense`。
+
+复选框规则：
+
+- `q-checkbox` 默认使用 `dense right-label color="primary"`，标签在右侧，颜色用主色。
+- 复选框和字段在同一列连续出现时可加 `q-field--with-bottom`；磁盘编辑这类需要和字段行高对齐的区域，可用 `q-field borderless dense` 包裹复选框。
+- 复选框文字颜色保持 `#333333`；确有局部深度选择器时只限制在当前编辑器内部。
+- 高级开关放在弹窗 footer 左侧，使用同样的 `dense right-label color="primary"`，右侧保留步骤按钮。
+
+全局字段样式基准：
 
 ```scss
 .q-field__native,
@@ -299,56 +338,13 @@
   padding-bottom: 15px;
 }
 
-.q-field--outlined.q-field--focused .q-field__control::after {
-  border-width: 1px !important;
-}
-```
-
-紧凑输入：
-
-```scss
-.u-dense .q-field__control,
-.u-dense .q-field__marginal {
-  height: 30px !important;
-}
-
 .q-field--dense .q-field__control {
   height: 30px;
 }
-```
 
-### 旧项目弹窗表单基准
-
-旧项目的 `FormTem.vue` 是弹窗配置表单的直接参考。除非原页面明确需要工具栏式边框控件，弹窗内的 `q-input`、`q-select` 使用 Quasar 默认的下划线型 `standard` 字段，**不要添加 `outlined` 或 `square`**。
-
-所有弹窗和页面表单内的表单项，默认必须直接使用本节的标准表单项样式：`u-border q-ma-sm q-pa-md u-dense` 表单容器、`q-col-gutter-lg` 网格间距、字段 `dense`、`q-select` 加 `options-dense`，并优先使用默认 `standard` 字段外观。以后只要修改或新增表单内样式，不要先做页面局部变体，除非旧项目源码明确使用了不同样式。
-
-表单内容容器使用：
-
-```vue
-<div class="u-border q-ma-sm q-pa-md u-dense">
-  <div class="row q-col-gutter-lg">
-    <div class="col-12 col-sm-6">
-      <q-input dense class="q-field--with-bottom" :label="gettext('Name')" />
-    </div>
-  </div>
-</div>
-```
-
-具体约定：
-
-- `u-border`：1px `#cccccc` 的表单分组边框；`q-ma-sm q-pa-md` 保持旧弹窗内外留白。
-- `u-dense`：统一字段控件与边缘区为 30px，并微调下拉箭头位置。
-- 字段默认 `dense`；`q-select` 同时使用 `options-dense`，需要提交值时再加 `emit-value`、`map-options`。
-- 单列连续字段加 `q-field--with-bottom`，使用全局 15px 底部间距；网格中的独立字段使用 `q-col-gutter-lg` 保持分栏间距。
-- 标签、输入文字、焦点线均由 `src/css/app.scss` 全局规则接管，不在页面 scoped style 中重复设置。
-- 只把 `u-hidden-error` 用于确实需要压缩校验提示的专用界面；它会隐藏字段底部区域，不可作为普通弹窗表单的默认容器类。
-
-隐藏错误区域：
-
-```scss
-.u-hidden-error .q-field__bottom {
-  display: none !important;
+.q-field--standard.q-field--dense .q-field__control,
+.q-field--standard.q-field--dense .q-field__marginal {
+  height: 40px;
 }
 ```
 

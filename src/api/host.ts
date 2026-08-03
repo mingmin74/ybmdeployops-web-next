@@ -120,6 +120,27 @@ export function getNodeNetwork(node: string) {
   );
 }
 
+export function getNodeUsbDevices(node: string) {
+  return request<Record<string, unknown>[]>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/scan/usb`,
+    { method: 'GET', notifyOnError: true },
+  );
+}
+
+export function getNodePciDevices(node: string) {
+  return request<Record<string, unknown>[]>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/hardware/pci`,
+    { method: 'GET', notifyOnError: true },
+  );
+}
+
+export function getNodePciMdevTypes(node: string, pciid: string) {
+  return request<Record<string, unknown>[]>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/hardware/pci/${encodeURIComponent(pciid)}/mdev`,
+    { method: 'GET', notifyOnError: true },
+  );
+}
+
 export function getNodeDns(node: string) {
   return request<PveNodeDns>(`/api2/json/nodes/${encodeURIComponent(node)}/dns`, {
     method: 'GET',

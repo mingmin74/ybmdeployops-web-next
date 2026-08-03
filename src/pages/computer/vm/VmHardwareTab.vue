@@ -16,6 +16,10 @@ import HardwareAddDialog from './hardware/dialogs/HardwareAddDialog.vue';
 import HardwareResizeDiskDialog from './hardware/dialogs/HardwareResizeDiskDialog.vue';
 import HardwareMoveDiskDialog from './hardware/dialogs/HardwareMoveDiskDialog.vue';
 import HardwareImportDiskDialog from './hardware/dialogs/HardwareImportDiskDialog.vue';
+import HardwareFirmwareDialog from './hardware/dialogs/HardwareFirmwareDialog.vue';
+import HardwareCloudInitDriveDialog from './hardware/dialogs/HardwareCloudInitDriveDialog.vue';
+import HardwareRngDialog from './hardware/dialogs/HardwareRngDialog.vue';
+import HardwareVirtiofsDialog from './hardware/dialogs/HardwareVirtiofsDialog.vue';
 
 const props = defineProps<{ node: string; vmid: string; config: PveRecord }>();
 const emit = defineEmits<{ updated: [] }>();
@@ -25,7 +29,13 @@ const addVisible = shallowRef(false);
 const resizeVisible = shallowRef(false);
 const moveVisible = shallowRef(false);
 const importDiskVisible = shallowRef(false);
+const firmwareVisible = shallowRef(false);
+const cloudInitVisible = shallowRef(false);
+const rngVisible = shallowRef(false);
+const virtiofsVisible = shallowRef(false);
 const selectedKey = shallowRef('');
+const addInitialKind = shallowRef<'disk' | 'cdrom' | 'net' | 'usb' | 'pci' | 'serial' | 'audio'>('disk');
+const firmwareKind = shallowRef<'efi' | 'tpm'>('efi');
 const form = reactive({
   deviceValue: '',
   advanced: false,
@@ -41,7 +51,10 @@ function parsePropertyString(value: unknown, defaultKey: string) {
     .split(',')
     .filter(Boolean)
     .forEach((part) => {
-      const [key, optionValue] = part.split('=', 2);
+      const segments = part.split('=', 2);
+      const key = segments[0] || '';
+      const optionValue = segments[1];
+      if (!key) return;
       if (optionValue === undefined) result[defaultKey] = key;
       else result[key] = optionValue;
     });
@@ -81,6 +94,9 @@ function renderMachine(value: unknown) {
 function deviceRow(key: string, config: PveRecord): HardwareRow | undefined {
   if (config[key] === undefined) return undefined;
   const value = textValue(config[key]) || '-';
+  if (/^(ide|scsi|sata|virtio)\d+$/.test(key) && value.includes('cloudinit')) {
+    return { key, type: 'cloudinit', name: `${gettext('CloudInit Drive')} (${key})`, value, editable: true };
+  }
   if (/^(ide|scsi|sata|virtio)\d+$/.test(key) && value.includes('media=cdrom')) {
     return { key, type: 'cdrom', name: `${gettext('CD/DVD Drive')} (${key})`, value, editable: true };
   }
@@ -89,6 +105,30 @@ function deviceRow(key: string, config: PveRecord): HardwareRow | undefined {
   }
   if (/^net\d+$/.test(key)) {
     return { key, type: 'network', name: `${gettext('Network Device')} (${key})`, value, editable: true };
+  }
+  if (key === 'efidisk0') {
+    return { key, type: 'efi', name: gettext('EFI Disk'), value, editable: true };
+  }
+  if (key === 'tpmstate0') {
+    return { key, type: 'tpm', name: gettext('TPM State'), value, editable: true };
+  }
+  if (/^usb\d+$/.test(key)) {
+    return { key, type: 'usb', name: `${gettext('USB Device')} (${key})`, value, editable: true };
+  }
+  if (/^hostpci\d+$/.test(key)) {
+    return { key, type: 'pci', name: `${gettext('PCI Device')} (${key})`, value, editable: true };
+  }
+  if (/^serial\d+$/.test(key)) {
+    return { key, type: 'serial', name: `${gettext('Serial Port')} (${key})`, value, editable: true };
+  }
+  if (key === 'audio0') {
+    return { key, type: 'audio', name: gettext('Audio Device'), value, editable: true };
+  }
+  if (key === 'rng0') {
+    return { key, type: 'rng', name: gettext('VirtIO RNG'), value, editable: true };
+  }
+  if (/^virtiofs\d+$/.test(key)) {
+    return { key, type: 'virtiofs', name: `${gettext('Virtiofs')} (${key})`, value, editable: true };
   }
   return undefined;
 }
@@ -143,7 +183,11 @@ const rows = computed<HardwareRow[]>(() => {
     },
   ];
   const devices = Object.keys(config)
-    .filter((key) => /^(ide|scsi|sata|virtio|net)\d+$/.test(key))
+    .filter(
+      (key) =>
+        /^(ide|scsi|sata|virtio|net|usb|hostpci|serial|virtiofs)\d+$/.test(key) ||
+        ['efidisk0', 'tpmstate0', 'audio0', 'rng0'].includes(key),
+    )
     .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
     .map((key) => deviceRow(key, config))
     .filter((row): row is HardwareRow => Boolean(row));
@@ -253,6 +297,9 @@ function canEditRow(row: HardwareRow) {
       return hasVmCapability('VM.Config.CDROM');
     case 'cloudinit':
       return hasVmCapability('VM.Config.CDROM') && hasVmCapability('VM.Config.Cloudinit');
+    case 'efi':
+    case 'tpm':
+      return hasVmCapability('VM.Config.Disk');
     case 'virtiofs':
       return hasVmCapability('VM.Config.Options');
     case 'display':
@@ -277,7 +324,7 @@ async function save() {
     if (form.deviceValue.trim()) data.vga = form.deviceValue;
     else data.delete = textValue(data.delete) ? `${textValue(data.delete)},vga` : 'vga';
   } else if (
-    ['disk', 'cdrom', 'cloudinit', 'network', 'usb', 'pci', 'serial', 'virtiofs', 'keyboard', 'audio', 'rng'].includes(device.type)
+    ['disk', 'cdrom', 'cloudinit', 'network', 'usb', 'pci', 'serial', 'virtiofs', 'keyboard', 'audio', 'rng', 'efi', 'tpm'].includes(device.type)
   )
     data[device.key] = form.deviceValue;
   loading.value = true;
@@ -325,8 +372,14 @@ function openImportDisk() {
   importDiskVisible.value = true;
 }
 
-function openAddHardware() {
+function openAddHardware(kind: 'disk' | 'cdrom' | 'net' | 'usb' | 'pci' | 'serial' | 'audio') {
+  addInitialKind.value = kind;
   addVisible.value = true;
+}
+
+function openFirmware(kind: 'efi' | 'tpm') {
+  firmwareKind.value = kind;
+  firmwareVisible.value = true;
 }
 
 function nextDeviceKey(
@@ -365,6 +418,10 @@ provide(vmHardwareKey, vmHardwareContext);
       :can-remove="canRemove"
       :can-revert="canRevert"
       @add="openAddHardware"
+      @add-firmware="openFirmware"
+      @add-cloud-init="cloudInitVisible = true"
+      @add-rng="rngVisible = true"
+      @add-virtiofs="virtiofsVisible = true"
       @import-disk="openImportDisk"
       @remove="removeDevice"
       @resize="openResize"
@@ -392,7 +449,7 @@ provide(vmHardwareKey, vmHardwareContext);
             </HardwareEditorHost>
           </div>
           <div
-            v-if="selectedDevice?.editable && !['cpu', 'memory', 'bios', 'machine', 'scsi-controller', 'system', 'display', 'cdrom'].includes(selectedDevice.type)"
+            v-if="selectedDevice?.editable && !['cpu', 'memory', 'bios', 'machine', 'scsi-controller', 'system', 'display', 'disk', 'cdrom', 'network'].includes(selectedDevice.type)"
             class="hardware-editor__footer row items-center justify-between"
           >
             <q-checkbox
@@ -414,8 +471,12 @@ provide(vmHardwareKey, vmHardwareContext);
         </div>
       </div>
     </div>
-    <HardwareAddDialog v-model="addVisible" />
+    <HardwareAddDialog v-model="addVisible" :initial-kind="addInitialKind" />
     <HardwareImportDiskDialog v-model="importDiskVisible" />
+    <HardwareFirmwareDialog v-model="firmwareVisible" :kind="firmwareKind" />
+    <HardwareCloudInitDriveDialog v-model="cloudInitVisible" />
+    <HardwareRngDialog v-model="rngVisible" />
+    <HardwareVirtiofsDialog v-model="virtiofsVisible" />
     <HardwareResizeDiskDialog v-model="resizeVisible" />
     <HardwareMoveDiskDialog v-model="moveVisible" />
   </div>

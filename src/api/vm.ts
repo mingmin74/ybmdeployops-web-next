@@ -198,6 +198,22 @@ export function createVm(node: string, data: Record<string, unknown>) {
   });
 }
 
+export function createCt(node: string, data: Record<string, unknown>) {
+  return request<string>(`/api2/extjs/nodes/${encodeURIComponent(node)}/lxc`, {
+    method: 'POST',
+    data,
+    notifyOnError: true,
+  });
+}
+
+export function getCtNextId(vmid?: number | string) {
+  return request<number | string>('/api2/extjs/cluster/nextid', {
+    method: 'GET',
+    ...(vmid === undefined ? {} : { params: { vmid } }),
+    notifyOnError: true,
+  });
+}
+
 export function runVmBackup(
   node: string,
   vmid: number | string,

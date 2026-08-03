@@ -14,7 +14,10 @@ function parseMachine(value: unknown) {
   const raw = textValue(value);
   if (!raw) return result;
   raw.split(',').forEach((part) => {
-    const [key, optionValue] = part.split('=', 2);
+    const segments = part.split('=', 2);
+    const key = segments[0] || '';
+    const optionValue = segments[1];
+    if (!key) return;
     if (optionValue === undefined || key === 'type') result.machine = optionValue || key;
     else if (key === 'viommu') result.viommu = optionValue;
   });
@@ -29,20 +32,38 @@ function parseMachine(value: unknown) {
 const form = reactive(parseMachine(config.value.machine));
 const advanced = shallowRef(Boolean(config.value.machine && (textValue(config.value.machine).includes(',') || form.version !== 'latest')));
 const machineRows = shallowRef<Array<{ id?: string; type?: string; version?: string }>>([]);
+
+function machineRowKind(row: { id?: string; type?: string; version?: string }) {
+  const id = textValue(row.id).toLowerCase();
+  const type = textValue(row.type).toLowerCase();
+  const version = textValue(row.version).toLowerCase();
+  const text = `${id} ${type} ${version}`;
+  if (type === 'q35' || text.includes('q35')) return 'q35';
+  if (type === 'pc' || type === 'i440fx' || text.includes('i440fx')) return 'i440fx';
+  return '';
+}
+
+function machineRowOption(row: { id?: string; type?: string; version?: string }) {
+  const id = textValue(row.id);
+  const version = textValue(row.version);
+  return {
+    label: version || id,
+    value: id || version,
+  };
+}
+
 const machineOptions = computed(() => [
   { label: `${gettext('Default')} (i440fx)`, value: '__default__' },
   { label: 'q35', value: 'q35' },
 ]);
 const versionOptions = computed(() => {
   const type = form.machine === 'q35' ? 'q35' : 'i440fx';
-  const rows = machineRows.value
-    .filter((row) => textValue(row.type) === type)
-    .map((row) => ({
-      label: textValue(row.version) || textValue(row.id),
-      value: textValue(row.id),
-    }))
+  const matchedRows = machineRows.value.filter((row) => machineRowKind(row) === type);
+  const rows = (matchedRows.length ? matchedRows : machineRows.value)
+    .map(machineRowOption)
     .filter((row) => row.value);
-  return [{ label: gettext('Latest'), value: 'latest' }, ...rows];
+  const uniqueRows = Array.from(new Map(rows.map((row) => [row.value, row])).values());
+  return [{ label: gettext('Latest'), value: 'latest' }, ...uniqueRows];
 });
 const viommuOptions = computed(() => {
   const base = [{ label: `${gettext('Default')} (${gettext('None')})`, value: '__default__' }];
@@ -77,7 +98,11 @@ watch(
 );
 
 onMounted(async () => {
-  machineRows.value = await getVmMachineTypes(node.value, textValue(config.value.arch));
+  const arch = textValue(config.value.arch) || 'x86_64';
+  machineRows.value = (await getVmMachineTypes(node.value, arch)).data || [];
+  if (!machineRows.value.length && arch !== 'x86_64') {
+    machineRows.value = (await getVmMachineTypes(node.value, 'x86_64')).data || [];
+  }
 });
 </script>
 

@@ -13,20 +13,20 @@ const { device } = defineProps<{ device: HardwareRow }>();
 const { node, config, canEditRow, updateConfig } = useVmHardwareContext();
 const storageRows = shallowRef<PveRecord[]>([]);
 const isoRows = shallowRef<PveRecord[]>([]);
-const form = reactive({
-  mediaType: 'iso' as MediaType,
+const form = reactive<{ mediaType: MediaType; storage: string; volid: string }>({
+  mediaType: 'iso',
   storage: '',
   volid: '',
 });
 
-function parseCdrom(value: unknown) {
+function parseCdrom(value: unknown): { mediaType: MediaType; storage: string; volid: string } {
   const raw = textValue(value);
-  if (raw === 'cdrom,media=cdrom') return { mediaType: 'cdrom' as MediaType, storage: '', volid: '' };
-  if (raw === 'none,media=cdrom') return { mediaType: 'none' as MediaType, storage: '', volid: '' };
+  if (raw === 'cdrom,media=cdrom') return { mediaType: 'cdrom', storage: '', volid: '' };
+  if (raw === 'none,media=cdrom') return { mediaType: 'none', storage: '', volid: '' };
   const volid = raw.split(',')[0] || '';
   return {
-    mediaType: 'iso' as MediaType,
-    storage: volid.includes(':') ? volid.split(':')[0] : '',
+    mediaType: 'iso',
+    storage: volid.includes(':') ? volid.split(':')[0] || '' : '',
     volid,
   };
 }
@@ -51,7 +51,7 @@ const isoOptions = computed(() =>
 const canSave = computed(() => form.mediaType !== 'iso' || Boolean(form.volid));
 
 async function loadStorages() {
-  storageRows.value = await getNodeStorage(node.value, 'iso');
+  storageRows.value = (await getNodeStorage(node.value, 'iso')).data || [];
   if (!form.storage && storageRows.value[0]?.storage) form.storage = textValue(storageRows.value[0].storage);
 }
 
@@ -61,7 +61,7 @@ async function loadIsoImages(selectFirst = false) {
     form.volid = '';
     return;
   }
-  isoRows.value = await getStorageContent(node.value, form.storage, 'iso');
+  isoRows.value = (await getStorageContent(node.value, form.storage, 'iso')).data || [];
   if (selectFirst || !isoRows.value.some((row) => textValue(row.volid) === form.volid)) {
     form.volid = textValue(isoRows.value[0]?.volid);
   }

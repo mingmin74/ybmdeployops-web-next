@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { QTableColumn, QTreeNode } from 'quasar';
 import { computed, onMounted, shallowRef, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import {
   getVmResources,
   runCtPowerCommand,
@@ -9,6 +10,7 @@ import {
   type VmResource,
 } from '@/api/vm';
 import { getNodeStorage } from '@/api/storageContent';
+import CreateCtDialog from '@/pages/computer/ct/CreateCtDialog.vue';
 import UWindow from '@/components/UWindow.vue';
 import UsageProgress from '@/components/UsageProgress.vue';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
@@ -41,6 +43,7 @@ const pendingCommandData = shallowRef<Record<string, unknown>>();
 const pendingCommandTitle = shallowRef('');
 const commandLoading = shallowRef(false);
 const session = useSessionStore();
+const router = useRouter();
 const taskDialogVisible = shallowRef(false);
 const taskNode = shallowRef('');
 const taskUpid = shallowRef('');
@@ -55,7 +58,10 @@ const backupStorage = shallowRef('');
 const backupMode = shallowRef<'snapshot' | 'suspend' | 'stop'>('snapshot');
 const backupCompression = shallowRef<'zstd' | 'lzo' | 'gzip' | '0'>('zstd');
 const backupProtected = shallowRef(false);
+const createDialogVisible = shallowRef(false);
 const defaultVisibleColumns = ['vmid', 'name', 'status', 'node', 'cpu', 'memory', 'disk', 'uptime'];
+
+const canCreateCt = computed(() => hasCapability('VM.Allocate'));
 const visibleColumnNames = shallowRef<string[]>(
   (() => {
     try {
@@ -332,6 +338,22 @@ function onTreeSelection(key: string) {
   selectedTreeNode.value = selectedTreeNode.value === key ? '' : key;
 }
 
+function openDetail(row: VmResource) {
+  if (!row.node || row.vmid === undefined || row.vmid === null) return;
+  void router.push({
+    name: 'computer-ct-container-detail',
+    params: { node: row.node, vmid: String(row.vmid) },
+  });
+}
+
+function openTreeContainer(node: ContainerTreeNode) {
+  if (node.kind !== 'container' || !node.node || !node.vmid) return;
+  void router.push({
+    name: 'computer-ct-container-detail',
+    params: { node: node.node, vmid: node.vmid },
+  });
+}
+
 function toggleRowSelection(_event: Event, row: VmResource) {
   const isSelected = selectedRows.value.some((selected) => selected.id === row.id);
   selectedRows.value = isSelected
@@ -401,6 +423,10 @@ async function bulkCommand(command: 'start' | 'shutdown' | 'stop') {
 function openTags() {
   tagValue.value = selectedRows.value.length === 1 ? String(selectedRows.value[0]?.tags || '') : '';
   tagsDialogVisible.value = true;
+}
+
+function openCreateDialog() {
+  createDialogVisible.value = true;
 }
 
 async function saveTags() {
@@ -526,7 +552,15 @@ onMounted(() => {
                       class="q-mr-sm"
                       :color="node.kind === 'container' ? statusColor(node.status) : 'grey-7'"
                     />
-                    <span class="ellipsis">{{ node.label }}</span>
+                    <button
+                      v-if="node.kind === 'container'"
+                      type="button"
+                      class="vm-tree-node__link ellipsis"
+                      @click.stop="openTreeContainer(node)"
+                    >
+                      {{ node.label }}
+                    </button>
+                    <span v-else class="ellipsis">{{ node.label }}</span>
                   </div>
                 </template>
               </q-tree>
@@ -551,6 +585,7 @@ onMounted(() => {
                     </q-item>
                   </q-list>
                 </q-btn-dropdown>
+                <q-btn no-caps outline size="12px" color="primary" class="u-button" icon="add" :label="gettext('Create')" :disable="!canCreateCt" @click="openCreateDialog" v-if="canCreateCt" />
                 <q-btn no-caps outline size="12px" color="primary" class="u-button" icon="sell" :label="gettext('Edit Tags')" :disable="!selectedRows.length" @click="openTags" />
                 <q-space />
                 <q-input v-model="search" dense outlined square clearable debounce="250" class="vm-search" :placeholder="gettext('Search')">
@@ -579,7 +614,8 @@ onMounted(() => {
               v-model:pagination="pagination"
               class="vm-table"
               flat
-              dense
+              table-header-class="u-table-header"
+              hide-selected-banner
               row-key="id"
               selection="multiple"
               :rows="filteredRows"
@@ -590,33 +626,39 @@ onMounted(() => {
               binary-state-sort
               @row-click="toggleRowSelection"
             >
-              <template #body-cell-name="{ row }">
-                <q-td>
+              <template #body-cell-name="scope">
+                <q-td :props="scope">
                   <div class="vm-name-cell">
                     <q-icon name="inventory_2" size="18px" color="primary" />
-                    <span class="vm-display-name-text ellipsis">{{ containerDisplayName(row) || '-' }}</span>
-                    <q-badge v-if="row.template" outline color="primary" :label="gettext('Template')" />
+                    <button
+                      type="button"
+                      class="vm-display-name-text ellipsis"
+                      @click.stop="openDetail(scope.row)"
+                    >
+                      {{ containerDisplayName(scope.row) || '-' }}
+                    </button>
+                    <q-badge v-if="scope.row.template" outline color="primary" :label="gettext('Template')" />
                   </div>
                 </q-td>
               </template>
-              <template #body-cell-status="{ row }">
-                <q-td>
-                  <q-badge :color="statusColor(row.status)" :label="statusText(row.status)" />
+              <template #body-cell-status="scope">
+                <q-td :props="scope">
+                  <q-badge :color="statusColor(scope.row.status)" :label="statusText(scope.row.status)" />
                 </q-td>
               </template>
-              <template #body-cell-cpu="{ row }">
-                <q-td>
-                  <UsageProgress :value="cpuPercent(row)" />
+              <template #body-cell-cpu="scope">
+                <q-td :props="scope">
+                  <UsageProgress :percent="cpuPercent(scope.row)" />
                 </q-td>
               </template>
-              <template #body-cell-memory="{ row }">
-                <q-td>
-                  <UsageProgress :value="usagePercent(row.mem, row.maxmem)" />
+              <template #body-cell-memory="scope">
+                <q-td :props="scope">
+                  <UsageProgress :percent="usagePercent(scope.row.mem, scope.row.maxmem)" />
                 </q-td>
               </template>
-              <template #body-cell-disk="{ row }">
-                <q-td>
-                  <UsageProgress :value="usagePercent(row.disk, row.maxdisk)" />
+              <template #body-cell-disk="scope">
+                <q-td :props="scope">
+                  <UsageProgress :percent="usagePercent(scope.row.disk, scope.row.maxdisk)" />
                 </q-td>
               </template>
               <template #top-right>
@@ -699,6 +741,11 @@ onMounted(() => {
       :upid="taskUpid"
       :title="taskTitle"
     />
+    <CreateCtDialog
+      v-model="createDialogVisible"
+      @completed="reload"
+      @task="openTask($event.node, $event.upid, $event.title)"
+    />
   </div>
 </template>
 
@@ -716,8 +763,8 @@ onMounted(() => {
 }
 
 .vm-list-tree {
-  width: 280px;
-  min-width: 280px;
+  width: 340px;
+  min-width: 340px;
   background: #fff;
 }
 
@@ -735,12 +782,25 @@ onMounted(() => {
 
 .vm-list-tree__body {
   height: calc(100vh - 220px);
-  padding: 8px 6px;
+  padding: 10px 8px;
 }
 
 .vm-tree-node {
+  min-height: 30px;
   min-width: 0;
+  padding-right: 8px;
   font-size: 13px;
+}
+
+.vm-tree-node__link {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--q-primary);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 
 .vm-list-main {
@@ -770,13 +830,33 @@ onMounted(() => {
 
 .vm-display-name-text {
   max-width: 220px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: #2563eb;
+  cursor: pointer;
+  font: inherit;
   font-weight: 500;
+  text-align: left;
 }
 
 .column-settings-btn :deep(.q-btn-dropdown__arrow),
 .column-settings-btn :deep(.q-btn-dropdown__arrow-container) {
   display: none;
+}
+
+:deep(.q-table__top) {
+  padding: 0 0 10px;
+}
+
+:deep(.q-table th),
+:deep(.q-table td) {
+  padding: 0 16px !important;
+}
+
+:deep(.q-table thead tr),
+:deep(.q-table tbody td) {
+  height: 40px;
 }
 
 @media (max-width: 900px) {

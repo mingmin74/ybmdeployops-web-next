@@ -318,7 +318,7 @@ body {
 
 .u-dense .q-field__control,
 .u-dense .q-field__marginal {
-  height: 30px !important;
+  // height: 30px !important;
 }
 
 .q-field--dense .q-field__control {
@@ -370,6 +370,6 @@ body {
   min-height: 50px !important;
 }
 
-.q-dialog__inner > div {
+.q-dialog__inner>div {
   border-radius: 0;
 }

@@ -207,6 +207,12 @@ const routes: RouteRecordRaw[] = [
         meta: { auth: true, title: 'Ct Container' },
       },
       {
+        path: 'computer/ct-container/:node/:vmid',
+        name: 'computer-ct-container-detail',
+        component: () => import('@/pages/computer/CtContainerDetailPage.vue'),
+        meta: { auth: true, title: 'Ct Container' },
+      },
+      {
         path: 'computer/images',
         name: 'computer-images',
         component: () => import('@/pages/computer/ImagesPage.vue'),

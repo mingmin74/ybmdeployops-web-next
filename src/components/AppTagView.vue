@@ -19,6 +19,10 @@ function routeTitle(nextRoute: RouteLocationNormalizedLoaded) {
     const vmid = String(nextRoute.params.vmid || '');
     return vmid ? `${gettext('Virtual Machine Details')} · ${vmid}` : gettext('Virtual Machine Details');
   }
+  if (nextRoute.name === 'computer-ct-container-detail') {
+    const vmid = String(nextRoute.params.vmid || '');
+    return vmid ? `${gettext('Container Details')} · ${vmid}` : gettext('Container Details');
+  }
   if (nextRoute.name === 'host-node-detail') {
     const nodeName = String(nextRoute.params.node || '');
     return nodeName ? `${gettext('Node Details')} · ${nodeName}` : gettext('Node Details');
