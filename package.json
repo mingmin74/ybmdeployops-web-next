@@ -6,6 +6,11 @@
   "author": "胡明明 <hmm@chinaybm.com>",
   "type": "module",
   "private": true,
+  "quasarCli": {
+    "quasarConfEnv": {
+      "file": ".env.development"
+    }
+  },
   "scripts": {
     "lint": "prettier --write \"**/*.{js,ts,vue,css,scss,html,md,json}\" --ignore-path .gitignore && eslint --fix -c ./eslint.config.js \"./src*/**/*.{ts,js,cjs,mjs,vue}\"",
     "lint:check": "prettier \"**/*.{js,ts,vue,css,scss,html,md,json}\" --ignore-path .gitignore && eslint -c ./eslint.config.js \"./src*/**/*.{ts,js,cjs,mjs,vue}\"",

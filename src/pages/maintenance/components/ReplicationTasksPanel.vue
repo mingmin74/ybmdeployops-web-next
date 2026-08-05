@@ -25,7 +25,8 @@ type Row = ReplicationTask & {
   durationText: string;
   rateText: string;
 };
-const props = withDefaults(defineProps<{ node?: string; vmid?: string; embedded?: boolean }>(), {
+const props = withDefaults(defineProps<{ node?: string; vmid?: string; guestType?: 'qemu' | 'lxc'; embedded?: boolean }>(), {
+  guestType: 'qemu',
   node: '',
   vmid: '',
   embedded: false,
@@ -172,7 +173,7 @@ async function loadInitial() {
     getClusterResources({ type: 'vm' }),
   ]);
   nodes.value = nodeResponse.data || [];
-  vms.value = (vmResponse.data || []).filter((item) => item.type === 'qemu' && !item.template);
+  vms.value = (vmResponse.data || []).filter((item) => item.type === props.guestType && !item.template);
   node.value = props.node || onlineNodes.value[0]?.node || nodes.value[0]?.node || '';
   await reload();
 }

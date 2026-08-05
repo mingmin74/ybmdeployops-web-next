@@ -4,7 +4,11 @@
 import { defineConfig } from '#q-app';
 
 export default defineConfig(() => {
-  const pveProxyTarget: string = process.env.VITE_PVE_PROXY_TARGET || 'https://192.168.1.228:8006';
+  const pveProxyTarget = import.meta.env.VITE_PVE_PROXY_TARGET;
+
+  if (!pveProxyTarget) {
+    throw new Error('Missing VITE_PVE_PROXY_TARGET in env file.');
+  }
 
   return {
     boot: ['locale', 'app-error'],
@@ -15,6 +19,10 @@ export default defineConfig(() => {
 
     build: {
       target: {},
+      env: {
+        clientPrefix: 'VITE_',
+        file: '.env.development',
+      },
       typescript: {
         strict: true,
         vueShim: true,

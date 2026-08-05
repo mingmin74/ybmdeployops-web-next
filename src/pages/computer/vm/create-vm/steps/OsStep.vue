@@ -37,6 +37,7 @@ const { isoImageName, stepContentHeight } = derived;
               :error="Boolean(validationErrors.isoStorage)"
               :error-message="validationErrors.isoStorage || ''"
               :label="gettext('Storage')"
+                class="q-field--with-bottom"
             />
             <SelectTable
               v-if="form.mediaType === 'iso'"
@@ -52,6 +53,7 @@ const { isoImageName, stepContentHeight } = derived;
               :error="Boolean(validationErrors.cdrom)"
               :error-message="validationErrors.cdrom || ''"
               :label="gettext('ISO image')"
+                class="q-field--with-bottom"
             />
             <q-select
               v-else

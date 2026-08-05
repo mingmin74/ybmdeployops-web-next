@@ -67,6 +67,7 @@ export default {
   'Memory Usage': '内存使用率',
   'Host Memory Usage': '主机内存使用率',
   'Virtual Machine Basic Information': '虚拟机基础信息',
+  'Container Basic Information': '容器基础信息',
   'Host Basic Information': '主机基础信息',
   'Server Load': '服务器负载',
   'IO Delay': 'IO 延迟',

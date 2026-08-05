@@ -30,7 +30,7 @@ const { selectedDevice, hasPendingChange, pendingValue } = useVmHardwareContext(
 </template>
 
 <style scoped lang="scss">
-.hardware-scroll { font-size: 13px; background: #fff; }
+.hardware-scroll { flex: 1 1 auto; height: 100%; font-size: 13px; background: #fff; }
 .hardware-list-panel { border-right: 0; }
 .hardware-list-row { min-height: 30px; align-items: center; border-bottom: 1px solid #eef0f3; transition: background-color 150ms ease-out; }
 .hardware-list-label { align-self: flex-start; padding-top: 6px; }

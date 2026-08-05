@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, shallowRef } from 'vue';
+import { computed, onMounted, onUnmounted, shallowRef, type Component } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getVmConfig, getVmCurrent } from '@/api/overview';
 import { runCtPowerCommand, type VmPowerCommand } from '@/api/vm';
@@ -9,6 +9,20 @@ import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
 import { toChineseStr } from '@/utils/unicode';
+import UsageProgress from '@/components/UsageProgress.vue';
+import { usagePercent } from '@/utils/format';
+import CtSummaryTab from '@/pages/computer/ct/CtSummaryTab.vue';
+import CtConsoleTab from '@/pages/computer/ct/CtConsoleTab.vue';
+import CtResourcesTab from '@/pages/computer/ct/CtResourcesTab.vue';
+import CtNetworkTab from '@/pages/computer/ct/CtNetworkTab.vue';
+import CtDnsTab from '@/pages/computer/ct/CtDnsTab.vue';
+import CtOptionsTab from '@/pages/computer/ct/CtOptionsTab.vue';
+import CtSnapshotsTab from '@/pages/computer/ct/CtSnapshotsTab.vue';
+import CtBackupTab from '@/pages/computer/ct/CtBackupTab.vue';
+import CtReplicationTab from '@/pages/computer/ct/CtReplicationTab.vue';
+import CtTaskHistoryTab from '@/pages/computer/ct/CtTaskHistoryTab.vue';
+import CtFirewallTab from '@/pages/computer/ct/CtFirewallTab.vue';
+import CtPermissionsTab from '@/pages/computer/ct/CtPermissionsTab.vue';
 
 type ContainerTab =
   | 'summary'
@@ -21,7 +35,6 @@ type ContainerTab =
   | 'backup'
   | 'replication'
   | 'tasks'
-  | 'monitor'
   | 'firewall'
   | 'permissions';
 
@@ -41,14 +54,15 @@ const taskUpid = shallowRef('');
 const taskTitle = shallowRef('');
 const powerCommandLoading = shallowRef(false);
 
-const name = computed(() => decodeContainerName(current.value.name || config.value.hostname || config.value.name) || vmid.value);
+const name = computed(
+  () =>
+    decodeContainerName(current.value.name || config.value.hostname || config.value.name) ||
+    vmid.value,
+);
 const status = computed(() => textValue(current.value.status) || 'unknown');
 const isTemplate = computed(() => Boolean(config.value.template));
 const vmCaps = computed(
   () => (session.caps as unknown as { vms?: Record<string, unknown> }).vms || {},
-);
-const nodeCaps = computed(
-  () => (session.caps as unknown as { nodes?: Record<string, unknown> }).nodes || {},
 );
 const canViewConsole = computed(() => Boolean(vmCaps.value['VM.Console']) && !isTemplate.value);
 const canViewBackup = computed(() => Boolean(vmCaps.value['VM.Backup']));
@@ -61,7 +75,6 @@ const canViewSnapshots = computed(
       vmCaps.value['VM.Audit'],
     ),
 );
-const canViewMonitor = computed(() => Boolean(nodeCaps.value['Sys.Audit']) && !isTemplate.value);
 const canViewFirewall = computed(() => Boolean(vmCaps.value['VM.Audit']));
 const canManagePermissions = computed(() => Boolean(vmCaps.value['Permissions.Modify']));
 const canPowerManage = computed(() => Boolean(vmCaps.value['VM.PowerMgmt']) && !isTemplate.value);
@@ -72,19 +85,57 @@ const canSuspend = computed(() => canPowerManage.value && status.value === 'runn
 const canResume = computed(() => canPowerManage.value && status.value === 'suspended');
 const visibleTabs = computed<Array<{ name: ContainerTab; icon: string; label: string }>>(() => [
   { name: 'summary', icon: 'summarize', label: gettext('Summary') },
-  ...(canViewConsole.value ? [{ name: 'console' as const, icon: 'terminal', label: gettext('Console') }] : []),
+  ...(canViewConsole.value
+    ? [{ name: 'console' as const, icon: 'terminal', label: gettext('Console') }]
+    : []),
   { name: 'resources', icon: 'memory', label: gettext('Resources') },
   { name: 'network', icon: 'lan', label: gettext('Network') },
   { name: 'dns', icon: 'dns', label: 'DNS' },
   { name: 'options', icon: 'settings', label: gettext('Options') },
-  ...(canViewSnapshots.value ? [{ name: 'snapshots' as const, icon: 'camera', label: gettext('Snapshots') }] : []),
-  ...(canViewBackup.value ? [{ name: 'backup' as const, icon: 'backup', label: gettext('Backup') }] : []),
-  ...(canViewBackup.value ? [{ name: 'replication' as const, icon: 'sync', label: gettext('Replication') }] : []),
+  ...(canViewSnapshots.value
+    ? [{ name: 'snapshots' as const, icon: 'camera', label: gettext('Snapshots') }]
+    : []),
+  ...(canViewBackup.value
+    ? [{ name: 'backup' as const, icon: 'backup', label: gettext('Backup') }]
+    : []),
+  ...(canViewBackup.value
+    ? [{ name: 'replication' as const, icon: 'sync', label: gettext('Replication') }]
+    : []),
   { name: 'tasks', icon: 'history', label: gettext('Task History') },
-  ...(canViewMonitor.value ? [{ name: 'monitor' as const, icon: 'monitor', label: gettext('Monitor') }] : []),
-  ...(canViewFirewall.value ? [{ name: 'firewall' as const, icon: 'security', label: gettext('Firewall') }] : []),
-  ...(canManagePermissions.value ? [{ name: 'permissions' as const, icon: 'manage_accounts', label: gettext('Permissions') }] : []),
+  ...(canViewFirewall.value
+    ? [{ name: 'firewall' as const, icon: 'security', label: gettext('Firewall') }]
+    : []),
+  ...(canManagePermissions.value
+    ? [{ name: 'permissions' as const, icon: 'manage_accounts', label: gettext('Permissions') }]
+    : []),
 ]);
+
+const detailTabComponents: Record<ContainerTab, Component> = {
+  summary: CtSummaryTab,
+  console: CtConsoleTab,
+  resources: CtResourcesTab,
+  network: CtNetworkTab,
+  dns: CtDnsTab,
+  options: CtOptionsTab,
+  snapshots: CtSnapshotsTab,
+  backup: CtBackupTab,
+  replication: CtReplicationTab,
+  tasks: CtTaskHistoryTab,
+  firewall: CtFirewallTab,
+  permissions: CtPermissionsTab,
+};
+
+function detailTabProps(tabName: ContainerTab): Record<string, unknown> {
+  const common = { node: node.value, vmid: vmid.value };
+  if (tabName === 'summary') return common;
+  if (tabName === 'console') return { ...common, name: name.value };
+  if (tabName === 'resources' || tabName === 'options') return { ...common, config: config.value };
+  if (tabName === 'network') return { ...common, config: config.value };
+  if (tabName === 'dns') return { ...common, config: config.value };
+  if (tabName === 'snapshots') return { ...common, running: status.value === 'running' };
+  if (tabName === 'permissions') return { vmid: vmid.value };
+  return common;
+}
 
 function statusText(value: string) {
   if (value === 'running') return gettext('Running');
@@ -182,6 +233,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (refreshTimer.value) window.clearInterval(refreshTimer.value);
 });
+
 </script>
 
 <template>
@@ -221,22 +273,47 @@ onUnmounted(() => {
             :disable="!canPowerManage || powerCommandLoading"
           >
             <q-list dense>
-              <q-item v-close-popup clickable :disable="!canStart" @click="runPowerCommand('start')">
+              <q-item
+                v-close-popup
+                clickable
+                :disable="!canStart"
+                @click="runPowerCommand('start')"
+              >
                 <q-item-section>{{ gettext('Start') }}</q-item-section>
               </q-item>
-              <q-item v-close-popup clickable :disable="!canShutdown" @click="runPowerCommand('shutdown')">
+              <q-item
+                v-close-popup
+                clickable
+                :disable="!canShutdown"
+                @click="runPowerCommand('shutdown')"
+              >
                 <q-item-section>{{ gettext('Shutdown') }}</q-item-section>
               </q-item>
               <q-item v-close-popup clickable :disable="!canStop" @click="runPowerCommand('stop')">
                 <q-item-section class="text-red">{{ gettext('Stop') }}</q-item-section>
               </q-item>
-              <q-item v-close-popup clickable :disable="!canShutdown" @click="runPowerCommand('reboot')">
+              <q-item
+                v-close-popup
+                clickable
+                :disable="!canShutdown"
+                @click="runPowerCommand('reboot')"
+              >
                 <q-item-section>{{ gettext('Reboot') }}</q-item-section>
               </q-item>
-              <q-item v-close-popup clickable :disable="!canSuspend" @click="runPowerCommand('suspend')">
+              <q-item
+                v-close-popup
+                clickable
+                :disable="!canSuspend"
+                @click="runPowerCommand('suspend')"
+              >
                 <q-item-section>{{ gettext('Suspend') }}</q-item-section>
               </q-item>
-              <q-item v-close-popup clickable :disable="!canResume" @click="runPowerCommand('resume')">
+              <q-item
+                v-close-popup
+                clickable
+                :disable="!canResume"
+                @click="runPowerCommand('resume')"
+              >
                 <q-item-section>{{ gettext('Resume') }}</q-item-section>
               </q-item>
             </q-list>
@@ -292,12 +369,19 @@ onUnmounted(() => {
       <q-separator />
 
       <q-tab-panels v-model="tab" animated>
-        <q-tab-panel v-for="item in visibleTabs" :key="item.name" :name="item.name" class="q-pa-none">
-          <div class="ct-placeholder">
-            <q-icon :name="item.icon" size="32px" color="primary" />
-            <div class="ct-placeholder__title">{{ item.label }}</div>
-            <div class="ct-placeholder__text">{{ gettext('Coming Soon') }}</div>
-          </div>
+        <q-tab-panel
+          v-for="item in visibleTabs"
+          :key="item.name"
+          :name="item.name"
+          class="q-pa-none"
+        >
+          <component
+            :is="detailTabComponents[item.name]"
+            v-bind="detailTabProps(item.name)"
+            @updated="reload"
+            @task="openTask"
+          />
+
         </q-tab-panel>
       </q-tab-panels>
     </section>

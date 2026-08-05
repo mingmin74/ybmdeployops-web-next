@@ -522,34 +522,25 @@ onMounted(() => {
     <q-card class="no-shadow no-border-radius vm-list-card">
       <q-card-section class="q-pa-md">
         <div class="row no-wrap vm-list-layout">
-          <aside class="vm-list-tree">
-            <div class="vm-list-tree__header">
-              <div class="vm-list-title">{{ gettext('Ct Container') }}</div>
-              <q-input v-model="treeSearch" dense outlined square clearable debounce="200" :placeholder="gettext('Search')">
-                <template #prepend>
-                  <q-icon name="search" size="18px" />
-                </template>
-              </q-input>
-            </div>
-            <q-separator />
-            <q-scroll-area class="vm-list-tree__body">
-              <q-tree
-                :nodes="filteredTreeNodes"
-                node-key="key"
-                dense
-                no-connectors
-                :expanded="treeExpanded"
-                :selected="selectedTreeNode"
-                selected-color="primary"
-                @update:selected="onTreeSelection"
-                @update:expanded="treeExpanded = [...$event]"
-              >
-                <template #default-header="{ node }">
-                  <div class="row items-center no-wrap full-width vm-tree-node">
+          <aside class="vm-resource-tree">
+            <q-input v-model="treeSearch" dense outlined square clearable debounce="200" class="vm-tree-search" :placeholder="gettext('Search')">
+              <template #append><q-icon name="search" /></template>
+            </q-input>
+            <q-tree
+              v-model:selected="selectedTreeNode"
+              v-model:expanded="treeExpanded"
+              :nodes="filteredTreeNodes"
+              node-key="key"
+              label-key="label"
+              selected-color="primary"
+              @update:selected="onTreeSelection"
+            >
+              <template #default-header="{ node }">
+                  <div class="row items-center no-wrap vm-tree-node">
                     <q-icon
                       :name="node.kind === 'node' ? 'dns' : node.kind === 'category' ? 'folder' : 'inventory_2'"
-                      size="18px"
-                      class="q-mr-sm"
+                      size="16px"
+                      class="q-mr-xs"
                       :color="node.kind === 'container' ? statusColor(node.status) : 'grey-7'"
                     />
                     <button
@@ -562,53 +553,11 @@ onMounted(() => {
                     </button>
                     <span v-else class="ellipsis">{{ node.label }}</span>
                   </div>
-                </template>
-              </q-tree>
-            </q-scroll-area>
+              </template>
+            </q-tree>
           </aside>
 
-          <q-separator vertical />
-
-          <main class="vm-list-main">
-            <q-card-section class="vm-list-toolbar q-pa-none">
-              <div class="row items-center q-gutter-sm no-wrap">
-                <q-btn-dropdown no-caps outline size="12px" color="primary" class="u-button" :label="`${gettext('Bulk')} ${gettext('Actions')}`" :disable="!selectedRows.length || commandLoading">
-                  <q-list dense>
-                    <q-item v-close-popup clickable :disable="!canBulkPower" @click="bulkCommand('start')">
-                      <q-item-section>{{ gettext('Bulk Start') }}</q-item-section>
-                    </q-item>
-                    <q-item v-close-popup clickable :disable="!canBulkPower" @click="bulkCommand('shutdown')">
-                      <q-item-section>{{ gettext('Bulk Shutdown') }}</q-item-section>
-                    </q-item>
-                    <q-item v-close-popup clickable :disable="!canBulkPower" @click="bulkCommand('stop')">
-                      <q-item-section>{{ gettext('Bulk Stop') }}</q-item-section>
-                    </q-item>
-                  </q-list>
-                </q-btn-dropdown>
-                <q-btn no-caps outline size="12px" color="primary" class="u-button" icon="add" :label="gettext('Create')" :disable="!canCreateCt" @click="openCreateDialog" v-if="canCreateCt" />
-                <q-btn no-caps outline size="12px" color="primary" class="u-button" icon="sell" :label="gettext('Edit Tags')" :disable="!selectedRows.length" @click="openTags" />
-                <q-space />
-                <q-input v-model="search" dense outlined square clearable debounce="250" class="vm-search" :placeholder="gettext('Search')">
-                  <template #prepend>
-                    <q-icon name="search" size="18px" />
-                  </template>
-                </q-input>
-                <q-btn flat dense round icon="refresh" :loading="loading" @click="reload">
-                  <q-tooltip>{{ gettext('Refresh') }}</q-tooltip>
-                </q-btn>
-                <q-btn-dropdown flat dense round icon="settings" class="column-settings-btn">
-                  <q-list dense>
-                    <q-item v-for="column in columns" :key="column.name" tag="label" clickable>
-                      <q-item-section side>
-                        <q-checkbox v-model="visibleColumnNames" :val="column.name" dense />
-                      </q-item-section>
-                      <q-item-section>{{ column.label }}</q-item-section>
-                    </q-item>
-                  </q-list>
-                </q-btn-dropdown>
-              </div>
-            </q-card-section>
-
+          <section class="vm-table-panel">
             <q-table
               v-model:selected="selectedRows"
               v-model:pagination="pagination"
@@ -626,6 +575,47 @@ onMounted(() => {
               binary-state-sort
               @row-click="toggleRowSelection"
             >
+              <template #top>
+                <div class="full-width row items-center q-gutter-sm">
+                  <q-btn v-if="canCreateCt" no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Create')" :disable="!canCreateCt" @click="openCreateDialog" />
+                  <q-btn-dropdown no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Power')" :disable="!selectedContainer || commandLoading">
+                    <q-list dense>
+                      <q-item v-close-popup clickable :disable="!canStart" @click="requestCommand('start')"><q-item-section>{{ gettext('Start') }}</q-item-section></q-item>
+                      <q-item v-close-popup clickable :disable="!canShutdown" @click="requestCommand('shutdown')"><q-item-section>{{ gettext('Shutdown') }}</q-item-section></q-item>
+                      <q-item v-close-popup clickable :disable="!canStop" @click="requestCommand('stop')"><q-item-section class="text-red">{{ gettext('Stop') }}</q-item-section></q-item>
+                      <q-item v-close-popup clickable :disable="!canReboot" @click="requestCommand('reboot')"><q-item-section>{{ gettext('Reboot') }}</q-item-section></q-item>
+                      <q-item v-close-popup clickable :disable="!canSuspend" @click="requestCommand('suspend')"><q-item-section>{{ gettext('Suspend') }}</q-item-section></q-item>
+                      <q-item v-close-popup clickable :disable="!canResume" @click="requestCommand('resume')"><q-item-section>{{ gettext('Resume') }}</q-item-section></q-item>
+                    </q-list>
+                  </q-btn-dropdown>
+                  <q-btn-dropdown no-caps outline size="12px" color="primary" class="u-button" :label="`${gettext('Bulk')} ${gettext('Actions')}`" :disable="!selectedRows.length || commandLoading">
+                    <q-list dense>
+                      <q-item v-close-popup clickable :disable="!canBulkPower" @click="bulkCommand('start')"><q-item-section>{{ gettext('Bulk Start') }}</q-item-section></q-item>
+                      <q-item v-close-popup clickable :disable="!canBulkPower" @click="bulkCommand('shutdown')"><q-item-section>{{ gettext('Bulk Shutdown') }}</q-item-section></q-item>
+                      <q-item v-close-popup clickable :disable="!canBulkPower" @click="bulkCommand('stop')"><q-item-section>{{ gettext('Bulk Stop') }}</q-item-section></q-item>
+                    </q-list>
+                  </q-btn-dropdown>
+                  <q-btn-dropdown no-caps outline size="12px" color="primary" class="u-button" :label="gettext('More')" :disable="!selectedContainer || commandLoading">
+                    <q-list dense>
+                      <q-item v-close-popup clickable :disable="!selectedRows.length" @click="openTags"><q-item-section>{{ gettext('Edit Tags') }}</q-item-section></q-item>
+                      <q-item v-close-popup clickable :disable="!canBackup" @click="openBackup"><q-item-section>{{ gettext('Backup now') }}</q-item-section></q-item>
+                    </q-list>
+                  </q-btn-dropdown>
+                  <q-btn flat dense round color="primary" icon="refresh" :aria-label="gettext('Refresh')" :loading="loading" @click="reload" />
+                  <q-space />
+                  <q-input v-model="search" borderless dense debounce="300" class="vm-search" :placeholder="gettext('Search')">
+                    <template #append><q-icon name="search" /></template>
+                  </q-input>
+                  <q-btn-dropdown no-caps flat dense round icon="settings" class="q-ml-sm column-settings-btn" :aria-label="gettext('Columns')">
+                    <q-list dense>
+                      <q-item v-for="column in columns" :key="column.name" tag="label">
+                        <q-item-section avatar><q-checkbox v-model="visibleColumnNames" :val="column.name" dense /></q-item-section>
+                        <q-item-section>{{ column.label }}</q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-btn-dropdown>
+                </div>
+              </template>
               <template #body-cell-name="scope">
                 <q-td :props="scope">
                   <div class="vm-name-cell">
@@ -661,33 +651,8 @@ onMounted(() => {
                   <UsageProgress :percent="usagePercent(scope.row.disk, scope.row.maxdisk)" />
                 </q-td>
               </template>
-              <template #top-right>
-                <div class="row items-center q-gutter-xs">
-                  <q-btn dense flat round icon="play_arrow" color="positive" :disable="!canStart" @click.stop="requestCommand('start')">
-                    <q-tooltip>{{ gettext('Start') }}</q-tooltip>
-                  </q-btn>
-                  <q-btn dense flat round icon="power_settings_new" color="warning" :disable="!canShutdown" @click.stop="requestCommand('shutdown')">
-                    <q-tooltip>{{ gettext('Shutdown') }}</q-tooltip>
-                  </q-btn>
-                  <q-btn dense flat round icon="stop" color="negative" :disable="!canStop" @click.stop="requestCommand('stop')">
-                    <q-tooltip>{{ gettext('Stop') }}</q-tooltip>
-                  </q-btn>
-                  <q-btn dense flat round icon="restart_alt" :disable="!canReboot" @click.stop="requestCommand('reboot')">
-                    <q-tooltip>{{ gettext('Reboot') }}</q-tooltip>
-                  </q-btn>
-                  <q-btn dense flat round icon="pause" :disable="!canSuspend" @click.stop="requestCommand('suspend')">
-                    <q-tooltip>{{ gettext('Suspend') }}</q-tooltip>
-                  </q-btn>
-                  <q-btn dense flat round icon="play_circle" :disable="!canResume" @click.stop="requestCommand('resume')">
-                    <q-tooltip>{{ gettext('Resume') }}</q-tooltip>
-                  </q-btn>
-                  <q-btn dense flat round icon="backup" :disable="!canBackup" @click.stop="openBackup">
-                    <q-tooltip>{{ gettext('Backup') }}</q-tooltip>
-                  </q-btn>
-                </div>
-              </template>
             </q-table>
-          </main>
+          </section>
         </div>
       </q-card-section>
     </q-card>
@@ -751,45 +716,39 @@ onMounted(() => {
 
 <style scoped>
 .vm-list-page {
-  min-height: calc(100vh - 86px);
+  min-height: calc(100vh - 120px);
 }
 
 .vm-list-card {
-  border: 1px solid #e5e7eb;
+  min-height: calc(100vh - 120px);
 }
 
 .vm-list-layout {
-  min-height: calc(100vh - 132px);
+  align-items: stretch;
+  min-height: calc(100vh - 152px);
 }
 
-.vm-list-tree {
-  width: 340px;
-  min-width: 340px;
-  background: #fff;
+.vm-resource-tree {
+  --vm-resource-tree-width: 220px;
+  box-sizing: border-box;
+  width: calc(var(--vm-resource-tree-width) + 13px);
+  flex: 0 0 calc(var(--vm-resource-tree-width) + 13px);
+  max-height: calc(100vh - 152px);
+  padding-right: 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-right: 1px solid #cccccc;
 }
 
-.vm-list-tree__header {
-  padding: 0 12px 12px;
-}
-
-.vm-list-title {
-  height: 36px;
-  line-height: 36px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.vm-list-tree__body {
-  height: calc(100vh - 220px);
-  padding: 10px 8px;
+.vm-tree-search,
+.vm-resource-tree :deep(.q-tree) {
+  width: 100%;
 }
 
 .vm-tree-node {
-  min-height: 30px;
+  max-width: var(--vm-resource-tree-width);
   min-width: 0;
-  padding-right: 8px;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .vm-tree-node__link {
@@ -803,22 +762,18 @@ onMounted(() => {
   text-align: left;
 }
 
-.vm-list-main {
+.vm-table-panel {
   min-width: 0;
   flex: 1;
-  padding-left: 16px;
-}
-
-.vm-list-toolbar {
-  margin-bottom: 12px;
+  padding-left: 12px;
 }
 
 .vm-search {
-  width: 240px;
+  width: 210px;
 }
 
 .vm-table {
-  height: calc(100vh - 190px);
+  height: auto;
 }
 
 .vm-name-cell {
@@ -859,27 +814,8 @@ onMounted(() => {
   height: 40px;
 }
 
-@media (max-width: 900px) {
-  .vm-list-layout {
-    flex-direction: column;
-  }
-
-  .vm-list-tree {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .vm-list-tree__body {
-    height: 220px;
-  }
-
-  .vm-list-main {
-    padding-left: 0;
-    padding-top: 12px;
-  }
-
-  .vm-search {
-    width: 180px;
-  }
+:deep(.q-field__control),
+:deep(.q-field__marginal) {
+  height: 28px;
 }
 </style>

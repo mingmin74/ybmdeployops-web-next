@@ -16,7 +16,10 @@ import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
 
-const props = defineProps<{ node: string; vmid: string; running: boolean }>();
+const props = withDefaults(
+  defineProps<{ node: string; vmid: string; running: boolean; guestType?: 'qemu' | 'lxc' }>(),
+  { guestType: 'qemu' },
+);
 const emit = defineEmits<{ task: [node: string, upid: string, title: string] }>();
 const session = useSessionStore();
 
@@ -57,7 +60,9 @@ const canTakeSnapshot = computed(() => canSnapshot.value && snapshotFeature.valu
 const canRollbackPermission = computed(() => Boolean(vmCaps.value['VM.Snapshot.Rollback']));
 
 const selected = computed(() =>
-  treeRows.value.flatMap((row) => flatten(row)).find((row) => row.displayName === selectedName.value),
+  treeRows.value
+    .flatMap((row) => flatten(row))
+    .find((row) => row.displayName === selectedName.value),
 );
 const selectedIsSnapshot = computed(() => Boolean(selected.value && !selected.value.isCurrent));
 const canRollback = computed(() => canRollbackPermission.value && selectedIsSnapshot.value);
@@ -84,7 +89,7 @@ const treeRows = computed(() => {
     });
   });
 
-  map.forEach((row, name) => {
+  map.forEach((row) => {
     const parentName = textValue(row.parent);
     const parent = parentName ? map.get(parentName) : undefined;
 
@@ -190,7 +195,7 @@ async function loadFeature() {
   }
 
   try {
-    const response = await getVmSnapshotFeature(props.node, props.vmid);
+    const response = await getVmSnapshotFeature(props.node, props.vmid, props.guestType);
     snapshotFeature.value = Boolean(response.data?.hasFeature);
   } catch {
     snapshotFeature.value = false;
@@ -201,7 +206,10 @@ async function reload() {
   if (!props.node || !props.vmid) return;
   loading.value = true;
   try {
-    const [snapshotResponse] = await Promise.all([getVmSnapshots(props.node, props.vmid), loadFeature()]);
+    const [snapshotResponse] = await Promise.all([
+      getVmSnapshots(props.node, props.vmid, props.guestType),
+      loadFeature(),
+    ]);
     snapshots.value = snapshotResponse.data || [];
 
     const nextExpanded = new Set(expandedNames.value);
@@ -226,7 +234,7 @@ async function loadGuestAgent() {
   if (!props.node || !props.vmid || !props.running) return;
 
   try {
-    const response = await getVmConfig(props.node, props.vmid, 'qemu', { current: 1 });
+    const response = await getVmConfig(props.node, props.vmid, props.guestType, { current: 1 });
     guestAgentEnabled.value = isAgentEnabled(response.data?.agent);
   } catch {
     guestAgentEnabled.value = false;
@@ -248,11 +256,16 @@ async function create() {
   if (!snapname) return;
   loading.value = true;
   try {
-    const response = await createVmSnapshot(props.node, props.vmid, {
-      snapname,
-      description: form.description.trim() || undefined,
-      vmstate: form.vmstate ? 1 : 0,
-    });
+    const response = await createVmSnapshot(
+      props.node,
+      props.vmid,
+      {
+        snapname,
+        description: form.description.trim() || undefined,
+        vmstate: form.vmstate ? 1 : 0,
+      },
+      props.guestType,
+    );
     createVisible.value = false;
     emit('task', props.node, String(response.data || ''), gettext('Take Snapshot'));
     await reload();
@@ -262,7 +275,10 @@ async function create() {
 }
 
 function confirm(nextAction: 'rollback' | 'delete') {
-  if ((nextAction === 'rollback' && !canRollback.value) || (nextAction === 'delete' && !canRemove.value)) {
+  if (
+    (nextAction === 'rollback' && !canRollback.value) ||
+    (nextAction === 'delete' && !canRemove.value)
+  ) {
     return;
   }
 
@@ -275,9 +291,10 @@ async function openEdit() {
   if (!snapname || !canEditView.value) return;
   loading.value = true;
   try {
-    const response = await getVmSnapshotConfig(props.node, props.vmid, snapname);
+    const response = await getVmSnapshotConfig(props.node, props.vmid, snapname, props.guestType);
     editConfig.value = response.data || {};
-    editDescription.value = textValue(response.data?.description) || textValue(selected.value?.description);
+    editDescription.value =
+      textValue(response.data?.description) || textValue(selected.value?.description);
     editVisible.value = true;
   } finally {
     loading.value = false;
@@ -289,9 +306,15 @@ async function saveEdit() {
   if (!canSnapshot.value || !snapname) return;
   loading.value = true;
   try {
-    await updateVmSnapshotConfig(props.node, props.vmid, snapname, {
-      description: editDescription.value,
-    });
+    await updateVmSnapshotConfig(
+      props.node,
+      props.vmid,
+      snapname,
+      {
+        description: editDescription.value,
+      },
+      props.guestType,
+    );
     editVisible.value = false;
     await reload();
   } finally {
@@ -306,8 +329,8 @@ async function runAction() {
   try {
     const response =
       action.value === 'rollback'
-        ? await rollbackVmSnapshot(props.node, props.vmid, snapname)
-        : await deleteVmSnapshot(props.node, props.vmid, snapname);
+        ? await rollbackVmSnapshot(props.node, props.vmid, snapname, props.guestType)
+        : await deleteVmSnapshot(props.node, props.vmid, snapname, props.guestType);
     actionVisible.value = false;
     emit(
       'task',
@@ -437,7 +460,10 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
 
     <q-dialog v-model="createVisible" persistent>
       <UWindow :title="`VM ${vmid} ${gettext('Snapshot')}`" width="450px" :loading="loading">
-        <q-form class="snapshot-dialog-form u-dense u-border q-ma-sm q-pa-md u-hidden-error" @submit.prevent="create">
+        <q-form
+          class="snapshot-dialog-form u-dense u-border q-ma-sm q-pa-md u-hidden-error"
+          @submit.prevent="create"
+        >
           <q-input
             v-model="form.snapname"
             dense
@@ -494,14 +520,15 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
     </q-dialog>
 
     <q-dialog v-model="editVisible" persistent>
-      <UWindow :title="`${gettext('Snapshot')} ${selectedSnapshotName}`" width="620px" :loading="loading">
-        <div class="snapshot-dialog-form snapshot-edit-form u-dense u-border q-ma-sm q-pa-md u-hidden-error">
-          <q-input
-            :model-value="selectedSnapshotName"
-            dense
-            readonly
-            :label="gettext('Name')"
-          />
+      <UWindow
+        :title="`${gettext('Snapshot')} ${selectedSnapshotName}`"
+        width="620px"
+        :loading="loading"
+      >
+        <div
+          class="snapshot-dialog-form snapshot-edit-form u-dense u-border q-ma-sm q-pa-md u-hidden-error"
+        >
+          <q-input :model-value="selectedSnapshotName" dense readonly :label="gettext('Name')" />
           <q-input
             :model-value="formatTime(editConfig.snaptime)"
             dense
@@ -562,12 +589,18 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
           <template v-if="action === 'rollback'">
             <div>
               {{ gettext('Are you sure you want to rollback to snapshot') }}
-              <strong>{{ selectedSnapshotName }}</strong>?
+              <strong>{{ selectedSnapshotName }}</strong
+              >?
             </div>
             <div class="q-mt-sm text-negative">{{ gettext('Current state will be lost.') }}</div>
           </template>
           <template v-else>
-            {{ gettext('Are you sure you want to remove entry {0}').replace('{0}', `'${selectedSnapshotName}'`) }}
+            {{
+              gettext('Are you sure you want to remove entry {0}').replace(
+                '{0}',
+                `'${selectedSnapshotName}'`,
+              )
+            }}
           </template>
         </div>
         <template #foot>
@@ -597,8 +630,14 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
 </template>
 
 <style scoped lang="scss">
-.vm-snapshots-tab { padding: 8px; font-size: 13px; }
-.snapshots-toolbar { margin-top: 0; margin-bottom: 4px; }
+.vm-snapshots-tab {
+  padding: 8px;
+  font-size: 13px;
+}
+.snapshots-toolbar {
+  margin-top: 0;
+  margin-bottom: 4px;
+}
 .snapshot-feature-warning {
   display: flex;
   align-items: center;
@@ -630,9 +669,16 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
   color: #334155;
   border-bottom: 1px solid #eef0f3;
 }
-.snapshot-tree-body-row:hover { background: #f4f8fc; }
-.snapshot-tree-body-row.is-selected { background: #e6f1fb; color: #1f4f78; }
-.snapshot-tree-body-row.is-current { font-weight: 500; }
+.snapshot-tree-body-row:hover {
+  background: #f4f8fc;
+}
+.snapshot-tree-body-row.is-selected {
+  background: #e6f1fb;
+  color: #1f4f78;
+}
+.snapshot-tree-body-row.is-current {
+  font-weight: 500;
+}
 .snapshot-name-cell,
 .snapshot-ram-cell,
 .snapshot-status-cell,
@@ -643,17 +689,40 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.snapshot-name-content { display: flex; align-items: center; min-width: 0; }
-.snapshot-expander { width: 20px; height: 20px; margin-right: 2px; color: #52606d; }
-.snapshot-expander-placeholder { display: inline-block; width: 22px; height: 20px; flex: 0 0 22px; }
-.snapshot-row-icon { flex: 0 0 auto; margin-right: 6px; color: #64748b; }
+.snapshot-name-content {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.snapshot-expander {
+  width: 20px;
+  height: 20px;
+  margin-right: 2px;
+  color: #52606d;
+}
+.snapshot-expander-placeholder {
+  display: inline-block;
+  width: 22px;
+  height: 20px;
+  flex: 0 0 22px;
+}
+.snapshot-row-icon {
+  flex: 0 0 auto;
+  margin-right: 6px;
+  color: #64748b;
+}
 .snapshot-row-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.snapshot-empty { padding: 16px; color: #6b7280; font-size: 13px; text-align: center; }
+.snapshot-empty {
+  padding: 16px;
+  color: #6b7280;
+  font-size: 13px;
+  text-align: center;
+}
 .snapshot-dialog-form {
   display: grid;
   gap: 12px;

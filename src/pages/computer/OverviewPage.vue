@@ -17,7 +17,7 @@ import vmOverviewIcon from '@/assets/overview/left_icon.png';
 import lxcOverviewIcon from '@/assets/overview/left4.png';
 import { gettext } from '@/locale';
 import { formatBytes, textValue, usedPercent } from '@/utils/pveFormat';
-import { progressColor } from '@/utils/format';
+import { resourceProgressColor } from '@/utils/format';
 
 type TimeOption = {
   label: string;
@@ -33,6 +33,7 @@ type NetworkInterface = {
 const props = defineProps<{
   fixedNode?: string;
   fixedVmid?: string;
+  fixedResourceType?: 'qemu' | 'lxc';
   hideVmSelector?: boolean;
 }>();
 
@@ -116,8 +117,8 @@ const vmColumns = computed<QTableColumn<PveRecord>[]>(() => [
 
 const isFixedVm = computed(() => Boolean(props.fixedNode && props.fixedVmid));
 const fixedVm = computed<PveRecord>(() => ({
-  id: `qemu/${props.fixedVmid || ''}`,
-  type: 'qemu',
+  id: `${props.fixedResourceType || 'qemu'}/${props.fixedVmid || ''}`,
+  type: props.fixedResourceType || 'qemu',
   node: props.fixedNode,
   vmid: props.fixedVmid,
 }));
@@ -129,7 +130,12 @@ const selectedVm = computed(
     {},
 );
 const selectedType = computed(() =>
-  isFixedVm.value || selectedVm.value.type !== 'lxc' ? 'qemu' : 'lxc',
+  isFixedVm.value ? props.fixedResourceType || 'qemu' : selectedVm.value.type === 'lxc' ? 'lxc' : 'qemu',
+);
+const basicInformationTitle = computed(() =>
+  selectedType.value === 'lxc'
+    ? gettext('Container Basic Information')
+    : gettext('Virtual Machine Basic Information'),
 );
 const overviewIllustration = computed(() =>
   selectedType.value === 'lxc' ? lxcOverviewIcon : vmOverviewIcon,
@@ -597,7 +603,7 @@ onUnmounted(clearTimers);
       <q-card class="overview-panel base-info-panel no-shadow no-border-radius no-margin">
         <q-card-section class="panel-section">
           <div class="panel-header">
-            <span>{{ gettext('Virtual Machine Basic Information') }}</span>
+            <span>{{ basicInformationTitle }}</span>
             <span class="panel-subtitle">{{ selectedType.toUpperCase() }}</span>
           </div>
           <div class="base-info-content">
@@ -649,10 +655,10 @@ onUnmounted(clearTimers);
               <q-circular-progress
                 show-value
                 class="resource-card-progress"
-                size="68px"
+                size="80px"
                 :thickness="0.18"
                 :value="cpuPercent"
-                :color="progressColor(cpuPercent)"
+                :color="resourceProgressColor(cpuPercent)"
                 track-color="blue-grey-1"
               >
                 {{ cpuPercent.toFixed(0) }}%
@@ -668,10 +674,10 @@ onUnmounted(clearTimers);
               <q-circular-progress
                 show-value
                 class="resource-card-progress"
-                size="68px"
+                size="80px"
                 :thickness="0.18"
                 :value="memPercent"
-                :color="progressColor(memPercent)"
+                :color="resourceProgressColor(memPercent)"
                 track-color="blue-grey-1"
               >
                 {{ memPercent.toFixed(0) }}%
@@ -687,10 +693,10 @@ onUnmounted(clearTimers);
               <q-circular-progress
                 show-value
                 class="resource-card-progress"
-                size="68px"
+                size="80px"
                 :thickness="0.18"
                 :value="diskPercent"
-                :color="progressColor(diskPercent)"
+                :color="resourceProgressColor(diskPercent)"
                 track-color="blue-grey-1"
               >
                 {{ diskPercent.toFixed(0) }}%
@@ -706,10 +712,10 @@ onUnmounted(clearTimers);
               <q-circular-progress
                 show-value
                 class="resource-card-progress"
-                size="68px"
+                size="80px"
                 :thickness="0.18"
                 :value="hostMemPercent"
-                :color="progressColor(hostMemPercent)"
+                :color="resourceProgressColor(hostMemPercent)"
                 track-color="blue-grey-1"
               >
                 {{ hostMemPercent.toFixed(0) }}%
@@ -1175,7 +1181,7 @@ onUnmounted(clearTimers);
 }
 
 .resource-card-compare {
-  padding-right: 82px;
+  padding-right: 96px;
 }
 
 .resource-card-compare .resource-card-title {

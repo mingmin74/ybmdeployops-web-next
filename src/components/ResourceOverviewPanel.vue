@@ -11,7 +11,7 @@ import { getClusterResources } from '@/api/resources';
 import { getNodeRrd, getNodeStatus, getStorageRrd, getVmCurrent, getVmRrd } from '@/api/overview';
 import { gettext } from '@/locale';
 import { formatBytes, textValue, usedPercent } from '@/utils/pveFormat';
-import { progressColor } from '@/utils/format';
+import { resourceProgressColor } from '@/utils/format';
 import hostOverviewIllustration from '@/assets/overview/left_icon1.png';
 
 const props = defineProps<{
@@ -548,10 +548,10 @@ onMounted(loadResources);
                 <q-circular-progress
                   show-value
                   class="resource-card-progress"
-                  size="68px"
+                  size="80px"
                   :thickness="0.18"
                   :value="card.percent"
-                  :color="progressColor(card.percent)"
+                  :color="resourceProgressColor(card.percent)"
                   track-color="blue-grey-1"
                 >
                   {{ card.percent.toFixed(0) }}%
@@ -994,7 +994,7 @@ onMounted(loadResources);
   border: 1px solid #e1e6ee;
   border-radius: 4px;
   min-height: 124px;
-  padding: 12px 82px 12px 14px;
+  padding: 12px 96px 12px 14px;
   position: relative;
   flex: 1 1 calc((100% - 20px) / 3);
   min-width: 160px;

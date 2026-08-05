@@ -179,6 +179,35 @@ export function resizeVmDisk(node: string, vmid: number | string, disk: string, 
   );
 }
 
+export function resizeCtVolume(node: string, vmid: number | string, volume: string, size: string) {
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/lxc/${encodeURIComponent(String(vmid))}/resize`,
+    { method: 'PUT', data: { disk: volume, size }, notifyOnError: true },
+  );
+}
+
+export function moveCtVolume(
+  node: string,
+  vmid: number | string,
+  data: { volume: string; storage: string; delete?: 0 | 1 },
+) {
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/lxc/${encodeURIComponent(String(vmid))}/move_volume`,
+    { method: 'POST', data, notifyOnError: true },
+  );
+}
+
+export function reassignCtVolume(
+  node: string,
+  vmid: number | string,
+  data: { volume: string; 'target-vmid': number | string; 'target-volume': string },
+) {
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/lxc/${encodeURIComponent(String(vmid))}/move_volume`,
+    { method: 'POST', data, notifyOnError: true },
+  );
+}
+
 export function moveVmDisk(
   node: string,
   vmid: number | string,
@@ -275,8 +304,9 @@ export function restoreVmBackup(
     'live-restore'?: 0 | 1;
     'ha-managed'?: 0 | 1;
   },
+  type: 'qemu' | 'lxc' = 'qemu',
 ) {
-  return request<string>(`/api2/json/nodes/${encodeURIComponent(node)}/qemu`, {
+  return request<string>(`/api2/json/nodes/${encodeURIComponent(node)}/${type}`, {
     method: 'POST',
     data,
     notifyOnError: true,

@@ -35,6 +35,12 @@ export function progressColor(value: unknown) {
   return number >= 90 ? 'red' : number >= 80 ? 'warning' : 'primary';
 }
 
+export function resourceProgressColor(value: unknown) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 'positive';
+  return number >= 90 ? 'red' : number >= 80 ? 'warning' : 'positive';
+}
+
 export function formatDate(value: unknown) {
   const timestamp = Number(value);
   if (!timestamp) return gettext('never');

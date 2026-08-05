@@ -1,515 +1,284 @@
 # AGENTS.override.md
 
-## 迁移核心原则
-
-本项目从老项目 `webmanager` 迁移到 Vue 3 + Quasar 2。
-
-迁移页面时必须遵守：
-
-**技术实现升级，业务逻辑和页面视觉要保持老项目一致。**
-本次是旧项目的等价迁移，不是参考旧项目重新设计。旧项目页面是唯一的功能和视觉基准。禁止改变字段顺序、区域结构、按钮位置和交互形式；禁止因为新版 Quasar 的默认布局而重新排列页面。修改前必须给出旧文件依据和字段映射。
-不要把页面重做成新的产品风格。老项目是 PVE 管理台式后台界面，视觉关键词是：
-
-- 信息密度高
-- 工具栏紧凑
-- 表格为主
-- 弹窗方正
-- 按钮小尺寸
-- 蓝色主色
-- 少圆角
-- 少阴影
-- 少装饰
-
-迁移页面前，必须先查看老项目对应页面和相关公共组件：
-
-- 老项目页面：`C:\Users\depuser05\Desktop\work\pve\webmanager\src\pages`
-- 老项目全局样式：`C:\Users\depuser05\Desktop\work\pve\webmanager\src\css\app.scss`
-- 老项目弹窗组件：`C:\Users\depuser05\Desktop\work\pve\webmanager\src\components\Public\Window.vue`
-- 老项目通用表单：`C:\Users\depuser05\Desktop\work\pve\webmanager\src\components\Public\FormTem.vue`
-
-## 全局视觉基准
-
-老项目全局样式以 `src/css/app.scss` 为准。
-
-主要颜色：
-
-- 主色：`#1976D2`
-- 浅蓝背景：`#e6f1fc`
-- 表头浅蓝背景：`#f2f5fc`
-- 常规文字：`#333333`
-- 次级文字：`#666666`
-- 边框灰：`#cccccc`
-- 表头边框：`#dfe1e6`
-- 成功：`#21BF4B`
-- 警告：`#fc0`
-- 危险：`#FF6C59` / `#cf4c35`
-
-基础形态：
-
-- 业务页面不做大圆角。
-- 弹窗、菜单、表格卡片尽量保持方角。
-- 卡片多用 `no-shadow`、`no-border-radius`。
-- 页面不要使用大面积渐变、营销式 hero、装饰性背景图。
-- 操作型页面优先保证扫描效率，不追求视觉炫技。
-
-## 表格样式
-
-老项目大量页面以 `q-table` 为主，迁移时应优先复刻该模式。
-
-默认结构：
-
-```vue
-<q-card class="q-ma-md q-mt-sm no-border-radius no-shadow">
-  <q-card-section>
-    <q-table
-      flat
-      row-key="id"
-      table-header-class="u-table-header"
-      :rows-per-page-options="[0]"
-      :no-data-label="gettext('no record can be found')"
-    >
-      <template #top>
-        <!-- toolbar buttons -->
-      </template>
-    </q-table>
-  </q-card-section>
-</q-card>
-```
-
-表格规则：
-
-- 表格外层通常是无阴影、无圆角的 `q-card`。
-- `q-table` 常用 `flat`。
-- 表头统一使用 `table-header-class="u-table-header"`。
-- 表格默认不分页时使用 `:rows-per-page-options="[0]"`。
-- 行高和表头高度约 `40px`。
-- 单元格横向 padding 约 `16px`。
-- 空数据文案使用 `gettext('no record can be found')`。
-- 空数据插槽保持灰色居中提示。
-- 表格工具栏放在 `#top` 插槽内。
-- 工具栏左侧放主要操作按钮，右侧可放筛选器、节点选择、搜索等。
-- 表格选择通常使用 `selection="single"` 或按原页面保持一致。
-- 选中项状态决定按钮禁用和按钮颜色，不要改成交互完全不同的批量操作模式。
-
-表头样式应接近：
-
-```scss
-.u-table-header {
-  width: 100%;
-  background: #f2f5fc;
-  border-bottom: 1px solid #dfe1e6;
-}
-```
-
-表格全局样式应接近：
-
-```scss
-.q-table__card {
-  color: #333333 !important;
-}
-
-.q-table__top {
-  padding: 0 0 10px 0;
-}
-
-.q-table th,
-.q-table td {
-  padding: 0 16px !important;
-}
-
-.q-table thead tr,
-.q-table tbody td {
-  height: 40px;
-}
-```
-
-表格中的使用率/占用率进度条必须复用新项目公共组件 `src/components/UsageProgress.vue`，样式对齐老项目：
-
-```vue
-<q-linear-progress
-  rounded
-  size="20px"
-  style="width: 100px"
-  :value="percent / 100"
-  :color="progressColor(percent)"
->
-  <div class="absolute-full flex flex-center">
-    <q-badge color="white" text-color="accent" style="padding: 1px 3px" :label="label" />
-  </div>
-</q-linear-progress>
-```
-
-进度条颜色规则必须保持统一：
-
-- `>= 90`：`red`
-- `>= 80`：`warning`
-- 其他：`primary`
-
-后续迁移任何表格里的 CPU、内存、磁盘、存储、资源池等使用率列时，不要再显示纯文本百分比，应使用 `UsageProgress.vue`。
-
-## 常用按钮样式
-
-老项目按钮特点是小、方、低高度、无大圆角。
-
-通用按钮类：
-
-```scss
-.u-button {
-  border: 0 !important;
-  min-height: 28px !important;
-  border-radius: 0 !important;
-}
-
-.u-border-button {
-  border: 1px solid #adb0b8 !important;
-}
-
-.q-btn {
-  font-weight: normal;
-}
-```
-
-迁移按钮时优先使用：
-
-```vue
-<q-btn
-  no-caps
-  outline
-  size="12px"
-  color="primary"
-  class="u-button q-mr-sm"
-  :label="gettext('Create')"
-/>
-```
-
-常见规则：
-
-- 文本按钮默认 `no-caps`。
-- 操作按钮默认 `size="12px"`。
-- 表格工具栏按钮常用 `outline`。
-- 按钮高度保持紧凑，约 `28px`。
-- 按钮圆角为 `0`。
-- 普通主操作：`color="primary"`。
-- 危险操作：`color="red"` 或 `bg-negative`，按老页面保持。
-- 禁用按钮常用 `color="grey"`。
-- 表单保存按钮常用 `flat` + 背景色类。
-
-表单确认按钮状态：
-
-```vue
-<q-btn
-  no-caps
-  flat
-  size="12px"
-  :label="gettext('Save')"
-  :class="isPass && !loading ? 'bg-primary text-grey-1 u-button' : 'bg-grey-4 text-grey-6 u-button'"
-/>
-```
-
-不要把旧页面的小工具按钮改成大号 `unelevated`、大圆角、整行按钮。
-
-## 弹窗样式
-
-老项目弹窗以 `q-dialog + u-window` 为主。
-
-默认弹窗：
-
-```vue
-<q-dialog v-model="dialogVisible" persistent transition-show="scale" transition-hide="scale">
-  <u-window :title="gettext('Title')" width="600px">
-    <!-- content -->
-    <template #foot>
-      <q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :label="gettext('Save')" />
-    </template>
-  </u-window>
-</q-dialog>
-```
-
-迁移到新项目时如果没有 `u-window`，应实现一个等价的页面局部结构，视觉保持：
-
-- 弹窗外层 `q-card` 方角。
-- 弹窗默认 `persistent`。
-- 动画使用 `transition-show="scale"`、`transition-hide="scale"`。
-- 弹窗宽度按旧页面保持，常见为 `400px`、`600px`、`780px`、`1180px`。
-- 弹窗标题栏使用深蓝背景。
-- 标题栏文字白色。
-- 标题栏左侧有小 loading/spinner 图标的旧页面，迁移时尽量保留。
-- 关闭按钮在右上角，红色背景，图标 `close`，小尺寸。
-- 内容区域通常 `q-pa-none` 或内部自控 padding。
-- footer 使用浅灰背景 `bg-grey-2`，右对齐。
-- 弹窗内表单错误区域可隐藏，保持旧项目的紧凑感。
-
-老项目 `u-window` 关键视觉：
-
-```vue
-<q-card :style="'max-width: ' + width + ';width:' + width + ';height: ' + height">
-  <q-card-section class="row items-center bg-blue-8 text-grey-1 shadow-down-10 q-pa-sm">
-    <q-spinner-bars size="14px" color="white" />
-    <div class="text-weight-bold q-mx-sm text-overflow">{{ title }}</div>
-    <q-space />
-    <q-btn class="bg-negative" icon="close" size="sm" flat dense />
-  </q-card-section>
-  <q-card-section class="q-pa-none u-hidden-error">
-    <!-- body -->
-  </q-card-section>
-  <q-card-actions align="right" class="bg-grey-2 overflow-hidden">
-    <!-- footer -->
-  </q-card-actions>
-</q-card>
-```
-
-全局弹窗方角：
-
-```scss
-.q-dialog__inner > div {
-  border-radius: 0;
-}
-```
-
-## 表单项样式
-
-弹窗表单项以新增模块 `src/pages/computer/vm/create-vm` 和 `CreateVmDialog.vue` 为当前标准；旧项目 `FormTem.vue` 仍是来源依据，但后续新模块应优先对齐这个 VM 创建弹窗已经落地的 Vue3 + Quasar 写法。除非旧项目源码明确使用了工具栏式边框控件，弹窗内的 `q-input`、`q-select`、`SelectTable`、`NodeSelectTable` 默认使用 Quasar 下划线型 `standard` 外观，**不要添加 `outlined` 或 `square`**。
-
-表单区域结构：
-
-```vue
-<q-scroll-area class="q-pa-sm" :style="{ height: stepContentHeight('general') }">
-  <div class="q-px-md q-py-sm u-border-dotted-blue bg-white">
-    <div class="row q-gutter-lg">
-      <div class="col">
-        <q-input dense class="q-field--with-bottom" :label="gettext('Name')" />
-      </div>
-      <div class="col">
-        <q-select dense options-dense emit-value map-options class="q-field--with-bottom" />
-      </div>
-    </div>
-  </div>
-</q-scroll-area>
-```
-
-通用规则：
-
-- 弹窗正文内分组使用 `q-px-md q-py-sm u-border-dotted-blue bg-white`，高级区域在外层追加 `q-mt-sm`；这类创建/编辑向导不再默认使用 `u-border q-ma-sm q-pa-md`。
-- 步骤内容外层使用 `q-scroll-area class="q-pa-sm"`，高度由页面逻辑控制，保持弹窗主体稳定。
-- 两列表单使用 `row q-gutter-lg` + 两个 `col`；小字段同排时用 `row q-gutter-sm`，固定短字段可设置明确宽度，例如设备 ID `style="width: 100px"`。
-- 连续字段使用 `class="q-field--with-bottom"`，由全局样式提供 15px 底部间距；不要在 scoped style 中重复写字段 margin。
-- 标签、输入文字、焦点线、字段高度由 `src/css/app.scss` 全局规则接管；页面 scoped style 只处理特殊业务布局。
-- `u-hidden-error` 只用于 `SelectTable` 这类需要压缩底部区域的封装控件，不作为普通弹窗表单容器默认类。
-
-输入框规则：
-
-- `q-input` 默认只加 `dense`，保持 `standard` 下划线外观。
-- 数字字段使用 `type="number"`，并按接口/旧页面补齐 `min`、`max`、`step`；需要数字模型时用 `v-model.number`。
-- 必填或校验字段使用 `:error`、`:error-message`，错误内容可以显示，但控件高度通过 `q-field--with-bottom` 保持紧凑稳定。
-- 只读展示字段仍用 `q-input dense readonly`，例如 SCSI Controller、Total cores，保持和可编辑字段同一视觉密度。
-- 占位文案用于默认值提示，例如 `gettext('default')`、`gettext('auto')`、`gettext('unlimited')`。
-
-下拉选择规则：
-
-- 普通 `q-select` 默认：`dense options-dense`；提交值与显示文本分离时追加 `emit-value map-options`。
-- 需要允许清空时才加 `clearable`；禁用态使用 `:disable`，不要用局部样式制造禁用效果。
-- 普通弹窗表单下拉不加 `outlined`、`square`、页面局部高度样式；工具栏下拉才使用后文“概览工具栏下拉规范”。
-- 表格式选择必须复用 `SelectTable` / `NodeSelectTable`，在弹窗表单中传 `field-style="standard"`，宽度按旧页面取值，常见为 `500px`。
-- `SelectTable` 弹层内表格保持 `flat dense hide-bottom`、`table-header-class="u-table-header"`、搜索框 `borderless dense`。
-
-复选框规则：
-
-- `q-checkbox` 默认使用 `dense right-label color="primary"`，标签在右侧，颜色用主色。
-- 复选框和字段在同一列连续出现时可加 `q-field--with-bottom`；磁盘编辑这类需要和字段行高对齐的区域，可用 `q-field borderless dense` 包裹复选框。
-- 复选框文字颜色保持 `#333333`；确有局部深度选择器时只限制在当前编辑器内部。
-- 高级开关放在弹窗 footer 左侧，使用同样的 `dense right-label color="primary"`，右侧保留步骤按钮。
-
-全局字段样式基准：
-
-```scss
-.q-field__native,
-.q-field__prefix,
-.q-field__suffix,
-.q-field__input {
-  color: #666666;
-  font-size: 12px;
-}
-
-.q-field__control-container .q-field__label {
-  color: #333333;
-}
-
-.q-field--with-bottom {
-  padding-bottom: 15px;
-}
-
-.q-field--dense .q-field__control {
-  height: 30px;
-}
-
-.q-field--standard.q-field--dense .q-field__control,
-.q-field--standard.q-field--dense .q-field__marginal {
-  height: 40px;
-}
-```
-
-## 卡片和内容区
-
-老项目卡片不是现代 dashboard 卡片风格，更多是内容容器。
-
-常见结构：
-
-```vue
-<div class="q-ma-md">
-  <q-card class="no-border-radius no-shadow">
-    <q-card-section>
-      <!-- toolbar / content -->
-    </q-card-section>
-  </q-card>
-
-  <q-card class="q-mt-md no-shadow no-border-radius">
-    <q-card-section class="no-padding">
-      <div class="content-center u-main-area">
-        <!-- table / details -->
-      </div>
-    </q-card-section>
-  </q-card>
-</div>
-```
-
-内容区样式：
-
-```scss
-.u-main-area {
-  background-color: #ffffff;
-  min-height: 100px;
-  padding: 16px;
-}
-
-.u-content-area {
-  border: 1px solid #cccccc;
-  padding: 10px;
-  margin: 10px 0;
-  color: #333333;
-}
-
-.u-card-blue {
-  background: #e9edfa;
-  color: #333333;
-}
-```
-
-迁移时：
-
-- 不要把每个区块都做成悬浮大卡片。
-- 不要给表格外层增加明显阴影。
-- 不要加入新的大标题 hero 区。
-- 页面标题、工具栏、表格应保持后台工具布局。
-
-## 菜单和下拉
-
-老项目菜单、弹出菜单是方角、紧凑、浅色背景。
-
-```scss
-.q-menu {
-  overflow-x: hidden;
-  font-size: 13px;
-  border-radius: 0;
-}
-
-.q-menu .q-item.q-router-link--active,
-.q-menu .q-item--active {
-  background: #e6f1fc;
-}
-
-.q-btn-dropdown--simple .q-btn-dropdown__arrow {
-  margin-left: 0 !important;
-}
-```
-
-迁移规则：
-
-- 下拉菜单保持小字号和方角。
-- 菜单项不要改成大块卡片。
-- 激活背景使用浅蓝 `#e6f1fc`。
-- 下拉按钮也要使用 `u-button` 密度。
-
-### 概览工具栏下拉规范
-
-计算-概览工具栏的时间范围下拉框是主机-概览及后续概览页的标准样式。资源选择和 RRD 聚合方式（平均值 / 最大值）下拉框均使用 `square`、`outlined`、`dense`、`options-dense`、`emit-value`、`map-options`，并将 `.q-field__control`、`.q-field__marginal` 固定为 `28px` 高度；原生输入区域同样为 `28px` 行高、上下内边距为 `0`，边框为 `#cccccc`。下拉框需与同一工具栏内的紧凑按钮等高，避免主机页出现比计算概览更高的选择框。
-
-## 状态和颜色
-
-常见状态颜色应沿用老项目：
-
-```scss
-.good {
-  color: #21bf4b;
-}
-
-.warning {
-  color: #fc0;
-}
-
-.critical {
-  color: #ff6c59;
-}
-
-.faded {
-  color: #cfcfcf;
-}
-```
-
-表格状态列可使用 `q-badge`，例如服务状态：
-
-```vue
-<q-badge :color="row.state === 'running' ? 'green' : 'red'" :label="statusLabel" />
-```
-
-节点、主机、服务等在线状态列默认规则：
-
-- `online` / `running`：绿色。
-- `offline` / `stopped` / 异常离线：红色。
-- `unknown` / 空值 / 其他未识别状态：灰色。
-
-不要随意替换旧状态色，除非源页面已有新规则。
-
-## 迁移检查清单
-
-迁移任意老页面到新项目时，完成前必须检查：
-
-- 是否查看了老项目同名页面。
-- 表格是否保留 `flat`、`u-table-header`、约 40px 行高。
-- 工具栏按钮是否为小尺寸、方角、`no-caps`。
-- 弹窗是否为方角、蓝色标题栏、灰色 footer。
-- 表单是否使用紧凑 `dense` 风格。
-- 旧页面的按钮启用/禁用规则是否保留。
-- 旧页面的空数据、加载、任务弹窗是否保留。
-- 是否避免了新增大圆角、大阴影、大卡片、渐变背景。
-- 是否所有可见文案都走 `gettext(...)`。
-- 是否没有在页面里重复实现全局请求错误提示。
-
-## 禁止事项
-
-迁移页面时不要做以下事情：
-
-- 不要为了“现代化”重设计页面视觉。
-- 不要把表格工具页改成营销页或大卡片页。
-- 不要使用大圆角按钮、大投影卡片、渐变背景作为默认风格。
-- 不要把旧项目小按钮改成大号主按钮。
-- 不要把弹窗改成圆角浮层或抽屉，除非旧页面本来就是抽屉。
-- 不要直接复制 Vue2 组件代码到 Vue3 项目里运行。
-- 不要跳过旧页面样式核对。
-
-## 推荐实现方式
-
-在新项目中可以逐步沉淀这些兼容类到全局样式：
-
-- `.u-button`
-- `.u-border-button`
-- `.u-table-header`
-- `.u-main-area`
-- `.u-content-area`
-- `.u-card-blue`
-- `.u-hidden-error`
-- `.u-dense`
-- `.text-overflow`
-
-公共弹窗建议实现一个 Vue3 版 `UWindow`，视觉对齐老项目 `Window.vue`。
-
-公共表格建议实现轻量约定组件或组合函数，但不要牺牲页面和旧项目的结构一致性。
+## 项目状态
+
+本项目从旧项目 `webmanager` 升级到 Vue 3 + 当前版本 Quasar。
+
+目前绝大多数功能已经完成迁移，当前主要处于：
+
+- 功能测试
+- Bug 修复
+- 与 Proxmox 源码核对逻辑
+- 缺失功能补齐
+- 公共组件复用检查
+- 局部页面视觉优化
+
+除非用户明确要求迁移某个尚未迁移的页面，否则不要默认把任务理解成“从旧项目迁移页面”。
+
+---
+
+## 1. 三个代码库的职责
+
+### 当前 Vue3 项目
+
+当前项目是实际修改对象。
+
+---
+
+### Proxmox 源码
+
+路径：
+
+`C:\Users\depuser05\Desktop\work\pve\pve-manager`
+
+Proxmox `pve-manager` 是：
+
+**业务逻辑、原生行为和原生组件关系的事实来源。**
+
+用于核对：
+
+- 功能流程
+- API
+- 请求参数
+- 参数转换
+- 默认值
+- 校验
+- 权限
+- 状态判断
+- 数据刷新
+- 创建 / 编辑 / 删除等行为
+- 原生组件复用关系
+
+用户提到：
+
+- 源码
+- 源代码
+- 参考源码
+- 跟源码核对
+- 原生实现
+- PVE / Proxmox 怎么实现
+- 从源码迁移功能
+
+如果没有明确说“旧项目源码”，则：
+
+**“源码”一律指 Proxmox `pve-manager`。**
+
+禁止用旧项目 `webmanager` 代替 Proxmox 源码判断业务逻辑。
+
+---
+
+### 旧项目 webmanager
+
+路径：
+
+`C:\Users\depuser05\Desktop\work\pve\webmanager`
+
+旧项目现在主要用于：
+
+**基础 UI 视觉基准和旧页面布局参考。**
+
+旧项目仍然决定项目基础控件的视觉体系，例如：
+
+- 按钮
+- 弹窗
+- 表格
+- 弹窗内表单项
+- 输入框
+- 下拉框
+- Checkbox
+- 菜单
+- 基础颜色和信息密度
+
+但旧项目不再作为业务逻辑的默认依据。
+
+---
+
+## 2. 逻辑任务的默认执行顺序
+
+当用户要求：
+
+- 跟源码核对
+- 检查某个页面逻辑
+- 检查组件复用
+- 补齐缺失功能
+- 从源码迁移功能
+
+默认执行顺序：
+
+1. 查看当前 Vue3 项目的实现；
+3. 到 `pve-manager` 查对应 Proxmox 源码；
+4. 核对业务逻辑、API、参数、状态和组件关系；
+5. 在当前 Vue3 项目的技术体系中实现或修复。
+
+如果在 `pve-manager` 没找到直接对应文件，应继续根据：
+
+- API
+- 组件名
+- 功能名
+- 父子组件
+- editor / panel / grid / window
+- handler / store
+
+追踪相关源码。
+
+不要因为旧项目存在同名页面就停止搜索 Proxmox 源码。
+
+---
+
+## 3. 从 Proxmox 补功能时，逻辑和 UI 必须分离
+
+从 Proxmox 源码补齐功能时：
+
+### 从 Proxmox 获取
+
+- 功能
+- API
+- 参数
+- 默认值
+- 校验
+- 显隐
+- disable 条件
+- 权限
+- 状态判断
+- 原生组件关系
+
+### 不从 Proxmox 获取
+
+- ExtJS 按钮外观
+- ExtJS 输入框外观
+- ExtJS Window 外观
+- ExtJS Grid 外观
+- ExtJS Tab 外观
+- ExtJS 配色和间距
+
+Proxmox 源码负责：
+
+**功能怎么工作。**
+
+当前项目和项目 UI 规范负责：
+
+**功能在 Vue3 项目里长什么样。**
+
+---
+
+## 4. 当前项目同类实现优先复用
+
+新增或补齐功能之前，必须先检查当前项目是否已经存在同类实现。
+
+例如：
+
+- CT 资源页可以参考当前 VM 硬件页；
+- CT 添加挂载点可以参考当前 VM 添加硬盘；
+- CT CPU / Memory 编辑可以参考 VM 同类编辑器；
+- 相同类型的 Dialog、Table、SelectTable、Hardware Editor 应优先复用已有实现。
+
+如果当前项目已经存在经过验证的同类 Vue3 实现：
+
+**优先复制其组件结构、Quasar props、class 和基础样式，不要重新设计一套 UI。**
+
+---
+
+## 5. UI 基准样式
+
+项目基础 UI 规范位于：
+
+`UI_BASELINE.md`
+
+涉及以下内容时必须读取并遵守该文件：
+
+- 按钮
+- 表格
+- 弹窗
+- 弹窗内表单项
+- q-input
+- q-select
+- q-checkbox
+- 菜单
+- 工具栏基础控件
+- 状态颜色
+
+用户说：
+
+- “改成基准样式”
+- “按钮样式不对”
+- “表单项样式不对”
+- “弹窗不是基准样式”
+- “表格改成项目基准”
+
+默认指：
+
+**按照 `UI_BASELINE.md` 修正对应基础控件。**
+
+这种情况下只修改相关视觉实现：
+
+- props
+- class
+- 必要的布局样式
+
+不要因此修改业务逻辑或重新设计整个页面。
+
+---
+
+## 6. 页面视觉优化与基础样式是两回事
+
+新项目允许对部分页面进行视觉优化，例如：
+
+- Dashboard
+- 概览
+- 详情页
+- 信息卡片
+- 页面布局
+- 信息层级
+- 导航结构
+
+如果某个页面已经采用新项目优化后的布局，不要因为旧项目不同而主动恢复旧布局。
+
+但是页面布局进行了优化，并不意味着基础控件风格也要变化。
+
+即使页面整体经过重新设计，其中普通：
+
+- 按钮
+- 表格
+- 编辑弹窗
+- q-input
+- q-select
+
+仍然默认遵守 `UI_BASELINE.md`。
+
+---
+
+## 7. 视觉参考优先级
+
+基础控件视觉：
+
+1. 当前项目已经确认正确的同类型实现
+2. `UI_BASELINE.md`
+3. 旧项目 `webmanager`
+4. 禁止使用 Proxmox ExtJS UI 作为视觉基准
+
+页面整体布局：
+
+1. 当前页面已经确认的设计
+2. 当前项目同类页面
+3. 用户本次明确要求
+4. 旧项目作为参考
+
+---
+
+
+
+## 核心原则
+
+始终牢记：
+
+**当前 Vue3 项目 = 实际实现**
+
+**Proxmox pve-manager = 业务逻辑事实来源**
+
+**UI_BASELINE.md + 旧项目 = 基础 UI 视觉来源**
+
+**当前已完成同类组件 = 新功能 UI 实现的优先模板**
+
+一句话总结：
+
+> 从 Proxmox 迁移逻辑，在当前 Vue3 项目的 UI 体系中实现。

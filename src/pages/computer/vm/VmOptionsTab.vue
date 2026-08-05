@@ -31,6 +31,12 @@ function optionIcon(key: string) {
   if (key === 'kvm') return 'memory';
   if (key === 'freeze') return 'ac_unit';
   if (key === 'vmstatestorage') return 'storage';
+  if (key === 'arch') return 'architecture';
+  if (key === 'console' || key === 'cmode' || key === 'tty') return 'terminal';
+  if (key === 'protection') return 'shield';
+  if (key === 'unprivileged') return 'lock_open';
+  if (key === 'features') return 'extension';
+  if (key === 'hookscript' || key === 'entrypoint' || key === 'env') return 'code';
   if (key === 'agent') return 'smart_toy';
   if (key === 'protection') return 'shield';
   if (key === 'spice') return 'desktop_windows';
@@ -87,7 +93,10 @@ function osBaseFor(ostype: string) {
   );
 }
 
-const props = defineProps<{ node: string; vmid: string; config: PveRecord }>();
+const props = withDefaults(
+  defineProps<{ node: string; vmid: string; config: PveRecord; guestType?: 'qemu' | 'lxc' }>(),
+  { guestType: 'qemu' },
+);
 const emit = defineEmits<{ updated: [] }>();
 const session = useSessionStore();
 const loading = shallowRef(false);
@@ -134,6 +143,16 @@ const form = reactive({
   tdxAttestation: true,
   tdxVsockCid: '2',
   tdxVsockPort: '4050',
+  console: true,
+  tty: '2',
+  cmode: '__default__',
+  featureKeyctl: false,
+  featureNesting: false,
+  featureNfs: false,
+  featureCifs: false,
+  featureFuse: false,
+  featureMknod: false,
+  entrypoint: '',
 });
 const original = shallowRef({
   name: '',
@@ -178,7 +197,21 @@ const original = shallowRef({
   tdxAttestation: true,
   tdxVsockCid: '2',
   tdxVsockPort: '4050',
+  console: true,
+  tty: '2',
+  cmode: '__default__',
+  featureKeyctl: false,
+  featureNesting: false,
+  featureNfs: false,
+  featureCifs: false,
+  featureFuse: false,
+  featureMknod: false,
+  entrypoint: '',
 });
+type EnvRow = { id: number; name: string; value: string };
+const envRows = ref<EnvRow[]>([]);
+const originalEnv = shallowRef('');
+let nextEnvRowId = 0;
 const bootRows = ref<BootDevice[]>([]);
 const bootTableBody = useTemplateRef<HTMLTableSectionElement>('bootTableBody');
 const originalBootValue = shallowRef('');
@@ -187,7 +220,7 @@ const bootValue = computed(
     `order=${bootRows.value
       .filter((row) => row.enabled)
       .map((row) => row.name)
-      .join(';')}`
+      .join(';')}`,
 );
 const originalSmbios1Value = shallowRef('');
 const hotplugFeatures = ref<string[]>([]);
@@ -195,13 +228,29 @@ const originalHotplugValue = shallowRef('');
 const hotplugValue = computed(
   () =>
     hotplugFeatureOrder.filter((feature) => hotplugFeatures.value.includes(feature)).join(',') ||
-    '0'
+    '0',
 );
 const canConfigureOptions = computed(() =>
-  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.Options'])
+  Boolean(
+    (session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.Options'],
+  ),
 );
 const canConfigureHardware = computed(() =>
-  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.HWType'])
+  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.HWType']),
+);
+const canModifyNode = computed(() =>
+  Boolean((session.caps as unknown as { nodes?: Record<string, unknown> }).nodes?.['Sys.Modify']),
+);
+const canEditLxcFeatures = computed(() =>
+  session.userid === 'root@pam' ||
+  (Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Allocate']) &&
+    optionEnabled(props.config.unprivileged)),
+);
+const envValue = computed(() => envRows.value.filter((row) => row.name.trim()).map((row) => `${row.name.trim()}=${row.value}`).join('\0'));
+const lxcAdvancedChanged = computed(() =>
+  props.guestType === 'lxc' &&
+  ((['console', 'tty', 'cmode', 'featureKeyctl', 'featureNesting', 'featureNfs', 'featureCifs', 'featureFuse', 'featureMknod', 'entrypoint'] as const)
+    .some((key) => form[key] !== original.value[key]) || envValue.value !== originalEnv.value),
 );
 const hardwareFields = new Set([
   'smbios1',
@@ -228,22 +277,22 @@ const optionsChanged = computed(
     hotplugValue.value !== originalHotplugValue.value ||
     Object.entries(form).some(
       ([key, value]) =>
-        !hardwareFields.has(key) && value !== original.value[key as keyof typeof original.value]
-    )
+        !hardwareFields.has(key) && value !== original.value[key as keyof typeof original.value],
+    ),
 );
 const hardwareChanged = computed(() =>
   [...hardwareFields].some(
-    (key) => form[key as keyof typeof form] !== original.value[key as keyof typeof original.value]
-  )
+    (key) => form[key as keyof typeof form] !== original.value[key as keyof typeof original.value],
+  ),
 );
 const canSave = computed(
   () =>
-    (optionsChanged.value || hardwareChanged.value) &&
+    (optionsChanged.value || hardwareChanged.value || lxcAdvancedChanged.value) &&
     (!optionsChanged.value || canConfigureOptions.value) &&
-    (!hardwareChanged.value || canConfigureHardware.value)
+    (!hardwareChanged.value || canConfigureHardware.value),
 );
 const spiceDisplayIsQxl = computed(() =>
-  /^qxl\d?$/.test(textValue(parseProperties(props.config.vga).type))
+  /^qxl\d?$/.test(textValue(parseProperties(props.config.vga).type)),
 );
 const startupValue = computed(() =>
   [
@@ -252,7 +301,7 @@ const startupValue = computed(() =>
     form.startupDown.trim() ? `down=${form.startupDown.trim()}` : '',
   ]
     .filter(Boolean)
-    .join(',')
+    .join(','),
 );
 const smbios1Value = computed(() => {
   const fields = [
@@ -271,14 +320,17 @@ const smbios1Value = computed(() => {
   return values.join(',');
 });
 const osVersionOptions = computed(
-  () => (osTypeGroups.find((group) => group.value === form.osBase) || otherOsTypeGroup).versions
+  () => (osTypeGroups.find((group) => group.value === form.osBase) || otherOsTypeGroup).versions,
 );
-const selectedOption = shallowRef('name');
+const selectedOption = shallowRef(props.guestType === 'lxc' ? 'onboot' : 'name');
+const isLxcReadOnlyOption = computed(() =>
+  props.guestType === 'lxc' && ['ostype', 'arch', 'unprivileged', 'hookscript'].includes(selectedOption.value),
+);
 const agentAdvanced = shallowRef(false);
 const pendingRows = shallowRef<PveRecord[]>([]);
 const vmStateStorageOptions = shallowRef<PveRecord[]>([]);
 const vmStateStorageDisplayValue = computed(
-  () => form.vmstatestorage || gettext("Automatic (Storage used by the VM, or 'local')")
+  () => form.vmstatestorage || gettext("Automatic (Storage used by the VM, or 'local')"),
 );
 const vmStateStorageColumns: QTableColumn<PveRecord>[] = [
   {
@@ -297,90 +349,161 @@ const vmStateStorageColumns: QTableColumn<PveRecord>[] = [
   },
 ];
 const pendingByKey = computed<Record<string, PveRecord>>(() =>
-  Object.fromEntries(pendingRows.value.map((row) => [textValue(row.key), row]))
+  Object.fromEntries(pendingRows.value.map((row) => [textValue(row.key), row])),
 );
-const optionRows = computed(() => [
-  { key: 'name', label: gettext('Name'), value: form.name || '-' },
-  { key: 'description', label: '中文名称', value: form.description || '--' },
-  {
-    key: 'onboot',
-    label: gettext('Start at boot'),
-    value: form.onboot ? gettext('Yes') : gettext('No'),
-  },
-  { key: 'ostype', label: gettext('OS Type'), value: form.ostype || '-' },
-  {
-    key: 'boot',
-    label: gettext('Boot Order'),
-    value: bootValue.value === 'order=' ? gettext('None') : bootValue.value.replace('order=', ''),
-  },
-  {
-    key: 'tablet',
-    label: gettext('USB Tablet'),
-    value: form.tablet ? gettext('Yes') : gettext('No'),
-  },
-  {
-    key: 'hotplug',
-    label: gettext('Hotplug'),
-    value: hotplugValue.value === '0' ? gettext('None') : hotplugValue.value,
-  },
-  { key: 'startup', label: gettext('Startup/Shutdown order'), value: startupValue.value || '-' },
-  {
-    key: 'acpi',
-    label: gettext('ACPI support'),
-    value: form.acpi ? gettext('Yes') : gettext('No'),
-  },
-  {
-    key: 'kvm',
-    label: gettext('KVM hardware virtualization'),
-    value: form.kvm ? gettext('Yes') : gettext('No'),
-  },
-  {
-    key: 'freeze',
-    label: gettext('Freeze CPU at startup'),
-    value: form.freeze ? gettext('Yes') : gettext('No'),
-  },
-  {
-    key: 'localtime',
-    label: gettext('Use local time for RTC'),
-    value:
-      form.localtime === '1'
-        ? gettext('Yes')
-        : form.localtime === '0'
-        ? gettext('No')
-        : gettext('Default'),
-  },
-  { key: 'startdate', label: gettext('RTC start date'), value: form.startdate || 'now' },
-  { key: 'vmstatestorage', label: gettext('VM State storage'), value: form.vmstatestorage || '-' },
-  { key: 'smbios1', label: gettext('SMBIOS settings (type1)'), value: form.smbios1 || '-' },
-  {
-    key: 'agent',
-    label: gettext('QEMU Guest Agent'),
-    value: form.agent ? gettext('Yes') : gettext('No'),
-  },
-  {
-    key: 'protection',
-    label: gettext('Protection'),
-    value: form.protection ? gettext('Yes') : gettext('No'),
-  },
-  {
-    key: 'spice',
-    label: gettext('Spice Enhancements'),
-    value:
-      form.spiceFolderSharing || form.spiceVideoStreaming !== 'off'
-        ? gettext('Enabled')
-        : gettext('None'),
-  },
-  {
-    key: 'sev',
-    label: gettext('AMD SEV Type'),
-    value: form.sevType === '__default__' ? gettext('Default') : form.sevType,
-  },
-  {
-    key: 'tdx',
-    label: gettext('Intel TDX Type'),
-    value: form.tdxType === '__default__' ? gettext('Default') : form.tdxType,
-  },
-]);
+function optionEnabled(value: unknown) {
+  return value === true || value === 1 || textValue(value) === '1';
+}
+const optionRows = computed(() => {
+  if (props.guestType === 'lxc') {
+    const config = props.config;
+    return [
+      {
+        key: 'onboot',
+        label: gettext('Start at boot'),
+        value: optionEnabled(config.onboot) ? gettext('Yes') : gettext('No'),
+      },
+      {
+        key: 'startup',
+        label: gettext('Start/Shutdown order'),
+        value: textValue(config.startup) || '-',
+      },
+      {
+        key: 'ostype',
+        label: gettext('OS Type'),
+        value: textValue(config.ostype) || gettext('Unknown'),
+      },
+      {
+        key: 'arch',
+        label: gettext('Architecture'),
+        value: textValue(config.arch) || gettext('Unknown'),
+      },
+      {
+        key: 'console',
+        label: '/dev/console',
+        value: config.console === 0 || config.console === '0' ? gettext('No') : gettext('Yes'),
+      },
+      { key: 'tty', label: gettext('TTY count'), value: textValue(config.tty) || '2' },
+      { key: 'cmode', label: gettext('Console mode'), value: textValue(config.cmode) || 'tty' },
+      {
+        key: 'protection',
+        label: gettext('Protection'),
+        value: optionEnabled(config.protection) ? gettext('Yes') : gettext('No'),
+      },
+      {
+        key: 'unprivileged',
+        label: gettext('Unprivileged container'),
+        value: optionEnabled(config.unprivileged) ? gettext('Yes') : gettext('No'),
+      },
+      {
+        key: 'features',
+        label: gettext('Features'),
+        value: textValue(config.features) || gettext('None'),
+      },
+      {
+        key: 'hookscript',
+        label: gettext('Hookscript'),
+        value: textValue(config.hookscript) || '-',
+      },
+      {
+        key: 'entrypoint',
+        label: gettext('Entrypoint'),
+        value: textValue(config.entrypoint) || '/sbin/init',
+      },
+      {
+        key: 'env',
+        label: gettext('Environment'),
+        value: textValue(config.env).replaceAll(/\0+/g, ' ') || gettext('None'),
+      },
+    ];
+  }
+  return [
+    { key: 'name', label: gettext('Name'), value: form.name || '-' },
+    { key: 'description', label: '中文名称', value: form.description || '--' },
+    {
+      key: 'onboot',
+      label: gettext('Start at boot'),
+      value: form.onboot ? gettext('Yes') : gettext('No'),
+    },
+    { key: 'ostype', label: gettext('OS Type'), value: form.ostype || '-' },
+    {
+      key: 'boot',
+      label: gettext('Boot Order'),
+      value: bootValue.value === 'order=' ? gettext('None') : bootValue.value.replace('order=', ''),
+    },
+    {
+      key: 'tablet',
+      label: gettext('USB Tablet'),
+      value: form.tablet ? gettext('Yes') : gettext('No'),
+    },
+    {
+      key: 'hotplug',
+      label: gettext('Hotplug'),
+      value: hotplugValue.value === '0' ? gettext('None') : hotplugValue.value,
+    },
+    { key: 'startup', label: gettext('Startup/Shutdown order'), value: startupValue.value || '-' },
+    {
+      key: 'acpi',
+      label: gettext('ACPI support'),
+      value: form.acpi ? gettext('Yes') : gettext('No'),
+    },
+    {
+      key: 'kvm',
+      label: gettext('KVM hardware virtualization'),
+      value: form.kvm ? gettext('Yes') : gettext('No'),
+    },
+    {
+      key: 'freeze',
+      label: gettext('Freeze CPU at startup'),
+      value: form.freeze ? gettext('Yes') : gettext('No'),
+    },
+    {
+      key: 'localtime',
+      label: gettext('Use local time for RTC'),
+      value:
+        form.localtime === '1'
+          ? gettext('Yes')
+          : form.localtime === '0'
+            ? gettext('No')
+            : gettext('Default'),
+    },
+    { key: 'startdate', label: gettext('RTC start date'), value: form.startdate || 'now' },
+    {
+      key: 'vmstatestorage',
+      label: gettext('VM State storage'),
+      value: form.vmstatestorage || '-',
+    },
+    { key: 'smbios1', label: gettext('SMBIOS settings (type1)'), value: form.smbios1 || '-' },
+    {
+      key: 'agent',
+      label: gettext('QEMU Guest Agent'),
+      value: form.agent ? gettext('Yes') : gettext('No'),
+    },
+    {
+      key: 'protection',
+      label: gettext('Protection'),
+      value: form.protection ? gettext('Yes') : gettext('No'),
+    },
+    {
+      key: 'spice',
+      label: gettext('Spice Enhancements'),
+      value:
+        form.spiceFolderSharing || form.spiceVideoStreaming !== 'off'
+          ? gettext('Enabled')
+          : gettext('None'),
+    },
+    {
+      key: 'sev',
+      label: gettext('AMD SEV Type'),
+      value: form.sevType === '__default__' ? gettext('Default') : form.sevType,
+    },
+    {
+      key: 'tdx',
+      label: gettext('Intel TDX Type'),
+      value: form.tdxType === '__default__' ? gettext('Default') : form.tdxType,
+    },
+  ];
+});
 const advancedOptionKeys = new Set([
   'hotplug',
   'startup',
@@ -394,10 +517,14 @@ const advancedOptionKeys = new Set([
   'tdx',
 ]);
 const basicOptionRows = computed(() =>
-  optionRows.value.filter((row) => !advancedOptionKeys.has(row.key))
+  props.guestType === 'lxc'
+    ? optionRows.value
+    : optionRows.value.filter((row) => !advancedOptionKeys.has(row.key)),
 );
 const advancedOptionRows = computed(() =>
-  optionRows.value.filter((row) => advancedOptionKeys.has(row.key))
+  props.guestType === 'lxc'
+    ? []
+    : optionRows.value.filter((row) => advancedOptionKeys.has(row.key)),
 );
 const pendingKeyMap: Record<string, string[]> = {
   spice: ['spice_enhancements'],
@@ -408,23 +535,23 @@ const hardwareOptionKeys = new Set(['smbios1', 'sev', 'tdx']);
 const pendingKeysForOption = (key: string) => pendingKeyMap[key] || [key];
 const selectedPendingKeys = computed(() => pendingKeysForOption(selectedOption.value));
 const canRevertSelected = computed(() =>
-  selectedPendingKeys.value.some((key) => Boolean(pendingByKey.value[key]))
+  selectedPendingKeys.value.some((key) => Boolean(pendingByKey.value[key])),
 );
 const canRevertCurrentOption = computed(() =>
   hardwareOptionKeys.has(selectedOption.value)
     ? canConfigureHardware.value
-    : canConfigureOptions.value
+    : canConfigureOptions.value,
 );
 
 async function loadPending() {
-  const response = await getVmPendingConfig(props.node, props.vmid);
+  const response = await getVmPendingConfig(props.node, props.vmid, props.guestType);
   pendingRows.value = response.data || [];
 }
 
 async function loadVmStateStorages() {
   const response = await getNodeStorage(props.node, 'images');
   vmStateStorageOptions.value = (response.data || []).filter((storage) =>
-    textValue(storage.storage)
+    textValue(storage.storage),
   );
 }
 
@@ -432,7 +559,7 @@ async function revertSelected() {
   if (!canRevertSelected.value || !canRevertCurrentOption.value) return;
   loading.value = true;
   try {
-    await revertVmConfig(props.node, props.vmid, selectedPendingKeys.value);
+    await revertVmConfig(props.node, props.vmid, selectedPendingKeys.value, props.guestType);
     await loadPending();
     emit('updated');
   } finally {
@@ -449,7 +576,7 @@ function parseProperties(value: unknown) {
       .map((part) => {
         const [key, ...parts] = part.split('=');
         return [key, parts.join('=') || '1'];
-      })
+      }),
   );
 }
 
@@ -493,6 +620,14 @@ function selectOsBase(value: string | null) {
   form.ostype = firstVersion.value;
 }
 
+function addEnvRow() {
+  envRows.value.push({ id: nextEnvRowId++, name: '', value: '' });
+}
+
+function removeEnvRow(id: number) {
+  envRows.value = envRows.value.filter((row) => row.id !== id);
+}
+
 function isBootDevice(key: string, value: string) {
   const isCloudInit = /media=cdrom/.test(value) && /[:/]vm-\d+-cloudinit/.test(value);
   return (
@@ -522,11 +657,13 @@ function buildBootRows() {
           names.push(
             ...devices
               .filter((device) => /media=cdrom/.test(device.description))
-              .map((device) => device.name)
+              .map((device) => device.name),
           );
         if (legacy.includes('n'))
           names.push(
-            ...devices.filter((device) => /^net\d+$/.test(device.name)).map((device) => device.name)
+            ...devices
+              .filter((device) => /^net\d+$/.test(device.name))
+              .map((device) => device.name),
           );
         return [...new Set(names)];
       })();
@@ -578,6 +715,7 @@ function syncForm() {
   const sev = parseProperties(props.config['amd-sev']);
   const tdx = parseProperties(props.config['intel-tdx']);
   const startup = parseProperties(props.config.startup);
+  const features = parseProperties(props.config.features);
   const textValue = (value: unknown, fallback = '') =>
     typeof value === 'string' || typeof value === 'number' ? String(value) : fallback;
   const smbios1 = parseSmbios1(textValue(props.config.smbios1));
@@ -631,15 +769,30 @@ function syncForm() {
     tdxAttestation: String(tdx.attestation || '1') !== '0',
     tdxVsockCid: String(tdx['vsock-cid'] || '2'),
     tdxVsockPort: String(tdx['vsock-port'] || '4050'),
+    console: Number(props.config.console ?? 1) === 1,
+    tty: textValue(props.config.tty, '2'),
+    cmode: ['tty', 'console', 'shell'].includes(textValue(props.config.cmode)) ? textValue(props.config.cmode) : '__default__',
+    featureKeyctl: textValue(features.keyctl) === '1',
+    featureNesting: textValue(features.nesting) === '1',
+    featureNfs: textValue(features.mount).split(/[; ]/).includes('nfs'),
+    featureCifs: textValue(features.mount).split(/[; ]/).includes('cifs'),
+    featureFuse: textValue(features.fuse) === '1',
+    featureMknod: textValue(features.mknod) === '1',
+    entrypoint: textValue(props.config.entrypoint),
   };
   Object.assign(form, next);
+  envRows.value = textValue(props.config.env).split(/\0+/).filter(Boolean).map((entry) => {
+    const [name, ...value] = entry.split('=');
+    return { id: nextEnvRowId++, name, value: value.join('=') };
+  });
+  originalEnv.value = envValue.value;
   original.value = { ...next };
   hotplugFeatures.value =
     form.hotplug === '0'
       ? []
       : !form.hotplug || form.hotplug === '1'
-      ? ['disk', 'network', 'usb']
-      : form.hotplug.split(',').filter(Boolean);
+        ? ['disk', 'network', 'usb']
+        : form.hotplug.split(',').filter(Boolean);
   originalHotplugValue.value = hotplugValue.value;
   buildBootRows();
   originalSmbios1Value.value = smbios1Value.value;
@@ -731,11 +884,36 @@ async function save() {
         `vsock-port=${form.tdxVsockPort || '4050'}`,
       ].join(',');
   }
+  if (props.guestType === 'lxc') {
+    if (form.console !== original.value.console) data.console = form.console ? 1 : 0;
+    if (form.tty !== original.value.tty) {
+      if (form.tty.trim()) data.tty = form.tty.trim();
+      else deletedKeys.push('tty');
+    }
+    if (form.cmode !== original.value.cmode) {
+      if (form.cmode === '__default__') deletedKeys.push('cmode');
+      else data.cmode = form.cmode;
+    }
+    const featureChanged = ['featureKeyctl', 'featureNesting', 'featureNfs', 'featureCifs', 'featureFuse', 'featureMknod']
+      .some((key) => form[key as keyof typeof form] !== original.value[key as keyof typeof original.value]);
+    if (featureChanged) {
+      const features = [
+        form.featureKeyctl ? 'keyctl=1' : '', form.featureNesting ? 'nesting=1' : '',
+        form.featureNfs || form.featureCifs ? `mount=${[form.featureNfs ? 'nfs' : '', form.featureCifs ? 'cifs' : ''].filter(Boolean).join(';')}` : '',
+        form.featureFuse ? 'fuse=1' : '', form.featureMknod ? 'mknod=1' : '',
+      ].filter(Boolean).join(',');
+      if (features) data.features = features; else deletedKeys.push('features');
+    }
+    if (form.entrypoint !== original.value.entrypoint) setOptional('entrypoint', form.entrypoint);
+    if (envValue.value !== originalEnv.value) {
+      if (envValue.value) data.env = envValue.value; else deletedKeys.push('env');
+    }
+  }
   if (deletedKeys.length) data.delete = deletedKeys.join(',');
   if (Object.keys(data).length === 1) return;
   loading.value = true;
   try {
-    await updateVmConfig(props.node, props.vmid, data);
+    await updateVmConfig(props.node, props.vmid, data, props.guestType);
     Notify.create({ type: 'positive', message: gettext('VM configuration saved successfully') });
     emit('updated');
   } finally {
@@ -749,7 +927,7 @@ watch(
     void loadPending();
     void loadVmStateStorages();
   },
-  { immediate: true }
+  { immediate: true },
 );
 watch(() => props.config, syncForm, { immediate: true });
 </script>
@@ -786,7 +964,7 @@ watch(() => props.config, syncForm, { immediate: true });
             </div>
             <div class="col-8 text-grey-8 options-list-value">{{ row.value }}</div>
           </div>
-          <div class="options-advanced-list">
+          <div v-if="advancedOptionRows.length" class="options-advanced-list">
             <div class="options-advanced-heading">
               <q-icon name="tune" size="15px" />{{ gettext('Advanced settings') }}
             </div>
@@ -810,7 +988,7 @@ watch(() => props.config, syncForm, { immediate: true });
         </div>
       </div>
       <div class="col-5 options-editor-column">
-        <div class="u-border q-pa-sm u-hidden-error options-scroll options-editor">
+        <div class="u-border u-hidden-error options-scroll options-editor">
           <div class="q-pa-sm">
             <div class="row items-center no-wrap editor-titlebar">
               <div class="editor-title text-grey-10">
@@ -827,6 +1005,9 @@ watch(() => props.config, syncForm, { immediate: true });
                 :loading="loading"
                 :label="gettext('Save')"
               />
+            </div>
+            <div v-if="isLxcReadOnlyOption" class="hardware-editor-hint">
+              {{ gettext('This option cannot be edited.') }}
             </div>
             <div class="row q-col-gutter-lg">
               <div v-show="selectedOption === 'name'" class="col-12 col-md-6">
@@ -854,9 +1035,15 @@ watch(() => props.config, syncForm, { immediate: true });
                   v-model="form.protection"
                   dense
                   color="primary"
-                  :label="gettext('Protection')"
+                  :label="props.guestType === 'lxc' ? gettext('Enabled') : gettext('Protection')"
                 />
               </div>
+              <div v-show="props.guestType === 'lxc' && selectedOption === 'console'" class="col-12"><q-checkbox v-model="form.console" dense color="primary" :disable="!canConfigureOptions" label="/dev/console" /></div>
+              <div v-show="props.guestType === 'lxc' && selectedOption === 'tty'" class="col-12 col-md-6"><q-input v-model="form.tty" dense type="number" min="0" max="6" :disable="!canConfigureOptions" :label="gettext('TTY count')" :placeholder="gettext('Default')" /></div>
+              <div v-show="props.guestType === 'lxc' && selectedOption === 'cmode'" class="col-12 col-md-6"><q-select v-model="form.cmode" dense options-dense emit-value map-options :disable="!canConfigureOptions" :options="[{ label: `${gettext('Default')} (tty)`, value: '__default__' }, { label: '/dev/tty[X]', value: 'tty' }, { label: '/dev/console', value: 'console' }, { label: 'shell', value: 'shell' }]" :label="gettext('Console mode')" /></div>
+              <div v-show="props.guestType === 'lxc' && selectedOption === 'features'" class="col-12"><div class="column"><q-checkbox v-model="form.featureKeyctl" dense color="primary" :disable="!canEditLxcFeatures || !optionEnabled(props.config.unprivileged)" :label="gettext('keyctl')" /><q-checkbox v-model="form.featureNesting" dense color="primary" :disable="!canEditLxcFeatures" :label="gettext('Nesting')" /><q-checkbox v-model="form.featureNfs" dense color="primary" :disable="!canEditLxcFeatures || optionEnabled(props.config.unprivileged)" label="NFS" /><q-checkbox v-model="form.featureCifs" dense color="primary" :disable="!canEditLxcFeatures || optionEnabled(props.config.unprivileged)" label="SMB/CIFS" /><q-checkbox v-model="form.featureFuse" dense color="primary" :disable="!canEditLxcFeatures" label="FUSE" /><q-checkbox v-model="form.featureMknod" dense color="primary" :disable="!canEditLxcFeatures" :label="gettext('Create Device Nodes') + ' (' + gettext('Experimental') + ')'" /></div></div>
+              <div v-show="props.guestType === 'lxc' && selectedOption === 'entrypoint'" class="col-12"><q-input v-model="form.entrypoint" dense :disable="!canConfigureOptions" :label="gettext('Entrypoint Init Command')" placeholder="/sbin/init" /><div class="option-hint q-mt-sm">{{ gettext('Changing the entrypoint command can lead to start failure!') }}</div></div>
+              <div v-show="props.guestType === 'lxc' && selectedOption === 'env'" class="col-12"><div class="row q-col-gutter-sm text-caption text-grey-7 q-mb-xs"><div class="col-5">{{ gettext('Name') }}</div><div class="col-6">{{ gettext('Value') }}</div></div><div v-for="row in envRows" :key="row.id" class="row q-col-gutter-sm q-mb-sm"><div class="col-5"><q-input v-model="row.name" dense :disable="!canConfigureOptions" /></div><div class="col-6"><q-input v-model="row.value" dense :disable="!canConfigureOptions" /></div><div class="col-1"><q-btn flat round dense size="sm" color="negative" icon="delete" :disable="!canConfigureOptions" @click="removeEnvRow(row.id)" /></div></div><q-btn no-caps flat size="12px" color="primary" class="u-button" :disable="!canConfigureOptions" :label="gettext('Add Variable')" @click="addEnvRow" /></div>
               <div v-show="selectedOption === 'agent'" class="col-12">
                 <div class="column agent-options">
                   <q-checkbox
@@ -879,14 +1066,14 @@ watch(() => props.config, syncForm, { immediate: true });
                     :disable="!form.agent"
                     :label="
                       gettext(
-                        'Freeze/thaw guest filesystems during certain operations for consistency'
+                        'Freeze/thaw guest filesystems during certain operations for consistency',
                       )
                     "
                   />
                   <div v-if="form.agent && !form.agentFreezeFs" class="option-hint">
                     {{
                       gettext(
-                        'Freeze/thaw for guest filesystems disabled. This can lead to inconsistent disk images during snapshots, backups, and similar operations.'
+                        'Freeze/thaw for guest filesystems disabled. This can lead to inconsistent disk images during snapshots, backups, and similar operations.',
                       )
                     }}
                   </div>
@@ -987,12 +1174,14 @@ watch(() => props.config, syncForm, { immediate: true });
                 <q-input
                   v-model="form.startupOrder"
                   dense
+                  :disable="props.guestType === 'lxc' && !canModifyNode"
                   :label="gettext('Start/Shutdown order')"
                   :placeholder="gettext('any')"
                 />
                 <q-input
                   v-model="form.startupUp"
                   dense
+                  :disable="props.guestType === 'lxc' && !canModifyNode"
                   class="q-mt-sm"
                   :label="gettext('Startup delay')"
                   :placeholder="gettext('default')"
@@ -1000,12 +1189,13 @@ watch(() => props.config, syncForm, { immediate: true });
                 <q-input
                   v-model="form.startupDown"
                   dense
+                  :disable="props.guestType === 'lxc' && !canModifyNode"
                   class="q-mt-sm"
                   :label="gettext('Shutdown timeout')"
                   :placeholder="gettext('default')"
                 />
               </div>
-              <div v-show="selectedOption === 'ostype'" class="col-12 col-md-6">
+              <div v-show="selectedOption === 'ostype' && props.guestType !== 'lxc'" class="col-12 col-md-6">
                 <q-select
                   v-model="form.osBase"
                   dense
@@ -1146,7 +1336,7 @@ watch(() => props.config, syncForm, { immediate: true });
                 <div v-if="!spiceDisplayIsQxl" class="option-hint">
                   {{
                     gettext(
-                      'To use these features set the display to SPICE in the hardware settings of the VM.'
+                      'To use these features set the display to SPICE in the hardware settings of the VM.',
                     )
                   }}
                 </div>
@@ -1332,7 +1522,9 @@ watch(() => props.config, syncForm, { immediate: true });
   background: #fff;
 }
 .options-list-column {
+  display: flex;
   overflow: hidden;
+  align-self: stretch;
 }
 .options-editor-column {
   display: flex;
@@ -1340,10 +1532,15 @@ watch(() => props.config, syncForm, { immediate: true });
   background: #fff;
 }
 .options-list-panel {
+  flex: 1 1 auto;
+  height: 100%;
   border-right: 0;
 }
 .options-editor {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  min-height: 100%;
   border-left: 1px solid #d7dce2;
 }
 .options-list-row {
@@ -1452,11 +1649,14 @@ watch(() => props.config, syncForm, { immediate: true });
 }
 .option-hint {
   margin-top: 8px;
-  padding-left: 8px;
-  color: #6b7280;
+  padding: 8px 10px;
+  border: 1px solid #b8d9ff;
+  background: #e8f3ff;
+  color: #1f5f9f;
   font-size: 12px;
-  line-height: 18px;
+  line-height: 1.5;
 }
+.hardware-editor-hint { padding: 8px 10px; border: 1px solid #b8d9ff; background: #e8f3ff; color: #1f5f9f; font-size: 12px; line-height: 1.5; }
 .vm-options-tab :deep(.q-checkbox) {
   min-height: 30px;
 }

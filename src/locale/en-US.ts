@@ -68,6 +68,7 @@ export default {
   'Memory Usage': 'Memory Usage',
   'Host Memory Usage': 'Host Memory Usage',
   'Virtual Machine Basic Information': 'Virtual Machine Basic Information',
+  'Container Basic Information': 'Container Basic Information',
   'Host Basic Information': 'Host Basic Information',
   'Server Load': 'Server Load',
   'IO Delay': 'IO Delay',

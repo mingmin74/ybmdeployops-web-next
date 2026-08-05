@@ -8,6 +8,7 @@ import type { DevicePrefix, HardwareRow } from '../types';
 interface UseVmHardwareOptions {
   node: ComputedRef<string>;
   vmid: ComputedRef<string>;
+  guestType: ComputedRef<'qemu' | 'lxc'>;
   config: ComputedRef<PveRecord>;
   loading: Ref<boolean>;
   selectedDevice: Readonly<Ref<HardwareRow | undefined>>;
@@ -26,10 +27,15 @@ export function useVmHardware(options: UseVmHardwareOptions): VmHardwareContext 
   async function updateConfig(data: PveRecord) {
     options.loading.value = true;
     try {
-      await updateVmConfig(options.node.value, options.vmid.value, {
-        digest: digest.value,
-        ...data,
-      });
+      await updateVmConfig(
+        options.node.value,
+        options.vmid.value,
+        {
+          digest: digest.value,
+          ...data,
+        },
+        options.guestType.value,
+      );
       options.notifyUpdated();
     } finally {
       options.loading.value = false;

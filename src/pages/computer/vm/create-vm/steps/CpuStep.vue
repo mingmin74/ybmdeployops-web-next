@@ -52,6 +52,7 @@ const { totalCores, cpuModelRows, cpuModelDisplayValue, cpuFlagState, stepConten
                     :display-value="cpuModelDisplayValue"
                     :get-row-value="(row) => textValue(row.name)"
                     :label="gettext('Type')"
+                      class="q-field--with-bottom"
                   />
                   <q-input
                     :model-value="totalCores"

@@ -21,7 +21,10 @@ import HardwareCloudInitDriveDialog from './hardware/dialogs/HardwareCloudInitDr
 import HardwareRngDialog from './hardware/dialogs/HardwareRngDialog.vue';
 import HardwareVirtiofsDialog from './hardware/dialogs/HardwareVirtiofsDialog.vue';
 
-const props = defineProps<{ node: string; vmid: string; config: PveRecord }>();
+const props = withDefaults(
+  defineProps<{ node: string; vmid: string; config: PveRecord; guestType?: 'qemu' | 'lxc' }>(),
+  { guestType: 'qemu' },
+);
 const emit = defineEmits<{ updated: [] }>();
 const session = useSessionStore();
 const loading = shallowRef(false);
@@ -34,7 +37,9 @@ const cloudInitVisible = shallowRef(false);
 const rngVisible = shallowRef(false);
 const virtiofsVisible = shallowRef(false);
 const selectedKey = shallowRef('');
-const addInitialKind = shallowRef<'disk' | 'cdrom' | 'net' | 'usb' | 'pci' | 'serial' | 'audio'>('disk');
+const addInitialKind = shallowRef<'disk' | 'cdrom' | 'net' | 'usb' | 'pci' | 'serial' | 'audio'>(
+  'disk',
+);
 const firmwareKind = shallowRef<'efi' | 'tpm'>('efi');
 const form = reactive({
   deviceValue: '',
@@ -88,23 +93,42 @@ function renderDisplay(value: unknown) {
 function renderMachine(value: unknown) {
   const machine = parsePropertyString(value, 'type');
   const type = machine.type || '__default__';
-  const displayType = type === 'pc' || type === '__default__' ? `${gettext('Default')} (i440fx)` : type;
+  const displayType =
+    type === 'pc' || type === '__default__' ? `${gettext('Default')} (i440fx)` : type;
   return machine.viommu ? `${displayType}, vIOMMU: ${machine.viommu}` : displayType;
 }
 function deviceRow(key: string, config: PveRecord): HardwareRow | undefined {
   if (config[key] === undefined) return undefined;
   const value = textValue(config[key]) || '-';
   if (/^(ide|scsi|sata|virtio)\d+$/.test(key) && value.includes('cloudinit')) {
-    return { key, type: 'cloudinit', name: `${gettext('CloudInit Drive')} (${key})`, value, editable: true };
+    return {
+      key,
+      type: 'cloudinit',
+      name: `${gettext('CloudInit Drive')} (${key})`,
+      value,
+      editable: true,
+    };
   }
   if (/^(ide|scsi|sata|virtio)\d+$/.test(key) && value.includes('media=cdrom')) {
-    return { key, type: 'cdrom', name: `${gettext('CD/DVD Drive')} (${key})`, value, editable: true };
+    return {
+      key,
+      type: 'cdrom',
+      name: `${gettext('CD/DVD Drive')} (${key})`,
+      value,
+      editable: true,
+    };
   }
   if (/^(ide|scsi|sata|virtio)\d+$/.test(key) && !value.includes('cloudinit')) {
     return { key, type: 'disk', name: `${gettext('Hard Disk')} (${key})`, value, editable: true };
   }
   if (/^net\d+$/.test(key)) {
-    return { key, type: 'network', name: `${gettext('Network Device')} (${key})`, value, editable: true };
+    return {
+      key,
+      type: 'network',
+      name: `${gettext('Network Device')} (${key})`,
+      value,
+      editable: true,
+    };
   }
   if (key === 'efidisk0') {
     return { key, type: 'efi', name: gettext('EFI Disk'), value, editable: true };
@@ -119,7 +143,13 @@ function deviceRow(key: string, config: PveRecord): HardwareRow | undefined {
     return { key, type: 'pci', name: `${gettext('PCI Device')} (${key})`, value, editable: true };
   }
   if (/^serial\d+$/.test(key)) {
-    return { key, type: 'serial', name: `${gettext('Serial Port')} (${key})`, value, editable: true };
+    return {
+      key,
+      type: 'serial',
+      name: `${gettext('Serial Port')} (${key})`,
+      value,
+      editable: true,
+    };
   }
   if (key === 'audio0') {
     return { key, type: 'audio', name: gettext('Audio Device'), value, editable: true };
@@ -128,16 +158,86 @@ function deviceRow(key: string, config: PveRecord): HardwareRow | undefined {
     return { key, type: 'rng', name: gettext('VirtIO RNG'), value, editable: true };
   }
   if (/^virtiofs\d+$/.test(key)) {
-    return { key, type: 'virtiofs', name: `${gettext('Virtiofs')} (${key})`, value, editable: true };
+    return {
+      key,
+      type: 'virtiofs',
+      name: `${gettext('Virtiofs')} (${key})`,
+      value,
+      editable: true,
+    };
   }
   return undefined;
 }
 const pendingByKey = computed<Record<string, PveRecord>>(() =>
-  Object.fromEntries(pendingRows.value.map((row) => [textValue(row.key), row]))
+  Object.fromEntries(pendingRows.value.map((row) => [textValue(row.key), row])),
 );
 
 const rows = computed<HardwareRow[]>(() => {
   const config = props.config;
+  if (props.guestType === 'lxc') {
+    const cpuLimit = numberValue(config.cpulimit, 0);
+    const cpuUnits = numberValue(config.cpuunits, 0);
+    const cpuValue = numberValue(config.cores, 0) || gettext('unlimited');
+    const cpuDetails = [
+      String(cpuValue),
+      ...(cpuLimit ? [`[cpulimit=${cpuLimit}]`] : []),
+      ...(cpuUnits ? [`[cpuunits=${cpuUnits}]`] : []),
+    ];
+    const mountPoints = Object.keys(config)
+      .filter((key) => /^(mp|unused)\d+$/.test(key))
+      .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+      .map((key) => ({
+        key,
+        type: 'disk' as const,
+        name: key.startsWith('mp')
+          ? `${gettext('Mount Point')} (${key})`
+          : `${gettext('Unused Disk')} ${key.replace('unused', '')}`,
+        value: textValue(config[key]) || '-',
+        editable: true,
+      }));
+    const devices = Object.keys(config)
+      .filter((key) => /^dev\d+$/.test(key))
+      .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+      .map((key) => ({
+        key,
+        type: 'pci' as const,
+        name: `${gettext('Device')} (${key})`,
+        value: textValue(config[key]) || '-',
+        editable: true,
+      }));
+    return [
+      {
+        key: 'memory',
+        type: 'memory',
+        name: gettext('Memory'),
+        value: `${numberValue(config.memory, 512)} MiB`,
+        editable: true,
+      },
+      {
+        key: 'swap',
+        type: 'memory',
+        name: gettext('Swap'),
+        value: `${numberValue(config.swap, 512)} MiB`,
+        editable: true,
+      },
+      {
+        key: 'cores',
+        type: 'cpu',
+        name: gettext('Cores'),
+        value: cpuDetails.join(' '),
+        editable: true,
+      },
+      {
+        key: 'rootfs',
+        type: 'disk',
+        name: gettext('Root Disk'),
+        value: textValue(config.rootfs) || gettext('None'),
+        editable: true,
+      },
+      ...mountPoints,
+      ...devices,
+    ];
+  }
   const base: HardwareRow[] = [
     {
       key: 'cpu',
@@ -196,17 +296,19 @@ const rows = computed<HardwareRow[]>(() => {
 
 const selectedDevice = computed(() => rows.value.find((row) => row.key === selectedKey.value));
 const selectedPending = computed(() =>
-  Boolean(selectedDevice.value && hasPendingChange(selectedDevice.value.key))
+  Boolean(selectedDevice.value && hasPendingChange(selectedDevice.value.key)),
 );
 const canRemove = computed(() => {
   const device = selectedDevice.value;
-  return Boolean(device && ['disk', 'cdrom', 'network'].includes(device.type));
+  return Boolean(
+    device && device.key !== 'rootfs' && ['disk', 'cdrom', 'network', 'pci'].includes(device.type),
+  );
 });
 const canRevert = computed(() =>
-  Boolean(selectedDevice.value && selectedPending.value && canEditRow(selectedDevice.value))
+  Boolean(selectedDevice.value && selectedPending.value && canEditRow(selectedDevice.value)),
 );
 const selectedCanSave = computed(() =>
-  Boolean(selectedDevice.value?.editable && canEditRow(selectedDevice.value))
+  Boolean(selectedDevice.value?.editable && canEditRow(selectedDevice.value)),
 );
 const isDisk = computed(() => selectedDevice.value?.type === 'disk');
 function selectHardware(row: HardwareRow) {
@@ -229,7 +331,7 @@ function hasVmCapability(capability: string) {
 }
 
 async function loadPending() {
-  const response = await getVmPendingConfig(props.node, props.vmid);
+  const response = await getVmPendingConfig(props.node, props.vmid, props.guestType);
   pendingRows.value = response.data || [];
 }
 
@@ -245,7 +347,7 @@ async function revertSelected() {
   };
   loading.value = true;
   try {
-    await revertVmConfig(props.node, props.vmid, grouped[row.key] || [row.key]);
+    await revertVmConfig(props.node, props.vmid, grouped[row.key] || [row.key], props.guestType);
     await loadPending();
     emit('updated');
   } finally {
@@ -258,7 +360,7 @@ watch(
   () => {
     void loadPending();
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 watch(
@@ -267,7 +369,7 @@ watch(
     if (selectedKey.value && nextRows.some((row) => row.key === selectedKey.value)) return;
     selectedKey.value = nextRows[0]?.key || '';
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 watch(
@@ -277,7 +379,7 @@ watch(
     form.deviceValue = device?.editable ? textValue(props.config[device.key]) : '';
     form.advanced = Boolean(device?.editable && form.deviceValue.includes(','));
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 function canEditRow(row: HardwareRow) {
@@ -324,12 +426,26 @@ async function save() {
     if (form.deviceValue.trim()) data.vga = form.deviceValue;
     else data.delete = textValue(data.delete) ? `${textValue(data.delete)},vga` : 'vga';
   } else if (
-    ['disk', 'cdrom', 'cloudinit', 'network', 'usb', 'pci', 'serial', 'virtiofs', 'keyboard', 'audio', 'rng', 'efi', 'tpm'].includes(device.type)
+    [
+      'disk',
+      'cdrom',
+      'cloudinit',
+      'network',
+      'usb',
+      'pci',
+      'serial',
+      'virtiofs',
+      'keyboard',
+      'audio',
+      'rng',
+      'efi',
+      'tpm',
+    ].includes(device.type)
   )
     data[device.key] = form.deviceValue;
   loading.value = true;
   try {
-    await updateVmConfig(props.node, props.vmid, data);
+    await updateVmConfig(props.node, props.vmid, data, props.guestType);
     emit('updated');
   } finally {
     loading.value = false;
@@ -339,11 +455,7 @@ async function save() {
 function removeDevice() {
   const device = selectedDevice.value;
   if (!device || !canEditRow(device)) return;
-  if (
-    !device ||
-    !['disk', 'cdrom', 'network'].includes(device.type)
-  )
-    return;
+  if (!device || !['disk', 'cdrom', 'network'].includes(device.type)) return;
   Dialog.create({
     title: gettext('Remove'),
     message: gettext('Are you sure to delete [%s]?').replace('%s', device.name),
@@ -351,7 +463,12 @@ function removeDevice() {
     persistent: true,
   }).onOk(() => {
     loading.value = true;
-    void updateVmConfig(props.node, props.vmid, { digest: props.config.digest, delete: device.key })
+    void updateVmConfig(
+      props.node,
+      props.vmid,
+      { digest: props.config.digest, delete: device.key },
+      props.guestType,
+    )
       .then(() => emit('updated'))
       .finally(() => {
         loading.value = false;
@@ -364,7 +481,8 @@ function openResize() {
   resizeVisible.value = true;
 }
 function openMove() {
-  if (isDisk.value && hasVmCapability('VM.Config.Disk') && selectedDevice.value?.key) moveVisible.value = true;
+  if (isDisk.value && hasVmCapability('VM.Config.Disk') && selectedDevice.value?.key)
+    moveVisible.value = true;
 }
 
 function openImportDisk() {
@@ -384,7 +502,7 @@ function openFirmware(kind: 'efi' | 'tpm') {
 
 function nextDeviceKey(
   prefix: 'scsi' | 'virtio' | 'sata' | 'net' | 'ide' | 'usb' | 'hostpci' | 'serial' | 'virtiofs',
-  limit = 32
+  limit = 32,
 ) {
   for (let index = 0; index < limit; index += 1) {
     const key = `${prefix}${index}`;
@@ -395,6 +513,7 @@ function nextDeviceKey(
 const vmHardwareContext = useVmHardware({
   node: computed(() => props.node),
   vmid: computed(() => props.vmid),
+  guestType: computed(() => props.guestType),
   config: computed(() => props.config),
   loading,
   selectedDevice,
@@ -417,6 +536,7 @@ provide(vmHardwareKey, vmHardwareContext);
       :is-disk="isDisk"
       :can-remove="canRemove"
       :can-revert="canRevert"
+      :guest-type="props.guestType"
       @add="openAddHardware"
       @add-firmware="openFirmware"
       @add-cloud-init="cloudInitVisible = true"
@@ -428,7 +548,7 @@ provide(vmHardwareKey, vmHardwareContext);
       @move="openMove"
       @revert="revertSelected"
     />
-    <div class="row">
+    <div class="row items-stretch">
       <div class="col-7 hardware-list-column">
         <HardwareList :rows="rows" @select="selectHardware" />
       </div>
@@ -449,7 +569,21 @@ provide(vmHardwareKey, vmHardwareContext);
             </HardwareEditorHost>
           </div>
           <div
-            v-if="selectedDevice?.editable && !['cpu', 'memory', 'bios', 'machine', 'scsi-controller', 'system', 'display', 'disk', 'cdrom', 'network'].includes(selectedDevice.type)"
+            v-if="
+              selectedDevice?.editable &&
+              ![
+                'cpu',
+                'memory',
+                'bios',
+                'machine',
+                'scsi-controller',
+                'system',
+                'display',
+                'disk',
+                'cdrom',
+                'network',
+              ].includes(selectedDevice.type)
+            "
             class="hardware-editor__footer row items-center justify-between"
           >
             <q-checkbox
@@ -488,7 +622,9 @@ provide(vmHardwareKey, vmHardwareContext);
   font-size: 13px;
 }
 .hardware-list-column {
+  display: flex;
   overflow: hidden;
+  align-self: stretch;
 }
 .hardware-edit-column {
   display: flex;

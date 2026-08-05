@@ -1,0 +1,91 @@
+
+> ybmdeployops-web-next@0.0.1 typecheck
+> vue-tsc --noEmit --pretty false
+
+src/pages/computer/ct/CreateCtBindMounts.vue(29,8): error TS2345: Argument of type '{ label: string; class: string; value: string; dense: true; outlined: true; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ label: string; class: string; value: string; dense: true; outlined: true; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtBindMounts.vue(29,116): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtBindMounts.vue(30,8): error TS2345: Argument of type '{ label: string; class: string; value: string; dense: true; outlined: true; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ label: string; class: string; value: string; dense: true; outlined: true; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtBindMounts.vue(30,131): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtBindMounts.vue(31,8): error TS2345: Argument of type '{ label: string; value: string; class: string; options: { label: string; value: string; }[]; dense: true; outlined: true; 'onUpdate:modelValue': any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QSelectProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ label: string; value: string; class: string; options: { label: string; value: string; }[]; dense: true; outlined: true; 'onUpdate:modelValue': any; }' but required in type 'QSelectProps'.
+src/pages/computer/ct/CreateCtDialog.vue(93,3): error TS2322: Type '"confirm" | "dns" | "template" | "mounts" | "general" | "hardware" | "bindmounts" | "limits" | "hooks" | undefined' is not assignable to type '"confirm" | "template" | "general" | "hardware"'.
+  Type 'undefined' is not assignable to type '"confirm" | "template" | "general" | "hardware"'.
+src/pages/computer/ct/CreateCtDialog.vue(101,28): error TS2532: Object is possibly 'undefined'.
+src/pages/computer/ct/CreateCtDialog.vue(354,40): error TS2322: Type 'number | null' is not assignable to type 'number'.
+  Type 'null' is not assignable to type 'number'.
+src/pages/computer/ct/CreateCtDialog.vue(355,39): error TS2322: Type 'number | null' is not assignable to type 'number'.
+  Type 'null' is not assignable to type 'number'.
+src/pages/computer/ct/CreateCtDialog.vue(379,36): error TS2322: Type '{ hostPath: string; containerPath: string; readOnly: boolean; createIfMissing?: boolean; propagation?: string; }[]' is not assignable to type 'BindMount[]'.
+  Type '{ hostPath: string; containerPath: string; readOnly: boolean; createIfMissing?: boolean; propagation?: string; }' is not assignable to type 'BindMount'.
+    Property 'createIfMissing' is optional in type '{ hostPath: string; containerPath: string; readOnly: boolean; createIfMissing?: boolean; propagation?: string; }' but required in type 'BindMount'.
+src/pages/computer/ct/CreateCtDns.vue(17,6): error TS2345: Argument of type '{ class: string; value: string; dense: true; outlined: true; label: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ class: string; value: string; dense: true; outlined: true; label: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtDns.vue(17,116): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtDns.vue(19,6): error TS2345: Argument of type '{ value: string; dense: true; outlined: true; type: "textarea"; autogrow: true; label: string; hint: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ value: string; dense: true; outlined: true; type: "textarea"; autogrow: true; label: string; hint: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtDns.vue(27,16): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtDns.vue(30,6): error TS2345: Argument of type '{ value: string; dense: true; outlined: true; label: string; hint: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ value: string; dense: true; outlined: true; label: string; hint: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtDns.vue(30,201): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtGeneral.vue(18,6): error TS2345: Argument of type '{ options: { label: string; value: string; }[]; dense: true; label: string; hideDropdownIcon: true; emitValue: true; mapOptions: true; value: string; 'onUpdate:modelValue': any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QSelectProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ options: { label: string; value: string; }[]; dense: true; label: string; hideDropdownIcon: true; emitValue: true; mapOptions: true; value: string; 'onUpdate:modelValue': any; }' but required in type 'QSelectProps'.
+src/pages/computer/ct/CreateCtGeneral.vue(29,8): error TS2345: Argument of type '{ class: string; value: string; dense: true; label: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ class: string; value: string; dense: true; label: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtGeneral.vue(29,97): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtGeneral.vue(30,8): error TS2345: Argument of type '{ class: string; value: string; dense: true; label: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ class: string; value: string; dense: true; label: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtGeneral.vue(30,109): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtHardware.vue(46,8): error TS2345: Argument of type '{ class: string; value: number | null; dense: true; type: "number"; label: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ class: string; value: number | null; dense: true; type: "number"; label: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtHardware.vue(46,127): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtHardware.vue(47,8): error TS2345: Argument of type '{ class: string; value: number | null; dense: true; type: "number"; label: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ class: string; value: number | null; dense: true; type: "number"; label: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtHardware.vue(47,122): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtHardware.vue(49,6): error TS2345: Argument of type '{ value: string; dense: true; type: "password"; label: string; hint: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ value: string; dense: true; type: "password"; label: string; hint: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtHardware.vue(49,182): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtHardware.vue(54,10): error TS2345: Argument of type '{ class: string; value: string; dense: true; label: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ class: string; value: string; dense: true; label: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtHardware.vue(54,122): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtHardware.vue(55,10): error TS2345: Argument of type '{ class: string; value: string; dense: true; label: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ class: string; value: string; dense: true; label: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtHardware.vue(55,108): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtHardware.vue(58,10): error TS2345: Argument of type '{ class: string; value: string; dense: true; label: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ class: string; value: string; dense: true; label: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtHardware.vue(58,118): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtHardware.vue(59,10): error TS2345: Argument of type '{ class: string; value: string; dense: true; label: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ class: string; value: string; dense: true; label: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtHardware.vue(59,106): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtHardware.vue(66,10): error TS2345: Argument of type '{ hint: string; class: string; value: string; dense: true; readonly: true; label: string; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ hint: string; class: string; value: string; dense: true; readonly: true; label: string; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtHardware.vue(67,10): error TS2345: Argument of type '{ hint: string; class: string; value: string; dense: true; readonly: true; label: string; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ hint: string; class: string; value: string; dense: true; readonly: true; label: string; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtHardware.vue(72,8): error TS2345: Argument of type '{ dense: true; rightLabel: boolean; color: "primary"; checked: boolean; label: string; 'onUpdate:modelValue': any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QCheckboxProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ dense: true; rightLabel: boolean; color: "primary"; checked: boolean; label: string; 'onUpdate:modelValue': any; }' but required in type 'QCheckboxProps'.
+src/pages/computer/ct/CreateCtHardware.vue(73,8): error TS2345: Argument of type '{ class: string; value: string; dense: true; label: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ class: string; value: string; dense: true; label: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtHardware.vue(73,127): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtHardware.vue(79,10): error TS2345: Argument of type '{ value: string; class: string; options: { label: string; value: string; }[]; dense: true; label: string; emitValue: true; mapOptions: true; 'onUpdate:modelValue': any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QSelectProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ value: string; class: string; options: { label: string; value: string; }[]; dense: true; label: string; emitValue: true; mapOptions: true; 'onUpdate:modelValue': any; }' but required in type 'QSelectProps'.
+src/pages/computer/ct/CreateCtHardware.vue(80,10): error TS2345: Argument of type '{ class: string; value: number | null; dense: true; type: "number"; label: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ class: string; value: number | null; dense: true; type: "number"; label: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtHardware.vue(80,143): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtHardware.vue(83,10): error TS2345: Argument of type '{ class: string; value: number | null; dense: true; type: "number"; label: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ class: string; value: number | null; dense: true; type: "number"; label: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtHardware.vue(83,137): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/ct/CreateCtHardware.vue(89,8): error TS2345: Argument of type '{ value: string; dense: true; type: "textarea"; label: string; onInput: any; }' is not assignable to parameter of type 'VNodeProps & AllowedComponentProps & ComponentCustomProps & QInputProps & Record<string, unknown>'.
+  Property 'modelValue' is missing in type '{ value: string; dense: true; type: "textarea"; label: string; onInput: any; }' but required in type 'QInputProps'.
+src/pages/computer/ct/CreateCtHardware.vue(89,141): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/pages/computer/vm/VmCloudInitTab.vue(58,51): error TS18048: 'address' is possibly 'undefined'.
+src/pages/computer/vm/VmCloudInitTab.vue(59,26): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/pages/computer/vm/VmCloudInitTab.vue(59,52): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/pages/computer/vm/VmCloudInitTab.vue(68,5): error TS2375: Type '{ type: string; key: string; comment: string | undefined; }' is not assignable to type 'ParsedSshKey' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'comment' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/pages/computer/vm/VmCloudInitTab.vue(71,55): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.

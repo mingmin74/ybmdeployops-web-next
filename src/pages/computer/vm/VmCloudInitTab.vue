@@ -54,7 +54,7 @@ function isValidNameserverList(value: string) {
   return value.split(/[ ,;]+/).every((entry) => {
     if (!entry) return true;
     const parts = entry.split('%');
-    const address = parts[0];
+    const address = parts[0] ?? '';
     if (parts.length > 2 || (parts.length > 1 && !address.toLowerCase().startsWith('fe80:'))) return false;
     return isIpv4Address(address) || isIpv6Address(address);
   });
@@ -65,10 +65,19 @@ function parseSshKey(value: string): ParsedSshKey | null {
   const typePattern = /^(?:(?:sk-)?(?:ssh-(?:dss|rsa|ed25519)|ecdsa-sha2-nistp\d+)(?:@(?:[a-z0-9_-]+\.)+[a-z]{2,})?)$/;
   if (!keyMatch || !keyMatch[2]) return null;
   if (keyMatch[1] && typePattern.test(keyMatch[1])) {
-    return { type: keyMatch[1], key: keyMatch[2], comment: keyMatch[3] };
+    return {
+      type: keyMatch[1],
+      key: keyMatch[2],
+      ...(keyMatch[3] ? { comment: keyMatch[3] } : {}),
+    };
   }
   if (typePattern.test(keyMatch[2])) {
-    return { options: keyMatch[1], type: keyMatch[2], key: keyMatch[3], comment: keyMatch[4] };
+    return {
+      options: keyMatch[1],
+      type: keyMatch[2],
+      key: keyMatch[3],
+      ...(keyMatch[4] ? { comment: keyMatch[4] } : {}),
+    };
   }
   return null;
 }

@@ -36,9 +36,9 @@ export function updateVmConfig(
   });
 }
 
-export function getVmPendingConfig(node: string, vmid: string | number) {
+export function getVmPendingConfig(node: string, vmid: string | number, type = 'qemu') {
   return request<PveRecord[]>(
-    `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/pending`,
+    `/api2/json/nodes/${encodeURIComponent(node)}/${type}/${encodeURIComponent(String(vmid))}/pending`,
     {
       method: 'GET',
       notifyOnError: true,
@@ -46,9 +46,9 @@ export function getVmPendingConfig(node: string, vmid: string | number) {
   );
 }
 
-export function revertVmConfig(node: string, vmid: string | number, keys: string[]) {
+export function revertVmConfig(node: string, vmid: string | number, keys: string[], type = 'qemu') {
   return request(
-    `/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/config`,
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/${type}/${encodeURIComponent(String(vmid))}/config`,
     {
       method: 'PUT',
       data: { revert: keys.join(',') },
@@ -57,8 +57,8 @@ export function revertVmConfig(node: string, vmid: string | number, keys: string
   );
 }
 
-export function getVmSnapshots(node: string, vmid: string | number) {
-  return request<PveRecord[]>(`/api2/json/nodes/${node}/qemu/${vmid}/snapshot`, {
+export function getVmSnapshots(node: string, vmid: string | number, type = 'qemu') {
+  return request<PveRecord[]>(`/api2/json/nodes/${node}/${type}/${vmid}/snapshot`, {
     method: 'GET',
     notifyOnError: true,
   });
@@ -72,17 +72,27 @@ export function getVmSnapshotFeature(node: string, vmid: string | number, type =
   });
 }
 
-export function createVmSnapshot(node: string, vmid: string | number, data: PveRecord) {
-  return request<string>(`/api2/json/nodes/${node}/qemu/${vmid}/snapshot`, {
+export function createVmSnapshot(
+  node: string,
+  vmid: string | number,
+  data: PveRecord,
+  type = 'qemu',
+) {
+  return request<string>(`/api2/json/nodes/${node}/${type}/${vmid}/snapshot`, {
     method: 'POST',
     data,
     notifyOnError: true,
   });
 }
 
-export function rollbackVmSnapshot(node: string, vmid: string | number, snapname: string) {
+export function rollbackVmSnapshot(
+  node: string,
+  vmid: string | number,
+  snapname: string,
+  type = 'qemu',
+) {
   return request<string>(
-    `/api2/json/nodes/${node}/qemu/${vmid}/snapshot/${encodeURIComponent(snapname)}/rollback`,
+    `/api2/json/nodes/${node}/${type}/${vmid}/snapshot/${encodeURIComponent(snapname)}/rollback`,
     {
       method: 'POST',
       notifyOnError: true,
@@ -90,9 +100,14 @@ export function rollbackVmSnapshot(node: string, vmid: string | number, snapname
   );
 }
 
-export function deleteVmSnapshot(node: string, vmid: string | number, snapname: string) {
+export function deleteVmSnapshot(
+  node: string,
+  vmid: string | number,
+  snapname: string,
+  type = 'qemu',
+) {
   return request<string>(
-    `/api2/json/nodes/${node}/qemu/${vmid}/snapshot/${encodeURIComponent(snapname)}`,
+    `/api2/json/nodes/${node}/${type}/${vmid}/snapshot/${encodeURIComponent(snapname)}`,
     {
       method: 'DELETE',
       notifyOnError: true,
@@ -100,9 +115,14 @@ export function deleteVmSnapshot(node: string, vmid: string | number, snapname: 
   );
 }
 
-export function getVmSnapshotConfig(node: string, vmid: string | number, snapname: string) {
+export function getVmSnapshotConfig(
+  node: string,
+  vmid: string | number,
+  snapname: string,
+  type = 'qemu',
+) {
   return request<PveRecord>(
-    `/api2/json/nodes/${node}/qemu/${vmid}/snapshot/${encodeURIComponent(snapname)}/config`,
+    `/api2/json/nodes/${node}/${type}/${vmid}/snapshot/${encodeURIComponent(snapname)}/config`,
     { method: 'GET', notifyOnError: true },
   );
 }
@@ -112,9 +132,10 @@ export function updateVmSnapshotConfig(
   vmid: string | number,
   snapname: string,
   data: PveRecord,
+  type = 'qemu',
 ) {
   return request(
-    `/api2/json/nodes/${node}/qemu/${vmid}/snapshot/${encodeURIComponent(snapname)}/config`,
+    `/api2/json/nodes/${node}/${type}/${vmid}/snapshot/${encodeURIComponent(snapname)}/config`,
     { method: 'PUT', data, notifyOnError: true },
   );
 }
@@ -136,6 +157,16 @@ export function getVmRrd(
 export function getVmGuestAgentInterfaces(node: string, vmid: string | number, type = 'qemu') {
   return request<PveRecord>(
     `/api2/json/nodes/${node}/${type}/${vmid}/agent/network-get-interfaces`,
+    {
+      method: 'GET',
+      notifyOnError: false,
+    },
+  );
+}
+
+export function getCtInterfaces(node: string, vmid: string | number) {
+  return request<PveRecord>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/lxc/${encodeURIComponent(String(vmid))}/interfaces`,
     {
       method: 'GET',
       notifyOnError: false,

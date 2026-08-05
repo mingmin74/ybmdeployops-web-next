@@ -15,12 +15,16 @@ const props = withDefaults(
     width?: string;
     label?: string;
     fieldStyle?: 'outlined' | 'standard';
+    error?: boolean;
+    errorMessage?: string;
   }>(),
   {
     disableOffline: false,
     width: '580px',
     label: '',
     fieldStyle: 'outlined',
+    error: false,
+    errorMessage: '',
   },
 );
 
@@ -140,6 +144,8 @@ onMounted(() => {
     :width="width"
     :label="label"
     :field-style="fieldStyle"
+    :error="error"
+    :error-message="errorMessage"
     :get-row-value="(row) => String(row.node || '')"
     :can-select="(row) => canSelect(row as PveNode)"
   >

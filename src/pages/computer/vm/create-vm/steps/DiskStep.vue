@@ -168,6 +168,7 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                             :display-value="form.storage"
                             :get-row-value="(row) => textValue(row.storage)"
                             :label="gettext('Storage')"
+                              class="q-field--with-bottom"
                           />
                           <q-input
                             v-model.number="form.diskSize"

@@ -87,6 +87,7 @@ export function installLocale(app: App) {
   app.config.globalProperties.ngettext = ngettext;
   app.config.globalProperties.$gettext = gettext;
   app.config.globalProperties.$ngettext = ngettext;
+  app.config.globalProperties.$t = gettext;
 }
 
 declare module '@vue/runtime-core' {
@@ -95,5 +96,6 @@ declare module '@vue/runtime-core' {
     ngettext: typeof ngettext;
     $gettext: typeof gettext;
     $ngettext: typeof ngettext;
+    $t: typeof gettext;
   }
 }

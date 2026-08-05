@@ -21,7 +21,7 @@ import {
   runVmBackup,
 } from '@/api/vm';
 
-const props = defineProps<{ node: string; vmid: string }>();
+const props = withDefaults(defineProps<{ node: string; vmid: string; guestType?: 'qemu' | 'lxc' }>(), { guestType: 'qemu' });
 const emit = defineEmits<{ task: [node: string, upid: string, title: string] }>();
 const $q = useQuasar();
 const session = useSessionStore();
@@ -211,16 +211,16 @@ function sortByAvailDesc(items: PveRecord[]) {
   return [...items].sort((a, b) => Number(b.avail || 0) - Number(a.avail || 0));
 }
 
-function isQemuBackupForCurrentVm(row: PveRecord) {
+function isGuestBackupForCurrentVm(row: PveRecord) {
   const vmid = textValue(props.vmid);
   const rowVmid = textValue(row.vmid);
   const volid = textValue(row.volid);
   const format = textValue(row.format);
   const subtype = textValue(row.subtype);
-  const isQemuBackup =
-    format === 'pbs-vm' || subtype === 'qemu' || /:backup\/vzdump-qemu-/.test(volid);
+  const isGuestBackup =
+    format === 'pbs-vm' || subtype === props.guestType || new RegExp(`:backup/vzdump-${props.guestType}-`).test(volid);
 
-  return isQemuBackup && (rowVmid === vmid || volid.includes(`vzdump-qemu-${vmid}`));
+  return isGuestBackup && (rowVmid === vmid || volid.includes(`vzdump-${props.guestType}-${vmid}`));
 }
 
 function parsePropertyString(value: unknown) {
@@ -255,7 +255,7 @@ async function refreshRows() {
   loading.value = true;
   try {
     const response = await getStorageContent(props.node, currentStorage.value, 'backup');
-    rows.value = (response.data || []).filter(isQemuBackupForCurrentVm);
+    rows.value = (response.data || []).filter(isGuestBackupForCurrentVm);
     selected.value = [];
   } finally {
     loading.value = false;
@@ -489,7 +489,7 @@ async function executeRestore() {
     if (restoreForm.cores) data.cores = Number(restoreForm.cores);
     if (restoreForm.memory) data.memory = Number(restoreForm.memory);
     if (restoreForm.sockets) data.sockets = Number(restoreForm.sockets);
-    const response = await restoreVmBackup(props.node, data);
+    const response = await restoreVmBackup(props.node, data, props.guestType);
     restoreVisible.value = false;
     emit('task', props.node, String(response.data || ''), gettext('Restore'));
   } finally {

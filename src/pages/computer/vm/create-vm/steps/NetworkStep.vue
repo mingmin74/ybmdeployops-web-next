@@ -38,6 +38,7 @@ const { bridgeRows, stepContentHeight } = derived;
                       :display-value="form.bridge"
                       :get-row-value="(row) => textValue(row.iface)"
                       :label="gettext('Bridge')"
+                        class="q-field--with-bottom"
                     />
                     <q-input
                       v-model="form.vlanTag"

@@ -104,7 +104,7 @@ PVE 代理：
 ```ts
 proxy: {
   '/api2': {
-    target: process.env.VITE_PVE_PROXY_TARGET ,
+    target: import.meta.env.VITE_PVE_PROXY_TARGET,
     ws: true,
     secure: false,
     changeOrigin: true,

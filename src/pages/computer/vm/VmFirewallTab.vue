@@ -20,7 +20,7 @@ import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
 
-const props = defineProps<{ node: string; vmid: string }>();
+const props = withDefaults(defineProps<{ node: string; vmid: string; guestType?: 'qemu' | 'lxc' }>(), { guestType: 'qemu' });
 const session = useSessionStore();
 const loading = shallowRef(false);
 const section = shallowRef<'rules' | 'options' | 'aliases' | 'ipset' | 'log'>('rules');
@@ -151,8 +151,8 @@ async function reload() {
   loading.value = true;
   try {
     const [rulesResponse, optionsResponse] = await Promise.all([
-      getVmFirewallRules(props.node, props.vmid),
-      getVmFirewallOptions(props.node, props.vmid),
+      getVmFirewallRules(props.node, props.vmid, props.guestType),
+      getVmFirewallOptions(props.node, props.vmid, props.guestType),
     ]);
     rows.value = rulesResponse.data || [];
     options.value = optionsResponse.data || {};
@@ -203,7 +203,7 @@ async function saveSecurityGroup() {
   if (!canConfigureFirewall.value || !groupForm.action) return;
   loading.value = true;
   try {
-    await createVmFirewallRule(props.node, props.vmid, { type: 'group', action: groupForm.action, enable: groupForm.enable, iface: groupForm.iface, comment: groupForm.comment });
+    await createVmFirewallRule(props.node, props.vmid, { type: 'group', action: groupForm.action, enable: groupForm.enable, iface: groupForm.iface, comment: groupForm.comment }, props.guestType);
     groupVisible.value = false;
     await reload();
   } finally { loading.value = false; }
@@ -213,8 +213,8 @@ async function saveRule() {
   loading.value = true;
   try {
     if (editing.value)
-      await updateVmFirewallRule(props.node, props.vmid, textValue(form.pos), form);
-    else await createVmFirewallRule(props.node, props.vmid, form);
+      await updateVmFirewallRule(props.node, props.vmid, textValue(form.pos), form, props.guestType);
+    else await createVmFirewallRule(props.node, props.vmid, form, props.guestType);
     dialog.value = false;
     await reload();
   } finally {
@@ -232,7 +232,7 @@ function removeRule() {
     cancel: true,
     persistent: true,
   }).onOk(() => {
-    void deleteVmFirewallRule(props.node, props.vmid, position, row.digest).then(reload);
+    void deleteVmFirewallRule(props.node, props.vmid, position, row.digest, props.guestType).then(reload);
   });
 }
 async function saveOption(key: string, value: unknown) {
@@ -242,7 +242,7 @@ async function saveOption(key: string, value: unknown) {
     await updateVmFirewallOptions(props.node, props.vmid, {
       [key]: value,
       digest: options.value.digest,
-    });
+    }, props.guestType);
     await reload();
   } finally {
     loading.value = false;
@@ -347,7 +347,7 @@ async function loadFirewallLogs(isStart: boolean) {
   logIsUpdate = true;
   logLoading.value = true;
   try {
-    const response = await getVmFirewallLogs(props.node, props.vmid, params);
+    const response = await getVmFirewallLogs(props.node, props.vmid, params, props.guestType);
     const items = response.data || [];
     const total = Number(response.total || items.length);
     const nextLogs = logs.value.slice();

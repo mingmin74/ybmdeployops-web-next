@@ -109,7 +109,7 @@
     </q-drawer>
 
     <q-page-container class="page-container">
-      <AppTagView />
+      <AppTagView v-if="route.name !== 'dashboard'" />
       <router-view />
     </q-page-container>
   </q-layout>
