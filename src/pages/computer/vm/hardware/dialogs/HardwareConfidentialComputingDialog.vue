@@ -36,7 +36,9 @@ watch(visible, (isVisible) => {
   if (!isVisible) return;
   const sev = parsePropertyString(config.value['amd-sev']);
   const tdx = parsePropertyString(config.value['intel-tdx']);
-  form.sevType = ['std', 'es', 'snp'].includes(String(sev.type || '')) ? String(sev.type) : '__default__';
+  form.sevType = ['std', 'es', 'snp'].includes(String(sev.type || ''))
+    ? String(sev.type)
+    : '__default__';
   form.sevDebug = String(sev['no-debug'] || '0') !== '1';
   form.sevKeySharing = String(sev['no-key-sharing'] || '0') !== '1';
   form.sevSmt = String(sev['allow-smt'] || '1') !== '0';
@@ -96,8 +98,16 @@ async function saveConfidentialComputing() {
         />
         <div v-if="form.sevType !== '__default__'" class="q-gutter-sm">
           <q-checkbox v-model="form.sevDebug" :label="gettext('Allow Debugging')" />
-          <q-checkbox v-if="form.sevType !== 'snp'" v-model="form.sevKeySharing" :label="gettext('Allow Key-Sharing')" />
-          <q-checkbox v-if="form.sevType === 'snp'" v-model="form.sevSmt" :label="gettext('Allow SMT')" />
+          <q-checkbox
+            v-if="form.sevType !== 'snp'"
+            v-model="form.sevKeySharing"
+            :label="gettext('Allow Key-Sharing')"
+          />
+          <q-checkbox
+            v-if="form.sevType === 'snp'"
+            v-model="form.sevSmt"
+            :label="gettext('Allow SMT')"
+          />
           <q-checkbox v-model="form.sevKernelHashes" :label="gettext('Enable Kernel Hashes')" />
         </div>
         <q-separator />
@@ -117,14 +127,48 @@ async function saveConfidentialComputing() {
         <template v-if="form.tdxType === 'tdx'">
           <q-checkbox v-model="form.tdxAttestation" :label="gettext('Enable Attestation')" />
           <div class="row q-col-gutter-md">
-            <q-input v-model="form.tdxCid" class="col-6" dense square outlined type="number" min="2" :disable="!form.tdxAttestation" label="CID" />
-            <q-input v-model="form.tdxPort" class="col-6" dense square outlined type="number" min="0" :disable="!form.tdxAttestation" :label="gettext('Port')" />
+            <q-input
+              v-model="form.tdxCid"
+              class="col-6"
+              dense
+              square
+              outlined
+              type="number"
+              min="2"
+              :disable="!form.tdxAttestation"
+              label="CID"
+            />
+            <q-input
+              v-model="form.tdxPort"
+              class="col-6"
+              dense
+              square
+              outlined
+              type="number"
+              min="0"
+              :disable="!form.tdxAttestation"
+              :label="gettext('Port')"
+            />
           </div>
         </template>
       </div>
       <template #foot>
-        <q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" />
-        <q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :label="gettext('Save')" @click="saveConfidentialComputing" />
+        <q-btn
+          v-close-popup
+          no-caps
+          outline
+          size="12px"
+          class="u-button"
+          :label="gettext('Cancel')"
+        />
+        <q-btn
+          no-caps
+          flat
+          size="12px"
+          class="bg-primary text-grey-1 u-button"
+          :label="gettext('Save')"
+          @click="saveConfidentialComputing"
+        />
       </template>
     </UWindow>
   </q-dialog>

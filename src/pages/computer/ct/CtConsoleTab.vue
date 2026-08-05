@@ -4,7 +4,15 @@ import { gettext } from '@/locale';
 
 const props = defineProps<{ node: string; vmid: string; name: string }>();
 const consoleUrl = computed(() => {
-  const params = new URLSearchParams({ console: 'lxc', novnc: '1', node: props.node, vmid: props.vmid, resize: 'scale', autoconnect: '1', reconnect: '1' });
+  const params = new URLSearchParams({
+    console: 'lxc',
+    novnc: '1',
+    node: props.node,
+    vmid: props.vmid,
+    resize: 'scale',
+    autoconnect: '1',
+    reconnect: '1',
+  });
   return `/?${params.toString()}`;
 });
 </script>
@@ -14,5 +22,11 @@ const consoleUrl = computed(() => {
 </template>
 
 <style scoped>
-.ct-console-tab { display: block; width: 100%; height: calc(100vh - 250px); min-height: 500px; border: 0; }
+.ct-console-tab {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 250px);
+  min-height: 500px;
+  border: 0;
+}
 </style>

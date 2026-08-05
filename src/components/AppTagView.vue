@@ -17,7 +17,9 @@ const activePath = computed(() => route.fullPath || route.path);
 function routeTitle(nextRoute: RouteLocationNormalizedLoaded) {
   if (nextRoute.name === 'computer-vm-detail') {
     const vmid = String(nextRoute.params.vmid || '');
-    return vmid ? `${gettext('Virtual Machine Details')} · ${vmid}` : gettext('Virtual Machine Details');
+    return vmid
+      ? `${gettext('Virtual Machine Details')} · ${vmid}`
+      : gettext('Virtual Machine Details');
   }
   if (nextRoute.name === 'computer-ct-container-detail') {
     const vmid = String(nextRoute.params.vmid || '');

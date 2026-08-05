@@ -25,12 +25,15 @@ type Row = ReplicationTask & {
   durationText: string;
   rateText: string;
 };
-const props = withDefaults(defineProps<{ node?: string; vmid?: string; guestType?: 'qemu' | 'lxc'; embedded?: boolean }>(), {
-  guestType: 'qemu',
-  node: '',
-  vmid: '',
-  embedded: false,
-});
+const props = withDefaults(
+  defineProps<{ node?: string; vmid?: string; guestType?: 'qemu' | 'lxc'; embedded?: boolean }>(),
+  {
+    guestType: 'qemu',
+    node: '',
+    vmid: '',
+    embedded: false,
+  },
+);
 const session = useSessionStore();
 const loading = ref(false);
 const filter = ref('');
@@ -69,15 +72,14 @@ const canOperate = computed(
 );
 const filteredTasks = computed(() => {
   const key = filter.value.trim().toLowerCase();
-  return tasks.value
-    .filter(
-      (row) =>
-        !key ||
-        [row.id, row.guest, row.jobnum, row.target, row.statusText, row.schedule, row.comment]
-          .join(' ')
-          .toLowerCase()
-          .includes(key),
-    );
+  return tasks.value.filter(
+    (row) =>
+      !key ||
+      [row.id, row.guest, row.jobnum, row.target, row.statusText, row.schedule, row.comment]
+        .join(' ')
+        .toLowerCase()
+        .includes(key),
+  );
 });
 const formTitle = computed(
   () => `${gettext(action.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Replication Job')}`,
@@ -173,7 +175,9 @@ async function loadInitial() {
     getClusterResources({ type: 'vm' }),
   ]);
   nodes.value = nodeResponse.data || [];
-  vms.value = (vmResponse.data || []).filter((item) => item.type === props.guestType && !item.template);
+  vms.value = (vmResponse.data || []).filter(
+    (item) => item.type === props.guestType && !item.template,
+  );
   node.value = props.node || onlineNodes.value[0]?.node || nodes.value[0]?.node || '';
   await reload();
 }
@@ -235,10 +239,7 @@ async function save() {
       .map((task) => Number(task.jobnum))
       .filter((value) => Number.isFinite(value));
     const data = {
-      id:
-        action.value === 'add'
-          ? `${form.guest}-${Math.max(-1, ...jobNums) + 1}`
-          : form.id,
+      id: action.value === 'add' ? `${form.guest}-${Math.max(-1, ...jobNums) + 1}` : form.id,
       target: action.value === 'add' ? form.target : undefined,
       schedule: form.schedule,
       rate: form.rate || undefined,
@@ -410,8 +411,7 @@ onBeforeUnmount(() => {
         ><q-td :props="props"
           ><q-icon
             :name="props.value ? 'check' : 'close'"
-            :class="props.value ? 'text-green' : 'text-red'"
-        /></q-td></template
+            :class="props.value ? 'text-green' : 'text-red'" /></q-td></template
       ><template #body-cell-status="props"
         ><q-td :props="props" :class="{ 'replication-row-loading': props.row.pid }"
           ><template v-if="!props.row.pid"
@@ -560,8 +560,12 @@ onBeforeUnmount(() => {
   box-shadow: 0 4px 12px rgba(51, 65, 85, 0.14);
 }
 .replication-row-loading {
-  background:
-    linear-gradient(90deg, rgba(25, 118, 210, 0.08) 25%, rgba(25, 118, 210, 0.18) 37%, rgba(25, 118, 210, 0.08) 63%)
+  background: linear-gradient(
+      90deg,
+      rgba(25, 118, 210, 0.08) 25%,
+      rgba(25, 118, 210, 0.18) 37%,
+      rgba(25, 118, 210, 0.08) 63%
+    )
     0 0 / 400% 100%;
   animation: replication-row-loading 1.4s ease infinite;
 }

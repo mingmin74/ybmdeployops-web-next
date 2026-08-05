@@ -65,7 +65,9 @@ const canCreateCt = computed(() => hasCapability('VM.Allocate'));
 const visibleColumnNames = shallowRef<string[]>(
   (() => {
     try {
-      const saved = JSON.parse(window.localStorage.getItem('ct-container-list-visible-columns') || '[]');
+      const saved = JSON.parse(
+        window.localStorage.getItem('ct-container-list-visible-columns') || '[]',
+      );
       return Array.isArray(saved) && saved.length
         ? saved.filter((value): value is string => typeof value === 'string')
         : defaultVisibleColumns;
@@ -97,7 +99,9 @@ const treeNodes = computed<ContainerTreeNode[]>(() => {
         template: Boolean(row.template),
       });
       const sortedRows = [...rows].sort((left, right) =>
-        (textValue(left.name) || textValue(left.vmid)).localeCompare(textValue(right.name) || textValue(right.vmid)),
+        (textValue(left.name) || textValue(left.vmid)).localeCompare(
+          textValue(right.name) || textValue(right.vmid),
+        ),
       );
       return {
         key: `node:${node}`,
@@ -105,8 +109,20 @@ const treeNodes = computed<ContainerTreeNode[]>(() => {
         kind: 'node',
         node,
         children: [
-          { key: `node:${node}:containers`, label: gettext('Container'), kind: 'category' as const, node, children: sortedRows.filter((row) => !row.template).map(toContainerNode) },
-          { key: `node:${node}:templates`, label: gettext('Template'), kind: 'category' as const, node, children: sortedRows.filter((row) => Boolean(row.template)).map(toContainerNode) },
+          {
+            key: `node:${node}:containers`,
+            label: gettext('Container'),
+            kind: 'category' as const,
+            node,
+            children: sortedRows.filter((row) => !row.template).map(toContainerNode),
+          },
+          {
+            key: `node:${node}:templates`,
+            label: gettext('Template'),
+            kind: 'category' as const,
+            node,
+            children: sortedRows.filter((row) => Boolean(row.template)).map(toContainerNode),
+          },
         ],
       };
     });
@@ -115,20 +131,23 @@ const treeNodes = computed<ContainerTreeNode[]>(() => {
 const filteredTreeNodes = computed(() => {
   const keyword = treeSearch.value.trim().toLocaleLowerCase();
   if (!keyword) return treeNodes.value;
-  const filterNodes = (nodes: ContainerTreeNode[]): ContainerTreeNode[] => nodes.flatMap((node) => {
-    const children = filterNodes((node.children || []) as ContainerTreeNode[]);
-    return textValue(node.label).toLocaleLowerCase().includes(keyword) || children.length
-      ? [{ ...node, children }]
-      : [];
-  });
+  const filterNodes = (nodes: ContainerTreeNode[]): ContainerTreeNode[] =>
+    nodes.flatMap((node) => {
+      const children = filterNodes((node.children || []) as ContainerTreeNode[]);
+      return textValue(node.label).toLocaleLowerCase().includes(keyword) || children.length
+        ? [{ ...node, children }]
+        : [];
+    });
   return filterNodes(treeNodes.value);
 });
 
-const selectedNode = computed(() =>
-  selectedTreeNode.value.match(/^node:([^:]+)/)?.[1] || '',
-);
+const selectedNode = computed(() => selectedTreeNode.value.match(/^node:([^:]+)/)?.[1] || '');
 const selectedCategory = computed(() =>
-  selectedTreeNode.value.endsWith(':containers') ? 'containers' : selectedTreeNode.value.endsWith(':templates') ? 'templates' : '',
+  selectedTreeNode.value.endsWith(':containers')
+    ? 'containers'
+    : selectedTreeNode.value.endsWith(':templates')
+      ? 'templates'
+      : '',
 );
 
 const selectedContainer = computed(() => selectedRows.value[0]);
@@ -139,7 +158,11 @@ const isSuspended = computed(() =>
 const isTemplate = computed(() => Boolean(selectedContainer.value?.template));
 const canPowerManage = computed(() => hasCapability('VM.PowerMgmt'));
 const canStart = computed(
-  () => Boolean(selectedContainer.value) && canPowerManage.value && isStopped.value && !isTemplate.value,
+  () =>
+    Boolean(selectedContainer.value) &&
+    canPowerManage.value &&
+    isStopped.value &&
+    !isTemplate.value,
 );
 const canStop = computed(
   () => Boolean(selectedContainer.value) && canPowerManage.value && !isStopped.value,
@@ -166,7 +189,11 @@ const canSuspend = computed(
     !isTemplate.value,
 );
 const canResume = computed(
-  () => Boolean(selectedContainer.value) && canPowerManage.value && isSuspended.value && !isTemplate.value,
+  () =>
+    Boolean(selectedContainer.value) &&
+    canPowerManage.value &&
+    isSuspended.value &&
+    !isTemplate.value,
 );
 const canBackup = computed(
   () => Boolean(selectedContainer.value) && hasCapability('VM.Backup') && !isTemplate.value,
@@ -187,7 +214,9 @@ const filteredRows = computed(() => {
   const keyword = search.value.trim().toLocaleLowerCase();
   return resources.value.filter((row) => {
     const matchesNode = !selectedNode.value || row.node === selectedNode.value;
-    const matchesCategory = !selectedCategory.value || (selectedCategory.value === 'templates' ? Boolean(row.template) : !row.template);
+    const matchesCategory =
+      !selectedCategory.value ||
+      (selectedCategory.value === 'templates' ? Boolean(row.template) : !row.template);
     const matchesSearch =
       !keyword ||
       [row.vmid, row.displayName, row.description, row.name, row.rawName, row.node]
@@ -383,7 +412,11 @@ async function confirmCommand() {
     pendingCommandData.value = undefined;
     await reload();
     if (response.data)
-      openTask(vm.node, response.data, `${containerDisplayName(vm) || vm.vmid}: ${taskCommandLabel}`);
+      openTask(
+        vm.node,
+        response.data,
+        `${containerDisplayName(vm) || vm.vmid}: ${taskCommandLabel}`,
+      );
   } finally {
     commandLoading.value = false;
   }
@@ -410,11 +443,12 @@ async function bulkCommand(command: 'start' | 'shutdown' | 'stop') {
     );
     await reload();
     const task = responses.find((response) => response.data);
-    if (task?.data) openTask(
-      String(targets[0]?.node || ''),
-      task.data,
-      `${gettext('Bulk')} ${commandLabel(command)}`,
-    );
+    if (task?.data)
+      openTask(
+        String(targets[0]?.node || ''),
+        task.data,
+        `${gettext('Bulk')} ${commandLabel(command)}`,
+      );
   } finally {
     commandLoading.value = false;
   }
@@ -437,10 +471,15 @@ async function saveTags() {
     await Promise.all(
       targets.map(async (row) => {
         const config = await getVmConfig(String(row.node), row.vmid, 'lxc');
-        await updateVmConfig(String(row.node), row.vmid, {
-          ...(config.data?.digest ? { digest: config.data.digest } : {}),
-          tags: tagValue.value.trim(),
-        }, 'lxc');
+        await updateVmConfig(
+          String(row.node),
+          row.vmid,
+          {
+            ...(config.data?.digest ? { digest: config.data.digest } : {}),
+            tags: tagValue.value.trim(),
+          },
+          'lxc',
+        );
       }),
     );
     tagsDialogVisible.value = false;
@@ -482,7 +521,11 @@ async function backupNow() {
     });
     backupVisible.value = false;
     if (response.data)
-      openTask(String(vm.node), response.data, `${containerDisplayName(vm) || vm.vmid}: ${gettext('Backup')}`);
+      openTask(
+        String(vm.node),
+        response.data,
+        `${containerDisplayName(vm) || vm.vmid}: ${gettext('Backup')}`,
+      );
   } finally {
     backupLoading.value = false;
   }
@@ -499,13 +542,17 @@ async function reload() {
   loading.value = true;
   try {
     const response = await getVmResources();
-    resources.value = (response.data || []).filter((row) => row.type === 'lxc').map(mergeContainerDisplayName);
+    resources.value = (response.data || [])
+      .filter((row) => row.type === 'lxc')
+      .map(mergeContainerDisplayName);
     treeExpanded.value = resources.value.flatMap((row) => {
       const node = textValue(row.node) || gettext('Unknown');
       return [`node:${node}`, `node:${node}:containers`, `node:${node}:templates`];
     });
     selectedRows.value = selectedRows.value
-      .map((selected) => resources.value.find((row) => containerKey(row) === containerKey(selected)))
+      .map((selected) =>
+        resources.value.find((row) => containerKey(row) === containerKey(selected)),
+      )
       .filter((row): row is VmResource => Boolean(row));
   } finally {
     loading.value = false;
@@ -523,7 +570,16 @@ onMounted(() => {
       <q-card-section class="q-pa-md">
         <div class="row no-wrap vm-list-layout">
           <aside class="vm-resource-tree">
-            <q-input v-model="treeSearch" dense outlined square clearable debounce="200" class="vm-tree-search" :placeholder="gettext('Search')">
+            <q-input
+              v-model="treeSearch"
+              dense
+              outlined
+              square
+              clearable
+              debounce="200"
+              class="vm-tree-search"
+              :placeholder="gettext('Search')"
+            >
               <template #append><q-icon name="search" /></template>
             </q-input>
             <q-tree
@@ -536,23 +592,29 @@ onMounted(() => {
               @update:selected="onTreeSelection"
             >
               <template #default-header="{ node }">
-                  <div class="row items-center no-wrap vm-tree-node">
-                    <q-icon
-                      :name="node.kind === 'node' ? 'dns' : node.kind === 'category' ? 'folder' : 'inventory_2'"
-                      size="16px"
-                      class="q-mr-xs"
-                      :color="node.kind === 'container' ? statusColor(node.status) : 'grey-7'"
-                    />
-                    <button
-                      v-if="node.kind === 'container'"
-                      type="button"
-                      class="vm-tree-node__link ellipsis"
-                      @click.stop="openTreeContainer(node)"
-                    >
-                      {{ node.label }}
-                    </button>
-                    <span v-else class="ellipsis">{{ node.label }}</span>
-                  </div>
+                <div class="row items-center no-wrap vm-tree-node">
+                  <q-icon
+                    :name="
+                      node.kind === 'node'
+                        ? 'dns'
+                        : node.kind === 'category'
+                          ? 'folder'
+                          : 'inventory_2'
+                    "
+                    size="16px"
+                    class="q-mr-xs"
+                    :color="node.kind === 'container' ? statusColor(node.status) : 'grey-7'"
+                  />
+                  <button
+                    v-if="node.kind === 'container'"
+                    type="button"
+                    class="vm-tree-node__link ellipsis"
+                    @click.stop="openTreeContainer(node)"
+                  >
+                    {{ node.label }}
+                  </button>
+                  <span v-else class="ellipsis">{{ node.label }}</span>
+                </div>
               </template>
             </q-tree>
           </aside>
@@ -577,39 +639,163 @@ onMounted(() => {
             >
               <template #top>
                 <div class="full-width row items-center q-gutter-sm">
-                  <q-btn v-if="canCreateCt" no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Create')" :disable="!canCreateCt" @click="openCreateDialog" />
-                  <q-btn-dropdown no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Power')" :disable="!selectedContainer || commandLoading">
+                  <q-btn
+                    v-if="canCreateCt"
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    :label="gettext('Create')"
+                    :disable="!canCreateCt"
+                    @click="openCreateDialog"
+                  />
+                  <q-btn-dropdown
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    :label="gettext('Power')"
+                    :disable="!selectedContainer || commandLoading"
+                  >
                     <q-list dense>
-                      <q-item v-close-popup clickable :disable="!canStart" @click="requestCommand('start')"><q-item-section>{{ gettext('Start') }}</q-item-section></q-item>
-                      <q-item v-close-popup clickable :disable="!canShutdown" @click="requestCommand('shutdown')"><q-item-section>{{ gettext('Shutdown') }}</q-item-section></q-item>
-                      <q-item v-close-popup clickable :disable="!canStop" @click="requestCommand('stop')"><q-item-section class="text-red">{{ gettext('Stop') }}</q-item-section></q-item>
-                      <q-item v-close-popup clickable :disable="!canReboot" @click="requestCommand('reboot')"><q-item-section>{{ gettext('Reboot') }}</q-item-section></q-item>
-                      <q-item v-close-popup clickable :disable="!canSuspend" @click="requestCommand('suspend')"><q-item-section>{{ gettext('Suspend') }}</q-item-section></q-item>
-                      <q-item v-close-popup clickable :disable="!canResume" @click="requestCommand('resume')"><q-item-section>{{ gettext('Resume') }}</q-item-section></q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canStart"
+                        @click="requestCommand('start')"
+                        ><q-item-section>{{ gettext('Start') }}</q-item-section></q-item
+                      >
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canShutdown"
+                        @click="requestCommand('shutdown')"
+                        ><q-item-section>{{ gettext('Shutdown') }}</q-item-section></q-item
+                      >
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canStop"
+                        @click="requestCommand('stop')"
+                        ><q-item-section class="text-red">{{
+                          gettext('Stop')
+                        }}</q-item-section></q-item
+                      >
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canReboot"
+                        @click="requestCommand('reboot')"
+                        ><q-item-section>{{ gettext('Reboot') }}</q-item-section></q-item
+                      >
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canSuspend"
+                        @click="requestCommand('suspend')"
+                        ><q-item-section>{{ gettext('Suspend') }}</q-item-section></q-item
+                      >
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canResume"
+                        @click="requestCommand('resume')"
+                        ><q-item-section>{{ gettext('Resume') }}</q-item-section></q-item
+                      >
                     </q-list>
                   </q-btn-dropdown>
-                  <q-btn-dropdown no-caps outline size="12px" color="primary" class="u-button" :label="`${gettext('Bulk')} ${gettext('Actions')}`" :disable="!selectedRows.length || commandLoading">
+                  <q-btn-dropdown
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    :label="`${gettext('Bulk')} ${gettext('Actions')}`"
+                    :disable="!selectedRows.length || commandLoading"
+                  >
                     <q-list dense>
-                      <q-item v-close-popup clickable :disable="!canBulkPower" @click="bulkCommand('start')"><q-item-section>{{ gettext('Bulk Start') }}</q-item-section></q-item>
-                      <q-item v-close-popup clickable :disable="!canBulkPower" @click="bulkCommand('shutdown')"><q-item-section>{{ gettext('Bulk Shutdown') }}</q-item-section></q-item>
-                      <q-item v-close-popup clickable :disable="!canBulkPower" @click="bulkCommand('stop')"><q-item-section>{{ gettext('Bulk Stop') }}</q-item-section></q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canBulkPower"
+                        @click="bulkCommand('start')"
+                        ><q-item-section>{{ gettext('Bulk Start') }}</q-item-section></q-item
+                      >
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canBulkPower"
+                        @click="bulkCommand('shutdown')"
+                        ><q-item-section>{{ gettext('Bulk Shutdown') }}</q-item-section></q-item
+                      >
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canBulkPower"
+                        @click="bulkCommand('stop')"
+                        ><q-item-section>{{ gettext('Bulk Stop') }}</q-item-section></q-item
+                      >
                     </q-list>
                   </q-btn-dropdown>
-                  <q-btn-dropdown no-caps outline size="12px" color="primary" class="u-button" :label="gettext('More')" :disable="!selectedContainer || commandLoading">
+                  <q-btn-dropdown
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    :label="gettext('More')"
+                    :disable="!selectedContainer || commandLoading"
+                  >
                     <q-list dense>
-                      <q-item v-close-popup clickable :disable="!selectedRows.length" @click="openTags"><q-item-section>{{ gettext('Edit Tags') }}</q-item-section></q-item>
-                      <q-item v-close-popup clickable :disable="!canBackup" @click="openBackup"><q-item-section>{{ gettext('Backup now') }}</q-item-section></q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!selectedRows.length"
+                        @click="openTags"
+                        ><q-item-section>{{ gettext('Edit Tags') }}</q-item-section></q-item
+                      >
+                      <q-item v-close-popup clickable :disable="!canBackup" @click="openBackup"
+                        ><q-item-section>{{ gettext('Backup now') }}</q-item-section></q-item
+                      >
                     </q-list>
                   </q-btn-dropdown>
-                  <q-btn flat dense round color="primary" icon="refresh" :aria-label="gettext('Refresh')" :loading="loading" @click="reload" />
+                  <q-btn
+                    flat
+                    dense
+                    round
+                    color="primary"
+                    icon="refresh"
+                    :aria-label="gettext('Refresh')"
+                    :loading="loading"
+                    @click="reload"
+                  />
                   <q-space />
-                  <q-input v-model="search" borderless dense debounce="300" class="vm-search" :placeholder="gettext('Search')">
+                  <q-input
+                    v-model="search"
+                    borderless
+                    dense
+                    debounce="300"
+                    class="vm-search"
+                    :placeholder="gettext('Search')"
+                  >
                     <template #append><q-icon name="search" /></template>
                   </q-input>
-                  <q-btn-dropdown no-caps flat dense round icon="settings" class="q-ml-sm column-settings-btn" :aria-label="gettext('Columns')">
+                  <q-btn-dropdown
+                    no-caps
+                    flat
+                    dense
+                    round
+                    icon="settings"
+                    class="q-ml-sm column-settings-btn"
+                    :aria-label="gettext('Columns')"
+                  >
                     <q-list dense>
                       <q-item v-for="column in columns" :key="column.name" tag="label">
-                        <q-item-section avatar><q-checkbox v-model="visibleColumnNames" :val="column.name" dense /></q-item-section>
+                        <q-item-section avatar
+                          ><q-checkbox v-model="visibleColumnNames" :val="column.name" dense
+                        /></q-item-section>
                         <q-item-section>{{ column.label }}</q-item-section>
                       </q-item>
                     </q-list>
@@ -627,13 +813,21 @@ onMounted(() => {
                     >
                       {{ containerDisplayName(scope.row) || '-' }}
                     </button>
-                    <q-badge v-if="scope.row.template" outline color="primary" :label="gettext('Template')" />
+                    <q-badge
+                      v-if="scope.row.template"
+                      outline
+                      color="primary"
+                      :label="gettext('Template')"
+                    />
                   </div>
                 </q-td>
               </template>
               <template #body-cell-status="scope">
                 <q-td :props="scope">
-                  <q-badge :color="statusColor(scope.row.status)" :label="statusText(scope.row.status)" />
+                  <q-badge
+                    :color="statusColor(scope.row.status)"
+                    :label="statusText(scope.row.status)"
+                  />
                 </q-td>
               </template>
               <template #body-cell-cpu="scope">
@@ -664,7 +858,12 @@ onMounted(() => {
         </div>
         <template #footer>
           <q-btn flat :label="gettext('Cancel')" v-close-popup :disable="commandLoading" />
-          <q-btn color="primary" :label="gettext('Confirm')" :loading="commandLoading" @click="confirmCommand" />
+          <q-btn
+            color="primary"
+            :label="gettext('Confirm')"
+            :loading="commandLoading"
+            @click="confirmCommand"
+          />
         </template>
       </UWindow>
     </q-dialog>
@@ -684,18 +883,51 @@ onMounted(() => {
     <q-dialog v-model="backupVisible">
       <UWindow :title="gettext('Backup')" width="520px" :loading="backupLoading">
         <div class="q-pa-md q-gutter-md">
-          <q-select v-model="backupStorage" dense outlined square emit-value map-options :label="gettext('Storage')" :options="backupStorages" />
-          <q-select v-model="backupMode" dense outlined square emit-value map-options :label="gettext('Mode')" :options="[
-            { label: gettext('Snapshot'), value: 'snapshot' },
-            { label: gettext('Suspend'), value: 'suspend' },
-            { label: gettext('Stop'), value: 'stop' },
-          ]" />
-          <q-select v-model="backupCompression" dense outlined square emit-value map-options :label="gettext('Compression')" :options="['zstd', 'lzo', 'gzip', '0']" />
+          <q-select
+            v-model="backupStorage"
+            dense
+            outlined
+            square
+            emit-value
+            map-options
+            :label="gettext('Storage')"
+            :options="backupStorages"
+          />
+          <q-select
+            v-model="backupMode"
+            dense
+            outlined
+            square
+            emit-value
+            map-options
+            :label="gettext('Mode')"
+            :options="[
+              { label: gettext('Snapshot'), value: 'snapshot' },
+              { label: gettext('Suspend'), value: 'suspend' },
+              { label: gettext('Stop'), value: 'stop' },
+            ]"
+          />
+          <q-select
+            v-model="backupCompression"
+            dense
+            outlined
+            square
+            emit-value
+            map-options
+            :label="gettext('Compression')"
+            :options="['zstd', 'lzo', 'gzip', '0']"
+          />
           <q-checkbox v-model="backupProtected" dense :label="gettext('Protected')" />
         </div>
         <template #footer>
           <q-btn flat :label="gettext('Cancel')" v-close-popup :disable="backupLoading" />
-          <q-btn color="primary" :label="gettext('Backup')" :disable="!backupStorage" :loading="backupLoading" @click="backupNow" />
+          <q-btn
+            color="primary"
+            :label="gettext('Backup')"
+            :disable="!backupStorage"
+            :loading="backupLoading"
+            @click="backupNow"
+          />
         </template>
       </UWindow>
     </q-dialog>

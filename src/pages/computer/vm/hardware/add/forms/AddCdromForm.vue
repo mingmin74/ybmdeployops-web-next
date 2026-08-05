@@ -41,10 +41,25 @@ const busOptions = [
 ];
 
 const storageColumns: QTableColumn<PveRecord>[] = [
-  { name: 'storage', label: gettext('Storage'), field: (row) => textValue(row.storage), align: 'left' },
+  {
+    name: 'storage',
+    label: gettext('Storage'),
+    field: (row) => textValue(row.storage),
+    align: 'left',
+  },
   { name: 'type', label: gettext('Type'), field: (row) => textValue(row.type), align: 'left' },
-  { name: 'avail', label: gettext('Avail'), field: (row) => formatBytes(textValue(row.avail)), align: 'right' },
-  { name: 'total', label: gettext('Total'), field: (row) => formatBytes(textValue(row.total)), align: 'right' },
+  {
+    name: 'avail',
+    label: gettext('Avail'),
+    field: (row) => formatBytes(textValue(row.avail)),
+    align: 'right',
+  },
+  {
+    name: 'total',
+    label: gettext('Total'),
+    field: (row) => formatBytes(textValue(row.total)),
+    align: 'right',
+  },
 ];
 
 const isoColumns: QTableColumn<PveRecord>[] = [
@@ -56,7 +71,12 @@ const isoColumns: QTableColumn<PveRecord>[] = [
     style: 'width: 290px; max-width: 290px',
     headerStyle: 'width: 290px',
   },
-  { name: 'format', label: gettext('Format'), field: (row) => textValue(row.format), align: 'left' },
+  {
+    name: 'format',
+    label: gettext('Format'),
+    field: (row) => textValue(row.format),
+    align: 'left',
+  },
   { name: 'size', label: gettext('Size'), field: (row) => formatIsoSize(row.size), align: 'right' },
 ];
 
@@ -64,13 +84,12 @@ const deviceMax = computed(() => cdromBusLimits[form.value.cdromBus] - 1);
 const isoDisabled = computed(() => form.value.cdromMediaType !== 'iso');
 const storageDisplay = computed(() => form.value.cdromStorage);
 const isoDisplay = computed(() => isoImageName(form.value.cdromVolid));
-const storageError = computed(() => form.value.cdromMediaType === 'iso' && !form.value.cdromStorage);
+const storageError = computed(
+  () => form.value.cdromMediaType === 'iso' && !form.value.cdromStorage,
+);
 const isoError = computed(() => form.value.cdromMediaType === 'iso' && !form.value.cdromVolid);
 const deviceError = computed(
-  () =>
-    deviceInUse ||
-    form.value.cdromDeviceId < 0 ||
-    form.value.cdromDeviceId > deviceMax.value
+  () => deviceInUse || form.value.cdromDeviceId < 0 || form.value.cdromDeviceId > deviceMax.value,
 );
 
 function isoImageName(value: unknown) {
@@ -95,7 +114,7 @@ async function loadStorages() {
   try {
     const response = await getNodeStorage(node.value, 'iso');
     storageRows.value = [...(response.data || [])].sort((left, right) =>
-      textValue(left.storage).localeCompare(textValue(right.storage))
+      textValue(left.storage).localeCompare(textValue(right.storage)),
     );
     const storageNames = storageRows.value.map((row) => textValue(row.storage)).filter(Boolean);
     if (!storageNames.includes(form.value.cdromStorage)) {
@@ -116,10 +135,10 @@ async function loadIsoImages(selectFirst = false) {
   try {
     const response = await getStorageContent(node.value, form.value.cdromStorage, 'iso');
     isoRows.value = [...(response.data || [])].sort((left, right) =>
-      textValue(left.volid).localeCompare(textValue(right.volid))
+      textValue(left.volid).localeCompare(textValue(right.volid)),
     );
     const selectedExists = isoRows.value.some(
-      (row) => textValue(row.volid) === form.value.cdromVolid
+      (row) => textValue(row.volid) === form.value.cdromVolid,
     );
     if (selectFirst || !selectedExists) {
       form.value.cdromVolid = textValue(isoRows.value[0]?.volid);
@@ -175,7 +194,11 @@ onMounted(async () => {
             :max="deviceMax"
             :label="gettext('Device')"
             :error="deviceError"
-            :error-message="deviceInUse ? gettext('This device is already in use') : `${gettext('Value must be between')} 0 ${gettext('and')} ${deviceMax}`"
+            :error-message="
+              deviceInUse
+                ? gettext('This device is already in use')
+                : `${gettext('Value must be between')} 0 ${gettext('and')} ${deviceMax}`
+            "
           />
         </div>
 

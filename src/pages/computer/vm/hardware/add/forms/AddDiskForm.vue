@@ -29,7 +29,9 @@ export interface AddDiskFormModel {
 const form = defineModel<AddDiskFormModel>('form', { required: true });
 const advanced = defineModel<boolean>('advanced', { default: false });
 const { scsiControllerLabel } = defineProps<{ scsiControllerLabel: string }>();
-const supportsIoThread = computed(() => form.value.diskBus === 'scsi' || form.value.diskBus === 'virtio');
+const supportsIoThread = computed(
+  () => form.value.diskBus === 'scsi' || form.value.diskBus === 'virtio',
+);
 const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
 </script>
 
@@ -183,7 +185,13 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
           </div>
           <div class="col-6">
             <q-field borderless dense>
-              <q-checkbox v-model="form.diskBackup" dense right-label color="primary" :label="gettext('Backup')" />
+              <q-checkbox
+                v-model="form.diskBackup"
+                dense
+                right-label
+                color="primary"
+                :label="gettext('Backup')"
+              />
             </q-field>
           </div>
           <div class="col-6">
@@ -220,29 +228,89 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
     <div v-show="activeTab === 'bandwidth'" class="q-pt-md">
       <div class="row q-col-gutter-sm">
         <div class="col-6">
-          <q-input v-model="form.mbps_rd" class="q-field--with-bottom" dense type="number" min="1" :label="`${gettext('Read limit')} (MB/s)`" />
+          <q-input
+            v-model="form.mbps_rd"
+            class="q-field--with-bottom"
+            dense
+            type="number"
+            min="1"
+            :label="`${gettext('Read limit')} (MB/s)`"
+          />
         </div>
         <div class="col-6">
-          <q-input v-model="form.mbps_wr" class="q-field--with-bottom" dense type="number" min="1" :label="`${gettext('Write limit')} (MB/s)`" />
+          <q-input
+            v-model="form.mbps_wr"
+            class="q-field--with-bottom"
+            dense
+            type="number"
+            min="1"
+            :label="`${gettext('Write limit')} (MB/s)`"
+          />
         </div>
         <div class="col-6">
-          <q-input v-model="form.iops_rd" class="q-field--with-bottom" dense type="number" min="10" step="10" :label="`${gettext('Read limit')} (ops/s)`" />
+          <q-input
+            v-model="form.iops_rd"
+            class="q-field--with-bottom"
+            dense
+            type="number"
+            min="10"
+            step="10"
+            :label="`${gettext('Read limit')} (ops/s)`"
+          />
         </div>
         <div class="col-6">
-          <q-input v-model="form.iops_wr" class="q-field--with-bottom" dense type="number" min="10" step="10" :label="`${gettext('Write limit')} (ops/s)`" />
+          <q-input
+            v-model="form.iops_wr"
+            class="q-field--with-bottom"
+            dense
+            type="number"
+            min="10"
+            step="10"
+            :label="`${gettext('Write limit')} (ops/s)`"
+          />
         </div>
         <div class="col-6">
-          <q-input v-model="form.mbps_rd_max" class="q-field--with-bottom" dense type="number" min="1" :label="`${gettext('Read max burst')} (MB)`" />
+          <q-input
+            v-model="form.mbps_rd_max"
+            class="q-field--with-bottom"
+            dense
+            type="number"
+            min="1"
+            :label="`${gettext('Read max burst')} (MB)`"
+          />
         </div>
         <div class="col-6">
-          <q-input v-model="form.mbps_wr_max" class="q-field--with-bottom" dense type="number" min="1" :label="`${gettext('Write max burst')} (MB)`" />
+          <q-input
+            v-model="form.mbps_wr_max"
+            class="q-field--with-bottom"
+            dense
+            type="number"
+            min="1"
+            :label="`${gettext('Write max burst')} (MB)`"
+          />
         </div>
         <div class="col-6">
-          <q-input v-model="form.iops_rd_max" class="q-field--with-bottom" dense type="number" min="10" step="10" :label="`${gettext('Read max burst')} (ops)`" />
+          <q-input
+            v-model="form.iops_rd_max"
+            class="q-field--with-bottom"
+            dense
+            type="number"
+            min="10"
+            step="10"
+            :label="`${gettext('Read max burst')} (ops)`"
+          />
         </div>
-      <div class="col-6">
-        <q-input v-model="form.iops_wr_max" class="q-field--with-bottom" dense type="number" min="10" step="10" :label="`${gettext('Write max burst')} (ops)`" />
-      </div>
+        <div class="col-6">
+          <q-input
+            v-model="form.iops_wr_max"
+            class="q-field--with-bottom"
+            dense
+            type="number"
+            min="10"
+            step="10"
+            :label="`${gettext('Write max burst')} (ops)`"
+          />
+        </div>
       </div>
     </div>
   </div>

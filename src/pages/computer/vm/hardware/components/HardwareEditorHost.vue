@@ -33,7 +33,12 @@ const activeEditor = computed(() => {
 
 <template>
   <div class="hardware-editor-host">
-    <component :is="activeEditor" v-if="activeEditor && selectedDevice" :key="selectedDevice.key" :device="selectedDevice" />
+    <component
+      :is="activeEditor"
+      v-if="activeEditor && selectedDevice"
+      :key="selectedDevice.key"
+      :device="selectedDevice"
+    />
     <slot v-else />
   </div>
 </template>

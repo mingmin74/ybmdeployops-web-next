@@ -24,7 +24,7 @@ const { tags, stepContentHeight } = derived;
             disable-offline
             width="500px"
             :label="gettext('Node')"
-              class="q-field--with-bottom"
+            class="q-field--with-bottom"
             field-style="standard"
           />
           <q-input

@@ -187,7 +187,10 @@ watch(() => [props.config.digest, props.vmid], loadForm, { immediate: true });
   padding-bottom: 6px;
   overflow-wrap: anywhere;
 }
-.dns-list-label { align-self: flex-start; padding-top: 6px; }
+.dns-list-label {
+  align-self: flex-start;
+  padding-top: 6px;
+}
 .dns-editor {
   display: flex;
   flex: 1;

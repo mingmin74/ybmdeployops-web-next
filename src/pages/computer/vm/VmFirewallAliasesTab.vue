@@ -117,7 +117,8 @@ watch(
               class="u-button"
               :disable="!editable"
               :label="gettext('Add')"
-              @click="openDialog()" /><q-btn
+              @click="openDialog()"
+            /><q-btn
               no-caps
               outline
               size="12px"
@@ -125,7 +126,8 @@ watch(
               class="u-button"
               :disable="!editable || !selectedAlias"
               :label="gettext('Edit')"
-              @click="openDialog(true)" /><q-btn
+              @click="openDialog(true)"
+            /><q-btn
               no-caps
               outline
               size="12px"
@@ -133,7 +135,8 @@ watch(
               class="u-button"
               :disable="!editable || !selectedAlias"
               :label="gettext('Remove')"
-              @click="remove" /><q-btn
+              @click="remove"
+            /><q-btn
               no-caps
               outline
               size="12px"
@@ -144,14 +147,9 @@ watch(
             />
           </div>
           <q-space />
-          <q-input
-            v-model="filter"
-            dense
-            borderless
-            debounce="300"
-            :placeholder="gettext('Search')"
+          <q-input v-model="filter" dense borderless debounce="300" :placeholder="gettext('Search')"
             ><template #append><q-icon name="search" /></template></q-input
-          ></template>
+        ></template>
         <template #body-cell-comment="scope"
           ><q-td :props="scope"
             ><div class="text-overflow firewall-alias-comment" :title="String(scope.value || '')">
@@ -170,16 +168,11 @@ watch(
   <q-dialog v-model="visible" persistent
     ><UWindow :title="gettext(editing ? 'Edit' : 'Add')" width="480px" :loading="loading"
       ><q-form class="firewall-alias-form u-border q-ma-sm q-pa-md u-dense" @submit.prevent="save">
-        <q-input
-          v-model="form.name"
+        <q-input v-model="form.name" dense :disable="editing" :label="gettext('Name')" /><q-input
+          v-model="form.cidr"
           dense
-          :disable="editing"
-          :label="gettext('Name')"
-        /><q-input v-model="form.cidr" dense label="CIDR" /><q-input
-          v-model="form.comment"
-          dense
-          :label="gettext('Comment')"
-        />
+          label="CIDR"
+        /><q-input v-model="form.comment" dense :label="gettext('Comment')" />
       </q-form>
       <template #foot
         ><q-btn

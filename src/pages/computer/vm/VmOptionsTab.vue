@@ -241,16 +241,36 @@ const canConfigureHardware = computed(() =>
 const canModifyNode = computed(() =>
   Boolean((session.caps as unknown as { nodes?: Record<string, unknown> }).nodes?.['Sys.Modify']),
 );
-const canEditLxcFeatures = computed(() =>
-  session.userid === 'root@pam' ||
-  (Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Allocate']) &&
-    optionEnabled(props.config.unprivileged)),
+const canEditLxcFeatures = computed(
+  () =>
+    session.userid === 'root@pam' ||
+    (Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Allocate']) &&
+      optionEnabled(props.config.unprivileged)),
 );
-const envValue = computed(() => envRows.value.filter((row) => row.name.trim()).map((row) => `${row.name.trim()}=${row.value}`).join('\0'));
-const lxcAdvancedChanged = computed(() =>
-  props.guestType === 'lxc' &&
-  ((['console', 'tty', 'cmode', 'featureKeyctl', 'featureNesting', 'featureNfs', 'featureCifs', 'featureFuse', 'featureMknod', 'entrypoint'] as const)
-    .some((key) => form[key] !== original.value[key]) || envValue.value !== originalEnv.value),
+const envValue = computed(() =>
+  envRows.value
+    .filter((row) => row.name.trim())
+    .map((row) => `${row.name.trim()}=${row.value}`)
+    .join('\0'),
+);
+const lxcAdvancedChanged = computed(
+  () =>
+    props.guestType === 'lxc' &&
+    ((
+      [
+        'console',
+        'tty',
+        'cmode',
+        'featureKeyctl',
+        'featureNesting',
+        'featureNfs',
+        'featureCifs',
+        'featureFuse',
+        'featureMknod',
+        'entrypoint',
+      ] as const
+    ).some((key) => form[key] !== original.value[key]) ||
+      envValue.value !== originalEnv.value),
 );
 const hardwareFields = new Set([
   'smbios1',
@@ -323,8 +343,10 @@ const osVersionOptions = computed(
   () => (osTypeGroups.find((group) => group.value === form.osBase) || otherOsTypeGroup).versions,
 );
 const selectedOption = shallowRef(props.guestType === 'lxc' ? 'onboot' : 'name');
-const isLxcReadOnlyOption = computed(() =>
-  props.guestType === 'lxc' && ['ostype', 'arch', 'unprivileged', 'hookscript'].includes(selectedOption.value),
+const isLxcReadOnlyOption = computed(
+  () =>
+    props.guestType === 'lxc' &&
+    ['ostype', 'arch', 'unprivileged', 'hookscript'].includes(selectedOption.value),
 );
 const agentAdvanced = shallowRef(false);
 const pendingRows = shallowRef<PveRecord[]>([]);
@@ -771,7 +793,9 @@ function syncForm() {
     tdxVsockPort: String(tdx['vsock-port'] || '4050'),
     console: Number(props.config.console ?? 1) === 1,
     tty: textValue(props.config.tty, '2'),
-    cmode: ['tty', 'console', 'shell'].includes(textValue(props.config.cmode)) ? textValue(props.config.cmode) : '__default__',
+    cmode: ['tty', 'console', 'shell'].includes(textValue(props.config.cmode))
+      ? textValue(props.config.cmode)
+      : '__default__',
     featureKeyctl: textValue(features.keyctl) === '1',
     featureNesting: textValue(features.nesting) === '1',
     featureNfs: textValue(features.mount).split(/[; ]/).includes('nfs'),
@@ -781,10 +805,13 @@ function syncForm() {
     entrypoint: textValue(props.config.entrypoint),
   };
   Object.assign(form, next);
-  envRows.value = textValue(props.config.env).split(/\0+/).filter(Boolean).map((entry) => {
-    const [name, ...value] = entry.split('=');
-    return { id: nextEnvRowId++, name, value: value.join('=') };
-  });
+  envRows.value = textValue(props.config.env)
+    .split(/\0+/)
+    .filter(Boolean)
+    .map((entry) => {
+      const [name, ...value] = entry.split('=');
+      return { id: nextEnvRowId++, name, value: value.join('=') };
+    });
   originalEnv.value = envValue.value;
   original.value = { ...next };
   hotplugFeatures.value =
@@ -894,19 +921,36 @@ async function save() {
       if (form.cmode === '__default__') deletedKeys.push('cmode');
       else data.cmode = form.cmode;
     }
-    const featureChanged = ['featureKeyctl', 'featureNesting', 'featureNfs', 'featureCifs', 'featureFuse', 'featureMknod']
-      .some((key) => form[key as keyof typeof form] !== original.value[key as keyof typeof original.value]);
+    const featureChanged = [
+      'featureKeyctl',
+      'featureNesting',
+      'featureNfs',
+      'featureCifs',
+      'featureFuse',
+      'featureMknod',
+    ].some(
+      (key) =>
+        form[key as keyof typeof form] !== original.value[key as keyof typeof original.value],
+    );
     if (featureChanged) {
       const features = [
-        form.featureKeyctl ? 'keyctl=1' : '', form.featureNesting ? 'nesting=1' : '',
-        form.featureNfs || form.featureCifs ? `mount=${[form.featureNfs ? 'nfs' : '', form.featureCifs ? 'cifs' : ''].filter(Boolean).join(';')}` : '',
-        form.featureFuse ? 'fuse=1' : '', form.featureMknod ? 'mknod=1' : '',
-      ].filter(Boolean).join(',');
-      if (features) data.features = features; else deletedKeys.push('features');
+        form.featureKeyctl ? 'keyctl=1' : '',
+        form.featureNesting ? 'nesting=1' : '',
+        form.featureNfs || form.featureCifs
+          ? `mount=${[form.featureNfs ? 'nfs' : '', form.featureCifs ? 'cifs' : ''].filter(Boolean).join(';')}`
+          : '',
+        form.featureFuse ? 'fuse=1' : '',
+        form.featureMknod ? 'mknod=1' : '',
+      ]
+        .filter(Boolean)
+        .join(',');
+      if (features) data.features = features;
+      else deletedKeys.push('features');
     }
     if (form.entrypoint !== original.value.entrypoint) setOptional('entrypoint', form.entrypoint);
     if (envValue.value !== originalEnv.value) {
-      if (envValue.value) data.env = envValue.value; else deletedKeys.push('env');
+      if (envValue.value) data.env = envValue.value;
+      else deletedKeys.push('env');
     }
   }
   if (deletedKeys.length) data.delete = deletedKeys.join(',');
@@ -1038,12 +1082,148 @@ watch(() => props.config, syncForm, { immediate: true });
                   :label="props.guestType === 'lxc' ? gettext('Enabled') : gettext('Protection')"
                 />
               </div>
-              <div v-show="props.guestType === 'lxc' && selectedOption === 'console'" class="col-12"><q-checkbox v-model="form.console" dense color="primary" :disable="!canConfigureOptions" label="/dev/console" /></div>
-              <div v-show="props.guestType === 'lxc' && selectedOption === 'tty'" class="col-12 col-md-6"><q-input v-model="form.tty" dense type="number" min="0" max="6" :disable="!canConfigureOptions" :label="gettext('TTY count')" :placeholder="gettext('Default')" /></div>
-              <div v-show="props.guestType === 'lxc' && selectedOption === 'cmode'" class="col-12 col-md-6"><q-select v-model="form.cmode" dense options-dense emit-value map-options :disable="!canConfigureOptions" :options="[{ label: `${gettext('Default')} (tty)`, value: '__default__' }, { label: '/dev/tty[X]', value: 'tty' }, { label: '/dev/console', value: 'console' }, { label: 'shell', value: 'shell' }]" :label="gettext('Console mode')" /></div>
-              <div v-show="props.guestType === 'lxc' && selectedOption === 'features'" class="col-12"><div class="column"><q-checkbox v-model="form.featureKeyctl" dense color="primary" :disable="!canEditLxcFeatures || !optionEnabled(props.config.unprivileged)" :label="gettext('keyctl')" /><q-checkbox v-model="form.featureNesting" dense color="primary" :disable="!canEditLxcFeatures" :label="gettext('Nesting')" /><q-checkbox v-model="form.featureNfs" dense color="primary" :disable="!canEditLxcFeatures || optionEnabled(props.config.unprivileged)" label="NFS" /><q-checkbox v-model="form.featureCifs" dense color="primary" :disable="!canEditLxcFeatures || optionEnabled(props.config.unprivileged)" label="SMB/CIFS" /><q-checkbox v-model="form.featureFuse" dense color="primary" :disable="!canEditLxcFeatures" label="FUSE" /><q-checkbox v-model="form.featureMknod" dense color="primary" :disable="!canEditLxcFeatures" :label="gettext('Create Device Nodes') + ' (' + gettext('Experimental') + ')'" /></div></div>
-              <div v-show="props.guestType === 'lxc' && selectedOption === 'entrypoint'" class="col-12"><q-input v-model="form.entrypoint" dense :disable="!canConfigureOptions" :label="gettext('Entrypoint Init Command')" placeholder="/sbin/init" /><div class="option-hint q-mt-sm">{{ gettext('Changing the entrypoint command can lead to start failure!') }}</div></div>
-              <div v-show="props.guestType === 'lxc' && selectedOption === 'env'" class="col-12"><div class="row q-col-gutter-sm text-caption text-grey-7 q-mb-xs"><div class="col-5">{{ gettext('Name') }}</div><div class="col-6">{{ gettext('Value') }}</div></div><div v-for="row in envRows" :key="row.id" class="row q-col-gutter-sm q-mb-sm"><div class="col-5"><q-input v-model="row.name" dense :disable="!canConfigureOptions" /></div><div class="col-6"><q-input v-model="row.value" dense :disable="!canConfigureOptions" /></div><div class="col-1"><q-btn flat round dense size="sm" color="negative" icon="delete" :disable="!canConfigureOptions" @click="removeEnvRow(row.id)" /></div></div><q-btn no-caps flat size="12px" color="primary" class="u-button" :disable="!canConfigureOptions" :label="gettext('Add Variable')" @click="addEnvRow" /></div>
+              <div
+                v-show="props.guestType === 'lxc' && selectedOption === 'console'"
+                class="col-12"
+              >
+                <q-checkbox
+                  v-model="form.console"
+                  dense
+                  color="primary"
+                  :disable="!canConfigureOptions"
+                  label="/dev/console"
+                />
+              </div>
+              <div
+                v-show="props.guestType === 'lxc' && selectedOption === 'tty'"
+                class="col-12 col-md-6"
+              >
+                <q-input
+                  v-model="form.tty"
+                  dense
+                  type="number"
+                  min="0"
+                  max="6"
+                  :disable="!canConfigureOptions"
+                  :label="gettext('TTY count')"
+                  :placeholder="gettext('Default')"
+                />
+              </div>
+              <div
+                v-show="props.guestType === 'lxc' && selectedOption === 'cmode'"
+                class="col-12 col-md-6"
+              >
+                <q-select
+                  v-model="form.cmode"
+                  dense
+                  options-dense
+                  emit-value
+                  map-options
+                  :disable="!canConfigureOptions"
+                  :options="[
+                    { label: `${gettext('Default')} (tty)`, value: '__default__' },
+                    { label: '/dev/tty[X]', value: 'tty' },
+                    { label: '/dev/console', value: 'console' },
+                    { label: 'shell', value: 'shell' },
+                  ]"
+                  :label="gettext('Console mode')"
+                />
+              </div>
+              <div
+                v-show="props.guestType === 'lxc' && selectedOption === 'features'"
+                class="col-12"
+              >
+                <div class="column">
+                  <q-checkbox
+                    v-model="form.featureKeyctl"
+                    dense
+                    color="primary"
+                    :disable="!canEditLxcFeatures || !optionEnabled(props.config.unprivileged)"
+                    :label="gettext('keyctl')"
+                  /><q-checkbox
+                    v-model="form.featureNesting"
+                    dense
+                    color="primary"
+                    :disable="!canEditLxcFeatures"
+                    :label="gettext('Nesting')"
+                  /><q-checkbox
+                    v-model="form.featureNfs"
+                    dense
+                    color="primary"
+                    :disable="!canEditLxcFeatures || optionEnabled(props.config.unprivileged)"
+                    label="NFS"
+                  /><q-checkbox
+                    v-model="form.featureCifs"
+                    dense
+                    color="primary"
+                    :disable="!canEditLxcFeatures || optionEnabled(props.config.unprivileged)"
+                    label="SMB/CIFS"
+                  /><q-checkbox
+                    v-model="form.featureFuse"
+                    dense
+                    color="primary"
+                    :disable="!canEditLxcFeatures"
+                    label="FUSE"
+                  /><q-checkbox
+                    v-model="form.featureMknod"
+                    dense
+                    color="primary"
+                    :disable="!canEditLxcFeatures"
+                    :label="gettext('Create Device Nodes') + ' (' + gettext('Experimental') + ')'"
+                  />
+                </div>
+              </div>
+              <div
+                v-show="props.guestType === 'lxc' && selectedOption === 'entrypoint'"
+                class="col-12"
+              >
+                <q-input
+                  v-model="form.entrypoint"
+                  dense
+                  :disable="!canConfigureOptions"
+                  :label="gettext('Entrypoint Init Command')"
+                  placeholder="/sbin/init"
+                />
+                <div class="option-hint q-mt-sm">
+                  {{ gettext('Changing the entrypoint command can lead to start failure!') }}
+                </div>
+              </div>
+              <div v-show="props.guestType === 'lxc' && selectedOption === 'env'" class="col-12">
+                <div class="row q-col-gutter-sm text-caption text-grey-7 q-mb-xs">
+                  <div class="col-5">{{ gettext('Name') }}</div>
+                  <div class="col-6">{{ gettext('Value') }}</div>
+                </div>
+                <div v-for="row in envRows" :key="row.id" class="row q-col-gutter-sm q-mb-sm">
+                  <div class="col-5">
+                    <q-input v-model="row.name" dense :disable="!canConfigureOptions" />
+                  </div>
+                  <div class="col-6">
+                    <q-input v-model="row.value" dense :disable="!canConfigureOptions" />
+                  </div>
+                  <div class="col-1">
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="sm"
+                      color="negative"
+                      icon="delete"
+                      :disable="!canConfigureOptions"
+                      @click="removeEnvRow(row.id)"
+                    />
+                  </div>
+                </div>
+                <q-btn
+                  no-caps
+                  flat
+                  size="12px"
+                  color="primary"
+                  class="u-button"
+                  :disable="!canConfigureOptions"
+                  :label="gettext('Add Variable')"
+                  @click="addEnvRow"
+                />
+              </div>
               <div v-show="selectedOption === 'agent'" class="col-12">
                 <div class="column agent-options">
                   <q-checkbox
@@ -1195,7 +1375,10 @@ watch(() => props.config, syncForm, { immediate: true });
                   :placeholder="gettext('default')"
                 />
               </div>
-              <div v-show="selectedOption === 'ostype' && props.guestType !== 'lxc'" class="col-12 col-md-6">
+              <div
+                v-show="selectedOption === 'ostype' && props.guestType !== 'lxc'"
+                class="col-12 col-md-6"
+              >
                 <q-select
                   v-model="form.osBase"
                   dense
@@ -1656,7 +1839,14 @@ watch(() => props.config, syncForm, { immediate: true });
   font-size: 12px;
   line-height: 1.5;
 }
-.hardware-editor-hint { padding: 8px 10px; border: 1px solid #b8d9ff; background: #e8f3ff; color: #1f5f9f; font-size: 12px; line-height: 1.5; }
+.hardware-editor-hint {
+  padding: 8px 10px;
+  border: 1px solid #b8d9ff;
+  background: #e8f3ff;
+  color: #1f5f9f;
+  font-size: 12px;
+  line-height: 1.5;
+}
 .vm-options-tab :deep(.q-checkbox) {
   min-height: 30px;
 }

@@ -233,7 +233,6 @@ onMounted(() => {
 onUnmounted(() => {
   if (refreshTimer.value) window.clearInterval(refreshTimer.value);
 });
-
 </script>
 
 <template>
@@ -381,7 +380,6 @@ onUnmounted(() => {
             @updated="reload"
             @task="openTask"
           />
-
         </q-tab-panel>
       </q-tab-panels>
     </section>

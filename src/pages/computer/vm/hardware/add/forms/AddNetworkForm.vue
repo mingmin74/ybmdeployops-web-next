@@ -39,7 +39,7 @@ const bridgeColumns: QTableColumn<PveRecord>[] = [
   {
     name: 'active',
     label: gettext('Active'),
-    field: (row) => (row.active ?? row.running ? gettext('Yes') : gettext('No')),
+    field: (row) => ((row.active ?? row.running) ? gettext('Yes') : gettext('No')),
     align: 'left',
   },
   {
@@ -57,7 +57,8 @@ const tagValid = computed(() => {
   return Number.isInteger(value) && value >= 1 && value <= 4094;
 });
 const macValid = computed(
-  () => !form.value.macaddr.trim() || /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(form.value.macaddr.trim())
+  () =>
+    !form.value.macaddr.trim() || /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(form.value.macaddr.trim()),
 );
 const rateValid = computed(() => {
   if (!form.value.rate.trim()) return true;
@@ -208,17 +209,20 @@ onMounted(() => {
             class="q-field--with-bottom"
             :disable="form.model !== 'virtio'"
             :error="!mtuValid"
-            :error-message="gettext('MTU needs to be >= 576 or 1 to inherit the MTU from the underlying bridge.')"
+            :error-message="
+              gettext('MTU needs to be >= 576 or 1 to inherit the MTU from the underlying bridge.')
+            "
             label="MTU"
             :placeholder="gettext('Same as bridge')"
           />
         </div>
         <div v-if="showMtuHint" class="col-12 add-network-form__hint">
-          {{ gettext("Use the special value '1' to inherit the MTU value from the underlying bridge") }}
+          {{
+            gettext("Use the special value '1' to inherit the MTU value from the underlying bridge")
+          }}
         </div>
       </div>
     </div>
-
   </div>
 </template>
 

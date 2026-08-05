@@ -10,5 +10,11 @@ defineProps<{ title: string }>();
 </template>
 
 <style scoped>
-.ct-detail-placeholder { min-height: 240px; display: grid; place-content: center; gap: 8px; text-align: center; }
+.ct-detail-placeholder {
+  min-height: 240px;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  text-align: center;
+}
 </style>

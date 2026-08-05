@@ -1,8 +1,5 @@
 import type { App } from 'vue';
-import {
-  __proxmox_i18n_msgcat__,
-  __proxmox_i18n_plurals_msgcat__,
-} from './pve-lang-zh_CN';
+import { __proxmox_i18n_msgcat__, __proxmox_i18n_plurals_msgcat__ } from './pve-lang-zh_CN';
 import enUS from './en-US';
 import zhCN from './zh-CN';
 

@@ -21,7 +21,10 @@ import {
   runVmBackup,
 } from '@/api/vm';
 
-const props = withDefaults(defineProps<{ node: string; vmid: string; guestType?: 'qemu' | 'lxc' }>(), { guestType: 'qemu' });
+const props = withDefaults(
+  defineProps<{ node: string; vmid: string; guestType?: 'qemu' | 'lxc' }>(),
+  { guestType: 'qemu' },
+);
 const emit = defineEmits<{ task: [node: string, upid: string, title: string] }>();
 const $q = useQuasar();
 const session = useSessionStore();
@@ -218,7 +221,9 @@ function isGuestBackupForCurrentVm(row: PveRecord) {
   const format = textValue(row.format);
   const subtype = textValue(row.subtype);
   const isGuestBackup =
-    format === 'pbs-vm' || subtype === props.guestType || new RegExp(`:backup/vzdump-${props.guestType}-`).test(volid);
+    format === 'pbs-vm' ||
+    subtype === props.guestType ||
+    new RegExp(`:backup/vzdump-${props.guestType}-`).test(volid);
 
   return isGuestBackup && (rowVmid === vmid || volid.includes(`vzdump-${props.guestType}-${vmid}`));
 }
@@ -350,7 +355,7 @@ function applyRestoreConfiguration(value: string) {
         allStoragesAvailable &&
         Boolean(
           storageHint &&
-            restoreStorages.value.some((item) => textValue(item.storage) === storageHint),
+          restoreStorages.value.some((item) => textValue(item.storage) === storageHint),
         );
       return;
     }
@@ -716,63 +721,63 @@ watch(
           <div class="row q-col-gutter-lg">
             <div class="col-12 col-sm-6">
               <SelectTable
-            v-model="form.storage"
-            row-key="storage"
-            field-style="standard"
-            width="560px"
-            class="q-field--with-bottom"
-            :rows="storages"
-            :columns="storageColumns"
-            :display-value="storageDisplayValue"
-            :loading="loading"
-            :get-row-value="(row) => textValue(row.storage)"
-            :label="gettext('Storage')"
-            @update:model-value="loadBackupDefaults"
-          >
-            <template #body-cell="scope">
-              <UsageProgress v-if="scope.col.name === 'used'" :percent="Number(scope.value)" />
-              <q-badge
-                v-else-if="scope.col.name === 'active'"
-                :color="Number(scope.row.active) ? 'green' : 'red'"
-                :label="scope.value"
+                v-model="form.storage"
+                row-key="storage"
+                field-style="standard"
+                width="560px"
+                class="q-field--with-bottom"
+                :rows="storages"
+                :columns="storageColumns"
+                :display-value="storageDisplayValue"
+                :loading="loading"
+                :get-row-value="(row) => textValue(row.storage)"
+                :label="gettext('Storage')"
+                @update:model-value="loadBackupDefaults"
+              >
+                <template #body-cell="scope">
+                  <UsageProgress v-if="scope.col.name === 'used'" :percent="Number(scope.value)" />
+                  <q-badge
+                    v-else-if="scope.col.name === 'active'"
+                    :color="Number(scope.row.active) ? 'green' : 'red'"
+                    :label="scope.value"
+                  />
+                  <template v-else>{{ scope.value }}</template>
+                </template>
+              </SelectTable>
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-select
+                v-model="form.mode"
+                dense
+                emit-value
+                map-options
+                options-dense
+                class="q-field--with-bottom"
+                :options="[
+                  { label: gettext('Snapshot'), value: 'snapshot' },
+                  { label: gettext('Suspend'), value: 'suspend' },
+                  { label: gettext('Stop'), value: 'stop' },
+                ]"
+                :label="gettext('Mode')"
               />
-              <template v-else>{{ scope.value }}</template>
-            </template>
-          </SelectTable>
             </div>
             <div class="col-12 col-sm-6">
               <q-select
-            v-model="form.mode"
-            dense
-            emit-value
-            map-options
-            options-dense
-            class="q-field--with-bottom"
-            :options="[
-              { label: gettext('Snapshot'), value: 'snapshot' },
-              { label: gettext('Suspend'), value: 'suspend' },
-              { label: gettext('Stop'), value: 'stop' },
-            ]"
-            :label="gettext('Mode')"
-          />
-            </div>
-            <div class="col-12 col-sm-6">
-              <q-select
-            v-model="form.compress"
-            dense
-            emit-value
-            map-options
-            options-dense
-            class="q-field--with-bottom"
-            :disable="backupCompressDisabled"
-            :options="[
-              { label: 'ZSTD', value: 'zstd' },
-              { label: 'LZO (fast)', value: 'lzo' },
-              { label: 'GZIP (good)', value: 'gzip' },
-              { label: gettext('None'), value: '0' },
-            ]"
-            :label="gettext('Compression')"
-          />
+                v-model="form.compress"
+                dense
+                emit-value
+                map-options
+                options-dense
+                class="q-field--with-bottom"
+                :disable="backupCompressDisabled"
+                :options="[
+                  { label: 'ZSTD', value: 'zstd' },
+                  { label: 'LZO (fast)', value: 'lzo' },
+                  { label: 'GZIP (good)', value: 'gzip' },
+                  { label: gettext('None'), value: '0' },
+                ]"
+                :label="gettext('Compression')"
+              />
             </div>
             <div class="col-12 col-sm-6">
               <q-select
@@ -800,19 +805,14 @@ watch(
             </div>
             <div class="col-12 col-sm-6">
               <q-checkbox
-            v-model="form.protected"
-            dense
-            color="primary"
-            :label="gettext('Protected')"
-          />
-            </div>
-            <div v-if="pruneVisible" class="col-12">
-              <q-checkbox
-                v-model="form.remove"
+                v-model="form.protected"
                 dense
                 color="primary"
-                :label="gettext('Prune')"
+                :label="gettext('Protected')"
               />
+            </div>
+            <div v-if="pruneVisible" class="col-12">
+              <q-checkbox v-model="form.remove" dense color="primary" :label="gettext('Prune')" />
               <div v-if="form.remove" class="backup-retention q-mt-sm">
                 <div class="text-grey-8 q-mb-xs">
                   {{ gettext('Storage Retention Configuration') }}:

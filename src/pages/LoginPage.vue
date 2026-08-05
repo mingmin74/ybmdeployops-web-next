@@ -7,7 +7,7 @@
       <div class="header-brand">
         <div class="header-logo">
           <!-- YBM -->
-          <img src="@/assets/logo.png" class="logo-image" alt="" srcset="">
+          <img src="@/assets/logo.png" class="logo-image" alt="" srcset="" />
         </div>
 
         <div class="header-product-name">
@@ -16,41 +16,20 @@
       </div>
 
       <nav class="header-actions">
-        <button
-          type="button"
-          class="header-action"
-        >
-          <q-icon
-            name="menu_book"
-            size="20px"
-          />
+        <button type="button" class="header-action">
+          <q-icon name="menu_book" size="20px" />
           <span>产品文档</span>
         </button>
 
-        <button
-          type="button"
-          class="header-action"
-        >
-          <q-icon
-            name="help_outline"
-            size="20px"
-          />
+        <button type="button" class="header-action">
+          <q-icon name="help_outline" size="20px" />
           <span>帮助中心</span>
         </button>
 
-        <button
-          type="button"
-          class="header-action"
-        >
-          <q-icon
-            name="language"
-            size="20px"
-          />
+        <button type="button" class="header-action">
+          <q-icon name="language" size="20px" />
           <span>简体中文</span>
-          <q-icon
-            name="keyboard_arrow_down"
-            size="17px"
-          />
+          <q-icon name="keyboard_arrow_down" size="17px" />
         </button>
       </nav>
     </header>
@@ -82,29 +61,18 @@
               数据中心管理平台
             </h1>
 
-            <p class="hero-description">
-              计算、存储、网络一体化管理，助力智能运维与资源统一调度
-            </p>
+            <p class="hero-description">计算、存储、网络一体化管理，助力智能运维与资源统一调度</p>
 
             <div class="feature-list">
               <!-- 高可用 -->
               <div class="feature-item">
                 <div class="feature-icon feature-icon-ha">
-                  <q-icon
-                    name="hexagon"
-                    size="37px"
-                  />
+                  <q-icon name="hexagon" size="37px" />
 
-                  <q-icon
-                    class="feature-inner"
-                    name="sync_alt"
-                    size="16px"
-                  />
+                  <q-icon class="feature-inner" name="sync_alt" size="16px" />
                 </div>
 
-                <span class="feature-name">
-                  高可用架构
-                </span>
+                <span class="feature-name"> 高可用架构 </span>
               </div>
 
               <div class="feature-divider" />
@@ -112,15 +80,10 @@
               <!-- 资源调度 -->
               <div class="feature-item">
                 <div class="feature-icon">
-                  <q-icon
-                    name="view_in_ar"
-                    size="41px"
-                  />
+                  <q-icon name="view_in_ar" size="41px" />
                 </div>
 
-                <span class="feature-name">
-                  统一资源调度
-                </span>
+                <span class="feature-name"> 统一资源调度 </span>
               </div>
 
               <div class="feature-divider" />
@@ -128,15 +91,10 @@
               <!-- 智能运维 -->
               <div class="feature-item">
                 <div class="feature-icon">
-                  <q-icon
-                    name="monitor_heart"
-                    size="40px"
-                  />
+                  <q-icon name="monitor_heart" size="40px" />
                 </div>
 
-                <span class="feature-name">
-                  智能运维
-                </span>
+                <span class="feature-name"> 智能运维 </span>
               </div>
 
               <div class="feature-divider" />
@@ -144,15 +102,10 @@
               <!-- 数据安全 -->
               <div class="feature-item">
                 <div class="feature-icon">
-                  <q-icon
-                    name="verified_user"
-                    size="40px"
-                  />
+                  <q-icon name="verified_user" size="40px" />
                 </div>
 
-                <span class="feature-name">
-                  数据安全
-                </span>
+                <span class="feature-name"> 数据安全 </span>
               </div>
             </div>
           </div>
@@ -166,7 +119,7 @@
             <!-- 产品信息 -->
             <div class="login-brand">
               <div class="login-logo">
-            <img src="@/assets/logo.png" class="logo-image" alt="" srcset="">
+                <img src="@/assets/logo.png" class="logo-image" alt="" srcset="" />
               </div>
 
               <div class="login-brand-info">
@@ -174,18 +127,12 @@
                   {{ appConfig.productName }}
                 </h2>
 
-                <p>
-                  统一纳管虚拟化、容器、存储与网络资源
-                </p>
+                <p>统一纳管虚拟化、容器、存储与网络资源</p>
               </div>
             </div>
 
             <!-- 登录表单 -->
-            <q-form
-              ref="loginFormRef"
-              class="login-form"
-              @submit="submitLogin"
-            >
+            <q-form ref="loginFormRef" class="login-form" @submit="submitLogin">
               <!-- 用户名 -->
               <q-input
                 v-model="form.username"
@@ -195,17 +142,10 @@
                 lazy-rules="ondemand"
                 class="login-field"
                 :placeholder="gettext('Username')"
-                :rules="[
-                  (value) =>
-                    Boolean(value) ||
-                    gettext('Username is required'),
-                ]"
+                :rules="[(value) => Boolean(value) || gettext('Username is required')]"
               >
                 <template #prepend>
-                  <q-icon
-                    name="person_outline"
-                    class="field-icon"
-                  />
+                  <q-icon name="person_outline" class="field-icon" />
                 </template>
               </q-input>
 
@@ -218,17 +158,10 @@
                 class="login-field"
                 :type="showPassword ? 'text' : 'password'"
                 :placeholder="gettext('Password')"
-                :rules="[
-                  (value) =>
-                    Boolean(value) ||
-                    gettext('Password is required'),
-                ]"
+                :rules="[(value) => Boolean(value) || gettext('Password is required')]"
               >
                 <template #prepend>
-                  <q-icon
-                    name="lock_outline"
-                    class="field-icon"
-                  />
+                  <q-icon name="lock_outline" class="field-icon" />
                 </template>
 
                 <template #append>
@@ -237,16 +170,8 @@
                     round
                     dense
                     class="password-toggle"
-                    :icon="
-                      showPassword
-                        ? 'visibility_off'
-                        : 'visibility'
-                    "
-                    :aria-label="
-                      gettext(
-                        'Toggle password visibility',
-                      )
-                    "
+                    :icon="showPassword ? 'visibility_off' : 'visibility'"
+                    :aria-label="gettext('Toggle password visibility')"
                     @click="showPassword = !showPassword"
                   />
                 </template>
@@ -255,10 +180,7 @@
               <!-- 认证域 -->
               <div class="realm-field">
                 <div class="realm-label">
-                  <q-icon
-                    name="domain"
-                    class="field-icon"
-                  />
+                  <q-icon name="domain" class="field-icon" />
 
                   <span>
                     {{ gettext('Realm') }}
@@ -310,9 +232,7 @@
     =============================== -->
     <footer class="login-footer">
       <div class="footer-left">
-        <span>
-          © 2024 YBM. All Rights Reserved.
-        </span>
+        <span> © 2024 YBM. All Rights Reserved. </span>
 
         <span class="footer-line" />
 
@@ -327,10 +247,7 @@
 
       <div class="footer-center">
         <div class="footer-info">
-          <q-icon
-            name="security"
-            size="20px"
-          />
+          <q-icon name="security" size="20px" />
           <span>国密合规支持</span>
         </div>
 
@@ -341,40 +258,24 @@
 
       <div class="footer-right">
         <div class="footer-info">
-          <q-icon
-            name="headset_mic"
-            size="20px"
-          />
-          <span>
-            技术支持：400-888-0755
-          </span>
+          <q-icon name="headset_mic" size="20px" />
+          <span> 技术支持：400-888-0755 </span>
         </div>
 
         <span class="footer-line" />
 
         <div class="footer-info">
-          <q-icon
-            name="mail_outline"
-            size="19px"
-          />
+          <q-icon name="mail_outline" size="19px" />
 
-          <span>
-            support@ybm.com
-          </span>
+          <span> support@ybm.com </span>
         </div>
 
         <span class="footer-line" />
 
-        <button
-          type="button"
-          class="footer-link"
-        >
+        <button type="button" class="footer-link">
           <span>官方网站</span>
 
-          <q-icon
-            name="open_in_new"
-            size="17px"
-          />
+          <q-icon name="open_in_new" size="17px" />
         </button>
       </div>
     </footer>
@@ -382,17 +283,9 @@
 </template>
 
 <script setup lang="ts">
-import {
-  reactive,
-  shallowRef,
-} from 'vue';
-import {
-  useRoute,
-  useRouter,
-} from 'vue-router';
-import {
-  Notify,
-} from 'quasar';
+import { reactive, shallowRef } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { Notify } from 'quasar';
 
 import { appConfig } from '@/config/app';
 import { gettext } from '@/locale';
@@ -409,17 +302,13 @@ const loading = shallowRef(false);
 const showPassword = shallowRef(false);
 
 const form = reactive({
-  username:
-    localStorage.getItem('username') || '',
+  username: localStorage.getItem('username') || '',
 
   password: '',
 
-  realm:
-    localStorage.getItem('realm') ||
-    appConfig.defaultRealm,
+  realm: localStorage.getItem('realm') || appConfig.defaultRealm,
 
-  remember:
-    localStorage.getItem('remember') === 'true',
+  remember: localStorage.getItem('remember') === 'true',
 });
 
 const realmOptions = [
@@ -446,45 +335,27 @@ async function submitLogin() {
     if (!response.success) {
       Notify.create({
         type: 'negative',
-        message:
-          response.message ||
-          gettext('Login failed'),
+        message: response.message || gettext('Login failed'),
       });
 
       return;
     }
 
     if (form.remember) {
-      localStorage.setItem(
-        'username',
-        form.username,
-      );
+      localStorage.setItem('username', form.username);
 
-      localStorage.setItem(
-        'realm',
-        form.realm,
-      );
+      localStorage.setItem('realm', form.realm);
 
-      localStorage.setItem(
-        'remember',
-        'true',
-      );
+      localStorage.setItem('remember', 'true');
     } else {
       localStorage.removeItem('username');
       localStorage.removeItem('realm');
       localStorage.removeItem('remember');
     }
 
-    const redirect =
-      typeof route.query.redirect === 'string'
-        ? route.query.redirect
-        : '/dashboard';
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard';
 
-    await router.push(
-      redirect === '/login'
-        ? '/dashboard'
-        : redirect,
-    );
+    await router.push(redirect === '/login' ? '/dashboard' : redirect);
   } finally {
     loading.value = false;
   }
@@ -514,11 +385,7 @@ async function submitLogin() {
 
   color: #1b2940;
 
-  font-family:
-    "Microsoft YaHei",
-    "PingFang SC",
-    Arial,
-    sans-serif;
+  font-family: 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif;
 }
 
 /* ==========================================================
@@ -539,13 +406,7 @@ async function submitLogin() {
 
   padding: 0 34px;
 
-  background:
-    linear-gradient(
-      100deg,
-      #0863bd 0%,
-      #0754a6 52%,
-      #06448d 100%
-    );
+  background: linear-gradient(100deg, #0863bd 0%, #0754a6 52%, #06448d 100%);
 
   color: #ffffff;
 }
@@ -595,7 +456,7 @@ async function submitLogin() {
 
   letter-spacing: 0.3px; */
 }
-.logo-image{
+.logo-image {
   width: 50px;
 }
 .header-product-name {
@@ -634,13 +495,7 @@ async function submitLogin() {
 
   background: transparent;
 
-  color:
-    rgba(
-      255,
-      255,
-      255,
-      0.94
-    );
+  color: rgba(255, 255, 255, 0.94);
 
   font-family: inherit;
   font-size: 15px;
@@ -649,8 +504,7 @@ async function submitLogin() {
 
   white-space: nowrap;
 
-  transition:
-    opacity 0.2s ease;
+  transition: opacity 0.2s ease;
 }
 
 .header-action:hover {
@@ -686,13 +540,12 @@ async function submitLogin() {
 
   pointer-events: none;
 
-  background:
-    linear-gradient(
-      90deg,
-      rgba(242, 249, 255, 0.18) 0%,
-      rgba(242, 249, 255, 0.06) 28%,
-      transparent 55%
-    );
+  background: linear-gradient(
+    90deg,
+    rgba(242, 249, 255, 0.18) 0%,
+    rgba(242, 249, 255, 0.06) 28%,
+    transparent 55%
+  );
 }
 
 /* ---------- 主体布局 ---------- */
@@ -710,17 +563,9 @@ async function submitLogin() {
     minmax(600px, 1fr)
     500px;
 
-  column-gap: clamp(
-    30px,
-    3.5vw,
-    68px
-  );
+  column-gap: clamp(30px, 3.5vw, 68px);
 
-  padding:
-    clamp(70px, 8vh, 102px)
-    clamp(60px, 6vw, 118px)
-    48px
-    clamp(90px, 7.2vw, 145px);
+  padding: clamp(70px, 8vh, 102px) clamp(60px, 6vw, 118px) 48px clamp(90px, 7.2vw, 145px);
 }
 
 /* ==========================================================
@@ -744,12 +589,7 @@ async function submitLogin() {
 
   color: #0864c6;
 
-  font-size:
-    clamp(
-      39px,
-      2.55vw,
-      49px
-    );
+  font-size: clamp(39px, 2.55vw, 49px);
 
   line-height: 1.38;
 
@@ -757,27 +597,17 @@ async function submitLogin() {
 
   letter-spacing: 2px;
 
-  text-shadow:
-    0 2px 8px
-    rgba(25, 118, 210, 0.055);
+  text-shadow: 0 2px 8px rgba(25, 118, 210, 0.055);
 }
 
 /* ---------- 描述 ---------- */
 
 .hero-description {
-  margin:
-    20px
-    0
-    34px;
+  margin: 20px 0 34px;
 
   color: #354760;
 
-  font-size:
-    clamp(
-      15px,
-      1vw,
-      18px
-    );
+  font-size: clamp(15px, 1vw, 18px);
 
   line-height: 1.7;
 
@@ -832,11 +662,7 @@ async function submitLogin() {
   left: 50%;
   top: 50%;
 
-  transform:
-    translate(
-      -50%,
-      -50%
-    );
+  transform: translate(-50%, -50%);
 
   color: #ffffff;
 }
@@ -853,14 +679,13 @@ async function submitLogin() {
 
   margin-bottom: 21px;
 
-  background:
-    linear-gradient(
-      to bottom,
-      transparent 0%,
-      #b6c8dc 18%,
-      #b6c8dc 82%,
-      transparent 100%
-    );
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #b6c8dc 18%,
+    #b6c8dc 82%,
+    transparent 100%
+  );
 }
 
 /* ==========================================================
@@ -883,45 +708,17 @@ async function submitLogin() {
 
   margin-top: 4px;
 
-  padding:
-    49px
-    37px
-    43px;
+  padding: 49px 37px 43px;
 
-  border:
-    1px solid
-    rgba(
-      255,
-      255,
-      255,
-      0.82
-    );
+  border: 1px solid rgba(255, 255, 255, 0.82);
 
   border-radius: 18px;
 
-  background:
-    rgba(
-      255,
-      255,
-      255,
-      0.955
-    );
+  background: rgba(255, 255, 255, 0.955);
 
   box-shadow:
-    0 18px 48px
-      rgba(
-        33,
-        81,
-        133,
-        0.14
-      ),
-    0 5px 15px
-      rgba(
-        52,
-        86,
-        122,
-        0.055
-      );
+    0 18px 48px rgba(33, 81, 133, 0.14),
+    0 5px 15px rgba(52, 86, 122, 0.055);
 }
 
 /* ==========================================================
@@ -956,14 +753,7 @@ async function submitLogin() {
       #0868ce
     ); */
 
-  box-shadow:
-    0 7px 16px
-      rgba(
-        25,
-        118,
-        210,
-        0.17
-      );
+  box-shadow: 0 7px 16px rgba(25, 118, 210, 0.17);
 
   color: #ffffff;
 
@@ -980,21 +770,13 @@ async function submitLogin() {
 }
 
 .login-brand-info h2 {
-  margin:
-    0
-    0
-    7px;
+  margin: 0 0 7px;
 
   overflow: hidden;
 
   color: #142238;
 
-  font-size:
-    clamp(
-      20px,
-      1.35vw,
-      25px
-    );
+  font-size: clamp(20px, 1.35vw, 25px);
 
   line-height: 1.25;
 
@@ -1040,83 +822,55 @@ async function submitLogin() {
   width: 100%;
 }
 
-.login-field
-  :deep(.q-field__control) {
+.login-field :deep(.q-field__control) {
   height: 55px;
 
   border-radius: 7px;
 
-  background:
-    rgba(
-      255,
-      255,
-      255,
-      0.82
-    );
+  background: rgba(255, 255, 255, 0.82);
 
   transition:
     background-color 0.2s ease,
     box-shadow 0.2s ease;
 }
 
-.login-field
-  :deep(.q-field__control::before) {
-  border:
-    1px solid
-    #cad5e3;
+.login-field :deep(.q-field__control::before) {
+  border: 1px solid #cad5e3;
 }
 
-.login-field:hover
-  :deep(.q-field__control::before) {
+.login-field:hover :deep(.q-field__control::before) {
   border-color: #98b7d9;
 }
 
-.login-field
-  :deep(.q-field__control::after) {
-  border:
-    1px solid
-    var(--primary);
+.login-field :deep(.q-field__control::after) {
+  border: 1px solid var(--primary);
 
-  transform: scale3d(
-    1,
-    1,
-    1
-  );
+  transform: scale3d(1, 1, 1);
 }
 
-.login-field
-  :deep(.q-field__native) {
+.login-field :deep(.q-field__native) {
   min-height: 55px;
 
-  padding:
-    0
-    0
-    0
-    2px;
+  padding: 0 0 0 2px;
 
   color: #27384e;
 
   font-size: 15px;
 }
 
-.login-field
-  :deep(
-    .q-field__native::placeholder
-  ) {
+.login-field :deep(.q-field__native::placeholder) {
   color: #728299;
 
   opacity: 1;
 }
 
-.login-field
-  :deep(.q-field__prepend) {
+.login-field :deep(.q-field__prepend) {
   height: 55px;
 
   padding-right: 11px;
 }
 
-.login-field
-  :deep(.q-field__append) {
+.login-field :deep(.q-field__append) {
   height: 55px;
 }
 
@@ -1148,19 +902,11 @@ async function submitLogin() {
 
   padding-left: 13px;
 
-  border:
-    1px solid
-    #cad5e3;
+  border: 1px solid #cad5e3;
 
   border-radius: 7px;
 
-  background:
-    rgba(
-      255,
-      255,
-      255,
-      0.82
-    );
+  background: rgba(255, 255, 255, 0.82);
 
   transition:
     border-color 0.2s ease,
@@ -1174,14 +920,7 @@ async function submitLogin() {
 .realm-field:focus-within {
   border-color: var(--primary);
 
-  box-shadow:
-    0 0 0 1px
-    rgba(
-      25,
-      118,
-      210,
-      0.03
-    );
+  box-shadow: 0 0 0 1px rgba(25, 118, 210, 0.03);
 }
 
 .realm-label {
@@ -1203,25 +942,19 @@ async function submitLogin() {
   min-width: 0;
 }
 
-.realm-select
-  :deep(.q-field__control) {
+.realm-select :deep(.q-field__control) {
   min-height: 53px;
   height: 53px;
 
   padding: 0;
 }
 
-.realm-select
-  :deep(.q-field__native) {
+.realm-select :deep(.q-field__native) {
   min-height: 53px;
 
   justify-content: flex-end;
 
-  padding:
-    0
-    8px
-    0
-    15px;
+  padding: 0 8px 0 15px;
 
   color: #41536a;
 
@@ -1230,8 +963,7 @@ async function submitLogin() {
   text-align: right;
 }
 
-.realm-select
-  :deep(.q-field__append) {
+.realm-select :deep(.q-field__append) {
   height: 53px;
 
   padding-left: 3px;
@@ -1255,8 +987,7 @@ async function submitLogin() {
   color: #34465e;
 }
 
-.remember-checkbox
-  :deep(.q-checkbox__label) {
+.remember-checkbox :deep(.q-checkbox__label) {
   padding-left: 4px;
 
   color: #35475e;
@@ -1276,12 +1007,7 @@ async function submitLogin() {
 
   border-radius: 6px;
 
-  background:
-    linear-gradient(
-      90deg,
-      var(--primary) 0%,
-      #0874db 100%
-    ) !important;
+  background: linear-gradient(90deg, var(--primary) 0%, #0874db 100%) !important;
 
   color: #ffffff;
 
@@ -1291,14 +1017,7 @@ async function submitLogin() {
 
   letter-spacing: 2px;
 
-  box-shadow:
-    0 6px 15px
-    rgba(
-      25,
-      118,
-      210,
-      0.18
-    );
+  box-shadow: 0 6px 15px rgba(25, 118, 210, 0.18);
 
   transition:
     filter 0.2s ease,
@@ -1309,19 +1028,11 @@ async function submitLogin() {
 .login-button:hover {
   filter: brightness(1.04);
 
-  box-shadow:
-    0 8px 20px
-    rgba(
-      25,
-      118,
-      210,
-      0.23
-    );
+  box-shadow: 0 8px 20px rgba(25, 118, 210, 0.23);
 }
 
 .login-button:active {
-  transform:
-    translateY(1px);
+  transform: translateY(1px);
 }
 
 /* ==========================================================
@@ -1350,22 +1061,9 @@ async function submitLogin() {
 
   padding: 0 34px;
 
-  border-top:
-    1px solid
-    rgba(
-      202,
-      218,
-      235,
-      0.48
-    );
+  border-top: 1px solid rgba(202, 218, 235, 0.48);
 
-  background:
-    rgba(
-      250,
-      252,
-      255,
-      0.98
-    );
+  background: rgba(250, 252, 255, 0.98);
 
   color: #65758b;
 
@@ -1438,8 +1136,7 @@ async function submitLogin() {
 
   cursor: pointer;
 
-  transition:
-    color 0.2s ease;
+  transition: color 0.2s ease;
 }
 
 .footer-link:hover {
@@ -1450,9 +1147,7 @@ async function submitLogin() {
    1600 以下
 ========================================================== */
 
-@media (
-  max-width: 1600px
-) {
+@media (max-width: 1600px) {
   .main-layout {
     grid-template-columns:
       minmax(550px, 1fr)
@@ -1487,10 +1182,7 @@ async function submitLogin() {
   .login-card {
     max-width: 455px;
 
-    padding:
-      43px
-      32px
-      38px;
+    padding: 43px 32px 38px;
   }
 
   .login-logo {
@@ -1517,9 +1209,7 @@ async function submitLogin() {
    1366 左右
 ========================================================== */
 
-@media (
-  max-width: 1400px
-) {
+@media (max-width: 1400px) {
   .login-page {
     min-width: 1100px;
   }
@@ -1527,9 +1217,7 @@ async function submitLogin() {
   .login-header {
     height: 66px;
 
-    padding:
-      0
-      26px;
+    padding: 0 26px;
   }
 
   .header-logo {
@@ -1552,11 +1240,7 @@ async function submitLogin() {
       minmax(500px, 1fr)
       420px;
 
-    padding:
-      58px
-      55px
-      36px
-      68px;
+    padding: 58px 55px 36px 68px;
 
     column-gap: 32px;
   }
@@ -1566,10 +1250,7 @@ async function submitLogin() {
   }
 
   .hero-description {
-    margin:
-      17px
-      0
-      27px;
+    margin: 17px 0 27px;
 
     font-size: 15px;
   }
@@ -1598,10 +1279,7 @@ async function submitLogin() {
   .login-card {
     max-width: 420px;
 
-    padding:
-      35px
-      29px
-      32px;
+    padding: 35px 29px 32px;
   }
 
   .login-brand {
@@ -1627,14 +1305,10 @@ async function submitLogin() {
     gap: 15px;
   }
 
-  .login-field
-    :deep(.q-field__control),
-  .login-field
-    :deep(.q-field__native),
-  .login-field
-    :deep(.q-field__prepend),
-  .login-field
-    :deep(.q-field__append) {
+  .login-field :deep(.q-field__control),
+  .login-field :deep(.q-field__native),
+  .login-field :deep(.q-field__prepend),
+  .login-field :deep(.q-field__append) {
     height: 50px;
     min-height: 50px;
   }
@@ -1643,12 +1317,9 @@ async function submitLogin() {
     height: 50px;
   }
 
-  .realm-select
-    :deep(.q-field__control),
-  .realm-select
-    :deep(.q-field__native),
-  .realm-select
-    :deep(.q-field__append) {
+  .realm-select :deep(.q-field__control),
+  .realm-select :deep(.q-field__native),
+  .realm-select :deep(.q-field__append) {
     height: 48px;
     min-height: 48px;
   }
@@ -1660,9 +1331,7 @@ async function submitLogin() {
   .login-footer {
     height: 60px;
 
-    padding:
-      0
-      26px;
+    padding: 0 26px;
 
     font-size: 11px;
   }
@@ -1672,9 +1341,7 @@ async function submitLogin() {
    低高度屏幕
 ========================================================== */
 
-@media (
-  max-height: 800px
-) {
+@media (max-height: 800px) {
   .login-page {
     min-height: 660px;
   }
@@ -1697,10 +1364,7 @@ async function submitLogin() {
   }
 
   .hero-description {
-    margin:
-      14px
-      0
-      22px;
+    margin: 14px 0 22px;
   }
 
   .login-card {

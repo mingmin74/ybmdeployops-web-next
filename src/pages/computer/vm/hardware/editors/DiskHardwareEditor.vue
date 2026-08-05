@@ -51,7 +51,16 @@ const preservedKeys = new Set([
   'iops_rd_max',
   'iops_wr_max',
 ]);
-const bandwidthKeys = ['mbps_rd', 'mbps_wr', 'iops_rd', 'iops_wr', 'mbps_rd_max', 'mbps_wr_max', 'iops_rd_max', 'iops_wr_max'] as const;
+const bandwidthKeys = [
+  'mbps_rd',
+  'mbps_wr',
+  'iops_rd',
+  'iops_wr',
+  'mbps_rd_max',
+  'mbps_wr_max',
+  'iops_rd_max',
+  'iops_wr_max',
+] as const;
 
 function parseEnabled(value: string | undefined, fallback = false) {
   if (value === undefined || value === '') return fallback;
@@ -79,28 +88,31 @@ function parseDrive(value: unknown) {
     iops_wr_max: '',
   };
   const preserved: string[] = [];
-  textValue(value).split(',').forEach((part) => {
-    if (!part) return;
-    const segments = part.split('=', 2);
-    const key = segments[0] || '';
-    const optionValue = segments[1];
-    if (!key) return;
-    if (optionValue === undefined) {
-      form.file = key;
-      return;
-    }
-    if (key === 'cache') form.cache = optionValue || '__default__';
-    else if (key === 'discard') form.discard = optionValue === 'on' || parseEnabled(optionValue);
-    else if (key === 'iothread') form.iothread = parseEnabled(optionValue);
-    else if (key === 'ssd') form.ssd = parseEnabled(optionValue);
-    else if (key === 'ro') form.readOnly = parseEnabled(optionValue);
-    else if (key === 'backup') form.backup = parseEnabled(optionValue, true);
-    else if (key === 'replicate') form.skipReplication = !parseEnabled(optionValue, true);
-    else if (key === 'aio') form.aio = optionValue || '__default__';
-    else if (bandwidthKeys.includes(key as (typeof bandwidthKeys)[number])) form[key as (typeof bandwidthKeys)[number]] = optionValue;
-    else if (!preservedKeys.has(key)) preserved.push(part);
-    else preserved.push(part);
-  });
+  textValue(value)
+    .split(',')
+    .forEach((part) => {
+      if (!part) return;
+      const segments = part.split('=', 2);
+      const key = segments[0] || '';
+      const optionValue = segments[1];
+      if (!key) return;
+      if (optionValue === undefined) {
+        form.file = key;
+        return;
+      }
+      if (key === 'cache') form.cache = optionValue || '__default__';
+      else if (key === 'discard') form.discard = optionValue === 'on' || parseEnabled(optionValue);
+      else if (key === 'iothread') form.iothread = parseEnabled(optionValue);
+      else if (key === 'ssd') form.ssd = parseEnabled(optionValue);
+      else if (key === 'ro') form.readOnly = parseEnabled(optionValue);
+      else if (key === 'backup') form.backup = parseEnabled(optionValue, true);
+      else if (key === 'replicate') form.skipReplication = !parseEnabled(optionValue, true);
+      else if (key === 'aio') form.aio = optionValue || '__default__';
+      else if (bandwidthKeys.includes(key as (typeof bandwidthKeys)[number]))
+        form[key as (typeof bandwidthKeys)[number]] = optionValue;
+      else if (!preservedKeys.has(key)) preserved.push(part);
+      else preserved.push(part);
+    });
   return { form, preserved };
 }
 
@@ -112,12 +124,12 @@ const supportsIoThread = computed(() => bus.value === 'scsi' || bus.value === 'v
 const advanced = shallowRef(
   Boolean(
     form.ssd ||
-      form.readOnly ||
-      !form.backup ||
-      form.skipReplication ||
-      form.aio !== '__default__' ||
-      bandwidthKeys.some((key) => form[key])
-  )
+    form.readOnly ||
+    !form.backup ||
+    form.skipReplication ||
+    form.aio !== '__default__' ||
+    bandwidthKeys.some((key) => form[key]),
+  ),
 );
 const cacheOptions = [
   { label: `${gettext('Default')} (${gettext('No cache')})`, value: '__default__' },
@@ -143,15 +155,15 @@ function optionalNumberValid(value: string, min: number) {
 const canSave = computed(() =>
   Boolean(
     form.file.trim() &&
-      optionalNumberValid(form.mbps_rd, 1) &&
-      optionalNumberValid(form.mbps_wr, 1) &&
-      optionalNumberValid(form.iops_rd, 10) &&
-      optionalNumberValid(form.iops_wr, 10) &&
-      optionalNumberValid(form.mbps_rd_max, 1) &&
-      optionalNumberValid(form.mbps_wr_max, 1) &&
-      optionalNumberValid(form.iops_rd_max, 10) &&
-      optionalNumberValid(form.iops_wr_max, 10)
-  )
+    optionalNumberValid(form.mbps_rd, 1) &&
+    optionalNumberValid(form.mbps_wr, 1) &&
+    optionalNumberValid(form.iops_rd, 10) &&
+    optionalNumberValid(form.iops_wr, 10) &&
+    optionalNumberValid(form.mbps_rd_max, 1) &&
+    optionalNumberValid(form.mbps_wr_max, 1) &&
+    optionalNumberValid(form.iops_rd_max, 10) &&
+    optionalNumberValid(form.iops_wr_max, 10),
+  ),
 );
 
 function pushOptional(parts: string[], key: string, value: string) {
@@ -211,16 +223,33 @@ async function save() {
       </div>
       <template v-if="advanced">
         <div class="col-6">
-          <q-checkbox v-model="form.ssd" dense color="primary" :disable="bus === 'virtio'" :label="gettext('SSD emulation')" />
+          <q-checkbox
+            v-model="form.ssd"
+            dense
+            color="primary"
+            :disable="bus === 'virtio'"
+            :label="gettext('SSD emulation')"
+          />
         </div>
         <div class="col-6">
-          <q-checkbox v-model="form.readOnly" dense color="primary" :disable="!supportsIoThread" :label="gettext('Readonly')" />
+          <q-checkbox
+            v-model="form.readOnly"
+            dense
+            color="primary"
+            :disable="!supportsIoThread"
+            :label="gettext('Readonly')"
+          />
         </div>
         <div class="col-6">
           <q-checkbox v-model="form.backup" dense color="primary" :label="gettext('Backup')" />
         </div>
         <div class="col-6">
-          <q-checkbox v-model="form.skipReplication" dense color="primary" :label="gettext('Skip replication')" />
+          <q-checkbox
+            v-model="form.skipReplication"
+            dense
+            color="primary"
+            :label="gettext('Skip replication')"
+          />
         </div>
         <div class="col-12">
           <q-select
@@ -234,28 +263,80 @@ async function save() {
           />
         </div>
         <div class="col-6">
-          <q-input v-model="form.mbps_rd" dense type="number" min="1" :label="`${gettext('Read limit')} (MB/s)`" />
+          <q-input
+            v-model="form.mbps_rd"
+            dense
+            type="number"
+            min="1"
+            :label="`${gettext('Read limit')} (MB/s)`"
+          />
         </div>
         <div class="col-6">
-          <q-input v-model="form.mbps_wr" dense type="number" min="1" :label="`${gettext('Write limit')} (MB/s)`" />
+          <q-input
+            v-model="form.mbps_wr"
+            dense
+            type="number"
+            min="1"
+            :label="`${gettext('Write limit')} (MB/s)`"
+          />
         </div>
         <div class="col-6">
-          <q-input v-model="form.iops_rd" dense type="number" min="10" step="10" :label="`${gettext('Read limit')} (ops/s)`" />
+          <q-input
+            v-model="form.iops_rd"
+            dense
+            type="number"
+            min="10"
+            step="10"
+            :label="`${gettext('Read limit')} (ops/s)`"
+          />
         </div>
         <div class="col-6">
-          <q-input v-model="form.iops_wr" dense type="number" min="10" step="10" :label="`${gettext('Write limit')} (ops/s)`" />
+          <q-input
+            v-model="form.iops_wr"
+            dense
+            type="number"
+            min="10"
+            step="10"
+            :label="`${gettext('Write limit')} (ops/s)`"
+          />
         </div>
         <div class="col-6">
-          <q-input v-model="form.mbps_rd_max" dense type="number" min="1" :label="`${gettext('Read max burst')} (MB)`" />
+          <q-input
+            v-model="form.mbps_rd_max"
+            dense
+            type="number"
+            min="1"
+            :label="`${gettext('Read max burst')} (MB)`"
+          />
         </div>
         <div class="col-6">
-          <q-input v-model="form.mbps_wr_max" dense type="number" min="1" :label="`${gettext('Write max burst')} (MB)`" />
+          <q-input
+            v-model="form.mbps_wr_max"
+            dense
+            type="number"
+            min="1"
+            :label="`${gettext('Write max burst')} (MB)`"
+          />
         </div>
         <div class="col-6">
-          <q-input v-model="form.iops_rd_max" dense type="number" min="10" step="10" :label="`${gettext('Read max burst')} (ops)`" />
+          <q-input
+            v-model="form.iops_rd_max"
+            dense
+            type="number"
+            min="10"
+            step="10"
+            :label="`${gettext('Read max burst')} (ops)`"
+          />
         </div>
         <div class="col-6">
-          <q-input v-model="form.iops_wr_max" dense type="number" min="10" step="10" :label="`${gettext('Write max burst')} (ops)`" />
+          <q-input
+            v-model="form.iops_wr_max"
+            dense
+            type="number"
+            min="10"
+            step="10"
+            :label="`${gettext('Write max burst')} (ops)`"
+          />
         </div>
       </template>
     </div>

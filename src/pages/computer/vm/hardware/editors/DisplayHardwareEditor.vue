@@ -66,10 +66,12 @@ const serialValid = computed(() => {
 const canSave = computed(() => memoryValid.value && serialValid.value);
 
 function buildVgaValue() {
-  if (form.type === '__default__' && !form.memory.trim() && form.clipboard === '__default__') return '';
+  if (form.type === '__default__' && !form.memory.trim() && form.clipboard === '__default__')
+    return '';
   const parts = [form.type === '__default__' ? 'std' : form.type];
   if (!isNonGui.value && form.memory.trim()) parts.push(`memory=${form.memory.trim()}`);
-  if (!isNonGui.value && form.clipboard !== '__default__') parts.push(`clipboard=${form.clipboard}`);
+  if (!isNonGui.value && form.clipboard !== '__default__')
+    parts.push(`clipboard=${form.clipboard}`);
   return parts.join(',');
 }
 
@@ -125,15 +127,25 @@ async function save() {
           />
         </div>
         <div v-if="form.clipboard === 'vnc' && !isNonGui" class="col-12 hardware-editor-hint">
-          {{ gettext('You cannot use the default SPICE clipboard if the VNC clipboard is selected.') }}
+          {{
+            gettext('You cannot use the default SPICE clipboard if the VNC clipboard is selected.')
+          }}
           {{ gettext('VNC clipboard requires spice-tools installed in the Guest-VM.') }}
         </div>
         <div v-if="form.clipboard === 'vnc' && !isNonGui" class="col-12 hardware-editor-hint">
-          {{ gettext('You cannot live-migrate while using the VNC clipboard with machine versions older than 10.1.') }}
+          {{
+            gettext(
+              'You cannot live-migrate while using the VNC clipboard with machine versions older than 10.1.',
+            )
+          }}
         </div>
         <div v-if="form.clipboard !== 'vnc' && !isNonGui" class="col-12 hardware-editor-hint">
           {{ gettext('This option depends on your display type.') }}
-          {{ gettext('If the display type uses SPICE you are able to use the default SPICE clipboard.') }}
+          {{
+            gettext(
+              'If the display type uses SPICE you are able to use the default SPICE clipboard.',
+            )
+          }}
         </div>
       </template>
     </div>

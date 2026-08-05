@@ -130,7 +130,11 @@ const selectedVm = computed(
     {},
 );
 const selectedType = computed(() =>
-  isFixedVm.value ? props.fixedResourceType || 'qemu' : selectedVm.value.type === 'lxc' ? 'lxc' : 'qemu',
+  isFixedVm.value
+    ? props.fixedResourceType || 'qemu'
+    : selectedVm.value.type === 'lxc'
+      ? 'lxc'
+      : 'qemu',
 );
 const basicInformationTitle = computed(() =>
   selectedType.value === 'lxc'
@@ -636,8 +640,6 @@ onUnmounted(clearTimers);
           </div>
         </q-card-section>
       </q-card>
-
-
 
       <q-card class="overview-panel resource-grid-panel no-shadow no-border-radius no-margin">
         <q-card-section class="panel-section">

@@ -176,8 +176,9 @@ watch(
                   :disable="!editable || !activeName"
                   :label="gettext('Remove')"
                   @click="removeIpset"
-                /></div
-              ><q-space /><q-btn
+                />
+              </div>
+              <q-space /><q-btn
                 no-caps
                 outline
                 size="12px"
@@ -229,8 +230,9 @@ watch(
                   :disable="!editable || !selectedEntry.length"
                   :label="gettext('Remove')"
                   @click="removeEntry"
-                /></div
-              ><q-space /><q-btn
+                />
+              </div>
+              <q-space /><q-btn
                 no-caps
                 outline
                 size="12px"
@@ -250,7 +252,10 @@ watch(
   </div>
   <q-dialog v-model="ipsetVisible" persistent
     ><UWindow :title="gettext('Add')" width="420px" :loading="loading"
-      ><q-form class="firewall-ipset-form u-border q-ma-sm q-pa-md u-dense" @submit.prevent="saveIpset">
+      ><q-form
+        class="firewall-ipset-form u-border q-ma-sm q-pa-md u-dense"
+        @submit.prevent="saveIpset"
+      >
         <q-input v-model="ipsetForm.name" dense :label="gettext('Name')" /><q-input
           v-model="ipsetForm.comment"
           dense
@@ -274,7 +279,10 @@ watch(
   ></q-dialog>
   <q-dialog v-model="entryVisible" persistent
     ><UWindow :title="gettext('Add')" width="420px" :loading="entryLoading"
-      ><q-form class="firewall-ipset-form u-border q-ma-sm q-pa-md u-dense" @submit.prevent="saveEntry">
+      ><q-form
+        class="firewall-ipset-form u-border q-ma-sm q-pa-md u-dense"
+        @submit.prevent="saveEntry"
+      >
         <q-input v-model="entryForm.cidr" dense label="CIDR" /><q-checkbox
           v-model="entryForm.nomatch"
           dense

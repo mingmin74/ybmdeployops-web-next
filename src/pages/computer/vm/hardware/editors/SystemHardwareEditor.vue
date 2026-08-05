@@ -21,12 +21,39 @@ async function save() {
 <template>
   <div class="hardware-special-editor">
     <div class="row q-col-gutter-lg hardware-special-editor__fields">
-      <div class="col-12"><q-select v-model="form.machine" dense options-dense emit-value map-options :options="[{ label: 'i440fx', value: 'i440fx' }, { label: 'Q35', value: 'q35' }]" :label="gettext('Machine')" /></div>
-      <div v-if="advanced" class="col-12"><q-select v-model="form.scsihw" dense options-dense :options="['virtio-scsi-pci', 'virtio-scsi-single', 'lsi', 'megasas', 'pvscsi']" :label="gettext('SCSI Controller')" /></div>
+      <div class="col-12">
+        <q-select
+          v-model="form.machine"
+          dense
+          options-dense
+          emit-value
+          map-options
+          :options="[
+            { label: 'i440fx', value: 'i440fx' },
+            { label: 'Q35', value: 'q35' },
+          ]"
+          :label="gettext('Machine')"
+        />
+      </div>
+      <div v-if="advanced" class="col-12">
+        <q-select
+          v-model="form.scsihw"
+          dense
+          options-dense
+          :options="['virtio-scsi-pci', 'virtio-scsi-single', 'lsi', 'megasas', 'pvscsi']"
+          :label="gettext('SCSI Controller')"
+        />
+      </div>
     </div>
     <div class="hardware-special-editor__footer row items-center justify-between">
       <q-checkbox v-model="advanced" dense color="primary" :label="gettext('Advanced')" />
-      <q-btn no-caps size="12px" class="bg-primary text-grey-1 u-button" :label="gettext('Save')" @click="save" />
+      <q-btn
+        no-caps
+        size="12px"
+        class="bg-primary text-grey-1 u-button"
+        :label="gettext('Save')"
+        @click="save"
+      />
     </div>
   </div>
 </template>

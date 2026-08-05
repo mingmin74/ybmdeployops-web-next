@@ -2,14 +2,7 @@ import type { ComputedRef, Ref } from 'vue';
 import type { PveNode, PvePool, PveRecord } from '@/api/resources';
 
 export type CreateCtStepName =
-  | 'general'
-  | 'template'
-  | 'hardware'
-  | 'mounts'
-  | 'bindmounts'
-  | 'limits'
-  | 'dns'
-  | 'confirm';
+  'general' | 'template' | 'hardware' | 'mounts' | 'bindmounts' | 'limits' | 'dns' | 'confirm';
 
 export type CtMount = {
   hostPath: string;

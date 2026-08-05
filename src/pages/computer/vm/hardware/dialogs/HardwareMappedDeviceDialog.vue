@@ -26,7 +26,8 @@ watch(visible, async (isVisible) => {
   if (!isVisible || !canUseDeviceMapping) return;
   loading.value = true;
   try {
-    const response = kind === 'usb' ? await getUsbMappings(node.value) : await getPciMappings(node.value);
+    const response =
+      kind === 'usb' ? await getUsbMappings(node.value) : await getPciMappings(node.value);
     devices.value = response.data || [];
     device.value = '';
     pcie.value = false;
@@ -46,7 +47,11 @@ async function addMappedDevice() {
 
 <template>
   <q-dialog v-model="visible" persistent>
-    <UWindow :title="gettext(kind === 'usb' ? 'Add Mapped USB Device' : 'Add Mapped PCI Device')" width="500px" :loading="loading">
+    <UWindow
+      :title="gettext(kind === 'usb' ? 'Add Mapped USB Device' : 'Add Mapped PCI Device')"
+      width="500px"
+      :loading="loading"
+    >
       <div class="q-pa-md q-gutter-md">
         <q-select
           v-model="device"
@@ -61,7 +66,14 @@ async function addMappedDevice() {
         <q-checkbox v-if="kind === 'pci'" v-model="pcie" :label="gettext('PCI-Express')" />
       </div>
       <template #foot>
-        <q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" />
+        <q-btn
+          v-close-popup
+          no-caps
+          outline
+          size="12px"
+          class="u-button"
+          :label="gettext('Cancel')"
+        />
         <q-btn
           no-caps
           flat

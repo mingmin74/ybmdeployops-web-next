@@ -188,7 +188,6 @@ function selectRow(_: Event, row: PveRecord) {
   align-items: center;
 }
 
-
 .select-table--outlined :deep(.select-table__field.q-field--outlined .q-field__control::before),
 .select-table--outlined :deep(.select-table__field.q-field--outlined .q-field__control::after) {
   border: 1px solid #cccccc !important;

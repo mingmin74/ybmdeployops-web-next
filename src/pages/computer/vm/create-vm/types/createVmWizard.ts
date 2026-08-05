@@ -4,14 +4,7 @@ import type { VmCpuFlag, VmCpuModel } from '@/api/vm';
 import type { PveNode, PvePool, PveRecord } from '@/api/resources';
 
 export type CreateVmStepName =
-  | 'general'
-  | 'os'
-  | 'system'
-  | 'disks'
-  | 'cpu'
-  | 'memory'
-  | 'network'
-  | 'confirm';
+  'general' | 'os' | 'system' | 'disks' | 'cpu' | 'memory' | 'network' | 'confirm';
 
 export type DiskBus = 'scsi' | 'virtio' | 'sata' | 'ide';
 export type ActiveDiskId = number | 'primary';

@@ -39,7 +39,11 @@ const deviceValid = computed(() => Boolean(form.value.audioDevice.trim()));
             :options="audioDeviceOptions"
             :label="gettext('Audio Device')"
             :error="!deviceValid || deviceInUse"
-            :error-message="deviceInUse ? gettext('This device is already in use') : gettext('This field is required')"
+            :error-message="
+              deviceInUse
+                ? gettext('This device is already in use')
+                : gettext('This field is required')
+            "
           />
           <q-select
             v-model="form.audioDriver"

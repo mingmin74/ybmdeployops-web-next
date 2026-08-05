@@ -110,7 +110,9 @@ const treeNodes = computed<VmTreeNode[]>(() => {
         template: Boolean(row.template),
       });
       const sortedRows = [...rows].sort((left, right) =>
-        (textValue(left.name) || textValue(left.vmid)).localeCompare(textValue(right.name) || textValue(right.vmid)),
+        (textValue(left.name) || textValue(left.vmid)).localeCompare(
+          textValue(right.name) || textValue(right.vmid),
+        ),
       );
       return {
         key: `node:${node}`,
@@ -118,8 +120,20 @@ const treeNodes = computed<VmTreeNode[]>(() => {
         kind: 'node',
         node,
         children: [
-          { key: `node:${node}:vms`, label: gettext('Virtual Machine'), kind: 'category' as const, node, children: sortedRows.filter((row) => !row.template).map(toVmNode) },
-          { key: `node:${node}:templates`, label: gettext('Template'), kind: 'category' as const, node, children: sortedRows.filter((row) => Boolean(row.template)).map(toVmNode) },
+          {
+            key: `node:${node}:vms`,
+            label: gettext('Virtual Machine'),
+            kind: 'category' as const,
+            node,
+            children: sortedRows.filter((row) => !row.template).map(toVmNode),
+          },
+          {
+            key: `node:${node}:templates`,
+            label: gettext('Template'),
+            kind: 'category' as const,
+            node,
+            children: sortedRows.filter((row) => Boolean(row.template)).map(toVmNode),
+          },
         ],
       };
     });
@@ -128,20 +142,23 @@ const treeNodes = computed<VmTreeNode[]>(() => {
 const filteredTreeNodes = computed(() => {
   const keyword = treeSearch.value.trim().toLocaleLowerCase();
   if (!keyword) return treeNodes.value;
-  const filterNodes = (nodes: VmTreeNode[]): VmTreeNode[] => nodes.flatMap((node) => {
-    const children = filterNodes((node.children || []) as VmTreeNode[]);
-    return textValue(node.label).toLocaleLowerCase().includes(keyword) || children.length
-      ? [{ ...node, children }]
-      : [];
-  });
+  const filterNodes = (nodes: VmTreeNode[]): VmTreeNode[] =>
+    nodes.flatMap((node) => {
+      const children = filterNodes((node.children || []) as VmTreeNode[]);
+      return textValue(node.label).toLocaleLowerCase().includes(keyword) || children.length
+        ? [{ ...node, children }]
+        : [];
+    });
   return filterNodes(treeNodes.value);
 });
 
-const selectedNode = computed(() =>
-  selectedTreeNode.value.match(/^node:([^:]+)/)?.[1] || '',
-);
+const selectedNode = computed(() => selectedTreeNode.value.match(/^node:([^:]+)/)?.[1] || '');
 const selectedCategory = computed(() =>
-  selectedTreeNode.value.endsWith(':vms') ? 'vms' : selectedTreeNode.value.endsWith(':templates') ? 'templates' : '',
+  selectedTreeNode.value.endsWith(':vms')
+    ? 'vms'
+    : selectedTreeNode.value.endsWith(':templates')
+      ? 'templates'
+      : '',
 );
 
 const selectedVm = computed(() => selectedRows.value[0]);
@@ -213,7 +230,9 @@ const filteredRows = computed(() => {
   const keyword = search.value.trim().toLocaleLowerCase();
   return resources.value.filter((row) => {
     const matchesNode = !selectedNode.value || row.node === selectedNode.value;
-    const matchesCategory = !selectedCategory.value || (selectedCategory.value === 'templates' ? Boolean(row.template) : !row.template);
+    const matchesCategory =
+      !selectedCategory.value ||
+      (selectedCategory.value === 'templates' ? Boolean(row.template) : !row.template);
     const matchesSearch =
       !keyword ||
       [row.vmid, row.displayName, row.description, row.name, row.rawName, row.node]
@@ -648,7 +667,9 @@ async function reload() {
   loading.value = true;
   try {
     const response = await getVmResources();
-    resources.value = (response.data || []).filter((row) => row.type === 'qemu').map(mergeVmDisplayName);
+    resources.value = (response.data || [])
+      .filter((row) => row.type === 'qemu')
+      .map(mergeVmDisplayName);
     treeExpanded.value = resources.value.flatMap((row) => {
       const node = textValue(row.node) || gettext('Unknown');
       return [`node:${node}`, `node:${node}:vms`, `node:${node}:templates`];
@@ -672,7 +693,15 @@ onMounted(() => {
       <q-card-section class="q-pa-md">
         <div class="row no-wrap vm-list-layout">
           <aside class="vm-resource-tree">
-            <q-input v-model="treeSearch" dense outlined square clearable class="vm-tree-search" :placeholder="gettext('Search')">
+            <q-input
+              v-model="treeSearch"
+              dense
+              outlined
+              square
+              clearable
+              class="vm-tree-search"
+              :placeholder="gettext('Search')"
+            >
               <template #append><q-icon name="search" /></template>
             </q-input>
             <q-tree
@@ -687,8 +716,22 @@ onMounted(() => {
               <template #default-header="scope">
                 <div class="row items-center no-wrap vm-tree-node">
                   <q-icon
-                    :name="scope.node.kind === 'node' ? 'dns' : scope.node.kind === 'category' ? 'folder' : scope.node.template ? 'article' : 'desktop_windows'"
-                    :color="scope.node.kind === 'node' ? 'primary' : scope.node.kind === 'category' ? 'grey-7' : statusColor(scope.node.status)"
+                    :name="
+                      scope.node.kind === 'node'
+                        ? 'dns'
+                        : scope.node.kind === 'category'
+                          ? 'folder'
+                          : scope.node.template
+                            ? 'article'
+                            : 'desktop_windows'
+                    "
+                    :color="
+                      scope.node.kind === 'node'
+                        ? 'primary'
+                        : scope.node.kind === 'category'
+                          ? 'grey-7'
+                          : statusColor(scope.node.status)
+                    "
                     size="16px"
                     class="q-mr-xs"
                   />
@@ -726,158 +769,270 @@ onMounted(() => {
                     :disable="!canCreate"
                     @click="createDialogVisible = true"
                   />
-                  <q-btn-dropdown no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Power')" :disable="!selectedVm || commandLoading">
-                    <q-list dense><q-item v-close-popup clickable :disable="!canStart" @click="requestCommand('start')"><q-item-section>{{ gettext('Start') }}</q-item-section></q-item><q-item v-close-popup clickable :disable="!canShutdown" @click="requestCommand('shutdown')"><q-item-section>{{ gettext('Shutdown') }}</q-item-section></q-item><q-item v-close-popup clickable :disable="!canStop" @click="requestCommand('stop')"><q-item-section class="text-red">{{ gettext('Stop') }}</q-item-section></q-item><q-item v-close-popup clickable :disable="!canReboot" @click="requestCommand('reboot')"><q-item-section>{{ gettext('Reboot') }}</q-item-section></q-item><q-item v-close-popup clickable :disable="!canSuspend" @click="requestCommand('suspend')"><q-item-section>{{ gettext('Suspend') }}</q-item-section></q-item><q-item v-close-popup clickable :disable="!canSuspend" @click="requestCommand('suspend', { todisk: 1 }, gettext('Hibernate'))"><q-item-section>{{ gettext('Hibernate') }}</q-item-section></q-item><q-item v-close-popup clickable :disable="!canResume" @click="requestCommand('resume')"><q-item-section>{{ gettext('Resume') }}</q-item-section></q-item><q-item v-close-popup clickable :disable="!canStop" @click="requestCommand('reset')"><q-item-section>{{ gettext('Reset') }}</q-item-section></q-item></q-list>
+                  <q-btn-dropdown
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    :label="gettext('Power')"
+                    :disable="!selectedVm || commandLoading"
+                  >
+                    <q-list dense
+                      ><q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canStart"
+                        @click="requestCommand('start')"
+                        ><q-item-section>{{ gettext('Start') }}</q-item-section></q-item
+                      ><q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canShutdown"
+                        @click="requestCommand('shutdown')"
+                        ><q-item-section>{{ gettext('Shutdown') }}</q-item-section></q-item
+                      ><q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canStop"
+                        @click="requestCommand('stop')"
+                        ><q-item-section class="text-red">{{
+                          gettext('Stop')
+                        }}</q-item-section></q-item
+                      ><q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canReboot"
+                        @click="requestCommand('reboot')"
+                        ><q-item-section>{{ gettext('Reboot') }}</q-item-section></q-item
+                      ><q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canSuspend"
+                        @click="requestCommand('suspend')"
+                        ><q-item-section>{{ gettext('Suspend') }}</q-item-section></q-item
+                      ><q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canSuspend"
+                        @click="requestCommand('suspend', { todisk: 1 }, gettext('Hibernate'))"
+                        ><q-item-section>{{ gettext('Hibernate') }}</q-item-section></q-item
+                      ><q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canResume"
+                        @click="requestCommand('resume')"
+                        ><q-item-section>{{ gettext('Resume') }}</q-item-section></q-item
+                      ><q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canStop"
+                        @click="requestCommand('reset')"
+                        ><q-item-section>{{ gettext('Reset') }}</q-item-section></q-item
+                      ></q-list
+                    >
                   </q-btn-dropdown>
-                  <q-btn-dropdown no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Console')" :disable="!selectedVm || !canUseConsole || commandLoading"><q-list dense><q-item v-close-popup clickable @click="openConsole('noVNC')"><q-item-section>noVNC</q-item-section></q-item><q-item v-close-popup clickable @click="downloadSpice"><q-item-section>SPICE</q-item-section></q-item><q-item v-close-popup clickable @click="openConsole('xterm.js')"><q-item-section>xterm.js</q-item-section></q-item></q-list></q-btn-dropdown>
-                  <q-btn-dropdown no-caps outline size="12px" color="primary" class="u-button" :label="`${gettext('Bulk')} ${gettext('Actions')}`" :disable="!selectedRows.length || commandLoading"><q-list dense><q-item v-close-popup clickable :disable="!canBulkPower" @click="bulkCommand('start')"><q-item-section>{{ gettext('Bulk Start') }}</q-item-section></q-item><q-item v-close-popup clickable :disable="!canBulkPower" @click="bulkCommand('shutdown')"><q-item-section>{{ gettext('Bulk Shutdown') }}</q-item-section></q-item><q-item v-close-popup clickable :disable="!canBulkPower" @click="bulkCommand('stop')"><q-item-section>{{ gettext('Bulk Stop') }}</q-item-section></q-item><q-item v-close-popup clickable :disable="!hasCapability('VM.Migrate')" @click="openBulkMigrate"><q-item-section>{{ gettext('Bulk Migrate') }}</q-item-section></q-item></q-list></q-btn-dropdown>
-                  <div v-show="false">
-                  <q-btn
+                  <q-btn-dropdown
                     no-caps
                     outline
                     size="12px"
                     color="primary"
                     class="u-button"
-                    icon="play_arrow"
-                    :label="gettext('Start')"
-                    :disable="!canStart || commandLoading"
-                    @click="requestCommand('start')"
-                  />
-                  <q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="primary"
-                    class="u-button"
-                    :label="gettext('Suspend')"
-                    :disable="!canSuspend || commandLoading"
-                    @click="requestCommand('suspend')"
-                  />
-                  <q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="primary"
-                    class="u-button"
-                    :label="gettext('Hibernate')"
-                    :disable="!canSuspend || commandLoading"
-                    @click="requestCommand('suspend', { todisk: 1 }, gettext('Hibernate'))"
-                  />
-                  <q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="primary"
-                    class="u-button"
-                    :label="gettext('Resume')"
-                    :disable="!canResume || commandLoading"
-                    @click="requestCommand('resume')"
-                  />
-                  <q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="primary"
-                    class="u-button"
-                    icon="power_settings_new"
-                    :label="gettext('Shutdown')"
-                    :disable="!canShutdown || commandLoading"
-                    @click="requestCommand('shutdown')"
-                  />
-                  <q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="red"
-                    class="u-button"
-                    icon="stop"
-                    :label="gettext('Stop')"
-                    :disable="!canStop || commandLoading"
-                    @click="requestCommand('stop')"
-                  />
-                  <q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="primary"
-                    class="u-button"
-                    icon="restart_alt"
-                    :label="gettext('Reboot')"
-                    :disable="!canReboot || commandLoading"
-                    @click="requestCommand('reboot')"
-                  />
-                  <q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="primary"
-                    class="u-button"
-                    icon="restart_alt"
-                    :label="gettext('Reset')"
-                    :disable="!canStop || commandLoading"
-                    @click="requestCommand('reset')"
-                  />
-                  <q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="primary"
-                    class="u-button"
-                    :label="gettext('Bulk Start')"
-                    :disable="!canBulkPower || commandLoading"
-                    @click="bulkCommand('start')"
-                  />
-                  <q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="primary"
-                    class="u-button"
-                    :label="gettext('Bulk Shutdown')"
-                    :disable="!canBulkPower || commandLoading"
-                    @click="bulkCommand('shutdown')"
-                  />
-                  <q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="negative"
-                    class="u-button"
-                    :label="gettext('Bulk Stop')"
-                    :disable="!canBulkPower || commandLoading"
-                    @click="bulkCommand('stop')"
-                  />
-                  <q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="primary"
-                    class="u-button"
-                    :label="gettext('Bulk Migrate')"
-                    :disable="!selectedRows.length || !hasCapability('VM.Migrate')"
-                    @click="openBulkMigrate"
-                  />
-                  <q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="primary"
-                    class="u-button"
-                    :label="gettext('Tags')"
-                    :disable="!selectedRows.length"
-                    @click="openTags"
-                  />
-                  <q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="primary"
-                    class="u-button"
-                    icon="terminal"
                     :label="gettext('Console')"
-                    :disable="!selectedVm || !canUseConsole"
-                    @click="() => openConsole('noVNC')"
-                  />
+                    :disable="!selectedVm || !canUseConsole || commandLoading"
+                    ><q-list dense
+                      ><q-item v-close-popup clickable @click="openConsole('noVNC')"
+                        ><q-item-section>noVNC</q-item-section></q-item
+                      ><q-item v-close-popup clickable @click="downloadSpice"
+                        ><q-item-section>SPICE</q-item-section></q-item
+                      ><q-item v-close-popup clickable @click="openConsole('xterm.js')"
+                        ><q-item-section>xterm.js</q-item-section></q-item
+                      ></q-list
+                    ></q-btn-dropdown
+                  >
+                  <q-btn-dropdown
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    :label="`${gettext('Bulk')} ${gettext('Actions')}`"
+                    :disable="!selectedRows.length || commandLoading"
+                    ><q-list dense
+                      ><q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canBulkPower"
+                        @click="bulkCommand('start')"
+                        ><q-item-section>{{ gettext('Bulk Start') }}</q-item-section></q-item
+                      ><q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canBulkPower"
+                        @click="bulkCommand('shutdown')"
+                        ><q-item-section>{{ gettext('Bulk Shutdown') }}</q-item-section></q-item
+                      ><q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canBulkPower"
+                        @click="bulkCommand('stop')"
+                        ><q-item-section>{{ gettext('Bulk Stop') }}</q-item-section></q-item
+                      ><q-item
+                        v-close-popup
+                        clickable
+                        :disable="!hasCapability('VM.Migrate')"
+                        @click="openBulkMigrate"
+                        ><q-item-section>{{ gettext('Bulk Migrate') }}</q-item-section></q-item
+                      ></q-list
+                    ></q-btn-dropdown
+                  >
+                  <div v-show="false">
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="primary"
+                      class="u-button"
+                      icon="play_arrow"
+                      :label="gettext('Start')"
+                      :disable="!canStart || commandLoading"
+                      @click="requestCommand('start')"
+                    />
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="primary"
+                      class="u-button"
+                      :label="gettext('Suspend')"
+                      :disable="!canSuspend || commandLoading"
+                      @click="requestCommand('suspend')"
+                    />
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="primary"
+                      class="u-button"
+                      :label="gettext('Hibernate')"
+                      :disable="!canSuspend || commandLoading"
+                      @click="requestCommand('suspend', { todisk: 1 }, gettext('Hibernate'))"
+                    />
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="primary"
+                      class="u-button"
+                      :label="gettext('Resume')"
+                      :disable="!canResume || commandLoading"
+                      @click="requestCommand('resume')"
+                    />
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="primary"
+                      class="u-button"
+                      icon="power_settings_new"
+                      :label="gettext('Shutdown')"
+                      :disable="!canShutdown || commandLoading"
+                      @click="requestCommand('shutdown')"
+                    />
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="red"
+                      class="u-button"
+                      icon="stop"
+                      :label="gettext('Stop')"
+                      :disable="!canStop || commandLoading"
+                      @click="requestCommand('stop')"
+                    />
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="primary"
+                      class="u-button"
+                      icon="restart_alt"
+                      :label="gettext('Reboot')"
+                      :disable="!canReboot || commandLoading"
+                      @click="requestCommand('reboot')"
+                    />
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="primary"
+                      class="u-button"
+                      icon="restart_alt"
+                      :label="gettext('Reset')"
+                      :disable="!canStop || commandLoading"
+                      @click="requestCommand('reset')"
+                    />
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="primary"
+                      class="u-button"
+                      :label="gettext('Bulk Start')"
+                      :disable="!canBulkPower || commandLoading"
+                      @click="bulkCommand('start')"
+                    />
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="primary"
+                      class="u-button"
+                      :label="gettext('Bulk Shutdown')"
+                      :disable="!canBulkPower || commandLoading"
+                      @click="bulkCommand('shutdown')"
+                    />
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="negative"
+                      class="u-button"
+                      :label="gettext('Bulk Stop')"
+                      :disable="!canBulkPower || commandLoading"
+                      @click="bulkCommand('stop')"
+                    />
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="primary"
+                      class="u-button"
+                      :label="gettext('Bulk Migrate')"
+                      :disable="!selectedRows.length || !hasCapability('VM.Migrate')"
+                      @click="openBulkMigrate"
+                    />
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="primary"
+                      class="u-button"
+                      :label="gettext('Tags')"
+                      :disable="!selectedRows.length"
+                      @click="openTags"
+                    />
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="primary"
+                      class="u-button"
+                      icon="terminal"
+                      :label="gettext('Console')"
+                      :disable="!selectedVm || !canUseConsole"
+                      @click="() => openConsole('noVNC')"
+                    />
                   </div>
                   <q-btn-dropdown
                     no-caps
@@ -984,7 +1139,13 @@ onMounted(() => {
               </template>
               <template #body-cell-name="scope">
                 <q-td :props="scope"
-                  ><q-icon :name="scope.row.template ? 'article' : 'desktop_windows'" :color="scope.row.template ? 'grey-7' : 'primary'" size="16px" class="q-mr-xs" /><span>{{ textValue(scope.value) || '-' }}</span></q-td>
+                  ><q-icon
+                    :name="scope.row.template ? 'article' : 'desktop_windows'"
+                    :color="scope.row.template ? 'grey-7' : 'primary'"
+                    size="16px"
+                    class="q-mr-xs"
+                  /><span>{{ textValue(scope.value) || '-' }}</span></q-td
+                >
               </template>
               <template #body-cell-cpu="scope">
                 <q-td :props="scope"><UsageProgress :percent="Number(scope.value)" /></q-td>

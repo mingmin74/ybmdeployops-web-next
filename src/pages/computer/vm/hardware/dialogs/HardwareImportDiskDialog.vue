@@ -105,9 +105,9 @@ const scsiControllerLabel = computed(() => {
 const canImport = computed(() =>
   Boolean(
     hasVmCapability('VM.Config.Disk') &&
-      form.sourceVolume &&
-      form.targetStorage &&
-      diskKeyAvailable.value,
+    form.sourceVolume &&
+    form.targetStorage &&
+    diskKeyAvailable.value,
   ),
 );
 
@@ -403,7 +403,13 @@ async function importDisk() {
               </div>
               <div class="col-6">
                 <q-field borderless dense>
-                  <q-checkbox v-model="form.diskBackup" dense right-label color="primary" :label="gettext('Backup')" />
+                  <q-checkbox
+                    v-model="form.diskBackup"
+                    dense
+                    right-label
+                    color="primary"
+                    :label="gettext('Backup')"
+                  />
                 </q-field>
               </div>
               <div class="col-6">
@@ -439,30 +445,90 @@ async function importDisk() {
         </div>
         <div v-show="activeTab === 'bandwidth'" class="q-pt-md">
           <div class="row q-col-gutter-sm">
-          <div class="col-6">
-            <q-input v-model="form.mbps_rd" class="q-field--with-bottom" dense type="number" min="1" :label="`${gettext('Read limit')} (MB/s)`" />
-          </div>
-          <div class="col-6">
-            <q-input v-model="form.mbps_wr" class="q-field--with-bottom" dense type="number" min="1" :label="`${gettext('Write limit')} (MB/s)`" />
-          </div>
-          <div class="col-6">
-            <q-input v-model="form.iops_rd" class="q-field--with-bottom" dense type="number" min="10" step="10" :label="`${gettext('Read limit')} (ops/s)`" />
-          </div>
-          <div class="col-6">
-            <q-input v-model="form.iops_wr" class="q-field--with-bottom" dense type="number" min="10" step="10" :label="`${gettext('Write limit')} (ops/s)`" />
-          </div>
-          <div class="col-6">
-            <q-input v-model="form.mbps_rd_max" class="q-field--with-bottom" dense type="number" min="1" :label="`${gettext('Read max burst')} (MB)`" />
-          </div>
-          <div class="col-6">
-            <q-input v-model="form.mbps_wr_max" class="q-field--with-bottom" dense type="number" min="1" :label="`${gettext('Write max burst')} (MB)`" />
-          </div>
-          <div class="col-6">
-            <q-input v-model="form.iops_rd_max" class="q-field--with-bottom" dense type="number" min="10" step="10" :label="`${gettext('Read max burst')} (ops)`" />
-          </div>
-          <div class="col-6">
-            <q-input v-model="form.iops_wr_max" class="q-field--with-bottom" dense type="number" min="10" step="10" :label="`${gettext('Write max burst')} (ops)`" />
-          </div>
+            <div class="col-6">
+              <q-input
+                v-model="form.mbps_rd"
+                class="q-field--with-bottom"
+                dense
+                type="number"
+                min="1"
+                :label="`${gettext('Read limit')} (MB/s)`"
+              />
+            </div>
+            <div class="col-6">
+              <q-input
+                v-model="form.mbps_wr"
+                class="q-field--with-bottom"
+                dense
+                type="number"
+                min="1"
+                :label="`${gettext('Write limit')} (MB/s)`"
+              />
+            </div>
+            <div class="col-6">
+              <q-input
+                v-model="form.iops_rd"
+                class="q-field--with-bottom"
+                dense
+                type="number"
+                min="10"
+                step="10"
+                :label="`${gettext('Read limit')} (ops/s)`"
+              />
+            </div>
+            <div class="col-6">
+              <q-input
+                v-model="form.iops_wr"
+                class="q-field--with-bottom"
+                dense
+                type="number"
+                min="10"
+                step="10"
+                :label="`${gettext('Write limit')} (ops/s)`"
+              />
+            </div>
+            <div class="col-6">
+              <q-input
+                v-model="form.mbps_rd_max"
+                class="q-field--with-bottom"
+                dense
+                type="number"
+                min="1"
+                :label="`${gettext('Read max burst')} (MB)`"
+              />
+            </div>
+            <div class="col-6">
+              <q-input
+                v-model="form.mbps_wr_max"
+                class="q-field--with-bottom"
+                dense
+                type="number"
+                min="1"
+                :label="`${gettext('Write max burst')} (MB)`"
+              />
+            </div>
+            <div class="col-6">
+              <q-input
+                v-model="form.iops_rd_max"
+                class="q-field--with-bottom"
+                dense
+                type="number"
+                min="10"
+                step="10"
+                :label="`${gettext('Read max burst')} (ops)`"
+              />
+            </div>
+            <div class="col-6">
+              <q-input
+                v-model="form.iops_wr_max"
+                class="q-field--with-bottom"
+                dense
+                type="number"
+                min="10"
+                step="10"
+                :label="`${gettext('Write max burst')} (ops)`"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -470,7 +536,14 @@ async function importDisk() {
         <div class="full-width row items-center justify-between">
           <q-checkbox v-model="advanced" dense color="primary" :label="gettext('Advanced')" />
           <div class="row items-center q-gutter-sm">
-            <q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" />
+            <q-btn
+              v-close-popup
+              no-caps
+              outline
+              size="12px"
+              class="u-button"
+              :label="gettext('Cancel')"
+            />
             <q-btn
               no-caps
               flat

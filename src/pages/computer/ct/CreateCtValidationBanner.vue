@@ -9,7 +9,11 @@ const { validationErrorEntries } = errors;
   <div v-if="validationErrorEntries.length" class="ct-create-validation-slot">
     <q-banner dense class="ct-create-validation">
       <template #avatar><q-icon name="warning_amber" size="18px" /></template>
-      <div v-for="([field, message], index) in validationErrorEntries" :key="field" class="ct-create-validation__item">
+      <div
+        v-for="([field, message], index) in validationErrorEntries"
+        :key="field"
+        class="ct-create-validation__item"
+      >
         {{ index + 1 }}. {{ message }}
       </div>
     </q-banner>

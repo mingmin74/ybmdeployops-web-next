@@ -15,13 +15,42 @@ const cpuModels = shallowRef<PveRecord[]>([]);
 const cpuFlags = shallowRef<VmCpuFlag[]>([]);
 const cpuModelsLoading = shallowRef(false);
 const cpuModelColumns: QTableColumn<PveRecord>[] = [
-  { name: 'displayname', label: gettext('Model'), field: (row) => textValue(row.displayname), align: 'left' },
-  { name: 'vendor', label: gettext('Vendor'), field: (row) => textValue(row.vendor), align: 'left' },
+  {
+    name: 'displayname',
+    label: gettext('Model'),
+    field: (row) => textValue(row.displayname),
+    align: 'left',
+  },
+  {
+    name: 'vendor',
+    label: gettext('Vendor'),
+    field: (row) => textValue(row.vendor),
+    align: 'left',
+  },
 ];
 const cpuFlagColumns: QTableColumn<VmCpuFlag>[] = [
-  { name: 'state', label: gettext('Value'), field: () => '', align: 'left', style: 'width: 190px', headerStyle: 'width: 190px' },
-  { name: 'name', label: gettext('Flag'), field: (row) => textValue(row.name), align: 'left', style: 'width: 110px', headerStyle: 'width: 110px' },
-  { name: 'description', label: gettext('Description'), field: (row) => textValue(row.description), align: 'left' },
+  {
+    name: 'state',
+    label: gettext('Value'),
+    field: () => '',
+    align: 'left',
+    style: 'width: 190px',
+    headerStyle: 'width: 190px',
+  },
+  {
+    name: 'name',
+    label: gettext('Flag'),
+    field: (row) => textValue(row.name),
+    align: 'left',
+    style: 'width: 110px',
+    headerStyle: 'width: 110px',
+  },
+  {
+    name: 'description',
+    label: gettext('Description'),
+    field: (row) => textValue(row.description),
+    align: 'left',
+  },
   {
     name: 'supported-on',
     label: gettext('Supported On'),
@@ -64,19 +93,22 @@ const form = reactive({
   vcpus: textValue(config.value.vcpus),
   vcpusEdited: Boolean(config.value.vcpus),
   cpulimit: textValue(config.value.cpulimit),
-  cpuunits: textValue(config.value.cpuunits) && textValue(config.value.cpuunits) !== '100' ? textValue(config.value.cpuunits) : '',
+  cpuunits:
+    textValue(config.value.cpuunits) && textValue(config.value.cpuunits) !== '100'
+      ? textValue(config.value.cpuunits)
+      : '',
   affinity: textValue(config.value.affinity),
   numa: Number(config.value.numa || 0) === 1,
 });
 const advanced = shallowRef(
   Boolean(
     config.value.vcpus ||
-      config.value.cpulimit ||
-      config.value.cpuunits ||
-      config.value.affinity ||
-      config.value.numa ||
-      initialCpu.flags
-  )
+    config.value.cpulimit ||
+    config.value.cpuunits ||
+    config.value.affinity ||
+    config.value.numa ||
+    initialCpu.flags,
+  ),
 );
 const totalCores = computed(() => Math.max(1, Number(form.sockets || 1) * Number(form.cores || 1)));
 const cpuModelRows = computed<PveRecord[]>(() =>
@@ -84,13 +116,13 @@ const cpuModelRows = computed<PveRecord[]>(() =>
     name: textValue(cpu.name),
     displayname: textValue(cpu.displayname) || textValue(cpu.name).replace(/^custom-/, ''),
     vendor: textValue(cpu.name) === 'host' ? 'Host' : textValue(cpu.vendor),
-  }))
+  })),
 );
 const cpuModelDisplayValue = computed(
   () =>
     textValue(cpuModelRows.value.find((row) => textValue(row.name) === form.cpu)?.displayname) ||
     form.cpu ||
-    `${gettext('Default')} (kvm64)`
+    `${gettext('Default')} (kvm64)`,
 );
 const cpuValue = computed(() => {
   const parts = [form.cpu.trim()];
@@ -106,7 +138,7 @@ async function loadCpuCapabilities() {
       getVmCpuFlags(node.value),
     ]);
     cpuModels.value = (modelsResponse.data || []).sort((left, right) =>
-      textValue(left.name).localeCompare(textValue(right.name))
+      textValue(left.name).localeCompare(textValue(right.name)),
     );
     cpuFlags.value = (flagsResponse.data || [])
       .map((flag) => (typeof flag === 'string' ? { name: flag } : flag))
@@ -147,7 +179,9 @@ async function save() {
   else if (config.value.cpu) addDelete(deletedKeys, 'cpu');
 
   if (form.originalCpu !== 'Hygon' && form.cpu === 'Hygon') {
-    data.args = form.args ? `${form.args} -cpu EPYC,vendor=AuthenticAMD` : '-cpu EPYC,vendor=AuthenticAMD';
+    data.args = form.args
+      ? `${form.args} -cpu EPYC,vendor=AuthenticAMD`
+      : '-cpu EPYC,vendor=AuthenticAMD';
   }
   if (form.originalCpu === 'Hygon' && form.cpu !== 'Hygon') {
     if (form.args === '-cpu EPYC,vendor=AuthenticAMD') addDelete(deletedKeys, 'args');
@@ -162,11 +196,14 @@ async function save() {
     else addDelete(deletedKeys, 'cpulimit');
     if (form.affinity.trim()) data.affinity = form.affinity.trim();
     else addDelete(deletedKeys, 'affinity');
-    if (form.cpuunits.trim() && form.cpuunits.trim() !== '100') data.cpuunits = form.cpuunits.trim();
+    if (form.cpuunits.trim() && form.cpuunits.trim() !== '100')
+      data.cpuunits = form.cpuunits.trim();
     else addDelete(deletedKeys, 'cpuunits');
   } else {
     data.numa = 0;
-    (['vcpus', 'cpulimit', 'cpuunits', 'affinity'] as const).forEach((key) => addDelete(deletedKeys, key));
+    (['vcpus', 'cpulimit', 'cpuunits', 'affinity'] as const).forEach((key) =>
+      addDelete(deletedKeys, key),
+    );
   }
   if (deletedKeys.length) data.delete = deletedKeys.join(',');
   await updateConfig(data);
@@ -180,7 +217,16 @@ onMounted(() => {
 <template>
   <div class="hardware-special-editor">
     <div class="row q-col-gutter-lg hardware-special-editor__fields">
-      <div class="col-6"><q-input v-model.number="form.sockets" dense :label="gettext('Sockets')" type="number" min="1" max="4" /></div>
+      <div class="col-6">
+        <q-input
+          v-model.number="form.sockets"
+          dense
+          :label="gettext('Sockets')"
+          type="number"
+          min="1"
+          max="4"
+        />
+      </div>
       <div class="col-6">
         <SelectTable
           v-model="form.cpu"
@@ -195,14 +241,63 @@ onMounted(() => {
           :label="gettext('Type')"
         />
       </div>
-      <div class="col-6"><q-input v-model.number="form.cores" dense :label="gettext('Cores')" type="number" min="1" /></div>
-      <div class="col-6"><q-input :model-value="totalCores" dense disable :label="gettext('Total cores')" /></div>
+      <div class="col-6">
+        <q-input
+          v-model.number="form.cores"
+          dense
+          :label="gettext('Cores')"
+          type="number"
+          min="1"
+        />
+      </div>
+      <div class="col-6">
+        <q-input :model-value="totalCores" dense disable :label="gettext('Total cores')" />
+      </div>
       <template v-if="advanced">
-        <div class="col-6"><q-input v-model="form.vcpus" dense :label="gettext('VCPUs')" type="number" min="1" :max="totalCores" :placeholder="String(totalCores)" @update:model-value="markVcpusEdited" /></div>
-        <div class="col-6"><q-input v-model="form.cpuunits" dense :label="gettext('CPU units')" type="number" min="1" max="10000" placeholder="100" /></div>
-        <div class="col-6"><q-input v-model="form.cpulimit" dense :label="gettext('CPU limit')" type="number" min="0" max="128" /></div>
-        <div class="col-6"><q-input v-model="form.affinity" dense :label="gettext('CPU Affinity')" :placeholder="gettext('All Cores')" /></div>
-        <div class="col-6"><q-checkbox v-model="form.numa" dense color="primary" :label="gettext('Enable NUMA')" /></div>
+        <div class="col-6">
+          <q-input
+            v-model="form.vcpus"
+            dense
+            :label="gettext('VCPUs')"
+            type="number"
+            min="1"
+            :max="totalCores"
+            :placeholder="String(totalCores)"
+            @update:model-value="markVcpusEdited"
+          />
+        </div>
+        <div class="col-6">
+          <q-input
+            v-model="form.cpuunits"
+            dense
+            :label="gettext('CPU units')"
+            type="number"
+            min="1"
+            max="10000"
+            placeholder="100"
+          />
+        </div>
+        <div class="col-6">
+          <q-input
+            v-model="form.cpulimit"
+            dense
+            :label="gettext('CPU limit')"
+            type="number"
+            min="0"
+            max="128"
+          />
+        </div>
+        <div class="col-6">
+          <q-input
+            v-model="form.affinity"
+            dense
+            :label="gettext('CPU Affinity')"
+            :placeholder="gettext('All Cores')"
+          />
+        </div>
+        <div class="col-6">
+          <q-checkbox v-model="form.numa" dense color="primary" :label="gettext('Enable NUMA')" />
+        </div>
         <div class="col-12">
           <div class="vm-cpu-flags-label">{{ gettext('Extra CPU Flags') }}:</div>
           <q-table
@@ -240,7 +335,13 @@ onMounted(() => {
     </div>
     <div class="hardware-special-editor__footer row items-center justify-between">
       <q-checkbox v-model="advanced" dense color="primary" :label="gettext('Advanced')" />
-      <q-btn no-caps size="12px" class="bg-primary text-grey-1 u-button" :label="gettext('Save')" @click="save" />
+      <q-btn
+        no-caps
+        size="12px"
+        class="bg-primary text-grey-1 u-button"
+        :label="gettext('Save')"
+        @click="save"
+      />
     </div>
   </div>
 </template>

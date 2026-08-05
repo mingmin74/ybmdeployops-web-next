@@ -72,7 +72,7 @@ const { canCreate } = derived;
           </div>
           <GeneralStep v-if="item.name === 'general'" />
           <OsStep v-else-if="item.name === 'os'" />
-                    <SystemStep v-else-if="item.name === 'system'" />
+          <SystemStep v-else-if="item.name === 'system'" />
           <DiskStep v-else-if="item.name === 'disks'" />
           <CpuStep v-else-if="item.name === 'cpu'" />
           <MemoryStep v-else-if="item.name === 'memory'" />

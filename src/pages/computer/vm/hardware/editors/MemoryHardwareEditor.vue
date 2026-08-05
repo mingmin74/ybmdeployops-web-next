@@ -15,7 +15,11 @@ const form = reactive({
   allowKsm: Number(config.value['allow-ksm'] ?? 1) === 1,
 });
 const advanced = shallowRef(
-  Boolean(config.value.balloon !== undefined || config.value.shares || config.value['allow-ksm'] !== undefined)
+  Boolean(
+    config.value.balloon !== undefined ||
+    config.value.shares ||
+    config.value['allow-ksm'] !== undefined,
+  ),
 );
 
 async function save() {
@@ -46,17 +50,64 @@ async function save() {
 <template>
   <div class="hardware-special-editor">
     <div class="row q-col-gutter-sm hardware-special-editor__fields">
-      <div class="col-12"><q-input v-model.number="form.memory" dense :label="gettext('Memory (MiB)')" type="number" min="32" step="32" /></div>
+      <div class="col-12">
+        <q-input
+          v-model.number="form.memory"
+          dense
+          :label="gettext('Memory (MiB)')"
+          type="number"
+          min="32"
+          step="32"
+        />
+      </div>
       <template v-if="advanced">
-        <div class="col-12"><q-input v-model.number="form.balloon" dense :disable="!form.ballooning" :label="`${gettext('Minimum memory')} (MiB)`" type="number" min="32" :max="form.memory" step="32" /></div>
-        <div class="col-12"><q-input v-model="form.shares" dense :disable="!form.ballooning || form.balloon === form.memory" :label="gettext('Shares')" type="number" min="0" max="50000" step="10" :placeholder="`${gettext('Default')} (1000)`" /></div>
-        <div class="col-12"><q-checkbox v-model="form.ballooning" dense color="primary" :label="gettext('Ballooning Device')" /></div>
-        <div class="col-12"><q-checkbox v-model="form.allowKsm" dense color="primary" :label="gettext('Allow KSM')" /></div>
+        <div class="col-12">
+          <q-input
+            v-model.number="form.balloon"
+            dense
+            :disable="!form.ballooning"
+            :label="`${gettext('Minimum memory')} (MiB)`"
+            type="number"
+            min="32"
+            :max="form.memory"
+            step="32"
+          />
+        </div>
+        <div class="col-12">
+          <q-input
+            v-model="form.shares"
+            dense
+            :disable="!form.ballooning || form.balloon === form.memory"
+            :label="gettext('Shares')"
+            type="number"
+            min="0"
+            max="50000"
+            step="10"
+            :placeholder="`${gettext('Default')} (1000)`"
+          />
+        </div>
+        <div class="col-12">
+          <q-checkbox
+            v-model="form.ballooning"
+            dense
+            color="primary"
+            :label="gettext('Ballooning Device')"
+          />
+        </div>
+        <div class="col-12">
+          <q-checkbox v-model="form.allowKsm" dense color="primary" :label="gettext('Allow KSM')" />
+        </div>
       </template>
     </div>
     <div class="hardware-special-editor__footer row items-center justify-between">
       <q-checkbox v-model="advanced" dense color="primary" :label="gettext('Advanced')" />
-      <q-btn no-caps size="12px" class="bg-primary text-grey-1 u-button" :label="gettext('Save')" @click="save" />
+      <q-btn
+        no-caps
+        size="12px"
+        class="bg-primary text-grey-1 u-button"
+        :label="gettext('Save')"
+        @click="save"
+      />
     </div>
   </div>
 </template>

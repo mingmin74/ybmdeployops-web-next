@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import type { QTableColumn } from 'quasar';
 import { Dialog, date as quasarDate } from 'quasar';
-import { computed, nextTick, onBeforeUnmount, reactive, shallowRef, useTemplateRef, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  reactive,
+  shallowRef,
+  useTemplateRef,
+  watch,
+} from 'vue';
 import type { PveRecord } from '@/api/resources';
 import {
   createVmFirewallRule,
@@ -20,7 +28,10 @@ import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
 
-const props = withDefaults(defineProps<{ node: string; vmid: string; guestType?: 'qemu' | 'lxc' }>(), { guestType: 'qemu' });
+const props = withDefaults(
+  defineProps<{ node: string; vmid: string; guestType?: 'qemu' | 'lxc' }>(),
+  { guestType: 'qemu' },
+);
 const session = useSessionStore();
 const loading = shallowRef(false);
 const section = shallowRef<'rules' | 'options' | 'aliases' | 'ipset' | 'log'>('rules');
@@ -46,7 +57,15 @@ let logRecordTotal = 0;
 let logIsUpdate = false;
 let logIsScroll = false;
 let logTimer: ReturnType<typeof setTimeout> | undefined;
-const securityGroupOptions = computed(() => securityGroups.value.map((group) => ({ label: textValue(group.group), value: textValue(group.group), description: textValue(group.comment) })).filter((group) => group.value));
+const securityGroupOptions = computed(() =>
+  securityGroups.value
+    .map((group) => ({
+      label: textValue(group.group),
+      value: textValue(group.group),
+      description: textValue(group.comment),
+    }))
+    .filter((group) => group.value),
+);
 const form = reactive<Record<string, string | number>>({
   type: 'in',
   action: 'ACCEPT',
@@ -142,8 +161,8 @@ const firewallOptionRows = computed<FirewallOptionRow[]>(() => [
   { key: 'policy_in', label: gettext('Input Policy'), value: 'DROP', type: 'policy' },
   { key: 'policy_out', label: gettext('Output Policy'), value: 'ACCEPT', type: 'policy' },
 ]);
-const selectedFirewallOptionRow = computed(
-  () => firewallOptionRows.value.find((row) => row.key === selectedFirewallOption.value),
+const selectedFirewallOptionRow = computed(() =>
+  firewallOptionRows.value.find((row) => row.key === selectedFirewallOption.value),
 );
 
 async function reload() {
@@ -197,23 +216,44 @@ async function openSecurityGroup() {
     groupForm.iface = '';
     groupForm.comment = '';
     groupVisible.value = true;
-  } finally { loading.value = false; }
+  } finally {
+    loading.value = false;
+  }
 }
 async function saveSecurityGroup() {
   if (!canConfigureFirewall.value || !groupForm.action) return;
   loading.value = true;
   try {
-    await createVmFirewallRule(props.node, props.vmid, { type: 'group', action: groupForm.action, enable: groupForm.enable, iface: groupForm.iface, comment: groupForm.comment }, props.guestType);
+    await createVmFirewallRule(
+      props.node,
+      props.vmid,
+      {
+        type: 'group',
+        action: groupForm.action,
+        enable: groupForm.enable,
+        iface: groupForm.iface,
+        comment: groupForm.comment,
+      },
+      props.guestType,
+    );
     groupVisible.value = false;
     await reload();
-  } finally { loading.value = false; }
+  } finally {
+    loading.value = false;
+  }
 }
 async function saveRule() {
   if (!canConfigureFirewall.value) return;
   loading.value = true;
   try {
     if (editing.value)
-      await updateVmFirewallRule(props.node, props.vmid, textValue(form.pos), form, props.guestType);
+      await updateVmFirewallRule(
+        props.node,
+        props.vmid,
+        textValue(form.pos),
+        form,
+        props.guestType,
+      );
     else await createVmFirewallRule(props.node, props.vmid, form, props.guestType);
     dialog.value = false;
     await reload();
@@ -232,17 +272,24 @@ function removeRule() {
     cancel: true,
     persistent: true,
   }).onOk(() => {
-    void deleteVmFirewallRule(props.node, props.vmid, position, row.digest, props.guestType).then(reload);
+    void deleteVmFirewallRule(props.node, props.vmid, position, row.digest, props.guestType).then(
+      reload,
+    );
   });
 }
 async function saveOption(key: string, value: unknown) {
   if (!canConfigureFirewall.value) return;
   loading.value = true;
   try {
-    await updateVmFirewallOptions(props.node, props.vmid, {
-      [key]: value,
-      digest: options.value.digest,
-    }, props.guestType);
+    await updateVmFirewallOptions(
+      props.node,
+      props.vmid,
+      {
+        [key]: value,
+        digest: options.value.digest,
+      },
+      props.guestType,
+    );
     await reload();
   } finally {
     loading.value = false;
@@ -418,289 +465,323 @@ onBeforeUnmount(() => {
         active-color="primary"
         indicator-color="primary"
         class="vm-firewall-nav"
-      ><q-tab inline-label name="rules" icon="rule" :label="gettext('Rules')" /><q-tab
-        inline-label
-        name="options"
-        icon="tune"
-        :label="gettext('Options')" /><q-tab
-        inline-label
-        name="aliases"
-        icon="sell"
-        :label="gettext('Alias')" /><q-tab
-        inline-label
-        name="ipset"
-        icon="lan"
-        :label="gettext('IPSet')" /><q-tab
-        v-if="canViewFirewallLog"
-        inline-label
-        name="log"
-        icon="article"
-        :label="gettext('Log')" /></q-tabs
+        ><q-tab inline-label name="rules" icon="rule" :label="gettext('Rules')" /><q-tab
+          inline-label
+          name="options"
+          icon="tune"
+          :label="gettext('Options')" /><q-tab
+          inline-label
+          name="aliases"
+          icon="sell"
+          :label="gettext('Alias')" /><q-tab
+          inline-label
+          name="ipset"
+          icon="lan"
+          :label="gettext('IPSet')" /><q-tab
+          v-if="canViewFirewallLog"
+          inline-label
+          name="log"
+          icon="article"
+          :label="gettext('Log')" /></q-tabs
       ><q-separator vertical />
       <q-tab-panels v-model="section" animated class="vm-firewall-panels">
-      <q-tab-panel name="rules" class="q-pa-sm"
-        ><q-card class="no-border-radius no-shadow q-ma-none">
-          <q-card-section class="q-pa-none">
-            <q-table
-              v-model:selected="selected"
-              flat
-              row-key="pos"
-              selection="single"
-              table-header-class="u-table-header"
-              :rows="rows"
-              :columns="columns"
-              :loading="loading"
-              :rows-per-page-options="[10]"
-              :pagination="{ page: 1, rowsPerPage: 10 }"
-              :no-data-label="gettext('no record can be found')"
-              ><template #top
-                ><div class="q-gutter-sm">
-                  <q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="primary"
-                    class="u-button"
-                    :disable="!canConfigureFirewall"
-                    :label="gettext('Add')"
-                    @click="openRule()"
-                  /><q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="primary"
-                    class="u-button"
-                    :disable="!canConfigureFirewall"
-                    :label="gettext('Insert Security Group')"
-                    @click="openSecurityGroup"
-                  /><q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="primary"
-                    class="u-button"
-                    :disable="!canConfigureFirewall || !selectedRule"
-                    :label="gettext('Edit')"
-                    @click="openRule(true)"
-                  /><q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="negative"
-                    class="u-button"
-                    :disable="!canConfigureFirewall || !selectedRule"
-                    :label="gettext('Remove')"
-                    @click="removeRule"
-                  /></div
-                ><q-space /><q-btn
-                  no-caps
-                  outline
-                  size="12px"
-                  color="primary"
-                  class="u-button"
-                  :label="gettext('Refresh')"
-                  @click="reload" /></template
-              ><template #body-cell-enable="scope"
-                ><q-td :props="scope"
-                  ><q-badge
-                    :color="scope.value ? 'positive' : 'negative'"
-                    :label="
-                      scope.value ? gettext('Enabled') : gettext('Disabled')
-                    " /></q-td></template
-              ><template #no-data
-                ><div class="full-width row flex-center text-grey q-gutter-sm">
-                  <span>{{ gettext('no record can be found') }}</span>
-                </div></template
-              ></q-table
-            >
-          </q-card-section>
-        </q-card
-      ></q-tab-panel>
-      <q-tab-panel name="options" class="q-pa-sm"
-        ><div class="firewall-options-shell">
-          <div class="row no-wrap firewall-options-scroll u-hidden-error">
-            <div class="col-7 firewall-options-list-column">
-              <div class="u-border firewall-options-list-panel">
-                <div
-                  v-for="row in firewallOptionRows"
-                  :key="row.key"
-                  class="cursor-pointer q-px-sm row firewall-options-list-row"
-                  :class="{ 'bg-blue-2 text-grey-1': selectedFirewallOption === row.key }"
-                  @click="selectedFirewallOption = row.key"
-                >
-                  <div class="col-5 text-grey-10 firewall-options-list-label">
-                    <q-icon
-                      :name="firewallOptionIcon(row.key)"
-                      size="15px"
-                      class="q-mr-xs firewall-options-list-icon"
-                    />{{ row.label }}
-                  </div>
-                  <div class="col-7 text-grey-8 firewall-options-list-value">
-                    {{ firewallOptionDisplayValue(row) }}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="col-5 firewall-options-editor-column">
-              <div class="u-border q-pa-sm u-hidden-error firewall-options-scroll firewall-options-editor">
-                <div class="row items-center no-wrap firewall-editor-titlebar">
-                  <div class="col firewall-editor-title">
-                    {{ selectedFirewallOptionRow?.label }}
-                  </div>
-                </div>
-                <div v-if="selectedFirewallOptionRow" class="row q-col-gutter-md">
-                  <div
-                    v-if="selectedFirewallOptionRow.type === 'boolean'"
-                    class="col-12"
-                  >
-                    <q-toggle
-                      :model-value="booleanOptionValue(selectedFirewallOptionRow.key)"
-                      dense
-                      :true-value="true"
-                      :false-value="false"
-                      :disable="!canConfigureFirewall"
+        <q-tab-panel name="rules" class="q-pa-sm"
+          ><q-card class="no-border-radius no-shadow q-ma-none">
+            <q-card-section class="q-pa-none">
+              <q-table
+                v-model:selected="selected"
+                flat
+                row-key="pos"
+                selection="single"
+                table-header-class="u-table-header"
+                :rows="rows"
+                :columns="columns"
+                :loading="loading"
+                :rows-per-page-options="[10]"
+                :pagination="{ page: 1, rowsPerPage: 10 }"
+                :no-data-label="gettext('no record can be found')"
+                ><template #top
+                  ><div class="q-gutter-sm">
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
                       color="primary"
-                      :label="selectedFirewallOptionRow.label"
-                      @update:model-value="
-                        saveOption(selectedFirewallOptionRow.key, $event ? 1 : 0)
-                      "
+                      class="u-button"
+                      :disable="!canConfigureFirewall"
+                      :label="gettext('Add')"
+                      @click="openRule()"
+                    /><q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="primary"
+                      class="u-button"
+                      :disable="!canConfigureFirewall"
+                      :label="gettext('Insert Security Group')"
+                      @click="openSecurityGroup"
+                    /><q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="primary"
+                      class="u-button"
+                      :disable="!canConfigureFirewall || !selectedRule"
+                      :label="gettext('Edit')"
+                      @click="openRule(true)"
+                    /><q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="negative"
+                      class="u-button"
+                      :disable="!canConfigureFirewall || !selectedRule"
+                      :label="gettext('Remove')"
+                      @click="removeRule"
                     />
                   </div>
-                  <div v-else-if="selectedFirewallOptionRow.type === 'log'" class="col-12 col-md-8">
-                    <q-select
-                      :model-value="
-                        textValue(options[selectedFirewallOptionRow.key]) ||
-                        selectedFirewallOptionRow.value
-                      "
-                      dense
-                      options-dense
-                      emit-value
-                      map-options
-                      :disable="!canConfigureFirewall"
-                      :options="firewallLogLevelOptions"
-                      :label="selectedFirewallOptionRow.label"
-                      @update:model-value="saveOption(selectedFirewallOptionRow.key, $event)"
-                    />
+                  <q-space /><q-btn
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    :label="gettext('Refresh')"
+                    @click="reload" /></template
+                ><template #body-cell-enable="scope"
+                  ><q-td :props="scope"
+                    ><q-badge
+                      :color="scope.value ? 'positive' : 'negative'"
+                      :label="
+                        scope.value ? gettext('Enabled') : gettext('Disabled')
+                      " /></q-td></template
+                ><template #no-data
+                  ><div class="full-width row flex-center text-grey q-gutter-sm">
+                    <span>{{ gettext('no record can be found') }}</span>
+                  </div></template
+                ></q-table
+              >
+            </q-card-section>
+          </q-card></q-tab-panel
+        >
+        <q-tab-panel name="options" class="q-pa-sm"
+          ><div class="firewall-options-shell">
+            <div class="row no-wrap firewall-options-scroll u-hidden-error">
+              <div class="col-7 firewall-options-list-column">
+                <div class="u-border firewall-options-list-panel">
+                  <div
+                    v-for="row in firewallOptionRows"
+                    :key="row.key"
+                    class="cursor-pointer q-px-sm row firewall-options-list-row"
+                    :class="{ 'bg-blue-2 text-grey-1': selectedFirewallOption === row.key }"
+                    @click="selectedFirewallOption = row.key"
+                  >
+                    <div class="col-5 text-grey-10 firewall-options-list-label">
+                      <q-icon
+                        :name="firewallOptionIcon(row.key)"
+                        size="15px"
+                        class="q-mr-xs firewall-options-list-icon"
+                      />{{ row.label }}
+                    </div>
+                    <div class="col-7 text-grey-8 firewall-options-list-value">
+                      {{ firewallOptionDisplayValue(row) }}
+                    </div>
                   </div>
-                  <div v-else class="col-12 col-md-8">
-                    <q-select
-                      :model-value="
-                        textValue(options[selectedFirewallOptionRow.key]) ||
-                        selectedFirewallOptionRow.value
-                      "
-                      dense
-                      options-dense
-                      emit-value
-                      map-options
-                      :disable="!canConfigureFirewall"
-                      :options="firewallPolicyOptions"
-                      :label="selectedFirewallOptionRow.label"
-                      @update:model-value="saveOption(selectedFirewallOptionRow.key, $event)"
-                    />
+                </div>
+              </div>
+              <div class="col-5 firewall-options-editor-column">
+                <div
+                  class="u-border q-pa-sm u-hidden-error firewall-options-scroll firewall-options-editor"
+                >
+                  <div class="row items-center no-wrap firewall-editor-titlebar">
+                    <div class="col firewall-editor-title">
+                      {{ selectedFirewallOptionRow?.label }}
+                    </div>
+                  </div>
+                  <div v-if="selectedFirewallOptionRow" class="row q-col-gutter-md">
+                    <div v-if="selectedFirewallOptionRow.type === 'boolean'" class="col-12">
+                      <q-toggle
+                        :model-value="booleanOptionValue(selectedFirewallOptionRow.key)"
+                        dense
+                        :true-value="true"
+                        :false-value="false"
+                        :disable="!canConfigureFirewall"
+                        color="primary"
+                        :label="selectedFirewallOptionRow.label"
+                        @update:model-value="
+                          saveOption(selectedFirewallOptionRow.key, $event ? 1 : 0)
+                        "
+                      />
+                    </div>
+                    <div
+                      v-else-if="selectedFirewallOptionRow.type === 'log'"
+                      class="col-12 col-md-8"
+                    >
+                      <q-select
+                        :model-value="
+                          textValue(options[selectedFirewallOptionRow.key]) ||
+                          selectedFirewallOptionRow.value
+                        "
+                        dense
+                        options-dense
+                        emit-value
+                        map-options
+                        :disable="!canConfigureFirewall"
+                        :options="firewallLogLevelOptions"
+                        :label="selectedFirewallOptionRow.label"
+                        @update:model-value="saveOption(selectedFirewallOptionRow.key, $event)"
+                      />
+                    </div>
+                    <div v-else class="col-12 col-md-8">
+                      <q-select
+                        :model-value="
+                          textValue(options[selectedFirewallOptionRow.key]) ||
+                          selectedFirewallOptionRow.value
+                        "
+                        dense
+                        options-dense
+                        emit-value
+                        map-options
+                        :disable="!canConfigureFirewall"
+                        :options="firewallPolicyOptions"
+                        :label="selectedFirewallOptionRow.label"
+                        @update:model-value="saveOption(selectedFirewallOptionRow.key, $event)"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-          <q-inner-loading :showing="loading" />
-        </div
-        ></q-tab-panel
-      >
-      <q-tab-panel name="aliases" class="q-pa-sm"
-        ><VmFirewallAliasesTab :node="node" :vmid="vmid" :editable="canConfigureFirewall"
-      /></q-tab-panel>
-      <q-tab-panel name="ipset" class="q-pa-sm"
-        ><VmFirewallIpsetTab :node="node" :vmid="vmid" :editable="canConfigureFirewall"
-      /></q-tab-panel>
-      <q-tab-panel name="log" class="q-pa-sm"
-        ><div class="vm-firewall-log-wrap">
-          <div class="row q-gutter-sm items-center no-wrap vm-firewall-log-toolbar">
-            <q-btn-toggle
-              v-model="logLiveMode"
-              no-caps
-              size="12px"
-              class="u-button"
-              toggle-color="primary"
-              :options="logModeOptions"
-            />
-            <template v-if="!logLiveMode">
-              <q-input
-                v-model="logSince"
-                square
-                outlined
-                dense
-                class="u-dense vm-firewall-log-date"
-                :label="gettext('Since')"
-              >
-                <template #append>
-                  <q-icon name="event" class="cursor-pointer">
-                    <q-popup-proxy transition-show="scale" transition-hide="scale">
-                      <q-date v-model="logSince" minimal mask="YYYY-MM-DD" />
-                    </q-popup-proxy>
-                  </q-icon>
-                </template>
-              </q-input>
-              <q-input
-                v-model="logUntil"
-                square
-                outlined
-                dense
-                class="u-dense vm-firewall-log-date"
-                :label="gettext('Until')"
-              >
-                <template #append>
-                  <q-icon name="event" class="cursor-pointer">
-                    <q-popup-proxy transition-show="scale" transition-hide="scale">
-                      <q-date v-model="logUntil" minimal mask="YYYY-MM-DD" />
-                    </q-popup-proxy>
-                  </q-icon>
-                </template>
-              </q-input>
-            </template>
-            <q-btn
-              no-caps
-              size="12px"
-              color="primary"
-              class="u-button"
-              :loading="logLoading"
-              :label="gettext('Update')"
-              @click="resetAndLoadLogs"
-            />
-          </div>
-          <div
-            ref="logPosition"
-            class="vm-firewall-log u-size-12"
-            @scroll="handleLogScroll"
-            @mousedown="logIsScroll = false"
-            @mouseup="handleLogMouseUp"
-          >
-            <div v-if="!logLoading && !logs.length" class="vm-firewall-log-empty">
-              {{ gettext('No logs found') }}
+            <q-inner-loading :showing="loading" /></div
+        ></q-tab-panel>
+        <q-tab-panel name="aliases" class="q-pa-sm"
+          ><VmFirewallAliasesTab :node="node" :vmid="vmid" :editable="canConfigureFirewall"
+        /></q-tab-panel>
+        <q-tab-panel name="ipset" class="q-pa-sm"
+          ><VmFirewallIpsetTab :node="node" :vmid="vmid" :editable="canConfigureFirewall"
+        /></q-tab-panel>
+        <q-tab-panel name="log" class="q-pa-sm"
+          ><div class="vm-firewall-log-wrap">
+            <div class="row q-gutter-sm items-center no-wrap vm-firewall-log-toolbar">
+              <q-btn-toggle
+                v-model="logLiveMode"
+                no-caps
+                size="12px"
+                class="u-button"
+                toggle-color="primary"
+                :options="logModeOptions"
+              />
+              <template v-if="!logLiveMode">
+                <q-input
+                  v-model="logSince"
+                  square
+                  outlined
+                  dense
+                  class="u-dense vm-firewall-log-date"
+                  :label="gettext('Since')"
+                >
+                  <template #append>
+                    <q-icon name="event" class="cursor-pointer">
+                      <q-popup-proxy transition-show="scale" transition-hide="scale">
+                        <q-date v-model="logSince" minimal mask="YYYY-MM-DD" />
+                      </q-popup-proxy>
+                    </q-icon>
+                  </template>
+                </q-input>
+                <q-input
+                  v-model="logUntil"
+                  square
+                  outlined
+                  dense
+                  class="u-dense vm-firewall-log-date"
+                  :label="gettext('Until')"
+                >
+                  <template #append>
+                    <q-icon name="event" class="cursor-pointer">
+                      <q-popup-proxy transition-show="scale" transition-hide="scale">
+                        <q-date v-model="logUntil" minimal mask="YYYY-MM-DD" />
+                      </q-popup-proxy>
+                    </q-icon>
+                  </template>
+                </q-input>
+              </template>
+              <q-btn
+                no-caps
+                size="12px"
+                color="primary"
+                class="u-button"
+                :loading="logLoading"
+                :label="gettext('Update')"
+                @click="resetAndLoadLogs"
+              />
             </div>
             <div
-              v-for="(item, index) in logs"
-              :key="index"
-              class="vm-firewall-log-row"
-              :title="logText(item)"
+              ref="logPosition"
+              class="vm-firewall-log u-size-12"
+              @scroll="handleLogScroll"
+              @mousedown="logIsScroll = false"
+              @mouseup="handleLogMouseUp"
             >
-              <span class="text-grey-6">{{ index + 1 }}</span> {{ logText(item) }}
+              <div v-if="!logLoading && !logs.length" class="vm-firewall-log-empty">
+                {{ gettext('No logs found') }}
+              </div>
+              <div
+                v-for="(item, index) in logs"
+                :key="index"
+                class="vm-firewall-log-row"
+                :title="logText(item)"
+              >
+                <span class="text-grey-6">{{ index + 1 }}</span> {{ logText(item) }}
+              </div>
             </div>
-          </div>
-          <q-inner-loading :showing="logLoading" />
-        </div
-        ></q-tab-panel
-      >
+            <q-inner-loading :showing="logLoading" /></div
+        ></q-tab-panel>
       </q-tab-panels>
     </div>
     <q-dialog v-model="groupVisible" persistent>
       <UWindow :title="gettext('Insert Security Group')" width="460px" :loading="loading">
-        <q-form class="firewall-rule-form u-border q-ma-sm q-pa-md u-dense" @submit.prevent="saveSecurityGroup">
-          <q-select v-model="groupForm.action" dense options-dense emit-value map-options :options="securityGroupOptions" :label="gettext('Security Group')" :rules="[(value) => !!value || gettext('Required field')]" />
+        <q-form
+          class="firewall-rule-form u-border q-ma-sm q-pa-md u-dense"
+          @submit.prevent="saveSecurityGroup"
+        >
+          <q-select
+            v-model="groupForm.action"
+            dense
+            options-dense
+            emit-value
+            map-options
+            :options="securityGroupOptions"
+            :label="gettext('Security Group')"
+            :rules="[(value) => !!value || gettext('Required field')]"
+          />
           <q-input v-model="groupForm.iface" dense :label="gettext('Interface')" />
-          <q-checkbox v-model="groupForm.enable" dense color="primary" :true-value="1" :false-value="0" :label="gettext('Enable')" />
+          <q-checkbox
+            v-model="groupForm.enable"
+            dense
+            color="primary"
+            :true-value="1"
+            :false-value="0"
+            :label="gettext('Enable')"
+          />
           <q-input v-model="groupForm.comment" dense :label="gettext('Comment')" />
         </q-form>
-        <template #foot><q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" /><q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :disable="!groupForm.action" :loading="loading" :label="gettext('Save')" @click="saveSecurityGroup" /></template>
+        <template #foot
+          ><q-btn
+            v-close-popup
+            no-caps
+            outline
+            size="12px"
+            class="u-button"
+            :label="gettext('Cancel')" /><q-btn
+            no-caps
+            flat
+            size="12px"
+            class="bg-primary text-grey-1 u-button"
+            :disable="!groupForm.action"
+            :loading="loading"
+            :label="gettext('Save')"
+            @click="saveSecurityGroup"
+        /></template>
       </UWindow>
     </q-dialog>
     <q-dialog v-model="dialog" persistent
@@ -708,76 +789,74 @@ onBeforeUnmount(() => {
         :title="gettext(editing ? 'Edit Rule' : 'Add Rule')"
         width="620px"
         :loading="loading"
-        ><q-form class="firewall-rule-form u-border q-ma-sm q-pa-md u-dense" @submit.prevent="saveRule">
+        ><q-form
+          class="firewall-rule-form u-border q-ma-sm q-pa-md u-dense"
+          @submit.prevent="saveRule"
+        >
           <div class="row q-col-gutter-md">
-          <q-select
-            v-model="form.type"
-            class="col-6"
-            dense
-            options-dense
-            emit-value
-            map-options
-            :label="gettext('Direction')"
-            :options="[
-              { label: gettext('In'), value: 'in' },
-              { label: gettext('Out'), value: 'out' },
-            ]"
-          /><q-select
-            v-model="form.action"
-            class="col-6"
-            dense
-            options-dense
-            :label="gettext('Action')"
-            :options="['ACCEPT', 'DROP', 'REJECT']"
-          /><q-input
-            v-model="form.macro"
-            class="col-6"
-            dense
-            :label="gettext('Macro')"
-          /><q-input
-            v-model="form.iface"
-            class="col-6"
-            dense
-            :label="gettext('Interface')"
-          /><q-input
-            v-model="form.source"
-            class="col-6"
-            dense
-            :label="gettext('Source')"
-          /><q-input
-            v-model="form.dest"
-            class="col-6"
-            dense
-            :label="gettext('Destination')"
-          /><q-input
-            v-model="form.proto"
-            class="col-4"
-            dense
-            :label="gettext('Protocol')"
-          /><q-input
-            v-model="form.sport"
-            class="col-4"
-            dense
-            :label="gettext('Source port')"
-          /><q-input
-            v-model="form.dport"
-            class="col-4"
-            dense
-            :label="gettext('Dest. port')"
-          /><q-input
-            v-model="form.comment"
-            class="col-12"
-            dense
-            :label="gettext('Comment')"
-          /><q-checkbox
-            v-model="form.enable"
-            class="col-12"
-            dense
-            color="primary"
-            :true-value="1"
-            :false-value="0"
-            :label="gettext('Enable')"
-          />
+            <q-select
+              v-model="form.type"
+              class="col-6"
+              dense
+              options-dense
+              emit-value
+              map-options
+              :label="gettext('Direction')"
+              :options="[
+                { label: gettext('In'), value: 'in' },
+                { label: gettext('Out'), value: 'out' },
+              ]"
+            /><q-select
+              v-model="form.action"
+              class="col-6"
+              dense
+              options-dense
+              :label="gettext('Action')"
+              :options="['ACCEPT', 'DROP', 'REJECT']"
+            /><q-input v-model="form.macro" class="col-6" dense :label="gettext('Macro')" /><q-input
+              v-model="form.iface"
+              class="col-6"
+              dense
+              :label="gettext('Interface')"
+            /><q-input
+              v-model="form.source"
+              class="col-6"
+              dense
+              :label="gettext('Source')"
+            /><q-input
+              v-model="form.dest"
+              class="col-6"
+              dense
+              :label="gettext('Destination')"
+            /><q-input
+              v-model="form.proto"
+              class="col-4"
+              dense
+              :label="gettext('Protocol')"
+            /><q-input
+              v-model="form.sport"
+              class="col-4"
+              dense
+              :label="gettext('Source port')"
+            /><q-input
+              v-model="form.dport"
+              class="col-4"
+              dense
+              :label="gettext('Dest. port')"
+            /><q-input
+              v-model="form.comment"
+              class="col-12"
+              dense
+              :label="gettext('Comment')"
+            /><q-checkbox
+              v-model="form.enable"
+              class="col-12"
+              dense
+              color="primary"
+              :true-value="1"
+              :false-value="0"
+              :label="gettext('Enable')"
+            />
           </div>
         </q-form>
         <template #foot

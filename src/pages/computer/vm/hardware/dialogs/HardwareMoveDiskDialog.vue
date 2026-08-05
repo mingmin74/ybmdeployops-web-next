@@ -10,7 +10,8 @@ import { useVmHardwareContext } from '../context/vmHardwareContext';
 const visible = defineModel<boolean>({ default: false });
 const storages = shallowRef<string[]>([]);
 const form = reactive({ storage: '', format: '', deleteSource: false });
-const { hasVmCapability, loading, node, notifyUpdated, selectedDevice, vmid } = useVmHardwareContext();
+const { hasVmCapability, loading, node, notifyUpdated, selectedDevice, vmid } =
+  useVmHardwareContext();
 
 async function loadStorages() {
   if (!hasVmCapability('VM.Config.Disk') || selectedDevice.value?.type !== 'disk') return;
@@ -53,13 +54,43 @@ async function moveDisk() {
   <q-dialog v-model="visible" persistent>
     <UWindow :title="gettext('Move disk')" width="460px" :loading="loading">
       <div class="q-pa-md q-gutter-md">
-        <q-select v-model="form.storage" dense square outlined :options="storages" :label="gettext('Target Storage')" />
-        <q-select v-model="form.format" dense square outlined clearable :options="['raw', 'qcow2', 'vmdk']" :label="gettext('Disk Format')" />
+        <q-select
+          v-model="form.storage"
+          dense
+          square
+          outlined
+          :options="storages"
+          :label="gettext('Target Storage')"
+        />
+        <q-select
+          v-model="form.format"
+          dense
+          square
+          outlined
+          clearable
+          :options="['raw', 'qcow2', 'vmdk']"
+          :label="gettext('Disk Format')"
+        />
         <q-checkbox v-model="form.deleteSource" :label="gettext('Delete source')" />
       </div>
       <template #foot>
-        <q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" />
-        <q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :disable="!form.storage" :label="gettext('Move disk')" @click="moveDisk" />
+        <q-btn
+          v-close-popup
+          no-caps
+          outline
+          size="12px"
+          class="u-button"
+          :label="gettext('Cancel')"
+        />
+        <q-btn
+          no-caps
+          flat
+          size="12px"
+          class="bg-primary text-grey-1 u-button"
+          :disable="!form.storage"
+          :label="gettext('Move disk')"
+          @click="moveDisk"
+        />
       </template>
     </UWindow>
   </q-dialog>

@@ -174,9 +174,9 @@ const canAdd = computed(() => {
   if (form.kind === 'cdrom') {
     return Boolean(
       cdromKeyAvailable.value &&
-        form.cdromDeviceId >= 0 &&
-        form.cdromDeviceId < cdromBusLimits[form.cdromBus] &&
-        (form.cdromMediaType !== 'iso' || form.cdromVolid.trim())
+      form.cdromDeviceId >= 0 &&
+      form.cdromDeviceId < cdromBusLimits[form.cdromBus] &&
+      (form.cdromMediaType !== 'iso' || form.cdromVolid.trim()),
     );
   }
   if (form.kind === 'net') return networkFormValid();
@@ -199,7 +199,9 @@ const usb3Disabled = computed(() => maxUsbCount() > 5);
 const pciKey = computed(() => nextDeviceKey('hostpci', 16));
 const pciKeyAvailable = computed(() => !config.value[pciKey.value]);
 const pcieSupported = computed(() => textValue(config.value.machine).includes('q35'));
-const serialIdValid = computed(() => Number.isInteger(form.serialId) && form.serialId >= 0 && form.serialId <= 3);
+const serialIdValid = computed(
+  () => Number.isInteger(form.serialId) && form.serialId >= 0 && form.serialId <= 3,
+);
 const serialKey = computed(() => `serial${form.serialId}`);
 const serialKeyAvailable = computed(() => serialIdValid.value && !config.value[serialKey.value]);
 const audioKeyAvailable = computed(() => config.value.audio0 === undefined);
@@ -261,8 +263,8 @@ function resetNetworkDefaults() {
     model: ['wxp', 'w2k'].includes(textValue(config.value.ostype))
       ? 'rtl8139'
       : textValue(config.value.ostype) === 'l26'
-      ? 'virtio'
-      : 'e1000',
+        ? 'virtio'
+        : 'e1000',
     vlanTag: '',
     firewall: true,
     macaddr: '',
@@ -406,13 +408,13 @@ function networkFormValid() {
   const mtu = Number(form.mtu);
   return Boolean(
     form.bridge.trim() &&
-      (!form.vlanTag.trim() || (Number.isInteger(tag) && tag >= 1 && tag <= 4094)) &&
-      (!form.macaddr.trim() || /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(form.macaddr.trim())) &&
-      (!form.rate.trim() || (Number.isFinite(rate) && rate >= 0 && rate <= 10240)) &&
-      (!form.queues.trim() || (Number.isInteger(queues) && queues >= 1 && queues <= 64)) &&
-      (!form.mtu.trim() ||
-        form.model !== 'virtio' ||
-        (Number.isInteger(mtu) && mtu >= 1 && mtu <= 65520 && (mtu === 1 || mtu >= 576)))
+    (!form.vlanTag.trim() || (Number.isInteger(tag) && tag >= 1 && tag <= 4094)) &&
+    (!form.macaddr.trim() || /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(form.macaddr.trim())) &&
+    (!form.rate.trim() || (Number.isFinite(rate) && rate >= 0 && rate <= 10240)) &&
+    (!form.queues.trim() || (Number.isInteger(queues) && queues >= 1 && queues <= 64)) &&
+    (!form.mtu.trim() ||
+      form.model !== 'virtio' ||
+      (Number.isInteger(mtu) && mtu >= 1 && mtu <= 65520 && (mtu === 1 || mtu >= 576))),
   );
 }
 
@@ -421,7 +423,10 @@ function maxUsbCount() {
   const machine = textValue(config.value.machine);
   const match = /-(\d+)\.(\d+)/.exec(machine);
   const machineSupportsNewUsb = !match || Number(`${match[1]}.${match[2]}`) >= 7.1;
-  if (machineSupportsNewUsb && (ostype === 'l26' || /^win(\d+)$/.test(ostype) && Number(/^win(\d+)$/.exec(ostype)?.[1]) > 7)) {
+  if (
+    machineSupportsNewUsb &&
+    (ostype === 'l26' || (/^win(\d+)$/.test(ostype) && Number(/^win(\d+)$/.exec(ostype)?.[1]) > 7))
+  ) {
     return 14;
   }
   return 5;
@@ -429,7 +434,8 @@ function maxUsbCount() {
 
 function usbValue() {
   if (form.usbMode === 'spice') return 'spice';
-  if (form.usbMode === 'mapped' && form.usbMapping.trim()) return `mapping=${form.usbMapping.trim()}`;
+  if (form.usbMode === 'mapped' && form.usbMapping.trim())
+    return `mapping=${form.usbMapping.trim()}`;
   if ((form.usbMode === 'hostdevice' || form.usbMode === 'port') && form.usbValue.trim()) {
     const parts = [`host=${form.usbValue.trim()}`];
     if (form.usb3 && !usb3Disabled.value) parts.push('usb3=1');
@@ -446,9 +452,10 @@ function normalizePciHost(host: string) {
 }
 
 function pciValue() {
-  const parts = form.pciMode === 'mapped'
-    ? [`mapping=${form.pciMapping.trim()}`]
-    : [normalizePciHost(form.pciAddress)];
+  const parts =
+    form.pciMode === 'mapped'
+      ? [`mapping=${form.pciMapping.trim()}`]
+      : [normalizePciHost(form.pciAddress)];
 
   if (!parts[0]) return '';
   pushOptional(parts, 'mdev', form.pciMdev);
@@ -529,21 +536,33 @@ async function addDevice() {
           v-model:advanced="addDiskAdvanced"
           :scsi-controller-label="scsiControllerLabel"
         />
-        <AddNetworkForm v-else-if="form.kind === 'net'" v-model:form="form" v-model:advanced="addNetworkAdvanced" />
+        <AddNetworkForm
+          v-else-if="form.kind === 'net'"
+          v-model:form="form"
+          v-model:advanced="addNetworkAdvanced"
+        />
         <AddCdromForm
           v-else-if="form.kind === 'cdrom'"
           :key="addCdromFormKey"
           v-model:form="form"
           :device-in-use="!cdromKeyAvailable"
         />
-        <AddUsbForm v-else-if="form.kind === 'usb'" v-model:form="form" :disable-usb3="usb3Disabled" />
+        <AddUsbForm
+          v-else-if="form.kind === 'usb'"
+          v-model:form="form"
+          :disable-usb3="usb3Disabled"
+        />
         <AddPciForm v-else-if="form.kind === 'pci'" v-model:form="form" />
         <AddSerialForm
           v-else-if="form.kind === 'serial'"
           v-model:form="form"
           :device-in-use="serialIdValid && !serialKeyAvailable"
         />
-        <AddAudioForm v-else-if="form.kind === 'audio'" v-model:form="form" :device-in-use="!audioKeyAvailable" />
+        <AddAudioForm
+          v-else-if="form.kind === 'audio'"
+          v-model:form="form"
+          :device-in-use="!audioKeyAvailable"
+        />
       </div>
       <template #foot>
         <div class="full-width row items-center justify-between">
@@ -563,7 +582,14 @@ async function addDevice() {
           />
           <div v-else />
           <div class="row items-center q-gutter-sm">
-            <q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" />
+            <q-btn
+              v-close-popup
+              no-caps
+              outline
+              size="12px"
+              class="u-button"
+              :label="gettext('Cancel')"
+            />
             <q-btn
               no-caps
               flat

@@ -10,7 +10,8 @@ const form = defineModel<AddSerialFormModel>('form', { required: true });
 const { deviceInUse = false } = defineProps<{ deviceInUse?: boolean }>();
 
 const serialValid = computed(
-  () => Number.isInteger(form.value.serialId) && form.value.serialId >= 0 && form.value.serialId <= 3
+  () =>
+    Number.isInteger(form.value.serialId) && form.value.serialId >= 0 && form.value.serialId <= 3,
 );
 
 function clampSerialId() {

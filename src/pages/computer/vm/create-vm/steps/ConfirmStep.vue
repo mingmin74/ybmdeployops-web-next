@@ -7,23 +7,22 @@ const { summaryRows, stepContentHeight } = derived;
 </script>
 
 <template>
-<q-scroll-area class="q-pa-sm u-size-13" :style="{ height: stepContentHeight('confirm') }">
-            <q-markup-table flat dense class="vm-create-summary u-border-dotted-blue bg-white">
-              <thead>
-                <tr>
-                  <th class="text-left">{{ gettext('Key') }}</th>
-                  <th class="text-left">{{ gettext('Value') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in summaryRows" :key="row[0]">
-                  <td>{{ row[0] }}</td>
-                  <td class="vm-create-summary-value">{{ row[1] }}</td>
-                </tr>
-              </tbody></q-markup-table
-            >
-          </q-scroll-area>
-
+  <q-scroll-area class="q-pa-sm u-size-13" :style="{ height: stepContentHeight('confirm') }">
+    <q-markup-table flat dense class="vm-create-summary u-border-dotted-blue bg-white">
+      <thead>
+        <tr>
+          <th class="text-left">{{ gettext('Key') }}</th>
+          <th class="text-left">{{ gettext('Value') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="row in summaryRows" :key="row[0]">
+          <td>{{ row[0] }}</td>
+          <td class="vm-create-summary-value">{{ row[1] }}</td>
+        </tr>
+      </tbody></q-markup-table
+    >
+  </q-scroll-area>
 </template>
 
 <style scoped>

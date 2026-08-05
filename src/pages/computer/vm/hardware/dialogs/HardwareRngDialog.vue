@@ -30,7 +30,7 @@ const canAdd = computed(
     !hasRngDevice.value &&
     Boolean(form.source.trim()) &&
     maxBytesValid.value &&
-    periodValid.value
+    periodValid.value,
 );
 const showLimiterWarning = computed(() => form.maxBytes.trim() === '');
 
@@ -105,14 +105,25 @@ async function save() {
           />
         </div>
         <div v-if="showLimiterWarning" class="rng-warning q-mt-sm">
-          {{ gettext('Disabling the limiter can potentially allow a guest to overload the host. Proceed with caution.') }}
+          {{
+            gettext(
+              'Disabling the limiter can potentially allow a guest to overload the host. Proceed with caution.',
+            )
+          }}
         </div>
         <div v-if="hasRngDevice" class="rng-warning q-mt-sm">
           {{ gettext('VirtIO RNG') }} {{ gettext('This device is already in use') }}
         </div>
       </div>
       <template #foot>
-        <q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" />
+        <q-btn
+          v-close-popup
+          no-caps
+          outline
+          size="12px"
+          class="u-button"
+          :label="gettext('Cancel')"
+        />
         <q-btn
           no-caps
           flat

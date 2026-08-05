@@ -33,7 +33,7 @@ const usbDeviceRows = computed(() =>
       ...row,
       deviceKey: `${textValue(row.vendid)}:${textValue(row.prodid)}`,
       portKey: `${textValue(row.busnum)}-${textValue(row.usbpath)}`,
-    }))
+    })),
 );
 
 const mappingColumns: QTableColumn<PveRecord>[] = [
@@ -47,22 +47,53 @@ const mappingColumns: QTableColumn<PveRecord>[] = [
 ];
 
 const usbDeviceColumns: QTableColumn<PveRecord>[] = [
-  { name: 'deviceKey', label: gettext('Device'), field: (row) => textValue(row.deviceKey), align: 'left' },
-  { name: 'manufacturer', label: gettext('Manufacturer'), field: (row) => textValue(row.manufacturer), align: 'left' },
-  { name: 'product', label: gettext('Product'), field: (row) => textValue(row.product), align: 'left' },
+  {
+    name: 'deviceKey',
+    label: gettext('Device'),
+    field: (row) => textValue(row.deviceKey),
+    align: 'left',
+  },
+  {
+    name: 'manufacturer',
+    label: gettext('Manufacturer'),
+    field: (row) => textValue(row.manufacturer),
+    align: 'left',
+  },
+  {
+    name: 'product',
+    label: gettext('Product'),
+    field: (row) => textValue(row.product),
+    align: 'left',
+  },
   { name: 'speed', label: gettext('Speed'), field: (row) => textValue(row.speed), align: 'left' },
 ];
 
 const usbPortColumns: QTableColumn<PveRecord>[] = [
-  { name: 'portKey', label: gettext('Port'), field: (row) => textValue(row.portKey), align: 'left' },
-  { name: 'manufacturer', label: gettext('Manufacturer'), field: (row) => textValue(row.manufacturer), align: 'left' },
-  { name: 'product', label: gettext('Product'), field: (row) => textValue(row.product), align: 'left' },
+  {
+    name: 'portKey',
+    label: gettext('Port'),
+    field: (row) => textValue(row.portKey),
+    align: 'left',
+  },
+  {
+    name: 'manufacturer',
+    label: gettext('Manufacturer'),
+    field: (row) => textValue(row.manufacturer),
+    align: 'left',
+  },
+  {
+    name: 'product',
+    label: gettext('Product'),
+    field: (row) => textValue(row.product),
+    align: 'left',
+  },
   { name: 'speed', label: gettext('Speed'), field: (row) => textValue(row.speed), align: 'left' },
 ];
 
 const selectedRequired = computed(() => {
   if (form.value.usbMode === 'mapped') return !form.value.usbMapping.trim();
-  if (form.value.usbMode === 'hostdevice' || form.value.usbMode === 'port') return !form.value.usbValue.trim();
+  if (form.value.usbMode === 'hostdevice' || form.value.usbMode === 'port')
+    return !form.value.usbValue.trim();
   return false;
 });
 
@@ -89,18 +120,8 @@ onMounted(() => {
   <div class="add-usb-form u-dense">
     <div class="u-border q-pa-md">
       <div class="column">
-        <q-radio
-          v-model="form.usbMode"
-          dense
-          val="spice"
-          :label="gettext('Spice Port')"
-        />
-        <q-radio
-          v-model="form.usbMode"
-          dense
-          val="mapped"
-          :label="gettext('Use mapped Device')"
-        />
+        <q-radio v-model="form.usbMode" dense val="spice" :label="gettext('Spice Port')" />
+        <q-radio v-model="form.usbMode" dense val="mapped" :label="gettext('Use mapped Device')" />
         <div class="add-usb-form__nested">
           <SelectTable
             v-model="form.usbMapping"
@@ -143,12 +164,7 @@ onMounted(() => {
             :label="gettext('Choose Device')"
           />
         </div>
-        <q-radio
-          v-model="form.usbMode"
-          dense
-          val="port"
-          :label="gettext('Use USB Port')"
-        />
+        <q-radio v-model="form.usbMode" dense val="port" :label="gettext('Use USB Port')" />
         <div class="add-usb-form__nested">
           <SelectTable
             v-model="form.usbValue"

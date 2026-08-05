@@ -30,11 +30,25 @@ async function save() {
   <div class="hardware-special-editor">
     <div class="row q-col-gutter-sm hardware-special-editor__fields">
       <div class="col-12">
-        <q-select v-model="form.scsihw" dense options-dense emit-value map-options :options="scsiOptions" :label="gettext('Type')" />
+        <q-select
+          v-model="form.scsihw"
+          dense
+          options-dense
+          emit-value
+          map-options
+          :options="scsiOptions"
+          :label="gettext('Type')"
+        />
       </div>
     </div>
     <div class="hardware-special-editor__footer row items-center justify-end">
-      <q-btn no-caps size="12px" class="bg-primary text-grey-1 u-button" :label="gettext('Save')" @click="save" />
+      <q-btn
+        no-caps
+        size="12px"
+        class="bg-primary text-grey-1 u-button"
+        :label="gettext('Save')"
+        @click="save"
+      />
     </div>
   </div>
 </template>

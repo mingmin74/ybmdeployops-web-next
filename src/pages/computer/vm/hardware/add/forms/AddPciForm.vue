@@ -37,18 +37,18 @@ const mdevLoading = shallowRef(false);
 const advanced = shallowRef(false);
 
 const selectedPci = computed(() =>
-  pciRows.value.find((row) => textValue(row.id) === form.value.pciAddress)
+  pciRows.value.find((row) => textValue(row.id) === form.value.pciAddress),
 );
 const selectedMapping = computed(() =>
-  mappingRows.value.find((row) => textValue(row.id) === form.value.pciMapping)
+  mappingRows.value.find((row) => textValue(row.id) === form.value.pciMapping),
 );
-const selectedDevice = computed(() => (
-  form.value.pciMode === 'mapped' ? selectedMapping.value : selectedPci.value
-));
+const selectedDevice = computed(() =>
+  form.value.pciMode === 'mapped' ? selectedMapping.value : selectedPci.value,
+);
 const hasMdev = computed(() => Boolean(selectedDevice.value?.mdev));
 const isQ35 = computed(() => textValue(config.value.machine).includes('q35'));
-const noIommu = computed(() =>
-  pciRows.value.length > 0 && pciRows.value.every((row) => Number(row.iommugroup) === -1)
+const noIommu = computed(
+  () => pciRows.value.length > 0 && pciRows.value.every((row) => Number(row.iommugroup) === -1),
 );
 const selectedGroupWarning = computed(() => {
   const current = selectedPci.value;
@@ -122,7 +122,11 @@ const mdevColumns: QTableColumn<PveRecord>[] = [
 function mdevPath() {
   const row = selectedDevice.value;
   if (!row) return '';
-  return textValue(row.path || row.id || (form.value.pciMode === 'mapped' ? form.value.pciMapping : form.value.pciAddress));
+  return textValue(
+    row.path ||
+      row.id ||
+      (form.value.pciMode === 'mapped' ? form.value.pciMapping : form.value.pciAddress),
+  );
 }
 
 async function loadMdevOptions() {
@@ -135,7 +139,7 @@ async function loadMdevOptions() {
   try {
     const response = await getNodePciMdevTypes(node.value, path);
     mdevRows.value = (response.data || []).sort((left, right) =>
-      textValue(left.type).localeCompare(textValue(right.type))
+      textValue(left.type).localeCompare(textValue(right.type)),
     );
   } finally {
     mdevLoading.value = false;
@@ -204,12 +208,7 @@ onMounted(() => {
   <div class="add-pci-form u-dense">
     <div class="u-border q-pa-md">
       <div class="column">
-        <q-radio
-          v-model="form.pciMode"
-          dense
-          val="mapped"
-          :label="gettext('Use mapped Device')"
-        />
+        <q-radio v-model="form.pciMode" dense val="mapped" :label="gettext('Use mapped Device')" />
         <div class="add-pci-form__nested">
           <SelectTable
             v-model="form.pciMapping"
@@ -229,12 +228,7 @@ onMounted(() => {
           />
         </div>
 
-        <q-radio
-          v-model="form.pciMode"
-          dense
-          val="raw"
-          :label="gettext('Use raw PCI device')"
-        />
+        <q-radio v-model="form.pciMode" dense val="raw" :label="gettext('Use raw PCI device')" />
         <div class="add-pci-form__nested">
           <SelectTable
             v-model="form.pciAddress"
@@ -288,10 +282,21 @@ onMounted(() => {
         />
 
         <div v-if="noIommu" class="add-pci-form__hint q-mt-sm">
-          {{ gettext('No IOMMU detected, please activate it. See Documentation for further information.') }}
+          {{
+            gettext(
+              'No IOMMU detected, please activate it. See Documentation for further information.',
+            )
+          }}
         </div>
-        <div v-else-if="form.pciMode === 'raw' && selectedGroupWarning" class="add-pci-form__hint q-mt-sm">
-          {{ gettext('The selected PCI device is not isolated from other devices in the same IOMMU group.') }}
+        <div
+          v-else-if="form.pciMode === 'raw' && selectedGroupWarning"
+          class="add-pci-form__hint q-mt-sm"
+        >
+          {{
+            gettext(
+              'The selected PCI device is not isolated from other devices in the same IOMMU group.',
+            )
+          }}
         </div>
       </div>
     </div>

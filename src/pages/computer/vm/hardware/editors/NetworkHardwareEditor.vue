@@ -35,33 +35,37 @@ function parseNetwork(value: unknown) {
     mtu: '',
     disconnect: false,
   };
-  textValue(value).split(',').forEach((part) => {
-    if (!part) return;
-    const segments = part.split('=', 2);
-    const key = segments[0] || '';
-    const optionValue = segments[1];
-    if (!key) return;
-    const option = optionValue ?? '';
-    if (networkModels.includes(key) && optionValue === undefined) {
-      result.model = key;
-    } else if (networkModels.includes(key) && optionValue !== undefined) {
-      result.model = key;
-      result.macaddr = option;
-    } else if (key === 'bridge') result.bridge = option;
-    else if (key === 'tag') result.tag = option;
-    else if (key === 'firewall') result.firewall = option === '1';
-    else if (key === 'rate') result.rate = option;
-    else if (key === 'queues') result.queues = option;
-    else if (key === 'mtu') result.mtu = option;
-    else if (key === 'link_down') result.disconnect = option === '1';
-  });
+  textValue(value)
+    .split(',')
+    .forEach((part) => {
+      if (!part) return;
+      const segments = part.split('=', 2);
+      const key = segments[0] || '';
+      const optionValue = segments[1];
+      if (!key) return;
+      const option = optionValue ?? '';
+      if (networkModels.includes(key) && optionValue === undefined) {
+        result.model = key;
+      } else if (networkModels.includes(key) && optionValue !== undefined) {
+        result.model = key;
+        result.macaddr = option;
+      } else if (key === 'bridge') result.bridge = option;
+      else if (key === 'tag') result.tag = option;
+      else if (key === 'firewall') result.firewall = option === '1';
+      else if (key === 'rate') result.rate = option;
+      else if (key === 'queues') result.queues = option;
+      else if (key === 'mtu') result.mtu = option;
+      else if (key === 'link_down') result.disconnect = option === '1';
+    });
   return result;
 }
 
 const form = reactive(parseNetwork(config.value[device.key]));
 const advanced = shallowRef(Boolean(form.rate || form.queues || form.mtu || form.disconnect));
 const modelOptions = computed(() => networkModels);
-const macValid = computed(() => !form.macaddr.trim() || /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(form.macaddr.trim()));
+const macValid = computed(
+  () => !form.macaddr.trim() || /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(form.macaddr.trim()),
+);
 const tagValid = computed(() => {
   if (!form.tag.trim()) return true;
   const value = Number(form.tag);
@@ -82,7 +86,16 @@ const mtuValid = computed(() => {
   const value = Number(form.mtu);
   return Number.isInteger(value) && value >= 1 && value <= 65520 && (value === 1 || value >= 576);
 });
-const canSave = computed(() => Boolean(form.bridge.trim() && macValid.value && tagValid.value && rateValid.value && queuesValid.value && mtuValid.value));
+const canSave = computed(() =>
+  Boolean(
+    form.bridge.trim() &&
+    macValid.value &&
+    tagValid.value &&
+    rateValid.value &&
+    queuesValid.value &&
+    mtuValid.value,
+  ),
+);
 const showMtuHint = computed(() => form.mtu.trim() === '1');
 
 function networkValue() {
@@ -118,7 +131,13 @@ async function save() {
         />
       </div>
       <div class="col-6">
-        <q-select v-model="form.model" dense options-dense :options="modelOptions" :label="gettext('Model')" />
+        <q-select
+          v-model="form.model"
+          dense
+          options-dense
+          :options="modelOptions"
+          :label="gettext('Model')"
+        />
       </div>
       <div class="col-6">
         <q-input
@@ -180,16 +199,25 @@ async function save() {
             max="65520"
             :disable="form.model !== 'virtio'"
             :error="!mtuValid"
-            :error-message="gettext('MTU needs to be >= 576 or 1 to inherit the MTU from the underlying bridge.')"
+            :error-message="
+              gettext('MTU needs to be >= 576 or 1 to inherit the MTU from the underlying bridge.')
+            "
             label="MTU"
             :placeholder="gettext('Same as bridge')"
           />
         </div>
         <div class="col-6">
-          <q-checkbox v-model="form.disconnect" dense color="primary" :label="gettext('Disconnect')" />
+          <q-checkbox
+            v-model="form.disconnect"
+            dense
+            color="primary"
+            :label="gettext('Disconnect')"
+          />
         </div>
         <div v-if="showMtuHint" class="col-12 hardware-editor-hint">
-          {{ gettext("Use the special value '1' to inherit the MTU value from the underlying bridge") }}
+          {{
+            gettext("Use the special value '1' to inherit the MTU value from the underlying bridge")
+          }}
         </div>
       </template>
     </div>

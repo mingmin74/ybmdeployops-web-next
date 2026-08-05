@@ -9,11 +9,13 @@ import { useCreateCtWizardContext } from './create-ct/context/createCtWizardCont
 const { form, resources, errors } = useCreateCtWizardContext();
 const { validationErrors } = errors;
 
-const storageRows = computed<PveRecord[]>(() => resources.storageOptions.value.map((storage) => ({
-  storage,
-  type: 'storage',
-  content: 'vztmpl',
-})));
+const storageRows = computed<PveRecord[]>(() =>
+  resources.storageOptions.value.map((storage) => ({
+    storage,
+    type: 'storage',
+    content: 'vztmpl',
+  })),
+);
 const templateRows = computed<PveRecord[]>(() => resources.templateRows.value);
 function templateValue(row: PveRecord) {
   return String(row.volid || row.filename || '');
@@ -34,14 +36,45 @@ function formatSize(value: unknown) {
   return `${displaySize >= 10 || unitIndex === 0 ? Math.round(displaySize) : displaySize.toFixed(1)} ${units[unitIndex]}`;
 }
 const storageColumns: QTableColumn<PveRecord>[] = [
-  { name: 'storage', label: gettext('Storage'), field: (row) => String(row.storage || ''), align: 'left' },
+  {
+    name: 'storage',
+    label: gettext('Storage'),
+    field: (row) => String(row.storage || ''),
+    align: 'left',
+  },
   { name: 'type', label: gettext('Type'), field: (row) => String(row.type || ''), align: 'left' },
-  { name: 'content', label: gettext('Content'), field: (row) => String(row.content || ''), align: 'left' },
+  {
+    name: 'content',
+    label: gettext('Content'),
+    field: (row) => String(row.content || ''),
+    align: 'left',
+  },
 ];
 const templateColumns: QTableColumn<PveRecord>[] = [
-  { name: 'volid', label: gettext('Template'), field: templateName, align: 'left', style: 'width: 320px; max-width: 320px', headerStyle: 'width: 320px' },
-  { name: 'format', label: gettext('Format'), field: (row) => String(row.format || ''), align: 'left', style: 'width: 90px', headerStyle: 'width: 90px' },
-  { name: 'size', label: gettext('Size'), field: (row) => formatSize(row.size), align: 'right', style: 'width: 100px', headerStyle: 'width: 100px' },
+  {
+    name: 'volid',
+    label: gettext('Template'),
+    field: templateName,
+    align: 'left',
+    style: 'width: 320px; max-width: 320px',
+    headerStyle: 'width: 320px',
+  },
+  {
+    name: 'format',
+    label: gettext('Format'),
+    field: (row) => String(row.format || ''),
+    align: 'left',
+    style: 'width: 90px',
+    headerStyle: 'width: 90px',
+  },
+  {
+    name: 'size',
+    label: gettext('Size'),
+    field: (row) => formatSize(row.size),
+    align: 'right',
+    style: 'width: 100px',
+    headerStyle: 'width: 100px',
+  },
 ];
 </script>
 

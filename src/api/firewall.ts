@@ -12,14 +12,23 @@ function vmFirewallBase(node: string, vmid: string | number, guestType: 'qemu' |
   return `/api2/json/nodes/${encodeURIComponent(node)}/${guestType}/${encodeURIComponent(String(vmid))}/firewall`;
 }
 
-export function getVmFirewallRules(node: string, vmid: string | number, guestType: 'qemu' | 'lxc' = 'qemu') {
+export function getVmFirewallRules(
+  node: string,
+  vmid: string | number,
+  guestType: 'qemu' | 'lxc' = 'qemu',
+) {
   return request<PveRecord[]>(`${vmFirewallBase(node, vmid, guestType)}/rules`, {
     method: 'GET',
     notifyOnError: true,
   });
 }
 
-export function createVmFirewallRule(node: string, vmid: string | number, data: PveRecord, guestType: 'qemu' | 'lxc' = 'qemu') {
+export function createVmFirewallRule(
+  node: string,
+  vmid: string | number,
+  data: PveRecord,
+  guestType: 'qemu' | 'lxc' = 'qemu',
+) {
   return request(`${vmFirewallBase(node, vmid, guestType)}/rules`, { method: 'POST', data });
 }
 
@@ -27,38 +36,60 @@ export function updateVmFirewallRule(
   node: string,
   vmid: string | number,
   pos: string | number,
-  data: PveRecord, guestType: 'qemu' | 'lxc' = 'qemu',
+  data: PveRecord,
+  guestType: 'qemu' | 'lxc' = 'qemu',
 ) {
-  return request(`${vmFirewallBase(node, vmid, guestType)}/rules/${encodeURIComponent(String(pos))}`, {
-    method: 'PUT',
-    data,
-  });
+  return request(
+    `${vmFirewallBase(node, vmid, guestType)}/rules/${encodeURIComponent(String(pos))}`,
+    {
+      method: 'PUT',
+      data,
+    },
+  );
 }
 
 export function deleteVmFirewallRule(
   node: string,
   vmid: string | number,
   pos: string | number,
-  digest?: unknown, guestType: 'qemu' | 'lxc' = 'qemu',
+  digest?: unknown,
+  guestType: 'qemu' | 'lxc' = 'qemu',
 ) {
-  return request(`${vmFirewallBase(node, vmid, guestType)}/rules/${encodeURIComponent(String(pos))}`, {
-    method: 'DELETE',
-    ...(digest ? { data: { digest } } : {}),
-  });
+  return request(
+    `${vmFirewallBase(node, vmid, guestType)}/rules/${encodeURIComponent(String(pos))}`,
+    {
+      method: 'DELETE',
+      ...(digest ? { data: { digest } } : {}),
+    },
+  );
 }
 
-export function getVmFirewallOptions(node: string, vmid: string | number, guestType: 'qemu' | 'lxc' = 'qemu') {
+export function getVmFirewallOptions(
+  node: string,
+  vmid: string | number,
+  guestType: 'qemu' | 'lxc' = 'qemu',
+) {
   return request<PveRecord>(`${vmFirewallBase(node, vmid, guestType)}/options`, {
     method: 'GET',
     notifyOnError: true,
   });
 }
 
-export function updateVmFirewallOptions(node: string, vmid: string | number, data: PveRecord, guestType: 'qemu' | 'lxc' = 'qemu') {
+export function updateVmFirewallOptions(
+  node: string,
+  vmid: string | number,
+  data: PveRecord,
+  guestType: 'qemu' | 'lxc' = 'qemu',
+) {
   return request(`${vmFirewallBase(node, vmid, guestType)}/options`, { method: 'PUT', data });
 }
 
-export function getVmFirewallLogs(node: string, vmid: string | number, params: PveRecord, guestType: 'qemu' | 'lxc' = 'qemu') {
+export function getVmFirewallLogs(
+  node: string,
+  vmid: string | number,
+  params: PveRecord,
+  guestType: 'qemu' | 'lxc' = 'qemu',
+) {
   return request<PveRecord[]>(
     `/api2/extjs/nodes/${encodeURIComponent(node)}/${guestType}/${encodeURIComponent(String(vmid))}/firewall/log`,
     {

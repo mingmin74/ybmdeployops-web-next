@@ -34,25 +34,30 @@ function parseCdrom(value: unknown): { mediaType: MediaType; storage: string; vo
 Object.assign(form, parseCdrom(config.value[device.key]));
 
 const storageOptions = computed(() =>
-  storageRows.value.map((row) => ({
-    label: textValue(row.storage),
-    value: textValue(row.storage),
-  })).filter((row) => row.value)
+  storageRows.value
+    .map((row) => ({
+      label: textValue(row.storage),
+      value: textValue(row.storage),
+    }))
+    .filter((row) => row.value),
 );
 const isoOptions = computed(() =>
-  isoRows.value.map((row) => {
-    const volid = textValue(row.volid);
-    return {
-      label: volid.replace(/^.*:(.*\/)?/, ''),
-      value: volid,
-    };
-  }).filter((row) => row.value)
+  isoRows.value
+    .map((row) => {
+      const volid = textValue(row.volid);
+      return {
+        label: volid.replace(/^.*:(.*\/)?/, ''),
+        value: volid,
+      };
+    })
+    .filter((row) => row.value),
 );
 const canSave = computed(() => form.mediaType !== 'iso' || Boolean(form.volid));
 
 async function loadStorages() {
   storageRows.value = (await getNodeStorage(node.value, 'iso')).data || [];
-  if (!form.storage && storageRows.value[0]?.storage) form.storage = textValue(storageRows.value[0].storage);
+  if (!form.storage && storageRows.value[0]?.storage)
+    form.storage = textValue(storageRows.value[0].storage);
 }
 
 async function loadIsoImages(selectFirst = false) {
@@ -102,7 +107,12 @@ onMounted(async () => {
   <div class="hardware-special-editor">
     <div class="row q-col-gutter-sm hardware-special-editor__fields">
       <div class="col-12">
-        <q-radio v-model="form.mediaType" dense val="iso" :label="gettext('Use CD/DVD disc image file (iso)')" />
+        <q-radio
+          v-model="form.mediaType"
+          dense
+          val="iso"
+          :label="gettext('Use CD/DVD disc image file (iso)')"
+        />
       </div>
       <div class="col-12 q-pl-lg">
         <q-select
@@ -129,10 +139,20 @@ onMounted(async () => {
         />
       </div>
       <div class="col-12">
-        <q-radio v-model="form.mediaType" dense val="cdrom" :label="gettext('Use physical CD/DVD Drive')" />
+        <q-radio
+          v-model="form.mediaType"
+          dense
+          val="cdrom"
+          :label="gettext('Use physical CD/DVD Drive')"
+        />
       </div>
       <div class="col-12">
-        <q-radio v-model="form.mediaType" dense val="none" :label="gettext('Do not use any media')" />
+        <q-radio
+          v-model="form.mediaType"
+          dense
+          val="none"
+          :label="gettext('Do not use any media')"
+        />
       </div>
     </div>
     <div class="hardware-special-editor__footer row items-center justify-end">

@@ -44,10 +44,7 @@ const canRemove = computed(() => selectedRules.value.length === 1);
 const filteredRules = computed(() => {
   const query = filter.value.trim().toLowerCase();
   return rules.value
-    .filter(
-      (rule) =>
-        !props.resourcePath || props.resourcePath === rule.path,
-    )
+    .filter((rule) => !props.resourcePath || props.resourcePath === rule.path)
     .filter(
       (rule) =>
         !query ||

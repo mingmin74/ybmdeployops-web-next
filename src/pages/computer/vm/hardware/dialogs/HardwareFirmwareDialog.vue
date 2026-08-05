@@ -17,14 +17,31 @@ const storageLoading = shallowRef(false);
 const { config, hasVmCapability, loading, node, updateConfig } = useVmHardwareContext();
 
 const storageColumns: QTableColumn<PveRecord>[] = [
-  { name: 'storage', label: gettext('Storage'), field: (row) => textValue(row.storage), align: 'left' },
+  {
+    name: 'storage',
+    label: gettext('Storage'),
+    field: (row) => textValue(row.storage),
+    align: 'left',
+  },
   { name: 'type', label: gettext('Type'), field: (row) => textValue(row.type), align: 'left' },
-  { name: 'avail', label: gettext('Avail'), field: (row) => formatBytes(textValue(row.avail)), align: 'right' },
-  { name: 'total', label: gettext('Total'), field: (row) => formatBytes(textValue(row.total)), align: 'right' },
+  {
+    name: 'avail',
+    label: gettext('Avail'),
+    field: (row) => formatBytes(textValue(row.avail)),
+    align: 'right',
+  },
+  {
+    name: 'total',
+    label: gettext('Total'),
+    field: (row) => formatBytes(textValue(row.total)),
+    align: 'right',
+  },
 ];
 
 const usesEfiBios = computed(() => textValue(config.value.bios, 'seabios') === 'ovmf');
-const dialogTitle = computed(() => `${gettext('Add')}:${gettext(kind === 'efi' ? 'EFI Disk' : 'TPM State')}`);
+const dialogTitle = computed(
+  () => `${gettext('Add')}:${gettext(kind === 'efi' ? 'EFI Disk' : 'TPM State')}`,
+);
 const dialogLoading = computed(() => loading.value || storageLoading.value);
 const storageLabel = computed(() => gettext(kind === 'efi' ? 'EFI Storage' : 'TPM Storage'));
 const diskFormatOptions = computed(() =>
@@ -35,10 +52,10 @@ const diskFormatOptions = computed(() =>
         value === 'raw'
           ? `${gettext('Raw disk image')} (raw)`
           : value === 'qcow2'
-          ? `${gettext('QEMU image format')} (qcow2)`
-          : `${gettext('VMware image format')} (vmdk)`,
+            ? `${gettext('QEMU image format')} (qcow2)`
+            : `${gettext('VMware image format')} (vmdk)`,
       value,
-    }))
+    })),
 );
 const storageFormats = computed(() => storageFormatInfo(form.storage));
 const diskFormatDisabled = computed(() => diskFormatOptions.value.length <= 1);
@@ -80,10 +97,10 @@ function resetDiskFormat() {
   form.format = supported.includes('qcow2')
     ? 'qcow2'
     : supported.includes('raw')
-    ? 'raw'
-    : supported.includes(defaultFormat)
-    ? defaultFormat
-    : supported[0] || 'raw';
+      ? 'raw'
+      : supported.includes(defaultFormat)
+        ? defaultFormat
+        : supported[0] || 'raw';
 }
 
 function canSelectStorage(row: PveRecord) {
@@ -95,7 +112,7 @@ async function loadImageStorages() {
   try {
     const response = await getNodeStorage(node.value, 'images');
     imageStorageRows.value = [...(response.data || [])].sort((left, right) =>
-      textValue(left.storage).localeCompare(textValue(right.storage))
+      textValue(left.storage).localeCompare(textValue(right.storage)),
     );
     const firstUsable = imageStorageRows.value.find(canSelectStorage);
     form.storage = textValue(firstUsable?.storage);
@@ -122,9 +139,10 @@ async function addFirmware() {
   const key = kind === 'efi' ? 'efidisk0' : 'tpmstate0';
   if (!canAdd.value) return;
   await updateConfig({
-    [key]: kind === 'efi'
-      ? `${form.storage}:1,efitype=4m,format=${form.format},pre-enrolled-keys=${form.preEnrolledKeys ? 1 : 0}`
-      : `${form.storage}:1,format=${form.format},version=${form.tpmVersion}`,
+    [key]:
+      kind === 'efi'
+        ? `${form.storage}:1,efitype=4m,format=${form.format},pre-enrolled-keys=${form.preEnrolledKeys ? 1 : 0}`
+        : `${form.storage}:1,format=${form.format},version=${form.tpmVersion}`,
   });
   visible.value = false;
 }
@@ -217,7 +235,14 @@ async function addFirmware() {
         </template>
       </div>
       <template #foot>
-        <q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" />
+        <q-btn
+          v-close-popup
+          no-caps
+          outline
+          size="12px"
+          class="u-button"
+          :label="gettext('Cancel')"
+        />
         <q-btn
           no-caps
           flat

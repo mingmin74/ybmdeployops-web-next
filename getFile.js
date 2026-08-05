@@ -4,7 +4,11 @@ import readline from 'node:readline';
 
 const CONFIG = {
   srcRoot: path.resolve(process.cwd(), 'src'),
-  outputFile: path.join(process.env.USERPROFILE || process.cwd(), 'Desktop', '关联文件提取结果.txt'),
+  outputFile: path.join(
+    process.env.USERPROFILE || process.cwd(),
+    'Desktop',
+    '关联文件提取结果.txt',
+  ),
   extensions: ['.js', '.jsx', '.ts', '.tsx', '.vue'],
 };
 
@@ -29,7 +33,8 @@ function importCategory(importPath) {
 function getImports(content) {
   const imports = [];
   // Covers `import type`, named/default imports, multiline imports, and side-effect imports.
-  const importPattern = /^\s*import\s+(?:(type)\s+)?(?:(?:[\s\S]*?)\s+from\s+)?['"]([^'"]+)['"]\s*;?/gm;
+  const importPattern =
+    /^\s*import\s+(?:(type)\s+)?(?:(?:[\s\S]*?)\s+from\s+)?['"]([^'"]+)['"]\s*;?/gm;
   let match;
 
   while ((match = importPattern.exec(content)) !== null) {
@@ -46,7 +51,10 @@ function getImports(content) {
 
 function stripImports(content) {
   return content
-    .replace(/^\s*import\s+(?:(?:type)\s+)?(?:(?:[\s\S]*?)\s+from\s+)?['"][^'"]+['"]\s*;?\s*$/gm, '')
+    .replace(
+      /^\s*import\s+(?:(?:type)\s+)?(?:(?:[\s\S]*?)\s+from\s+)?['"][^'"]+['"]\s*;?\s*$/gm,
+      '',
+    )
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -67,7 +75,10 @@ function resolveFilePath(currentDir, importPath) {
     ...CONFIG.extensions.map((extension) => path.join(absolutePath, `index${extension}`)),
   ];
 
-  return candidates.find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile()) || null;
+  return (
+    candidates.find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile()) ||
+    null
+  );
 }
 
 function summarizeImports(imports) {
@@ -129,7 +140,9 @@ function createExtractor(options) {
     try {
       const content = fs.readFileSync(normalizedPath, 'utf8');
       const imports = getImports(content);
-      sections.push(`\n${'='.repeat(80)}\nFILE: ${normalizedPath}\n${'='.repeat(80)}\n\n${stripImports(content)}\n`);
+      sections.push(
+        `\n${'='.repeat(80)}\nFILE: ${normalizedPath}\n${'='.repeat(80)}\n\n${stripImports(content)}\n`,
+      );
 
       if (!allowRecursion) return;
       imports.filter(shouldFollow).forEach((item) => {
@@ -138,7 +151,9 @@ function createExtractor(options) {
         else unresolvedFiles.add(`${normalizedPath} -> ${item.path}`);
       });
     } catch (error) {
-      unresolvedFiles.add(`${normalizedPath} (${error instanceof Error ? error.message : String(error)})`);
+      unresolvedFiles.add(
+        `${normalizedPath} (${error instanceof Error ? error.message : String(error)})`,
+      );
     }
   }
 
@@ -160,9 +175,14 @@ async function analysePath(inputPath) {
   const rootImports = getImports(rootContent);
   console.log(`\n${formatImportReport(rootImports)}`);
 
-  const includeTypeImports = yesByDefault(await question('\n是否递归提取 type-only 引入的本地文件？[y/N] '), false);
+  const includeTypeImports = yesByDefault(
+    await question('\n是否递归提取 type-only 引入的本地文件？[y/N] '),
+    false,
+  );
   const includeVueComponents = yesByDefault(await question('是否递归提取 Vue 子组件？[Y/n] '));
-  const recursive = yesByDefault(await question('是否继续递归查询所有符合条件的本地 import？[Y/n] '));
+  const recursive = yesByDefault(
+    await question('是否继续递归查询所有符合条件的本地 import？[Y/n] '),
+  );
   const options = { includeTypeImports, includeVueComponents, recursive };
   const extractor = createExtractor(options);
 
@@ -178,7 +198,9 @@ async function analysePath(inputPath) {
     formatImportReport(rootImports),
     '',
     `实际提取文件数: ${extractor.processedFiles.size}`,
-    extractor.unresolvedFiles.size ? `未解析本地引入:\n${[...extractor.unresolvedFiles].map((item) => `- ${item}`).join('\n')}` : '未解析本地引入: 无',
+    extractor.unresolvedFiles.size
+      ? `未解析本地引入:\n${[...extractor.unresolvedFiles].map((item) => `- ${item}`).join('\n')}`
+      : '未解析本地引入: 无',
     ...extractor.sections,
   ].join('\n');
 

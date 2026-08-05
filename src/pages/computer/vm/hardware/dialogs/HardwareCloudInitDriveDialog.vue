@@ -40,10 +40,25 @@ const busMaxIds: Record<CloudInitBus, number> = {
 };
 
 const storageColumns: QTableColumn<PveRecord>[] = [
-  { name: 'storage', label: gettext('Storage'), field: (row) => textValue(row.storage), align: 'left' },
+  {
+    name: 'storage',
+    label: gettext('Storage'),
+    field: (row) => textValue(row.storage),
+    align: 'left',
+  },
   { name: 'type', label: gettext('Type'), field: (row) => textValue(row.type), align: 'left' },
-  { name: 'avail', label: gettext('Avail'), field: (row) => formatBytes(textValue(row.avail)), align: 'right' },
-  { name: 'total', label: gettext('Total'), field: (row) => formatBytes(textValue(row.total)), align: 'right' },
+  {
+    name: 'avail',
+    label: gettext('Avail'),
+    field: (row) => formatBytes(textValue(row.avail)),
+    align: 'right',
+  },
+  {
+    name: 'total',
+    label: gettext('Total'),
+    field: (row) => formatBytes(textValue(row.total)),
+    align: 'right',
+  },
 ];
 
 const diskFormatOptions = computed(() =>
@@ -54,19 +69,21 @@ const diskFormatOptions = computed(() =>
         value === 'raw'
           ? `${gettext('Raw disk image')} (raw)`
           : value === 'qcow2'
-          ? `${gettext('QEMU image format')} (qcow2)`
-          : `${gettext('VMware image format')} (vmdk)`,
+            ? `${gettext('QEMU image format')} (qcow2)`
+            : `${gettext('VMware image format')} (vmdk)`,
       value,
-    }))
+    })),
 );
 const storageFormats = computed(() => storageFormatInfo(form.storage));
 const diskFormatDisabled = computed(() => diskFormatOptions.value.length <= 1);
 const deviceMax = computed(() => busMaxIds[form.bus]);
 const deviceIdValid = computed(
-  () => Number.isInteger(form.deviceId) && form.deviceId >= 0 && form.deviceId <= deviceMax.value
+  () => Number.isInteger(form.deviceId) && form.deviceId >= 0 && form.deviceId <= deviceMax.value,
 );
 const deviceKey = computed(() => `${form.bus}${form.deviceId}`);
-const deviceInUse = computed(() => deviceIdValid.value && config.value[deviceKey.value] !== undefined);
+const deviceInUse = computed(
+  () => deviceIdValid.value && config.value[deviceKey.value] !== undefined,
+);
 const hasCloudInitDrive = computed(() =>
   Object.entries(config.value).some(
     ([key, value]) => /^(ide|scsi|sata)\d+$/.test(key) && textValue(value).includes('cloudinit'),
@@ -80,7 +97,7 @@ const canAdd = computed(
     !hasCloudInitDrive.value &&
     Boolean(form.storage.trim()) &&
     deviceIdValid.value &&
-    !deviceInUse.value
+    !deviceInUse.value,
 );
 
 function storageFormatInfo(storageName: string) {
@@ -116,10 +133,10 @@ function resetDiskFormat() {
   form.format = supported.includes('qcow2')
     ? 'qcow2'
     : supported.includes(defaultFormat)
-    ? defaultFormat
-    : supported.includes('raw')
-    ? 'raw'
-    : supported[0] || 'raw';
+      ? defaultFormat
+      : supported.includes('raw')
+        ? 'raw'
+        : supported[0] || 'raw';
 }
 
 function canSelectStorage(row: PveRecord) {
@@ -158,7 +175,7 @@ async function loadImageStorages() {
   try {
     const response = await getNodeStorage(node.value, 'images');
     imageStorageRows.value = [...(response.data || [])].sort((left, right) =>
-      textValue(left.storage).localeCompare(textValue(right.storage))
+      textValue(left.storage).localeCompare(textValue(right.storage)),
     );
     const firstUsable = imageStorageRows.value.find(canSelectStorage);
     form.storage = textValue(firstUsable?.storage);
@@ -201,7 +218,11 @@ async function addCloudInitDrive() {
 
 <template>
   <q-dialog v-model="visible" persistent>
-    <UWindow :title="`${gettext('Add')}:${gettext('CloudInit Drive')}`" width="430px" :loading="dialogLoading">
+    <UWindow
+      :title="`${gettext('Add')}:${gettext('CloudInit Drive')}`"
+      width="430px"
+      :loading="dialogLoading"
+    >
       <div class="q-pa-md u-dense">
         <div class="u-border q-pa-md">
           <div class="row q-col-gutter-lg">
@@ -227,7 +248,9 @@ async function addCloudInitDrive() {
                 class="q-field--with-bottom"
                 :label="gettext('Device')"
                 :error="!deviceIdValid || deviceInUse"
-                :error-message="deviceInUse ? gettext('This device is already in use') : `[0-${deviceMax}]`"
+                :error-message="
+                  deviceInUse ? gettext('This device is already in use') : `[0-${deviceMax}]`
+                "
                 @blur="clampDeviceId"
                 @update:model-value="clampDeviceId"
               />
@@ -269,7 +292,14 @@ async function addCloudInitDrive() {
         </div>
       </div>
       <template #foot>
-        <q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" />
+        <q-btn
+          v-close-popup
+          no-caps
+          outline
+          size="12px"
+          class="u-button"
+          :label="gettext('Cancel')"
+        />
         <q-btn
           no-caps
           flat

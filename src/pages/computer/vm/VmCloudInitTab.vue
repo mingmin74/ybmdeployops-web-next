@@ -48,21 +48,27 @@ function isIpv6Address(value: string) {
   return parts.length === 2 ? segments.length < 8 : segments.length === 8;
 }
 function normalizeNameserverList(value: string) {
-  return value.trim().split(/[ ,;]+/).filter(Boolean).join(' ');
+  return value
+    .trim()
+    .split(/[ ,;]+/)
+    .filter(Boolean)
+    .join(' ');
 }
 function isValidNameserverList(value: string) {
   return value.split(/[ ,;]+/).every((entry) => {
     if (!entry) return true;
     const parts = entry.split('%');
     const address = parts[0] ?? '';
-    if (parts.length > 2 || (parts.length > 1 && !address.toLowerCase().startsWith('fe80:'))) return false;
+    if (parts.length > 2 || (parts.length > 1 && !address.toLowerCase().startsWith('fe80:')))
+      return false;
     return isIpv4Address(address) || isIpv6Address(address);
   });
 }
 type ParsedSshKey = { options?: string; type: string; key: string; comment?: string };
 function parseSshKey(value: string): ParsedSshKey | null {
   const keyMatch = /^(?:((?:[^\s"]|"(?:\\.|[^"\\])*")+)\s+)?(\S+)\s+(\S+)(?:\s+(.*))?$/.exec(value);
-  const typePattern = /^(?:(?:sk-)?(?:ssh-(?:dss|rsa|ed25519)|ecdsa-sha2-nistp\d+)(?:@(?:[a-z0-9_-]+\.)+[a-z]{2,})?)$/;
+  const typePattern =
+    /^(?:(?:sk-)?(?:ssh-(?:dss|rsa|ed25519)|ecdsa-sha2-nistp\d+)(?:@(?:[a-z0-9_-]+\.)+[a-z]{2,})?)$/;
   if (!keyMatch || !keyMatch[2]) return null;
   if (keyMatch[1] && typePattern.test(keyMatch[1])) {
     return {
@@ -111,7 +117,10 @@ async function appendSshKeyFiles(event: Event) {
   input.value = '';
   for (const file of files) {
     if (file.size > 8192) {
-      Notify.create({ type: 'negative', message: `${gettext('Invalid file size')}: ${file.size} > 8192` });
+      Notify.create({
+        type: 'negative',
+        message: `${gettext('Invalid file size')}: ${file.size} > 8192`,
+      });
       continue;
     }
     try {
@@ -163,14 +172,21 @@ const cloudInitRows = computed(() => [
   })),
   { key: 'nameserver', label: gettext('DNS Server'), value: form.nameserver || '-' },
   { key: 'searchdomain', label: gettext('DNS Search Domain'), value: form.searchdomain || '-' },
-  { key: 'ciupgrade', label: gettext('Upgrade packages'), value: form.ciupgrade ? gettext('Yes') : gettext('No') },
+  {
+    key: 'ciupgrade',
+    label: gettext('Upgrade packages'),
+    value: form.ciupgrade ? gettext('Yes') : gettext('No'),
+  },
 ]);
 const selectedOptionLabel = computed(
-  () => cloudInitRows.value.find((row) => row.key === selectedOption.value)?.label || selectedOption.value,
+  () =>
+    cloudInitRows.value.find((row) => row.key === selectedOption.value)?.label ||
+    selectedOption.value,
 );
 const canRemoveSelected = computed(() => {
   if (!hasCloudInitDrive.value || !canConfigureCloudInit.value) return false;
-  if (['ciuser', 'searchdomain', 'nameserver', 'sshkeys'].includes(selectedOption.value)) return false;
+  if (['ciuser', 'searchdomain', 'nameserver', 'sshkeys'].includes(selectedOption.value))
+    return false;
   if (selectedOption.value === 'cipassword') return Boolean(props.config.cipassword);
   return selectedOption.value === 'ciupgrade' || selectedOption.value.startsWith('ipconfig');
 });
@@ -189,9 +205,12 @@ function sync() {
     sshkeys: decodeSshKeys(props.config.sshkeys),
     nameserver: textValue(props.config.nameserver),
     searchdomain: textValue(props.config.searchdomain),
-    ciupgrade: props.config.ciupgrade === undefined || props.config.ciupgrade === null || props.config.ciupgrade === ''
-      ? true
-      : Number(props.config.ciupgrade) === 1,
+    ciupgrade:
+      props.config.ciupgrade === undefined ||
+      props.config.ciupgrade === null ||
+      props.config.ciupgrade === ''
+        ? true
+        : Number(props.config.ciupgrade) === 1,
   };
   Object.assign(form, next);
   original.value = { ...next };
@@ -222,7 +241,10 @@ function confirmRemoveSelected() {
   if (!canRemoveSelected.value) return;
   Dialog.create({
     title: gettext('Remove'),
-    message: gettext('Are you sure you want to remove entry {0}').replace('{0}', `'${selectedOptionLabel.value}'`),
+    message: gettext('Are you sure you want to remove entry {0}').replace(
+      '{0}',
+      `'${selectedOptionLabel.value}'`,
+    ),
     cancel: true,
     persistent: true,
   }).onOk(() => void removeSelected());
@@ -319,13 +341,18 @@ watch(() => props.config, sync, { immediate: true });
             @click="selectedOption = row.key"
           >
             <div class="col-4 text-grey-10 options-list-label">
-              <q-icon :name="optionIcon(row.key)" size="16px" class="q-mr-xs options-list-icon" />{{ row.label }}:
+              <q-icon :name="optionIcon(row.key)" size="16px" class="q-mr-xs options-list-icon" />{{
+                row.label
+              }}:
             </div>
             <div class="col-8 text-grey-8 options-list-value">
               <template v-if="row.key === 'sshkeys'">
                 <template v-if="sshKeyDisplayRows.length">
                   <div v-for="entry in sshKeyDisplayRows" :key="entry.id">
-                    {{ entry.value }}<span v-if="entry.hasOptions" class="ssh-key-options"> ({{ gettext('with options') }})</span>
+                    {{ entry.value
+                    }}<span v-if="entry.hasOptions" class="ssh-key-options">
+                      ({{ gettext('with options') }})</span
+                    >
                   </div>
                 </template>
                 <template v-else>-</template>
@@ -407,7 +434,11 @@ watch(() => props.config, sync, { immediate: true });
                   v-model="form.nameserver"
                   dense
                   :label="gettext('DNS Server')"
-                  :rules="[(value) => isValidNameserverList(value) || gettext('Enter a valid IPv4 or IPv6 address list')]"
+                  :rules="[
+                    (value) =>
+                      isValidNameserverList(value) ||
+                      gettext('Enter a valid IPv4 or IPv6 address list'),
+                  ]"
                 />
               </div>
               <div v-show="selectedOption === 'searchdomain'" class="col-12 col-md-6">
@@ -436,29 +467,103 @@ watch(() => props.config, sync, { immediate: true });
 </template>
 
 <style scoped lang="scss">
-.vm-config-legacy { padding: 8px; font-size: 13px; }
-.vm-cloud-init-tab { position: relative; min-height: 160px; }
-.options-toolbar { margin-top: 0; margin-bottom: 4px; }
-.options-scroll { font-size: 13px; background: #fff; }
-.options-list-column { overflow: hidden; }
-.options-editor-column { display: flex; overflow: hidden; background: #fff; }
-.options-list-panel { border-right: 0; }
-.options-editor { flex: 1; border-left: 1px solid #d7dce2; }
-.options-list-row { min-height: 30px; align-items: center; border-bottom: 1px solid #eef0f3; transition: background-color 150ms ease-out; }
-.options-list-label { align-self: flex-start; padding-top: 6px; }
-.options-list-icon { vertical-align: text-bottom; }
-.options-list-value { min-width: 0; padding-top: 6px; padding-bottom: 6px; line-height: 18px; overflow-wrap: anywhere; word-break: break-word; white-space: normal; }
-.options-list-row:last-child { border-bottom: 0; }
-.options-list-row:hover { background: #f4f8fc; }
-.options-list-row.bg-blue-2 { background: #e6f1fb !important; }
+.vm-config-legacy {
+  padding: 8px;
+  font-size: 13px;
+}
+.vm-cloud-init-tab {
+  position: relative;
+  min-height: 160px;
+}
+.options-toolbar {
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+.options-scroll {
+  font-size: 13px;
+  background: #fff;
+}
+.options-list-column {
+  overflow: hidden;
+}
+.options-editor-column {
+  display: flex;
+  overflow: hidden;
+  background: #fff;
+}
+.options-list-panel {
+  border-right: 0;
+}
+.options-editor {
+  flex: 1;
+  border-left: 1px solid #d7dce2;
+}
+.options-list-row {
+  min-height: 30px;
+  align-items: center;
+  border-bottom: 1px solid #eef0f3;
+  transition: background-color 150ms ease-out;
+}
+.options-list-label {
+  align-self: flex-start;
+  padding-top: 6px;
+}
+.options-list-icon {
+  vertical-align: text-bottom;
+}
+.options-list-value {
+  min-width: 0;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+}
+.options-list-row:last-child {
+  border-bottom: 0;
+}
+.options-list-row:hover {
+  background: #f4f8fc;
+}
+.options-list-row.bg-blue-2 {
+  background: #e6f1fb !important;
+}
 .options-list-row.bg-blue-2 :deep(.text-grey-10),
-.options-list-row.bg-blue-2 :deep(.text-grey-8) { color: #1f4f78 !important; }
-.editor-titlebar { min-height: 38px; margin: -4px -4px 10px; padding: 4px 8px; background: #f5f7fa; border-bottom: 1px solid #d7dce2; }
-.editor-title { font-weight: 600; color: #334155; }
-.ssh-key-options { color: #6b7280; }
-.cloud-init-drive-mask { background: rgba(241, 245, 249, 0.8); backdrop-filter: blur(1px); }
-.cloud-init-drive-mask__content { padding: 12px 18px; color: #52606d; font-size: 13px; font-weight: 500; background: #fff; border: 1px solid #cbd5e1; border-radius: 3px; box-shadow: 0 4px 12px rgba(51, 65, 85, 0.14); }
+.options-list-row.bg-blue-2 :deep(.text-grey-8) {
+  color: #1f4f78 !important;
+}
+.editor-titlebar {
+  min-height: 38px;
+  margin: -4px -4px 10px;
+  padding: 4px 8px;
+  background: #f5f7fa;
+  border-bottom: 1px solid #d7dce2;
+}
+.editor-title {
+  font-weight: 600;
+  color: #334155;
+}
+.ssh-key-options {
+  color: #6b7280;
+}
+.cloud-init-drive-mask {
+  background: rgba(241, 245, 249, 0.8);
+  backdrop-filter: blur(1px);
+}
+.cloud-init-drive-mask__content {
+  padding: 12px 18px;
+  color: #52606d;
+  font-size: 13px;
+  font-weight: 500;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  box-shadow: 0 4px 12px rgba(51, 65, 85, 0.14);
+}
 @media (prefers-reduced-motion: reduce) {
-  .options-list-row { transition: none; }
+  .options-list-row {
+    transition: none;
+  }
 }
 </style>

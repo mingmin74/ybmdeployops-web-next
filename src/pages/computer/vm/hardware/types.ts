@@ -23,7 +23,8 @@ export type HardwareType =
   | 'tpm'
   | 'cloudinit';
 
-export type DevicePrefix = 'scsi' | 'virtio' | 'sata' | 'ide' | 'net' | 'usb' | 'hostpci' | 'serial' | 'virtiofs';
+export type DevicePrefix =
+  'scsi' | 'virtio' | 'sata' | 'ide' | 'net' | 'usb' | 'hostpci' | 'serial' | 'virtiofs';
 
 export interface HardwareRow {
   key: string;

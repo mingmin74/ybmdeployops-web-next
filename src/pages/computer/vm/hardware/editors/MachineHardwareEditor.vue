@@ -30,7 +30,12 @@ function parseMachine(value: unknown) {
 }
 
 const form = reactive(parseMachine(config.value.machine));
-const advanced = shallowRef(Boolean(config.value.machine && (textValue(config.value.machine).includes(',') || form.version !== 'latest')));
+const advanced = shallowRef(
+  Boolean(
+    config.value.machine &&
+    (textValue(config.value.machine).includes(',') || form.version !== 'latest'),
+  ),
+);
 const machineRows = shallowRef<Array<{ id?: string; type?: string; version?: string }>>([]);
 
 function machineRowKind(row: { id?: string; type?: string; version?: string }) {
@@ -68,17 +73,23 @@ const versionOptions = computed(() => {
 const viommuOptions = computed(() => {
   const base = [{ label: `${gettext('Default')} (${gettext('None')})`, value: '__default__' }];
   return form.machine === 'q35'
-    ? [...base, { label: 'Intel (AMD Compatible)', value: 'intel' }, { label: 'VirtIO', value: 'virtio' }]
+    ? [
+        ...base,
+        { label: 'Intel (AMD Compatible)', value: 'intel' },
+        { label: 'VirtIO', value: 'virtio' },
+      ]
     : [...base, { label: 'VirtIO', value: 'virtio' }];
 });
 
 function buildMachineValue() {
-  const machine = form.version && form.version !== 'latest'
-    ? form.version.trim()
-    : form.machine === '__default__'
-      ? 'pc'
-      : form.machine;
-  if (form.machine === '__default__' && form.version === 'latest' && form.viommu === '__default__') return '';
+  const machine =
+    form.version && form.version !== 'latest'
+      ? form.version.trim()
+      : form.machine === '__default__'
+        ? 'pc'
+        : form.machine;
+  if (form.machine === '__default__' && form.version === 'latest' && form.viommu === '__default__')
+    return '';
   const parts = [machine];
   if (advanced.value && form.viommu !== '__default__') parts.push(`viommu=${form.viommu}`);
   return parts.join(',');
@@ -93,7 +104,8 @@ async function save() {
 watch(
   () => form.machine,
   () => {
-    if (!versionOptions.value.some((option) => option.value === form.version)) form.version = 'latest';
+    if (!versionOptions.value.some((option) => option.value === form.version))
+      form.version = 'latest';
   },
 );
 
@@ -110,7 +122,15 @@ onMounted(async () => {
   <div class="hardware-special-editor">
     <div class="row q-col-gutter-sm hardware-special-editor__fields">
       <div class="col-12">
-        <q-select v-model="form.machine" dense options-dense emit-value map-options :options="machineOptions" :label="gettext('Machine')" />
+        <q-select
+          v-model="form.machine"
+          dense
+          options-dense
+          emit-value
+          map-options
+          :options="machineOptions"
+          :label="gettext('Machine')"
+        />
       </div>
       <template v-if="advanced">
         <div class="col-12">
@@ -125,16 +145,34 @@ onMounted(async () => {
           />
         </div>
         <div class="col-12 hardware-editor-hint">
-          {{ gettext('Machine version change may affect hardware layout and settings in the guest OS.') }}
+          {{
+            gettext(
+              'Machine version change may affect hardware layout and settings in the guest OS.',
+            )
+          }}
         </div>
         <div class="col-12">
-          <q-select v-model="form.viommu" dense options-dense emit-value map-options :options="viommuOptions" label="vIOMMU" />
+          <q-select
+            v-model="form.viommu"
+            dense
+            options-dense
+            emit-value
+            map-options
+            :options="viommuOptions"
+            label="vIOMMU"
+          />
         </div>
       </template>
     </div>
     <div class="hardware-special-editor__footer row items-center justify-between">
       <q-checkbox v-model="advanced" dense color="primary" :label="gettext('Advanced')" />
-      <q-btn no-caps size="12px" class="bg-primary text-grey-1 u-button" :label="gettext('Save')" @click="save" />
+      <q-btn
+        no-caps
+        size="12px"
+        class="bg-primary text-grey-1 u-button"
+        :label="gettext('Save')"
+        @click="save"
+      />
     </div>
   </div>
 </template>

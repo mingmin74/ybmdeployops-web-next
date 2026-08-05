@@ -34,12 +34,28 @@ export function resolveHardwareType(key: string, value: string): HardwareType {
 }
 
 export const hardwareMeta: Partial<Record<HardwareType, HardwareMeta>> = {
-  cpu: { icon: 'memory', capabilities: ['VM.Config.CPU', 'VM.Config.HWType'], pendingKeys: ['cpu', 'cores', 'sockets', 'numa', 'vcpus', 'cpulimit', 'cpuunits', 'affinity'] },
-  memory: { icon: 'storage', capabilities: ['VM.Config.Memory'], pendingKeys: ['memory', 'balloon', 'shares', 'allow-ksm'] },
+  cpu: {
+    icon: 'memory',
+    capabilities: ['VM.Config.CPU', 'VM.Config.HWType'],
+    pendingKeys: ['cpu', 'cores', 'sockets', 'numa', 'vcpus', 'cpulimit', 'cpuunits', 'affinity'],
+  },
+  memory: {
+    icon: 'storage',
+    capabilities: ['VM.Config.Memory'],
+    pendingKeys: ['memory', 'balloon', 'shares', 'allow-ksm'],
+  },
   bios: { icon: 'settings', capabilities: ['VM.Config.Options'], pendingKeys: ['bios'] },
   machine: { icon: 'settings', capabilities: ['VM.Config.HWType'], pendingKeys: ['machine'] },
-  'scsi-controller': { icon: 'settings', capabilities: ['VM.Config.HWType'], pendingKeys: ['scsihw'] },
-  system: { icon: 'settings', capabilities: ['VM.Config.Options', 'VM.Config.HWType'], pendingKeys: ['machine', 'scsihw'] },
+  'scsi-controller': {
+    icon: 'settings',
+    capabilities: ['VM.Config.HWType'],
+    pendingKeys: ['scsihw'],
+  },
+  system: {
+    icon: 'settings',
+    capabilities: ['VM.Config.Options', 'VM.Config.HWType'],
+    pendingKeys: ['machine', 'scsihw'],
+  },
   display: { icon: 'desktop_windows', capabilities: ['VM.Config.HWType'] },
   keyboard: { icon: 'keyboard', capabilities: ['VM.Config.HWType'] },
   audio: { icon: 'volume_up', capabilities: ['VM.Config.HWType'] },
