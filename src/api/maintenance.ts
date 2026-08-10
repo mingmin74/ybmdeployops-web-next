@@ -173,6 +173,7 @@ export function removeSnapshotTask(id: string) {
 
 export type ReplicationTask = PveRecord & {
   id: string;
+  digest?: string;
   guest?: string | number;
   target?: string;
   schedule?: string;
@@ -187,6 +188,13 @@ export type ReplicationTask = PveRecord & {
   pid?: string | number;
   remove_job?: boolean | number;
 };
+
+export function getClusterReplicationTasks() {
+  return request<ReplicationTask[]>('/api2/json/cluster/replication', {
+    method: 'GET',
+    notifyOnError: true,
+  });
+}
 
 export function getReplicationTasks(node: string, guest?: string | number) {
   const options = {

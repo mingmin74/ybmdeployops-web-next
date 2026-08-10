@@ -113,11 +113,15 @@ const visibleRows = computed(() => {
   return rows;
 });
 
-const warningVisible = computed(() => props.running && !guestAgentEnabled.value && !form.vmstate);
+const isQemu = computed(() => props.guestType === 'qemu');
+const warningVisible = computed(
+  () => isQemu.value && props.running && !guestAgentEnabled.value && !form.vmstate,
+);
 const editSettingsRows = computed(() =>
   Object.entries(editConfig.value)
     .filter(([key]) => key !== 'description' && key !== 'snaptime')
-    .map(([key, value]) => ({ key, value: textValue(value) || '-' })),
+    .map(([key, value]) => ({ key, value: textValue(value) || '-' }))
+    .sort((left, right) => left.key.localeCompare(right.key)),
 );
 const editSettingsColumns = computed(() => [
   { name: 'key', label: gettext('Key'), field: 'key', align: 'left' as const },
@@ -154,7 +158,7 @@ function formatTime(value: unknown) {
 }
 
 function ramText(row: SnapshotRow) {
-  if (row.isCurrent) return '';
+  if (!isQemu.value || row.isCurrent) return '';
   return Number(row.vmstate) === 1 ? gettext('Yes') : gettext('No');
 }
 
@@ -245,8 +249,8 @@ async function openCreate() {
   if (!canTakeSnapshot.value) return;
   form.snapname = `snapshot-${new Date().toISOString().slice(0, 16).replace(/[-T:]/g, '')}`;
   form.description = '';
-  form.vmstate = props.running;
-  await loadGuestAgent();
+  form.vmstate = false;
+  if (isQemu.value) await loadGuestAgent();
   createVisible.value = true;
 }
 
@@ -262,7 +266,7 @@ async function create() {
       {
         snapname,
         description: form.description.trim() || undefined,
-        vmstate: form.vmstate ? 1 : 0,
+        ...(isQemu.value ? { vmstate: form.vmstate ? 1 : 0 } : {}),
       },
       props.guestType,
     );
@@ -413,9 +417,12 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
     </div>
 
     <div class="snapshot-tree u-border">
-      <div class="snapshot-tree-header snapshot-tree-row">
+      <div
+        class="snapshot-tree-header snapshot-tree-row"
+        :class="{ 'snapshot-tree-row--without-ram': !isQemu }"
+      >
         <div class="snapshot-name-cell">{{ gettext('Name') }}</div>
-        <div class="snapshot-ram-cell">{{ gettext('RAM') }}</div>
+        <div v-if="isQemu" class="snapshot-ram-cell">{{ gettext('RAM') }}</div>
         <div class="snapshot-status-cell">{{ gettext('Date/Status') }}</div>
         <div class="snapshot-description-cell">{{ gettext('Description') }}</div>
       </div>
@@ -426,7 +433,11 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
         v-for="row in visibleRows"
         :key="row.id"
         class="snapshot-tree-row snapshot-tree-body-row cursor-pointer"
-        :class="{ 'is-selected': selectedName === row.displayName, 'is-current': row.isCurrent }"
+        :class="{
+          'is-selected': selectedName === row.displayName,
+          'is-current': row.isCurrent,
+          'snapshot-tree-row--without-ram': !isQemu,
+        }"
         @click="selectRow(row)"
         @dblclick="openEdit"
       >
@@ -451,7 +462,7 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
             <span class="snapshot-row-name">{{ row.displayName }}</span>
           </div>
         </div>
-        <div class="snapshot-ram-cell">{{ ramText(row) }}</div>
+        <div v-if="isQemu" class="snapshot-ram-cell">{{ ramText(row) }}</div>
         <div class="snapshot-status-cell">{{ dateOrStatusText(row) }}</div>
         <div class="snapshot-description-cell">{{ descriptionText(row) }}</div>
       </div>
@@ -459,7 +470,11 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
     </div>
 
     <q-dialog v-model="createVisible" persistent>
-      <UWindow :title="`VM ${vmid} ${gettext('Snapshot')}`" width="450px" :loading="loading">
+      <UWindow
+        :title="`${isQemu ? 'VM' : 'CT'} ${vmid} ${gettext('Snapshot')}`"
+        width="450px"
+        :loading="loading"
+      >
         <q-form
           class="snapshot-dialog-form u-dense u-border q-ma-sm q-pa-md u-hidden-error"
           @submit.prevent="create"
@@ -472,7 +487,7 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
             :rules="[(value) => !!String(value || '').trim() || gettext('Required field')]"
           />
           <q-checkbox
-            v-if="running"
+            v-if="isQemu && running"
             v-model="form.vmstate"
             dense
             color="primary"
@@ -655,6 +670,9 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
   display: grid;
   grid-template-columns: minmax(220px, 1.25fr) 88px 180px minmax(180px, 1fr);
   align-items: center;
+}
+.snapshot-tree-row--without-ram {
+  grid-template-columns: minmax(220px, 1.25fr) 180px minmax(180px, 1fr);
 }
 .snapshot-tree-header {
   min-height: 32px;
