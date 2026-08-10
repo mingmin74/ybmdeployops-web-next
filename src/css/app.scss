@@ -373,3 +373,71 @@ body {
 .q-dialog__inner > div {
   border-radius: 0;
 }
+
+// Ceph follows the same dense table and dialog language as the rest of the management UI.
+.ceph-page .q-tabs {
+  min-height: 36px;
+  border-bottom: 1px solid #dfe1e6;
+}
+
+.ceph-page .q-tab {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.ceph-page .q-tab-panels,
+.ceph-page .q-tab-panel {
+  background: transparent;
+}
+
+.ceph-page .q-tab-panel {
+  padding: 14px;
+}
+
+.ceph-page .q-table__top .text-subtitle2 {
+  color: #333333;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ceph-page .q-table__top .q-btn {
+  margin: 0;
+}
+
+.ceph-page .q-card--bordered {
+  border-color: #cccccc;
+  border-radius: 0;
+}
+
+.service-dialog,
+.osd-dialog,
+.cephfs-dialog {
+  min-width: 360px;
+  border-radius: 0 !important;
+}
+
+.service-dialog > .q-card__section:first-child,
+.osd-dialog > .q-card__section:first-child,
+.cephfs-dialog > .q-card__section:first-child {
+  padding: 9px 14px;
+  background: #1976d2;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.service-dialog > .q-card__section:not(:first-child),
+.osd-dialog > .q-card__section:not(:first-child),
+.cephfs-dialog > .q-card__section:not(:first-child) {
+  padding: 14px 16px;
+}
+
+.service-dialog > .q-card__actions,
+.osd-dialog > .q-card__actions,
+.cephfs-dialog > .q-card__actions {
+  min-height: 48px;
+  padding: 8px 12px;
+  background: #f5f6f8;
+  border-top: 1px solid #dfe1e6;
+}

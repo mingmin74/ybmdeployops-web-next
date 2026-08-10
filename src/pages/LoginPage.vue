@@ -1,5 +1,5 @@
 <template>
-  <div class="login-page">
+  <div class="login-page" :class="{ 'login-page--disaster-recovery': isDisasterRecoveryProduct }">
     <!-- ==============================
          顶部导航
     =============================== -->
@@ -291,7 +291,12 @@ import { appConfig } from '@/config/app';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 
-import loginBg from '@/assets/bg.png';
+import defaultLoginBg from '@/assets/bg.png';
+import disasterRecoveryLoginBg from '@/assets/bg1.png';
+
+const isDisasterRecoveryProduct = appConfig.productName === '云备姆灾备一体化系统';
+
+const loginBg = isDisasterRecoveryProduct ? disasterRecoveryLoginBg : defaultLoginBg;
 
 const route = useRoute();
 const router = useRouter();
@@ -614,6 +619,70 @@ async function submitLogin() {
   letter-spacing: 0.2px;
 }
 
+.login-page--disaster-recovery .hero-section {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+}
+
+.login-page--disaster-recovery .hero-content {
+  position: relative;
+  z-index: 2;
+  max-width: 700px;
+}
+
+/* 主体白雾 */
+.login-page--disaster-recovery .hero-section::before {
+  content: '';
+
+  position: absolute;
+  z-index: -1;
+
+  left: -130px;
+  top: -95px;
+
+  width: 900px;
+  height: 470px;
+
+  pointer-events: none;
+
+  /*
+   * 不要用一个椭圆。
+   * 用几团大小、位置都不同的白雾叠起来，
+   * 边缘就不会那么规则。
+   */
+  background:
+    radial-gradient(
+      ellipse 48% 60% at 23% 35%,
+      rgba(255, 255, 255, 0.98) 0%,
+      rgba(255, 255, 255, 0.92) 40%,
+      rgba(255, 255, 255, 0.58) 66%,
+      rgba(255, 255, 255, 0) 100%
+    ),
+    radial-gradient(
+      ellipse 42% 55% at 51% 30%,
+      rgba(255, 255, 255, 0.88) 0%,
+      rgba(255, 255, 255, 0.68) 45%,
+      rgba(255, 255, 255, 0.25) 72%,
+      rgba(255, 255, 255, 0) 100%
+    ),
+    radial-gradient(
+      ellipse 39% 45% at 34% 72%,
+      rgba(255, 255, 255, 0.72) 0%,
+      rgba(255, 255, 255, 0.42) 48%,
+      rgba(255, 255, 255, 0) 100%
+    ),
+    radial-gradient(
+      ellipse 30% 38% at 73% 44%,
+      rgba(255, 255, 255, 0.48) 0%,
+      rgba(255, 255, 255, 0.2) 55%,
+      rgba(255, 255, 255, 0) 100%
+    );
+
+  filter: blur(18px);
+
+  transform: translateZ(0);
+}
 /* ==========================================================
    Feature
 ========================================================== */

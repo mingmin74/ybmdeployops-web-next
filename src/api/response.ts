@@ -63,6 +63,8 @@ function toResult(payload: unknown): PveEnvelope {
 
   if (typeof payload.success === 'boolean') {
     result.success = payload.success;
+  } else if (typeof payload.success === 'number') {
+    result.success = payload.success !== 0;
   }
 
   if (typeof payload.message === 'string') {

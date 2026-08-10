@@ -75,7 +75,8 @@ onMounted(refreshData);
     :no-data-label="gettext('no record can be found')"
   >
     <template #top
-      ><q-btn
+      ><div class="text-subtitle2">{{ gettext('Resource Pool') }}</div>
+        <q-space /><q-btn
         no-caps
         outline
         size="12px"

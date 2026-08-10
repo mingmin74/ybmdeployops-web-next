@@ -56,7 +56,7 @@ const form = reactive({
 const selectedRow = computed(() => selected.value[0]);
 const canOperate = computed(() => Boolean(selectedRow.value));
 const title = computed(
-  () => `${gettext(action.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Proxmox Backup Server')}`,
+  () => `${gettext(action.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Proxmox Backup Server')}`
 );
 const filteredRows = computed(() => {
   const key = filter.value.trim().toLowerCase();
@@ -66,7 +66,7 @@ const filteredRows = computed(() => {
         [row.storage, row.server, row.username, row.datastore, row.nodes]
           .join(' ')
           .toLowerCase()
-          .includes(key),
+          .includes(key)
       );
 });
 const columns: QTableColumn<BksRow>[] = [
@@ -213,8 +213,8 @@ async function save() {
       form.encryption === 'autogen'
         ? 'autogen'
         : form.encryption === 'upload'
-          ? form.encryptionValue
-          : undefined;
+        ? form.encryptionValue
+        : undefined;
     const base: PveRecord = {
       type: 'pbs',
       storage: form.storage,
@@ -288,8 +288,9 @@ onMounted(async () => {
       :pagination="{ rowsPerPage: 20 }"
       table-header-class="u-table-header"
       @row-click="rowClick"
-      ><template #top
-        ><div class="q-gutter-sm">
+    >
+      <template #top>
+        <div class="q-gutter-sm">
           <q-btn
             no-caps
             outline
@@ -302,7 +303,7 @@ onMounted(async () => {
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="canOperate ? 'primary' : 'grey-6'"
             class="u-button"
             :disable="!canOperate"
             :label="gettext('Edit')"
@@ -311,7 +312,7 @@ onMounted(async () => {
             no-caps
             outline
             size="12px"
-            color="negative"
+            :color="canOperate ? 'negative' : 'grey-6'"
             class="u-button"
             :disable="!canOperate"
             :label="gettext('Delete')"

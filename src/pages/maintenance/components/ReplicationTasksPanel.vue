@@ -14,6 +14,7 @@ import {
 import { getNodes, type PveNode } from '@/api/resources';
 import { getClusterResources, type PveRecord } from '@/api/resources';
 import UWindow from '@/components/UWindow.vue';
+import SelectTable from '@/components/SelectTable.vue';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 
@@ -64,6 +65,10 @@ const onlineNodes = computed(() => nodes.value.filter((item) => item.status === 
 const standalone = computed(() => onlineNodes.value.length < 2);
 const showNodeSelector = computed(() => !props.node);
 const selectedTask = computed(() => selected.value[0]);
+const nodeColumns: QTableColumn<PveRecord>[] = [
+  { name: 'node', label: gettext('Node'), field: 'node', align: 'left', sortable: true },
+  { name: 'status', label: gettext('Status'), field: 'status', align: 'left', sortable: true },
+];
 const canManageReplication = computed(() =>
   Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Backup']),
 );
@@ -340,24 +345,12 @@ onBeforeUnmount(() => {
       table-header-class="u-table-header"
       @row-click="rowClick"
       ><template #top
-        ><div class="row q-gutter-sm">
-          <q-select
-            v-if="showNodeSelector"
-            v-model="node"
-            dense
-            options-dense
-            emit-value
-            map-options
-            option-value="node"
-            option-label="node"
-            :options="nodes"
-            :label="gettext('Node')"
-            style="min-width: 150px"
-          /><q-btn
+        ><div class="row items-center q-gutter-sm">
+       <q-btn
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="standalone ? 'grey-6' : 'primary'"
             class="u-button"
             :disable="standalone"
             :label="gettext('Add')"
@@ -366,7 +359,7 @@ onBeforeUnmount(() => {
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="canOperate ? 'primary' : 'grey-6'"
             class="u-button"
             :disable="!canOperate"
             :label="gettext('Edit')"
@@ -375,7 +368,7 @@ onBeforeUnmount(() => {
             no-caps
             outline
             size="12px"
-            color="negative"
+            :color="canOperate ? 'negative' : 'grey-6'"
             class="u-button"
             :disable="!canOperate"
             :label="gettext('Remove')"
@@ -384,7 +377,7 @@ onBeforeUnmount(() => {
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="canOperate ? 'primary' : 'grey-6'"
             class="u-button"
             :disable="!canOperate"
             :label="gettext('Log')"
@@ -393,7 +386,7 @@ onBeforeUnmount(() => {
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="canOperate ? 'primary' : 'grey-6'"
             class="u-button"
             :disable="!canOperate"
             :label="gettext('Schedule now')"

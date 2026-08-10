@@ -27,7 +27,7 @@ const props = withDefaults(
       <q-space />
       <q-btn
         v-close-popup
-        class="bg-negative"
+        class="u-window-close"
         icon="close"
         size="sm"
         flat
@@ -47,5 +47,15 @@ const props = withDefaults(
 <style scoped>
 .u-window-card {
   border-radius: 0;
+}
+.u-window-close {
+  background: transparent !important;
+  color: #ffffff;
+  opacity: 0.92;
+}
+.u-window-close:hover,
+.u-window-close:focus-visible {
+  background: rgba(255, 255, 255, 0.16) !important;
+  opacity: 1;
 }
 </style>

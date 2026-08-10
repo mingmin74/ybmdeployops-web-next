@@ -19,6 +19,7 @@ const props = withDefaults(
     disable?: boolean;
     error?: boolean;
     errorMessage?: string;
+    showError?: boolean;
     fixedLayout?: boolean;
     getRowValue?: (row: PveRecord) => string;
     canSelect?: (row: PveRecord) => boolean;
@@ -31,6 +32,7 @@ const props = withDefaults(
     disable: false,
     error: false,
     errorMessage: '',
+    showError: false,
     fixedLayout: false,
   },
 );
@@ -71,8 +73,9 @@ function selectRow(_: Event, row: PveRecord) {
 
 <template>
   <div
-    class="u-hidden-error select-table"
+    class="select-table"
     :class="{
+      'u-hidden-error': !showError,
       'select-table--outlined': fieldStyle === 'outlined',
       'select-table--fixed': fixedLayout,
     }"
@@ -97,7 +100,7 @@ function selectRow(_: Event, row: PveRecord) {
     >
       <template #selected>
         <slot name="selected">
-          <span class="text-primary text-weight-medium">{{ displayValue }}</span>
+          <span>{{ displayValue }}</span>
         </slot>
       </template>
 

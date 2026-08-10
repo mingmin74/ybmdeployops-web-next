@@ -3,7 +3,7 @@
 
   <div class="q-pa-md dashboard-layout">
     <!-- KPI -->
-    <!-- <KpiCards /> -->
+    <KpiCards />
 
     <!-- 拓扑 + 健康状态 / 虚拟机 -->
     <div class="dashboard-row">

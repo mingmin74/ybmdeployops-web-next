@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { date } from 'quasar';
-import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, useTemplateRef, watch } from 'vue';
 import NodeSelectTable from '@/components/NodeSelectTable.vue';
 import { getSystemJournal } from '@/api/maintenance';
 import { gettext } from '@/locale';
@@ -14,6 +14,8 @@ const lines = shallowRef<string[]>([]);
 const startcursor = ref('');
 const endcursor = ref('');
 const logRef = ref<HTMLElement>();
+const sinceDatePopup = useTemplateRef<{ show: () => void }>('sinceDatePopup');
+const untilDatePopup = useTemplateRef<{ show: () => void }>('untilDatePopup');
 let timer: ReturnType<typeof setInterval> | undefined;
 
 const output = computed(() => lines.value.join('\n'));
@@ -128,7 +130,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="column q-ma-sm">
+  <div class="row column q-px-md q-py-sm">
     <div class="col q-mb-sm">
       <div class="row q-gutter-sm items-center">
         <q-btn-toggle
@@ -146,16 +148,34 @@ onBeforeUnmount(() => {
             outlined
             dense
             class="u-dense date-input"
-            :label="gettext('Since')"
-          />
+            :placeholder="gettext('Since')"
+            @click="sinceDatePopup?.show()"
+          >
+            <template #append>
+              <q-icon name="event" size="16px" class="cursor-pointer">
+                <q-popup-proxy ref="sinceDatePopup" transition-show="scale" transition-hide="scale">
+                  <q-date v-model="since" mask="YYYY-MM-DD" />
+                </q-popup-proxy>
+              </q-icon>
+            </template>
+          </q-input>
           <q-input
             v-model="until"
             square
             outlined
             dense
             class="u-dense date-input"
-            :label="gettext('Until')"
-          />
+            :placeholder="gettext('Until')"
+            @click="untilDatePopup?.show()"
+          >
+            <template #append>
+              <q-icon name="event" size="16px" class="cursor-pointer">
+                <q-popup-proxy ref="untilDatePopup" transition-show="scale" transition-hide="scale">
+                  <q-date v-model="until" mask="YYYY-MM-DD" />
+                </q-popup-proxy>
+              </q-icon>
+            </template>
+          </q-input>
         </template>
         <q-btn
           no-caps
@@ -188,6 +208,17 @@ onBeforeUnmount(() => {
 <style scoped>
 .date-input {
   width: 140px;
+}
+
+.date-input :deep(.q-field__native),
+.date-input :deep(.q-field__append) {
+  align-self: center;
+}
+
+.date-input :deep(.q-field__append) {
+  height: 100%;
+  display: flex;
+  align-items: center;
 }
 
 .system-log-box {

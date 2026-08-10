@@ -255,7 +255,7 @@ onMounted(() => void reload());
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="canOperate ? 'primary' : 'grey-6'"
             class="u-button"
             :disable="!canOperate"
             :label="gettext('Edit')"
@@ -265,7 +265,7 @@ onMounted(() => void reload());
             no-caps
             outline
             size="12px"
-            color="negative"
+            :color="canOperate ? 'negative' : 'grey-6'"
             class="u-button"
             :disable="!canOperate"
             :label="gettext('Delete')"

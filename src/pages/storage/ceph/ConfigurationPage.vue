@@ -2,12 +2,15 @@
 import type { QTableColumn } from 'quasar';
 import { computed, onMounted, ref, shallowRef } from 'vue';
 import type { PveRecord } from '@/api/resources';
-import { getCephConfig, getCephConfigDb } from '@/api/ceph';
+import { getCephConfig, getCephConfigDb, getCephCrush } from '@/api/ceph';
 import { gettext } from '@/locale';
 
 const loading = ref(false);
 const rawConfig = ref('');
+const rawCrush = ref('');
 const dbRows = shallowRef<PveRecord[]>([]);
+const mainSplitter = ref(50);
+const configSplitter = ref(50);
 const columns: QTableColumn<PveRecord>[] = [
   {
     name: 'section',
@@ -41,20 +44,24 @@ const columns: QTableColumn<PveRecord>[] = [
 ];
 
 const configText = computed(() => rawConfig.value || gettext('no record can be found'));
+const crushText = computed(() => rawCrush.value || gettext('no record can be found'));
+
+function formatRawResponse(value: unknown) {
+  return typeof value === 'string' ? value : JSON.stringify(value || {}, null, 2);
+}
 
 async function refreshData() {
   loading.value = true;
   try {
-    const [rawResponse, dbResponse] = await Promise.allSettled([
+    const [rawResponse, crushResponse, dbResponse] = await Promise.allSettled([
       getCephConfig(),
+      getCephCrush(),
       getCephConfigDb(),
     ]);
     if (rawResponse.status === 'fulfilled') {
-      rawConfig.value =
-        typeof rawResponse.value.data === 'string'
-          ? rawResponse.value.data
-          : JSON.stringify(rawResponse.value.data || {}, null, 2);
+      rawConfig.value = formatRawResponse(rawResponse.value.data);
     }
+    if (crushResponse.status === 'fulfilled') rawCrush.value = formatRawResponse(crushResponse.value.data);
     if (dbResponse.status === 'fulfilled') dbRows.value = dbResponse.value.data || [];
   } finally {
     loading.value = false;
@@ -65,42 +72,36 @@ onMounted(refreshData);
 </script>
 
 <template>
-  <div class="column q-gutter-md">
-    <q-btn
-      no-caps
-      outline
-      size="12px"
-      color="primary"
-      class="u-button self-start"
-      :loading="loading"
-      :label="gettext('Refresh')"
-      @click="refreshData"
-    />
-    <q-card flat bordered
-      ><q-card-section
-        ><div class="text-subtitle2 q-mb-sm">{{ gettext('Configuration') }}</div>
-        <pre class="ceph-pre">{{ configText }}</pre>
-      </q-card-section></q-card
-    >
-    <q-table
-      flat
-      row-key="name"
-      table-header-class="u-table-header"
-      :title="gettext('Configuration Database')"
-      :rows="dbRows"
-      :columns="columns"
-      :loading="loading"
-      :pagination="{ page: 1, rowsPerPage: 10 }"
-      :rows-per-page-options="[10]"
-    />
+  <div class="ceph-configuration">
+    <div class="configuration-toolbar">
+      <q-btn no-caps outline size="12px" color="primary" class="u-button" :loading="loading" :label="gettext('Refresh')" @click="refreshData" />
+    </div>
+    <q-splitter v-model="mainSplitter" unit="%" :limits="[30, 70]" class="configuration-main-splitter">
+      <template #before><q-splitter v-model="configSplitter" horizontal unit="%" :limits="[25, 75]" class="configuration-bottom-splitter">
+        <template #before><section class="configuration-pane"><div class="pane-header">{{ gettext('Configuration') }}</div><pre class="ceph-pre">{{ configText }}</pre></section></template>
+        <template #after><section class="configuration-pane configuration-db-pane"><div class="pane-header">{{ gettext('Configuration Database') }}</div><q-table flat row-key="name" table-header-class="u-table-header" :rows="dbRows" :columns="columns" :loading="loading" :pagination="{ page: 1, rowsPerPage: 10 }" :rows-per-page-options="[10]" /></section></template>
+      </q-splitter></template>
+      <template #after><section class="configuration-pane crush-pane"><div class="pane-header">Crush Map</div><pre class="ceph-pre">{{ crushText }}</pre></section></template>
+    </q-splitter>
   </div>
 </template>
 
 <style scoped>
+.ceph-configuration { display: flex; flex-direction: column; height: calc(100vh - 214px); min-height: 560px; padding: 16px; }
+.configuration-toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.configuration-main-splitter, .configuration-bottom-splitter { background: #fff; border: 1px solid #dfe1e6; flex: 1; min-height: 0; }
+.configuration-main-splitter :deep(.q-splitter__separator), .configuration-bottom-splitter :deep(.q-splitter__separator) { background: #dfe1e6; }
+.configuration-main-splitter :deep(.q-splitter__separator-area), .configuration-bottom-splitter :deep(.q-splitter__separator-area) { width: 7px; }
+.configuration-pane { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.pane-header { align-items: center; background: #f2f5fc; border-bottom: 1px solid #dfe1e6; color: #174f86; display: flex; flex: 0 0 38px; font-size: 13px; font-weight: 600; padding: 0 14px; }
 .ceph-pre {
-  max-height: 360px;
-  overflow: auto;
   margin: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
   white-space: pre-wrap;
 }
+.configuration-db-pane :deep(.q-table__container) { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.configuration-db-pane :deep(.q-table__middle) { flex: 1; }
+@media (max-width: 760px) { .ceph-configuration { height: calc(100vh - 174px); min-height: 500px; padding: 10px; } }
 </style>

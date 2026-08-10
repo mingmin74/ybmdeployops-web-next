@@ -2,14 +2,12 @@
 import { shallowRef } from 'vue';
 import { gettext } from '@/locale';
 import BackupTasksPanel from './components/BackupTasksPanel.vue';
-import SnapshotTasksPanel from './components/SnapshotTasksPanel.vue';
 import ReplicationTasksPanel from './components/ReplicationTasksPanel.vue';
 import BksManagementPanel from './components/BksManagementPanel.vue';
 
 const activeTab = shallowRef('backup');
 const tabs = [
   { name: 'backup', label: 'Backup Tasks' },
-  { name: 'snapshot', label: 'Snapshot Tasks' },
   { name: 'replication', label: 'Replication Tasks' },
   { name: 'bks', label: 'Bks management' },
 ];
@@ -36,21 +34,18 @@ const tabs = [
       </q-tabs>
       <q-separator />
       <q-tab-panels v-model="activeTab" animated>
-        <q-tab-panel name="backup" class="q-pa-none">
+        <q-tab-panel name="backup">
           <BackupTasksPanel />
         </q-tab-panel>
-        <q-tab-panel name="snapshot" class="q-pa-none">
-          <SnapshotTasksPanel />
-        </q-tab-panel>
-        <q-tab-panel name="replication" class="q-pa-none">
+        <q-tab-panel name="replication">
           <ReplicationTasksPanel />
         </q-tab-panel>
-        <q-tab-panel name="bks" class="q-pa-none">
+        <q-tab-panel name="bks">
           <BksManagementPanel />
         </q-tab-panel>
         <q-tab-panel
           v-for="tab in tabs.filter(
-            (tab) => !['backup', 'snapshot', 'replication', 'bks'].includes(tab.name),
+            (tab) => !['backup', 'replication', 'bks'].includes(tab.name),
           )"
           :key="tab.name"
           :name="tab.name"

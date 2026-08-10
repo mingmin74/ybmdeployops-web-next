@@ -150,7 +150,7 @@ onMounted(() => {
     :can-select="(row) => canSelect(row as PveNode)"
   >
     <template #selected>
-      <span class="text-primary text-weight-medium q-mr-xs">{{ displayNode }}</span>
+      <span class="q-mr-xs">{{ displayNode }}</span>
       <span v-if="displayNode">: {{ displayStatus }}</span>
     </template>
 

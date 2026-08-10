@@ -12,6 +12,65 @@
         />
         <div class="brand-mark">YBM</div>
         <q-toolbar-title class="brand-title">{{ appConfig.productName }}</q-toolbar-title>
+        <div class="header-resource-search">
+          <q-input
+            ref="resourceSearchInput"
+            v-model="resourceSearch"
+            dense
+            borderless
+            input-class="header-resource-search__input"
+            :placeholder="gettext('Search nodes, virtual machines, containers, and more')"
+            :loading="resourcesLoading"
+            @focus="showResourceSearch"
+            @keydown.enter.prevent="openSelectedResource"
+            @keydown.up.prevent="moveResourceSelection(-1)"
+            @keydown.down.prevent="moveResourceSelection(1)"
+            @keydown.esc.prevent="resourceSearchOpen = false"
+          >
+            <template #prepend><q-icon name="search" size="18px" /></template>
+          </q-input>
+          <q-menu
+            v-model="resourceSearchOpen"
+            class="resource-search-menu"
+            no-focus
+            no-refocus
+            fit
+            anchor="bottom left"
+            self="top left"
+            :offset="[0, 8]"
+          >
+            <q-table
+              flat
+              dense
+              row-key="id"
+              table-header-class="u-table-header"
+              :rows="filteredResources"
+              :columns="resourceColumns"
+              :pagination="{ rowsPerPage: 0 }"
+              :loading="resourcesLoading"
+              hide-bottom
+              style="width: 680px; height: 400px"
+              @row-click="(_, row) => openResource(row)"
+            >
+              <template #body-cell-type="scope">
+                <q-td :props="scope">
+                  <q-icon
+                    :name="resourceTypeIcon(scope.row)"
+                    :color="resourceTypeIconColor(scope.row)"
+                    size="18px"
+                    class="q-mr-sm"
+                  />
+                  {{ scope.value }}
+                </q-td>
+              </template>
+              <template #no-data="{ message }">
+                <div class="full-width row flex-center text-accent q-gutter-sm">
+                  <span class="text-grey-6">{{ message }}</span>
+                </div>
+              </template>
+            </q-table>
+          </q-menu>
+        </div>
         <q-btn-dropdown
           flat
           dense
@@ -116,9 +175,11 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue';
+import type { QTableColumn } from 'quasar';
+import { computed, onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppTagView from '@/components/AppTagView.vue';
+import { getClusterResources, type PveRecord } from '@/api/resources';
 import { appConfig } from '@/config/app';
 import { menuItems, type MenuItem } from '@/config/menu';
 import { gettext } from '@/locale';
@@ -129,7 +190,60 @@ const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();
 const ui = useUiStore();
+const resources = shallowRef<PveRecord[]>([]);
+const resourcesLoading = shallowRef(false);
+const resourceSearch = shallowRef('');
+const resourceSearchOpen = shallowRef(false);
+const selectedResourceRows = shallowRef<PveRecord[]>([]);
+const resourceSearchInput = useTemplateRef<{ focus: () => void; blur: () => void }>(
+  'resourceSearchInput',
+);
 let refreshHandler: ReturnType<typeof setInterval> | undefined;
+
+const resourceColumns: QTableColumn<PveRecord>[] = [
+  {
+    name: 'type',
+    label: gettext('Type'),
+    field: (row) => String(row.type || '-'),
+    align: 'left',
+    sortable: true,
+  },
+  {
+    name: 'text',
+    label: gettext('Description'),
+    field: (row) => String(row.text || resourceName(row)),
+    align: 'left',
+    sortable: true,
+  },
+  {
+    name: 'node',
+    label: gettext('Node'),
+    field: (row) => String(row.node || '-'),
+    align: 'left',
+    sortable: true,
+  },
+  {
+    name: 'pool',
+    label: gettext('Pool'),
+    field: (row) => String(row.pool || '-'),
+    align: 'left',
+    sortable: true,
+  },
+];
+
+const filteredResources = computed(() => {
+  const words = resourceSearch.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
+
+  return resources.value
+    .map((resource) => ({ resource, relevance: resourceRelevance(resource, words) }))
+    .filter(({ relevance }) => words.length === 0 || relevance > 0)
+    .sort((a, b) => b.relevance - a.relevance)
+    .map(({ resource }) => resource);
+});
+
+watch(filteredResources, (rows) => {
+  selectedResourceRows.value = rows[0] ? [rows[0]] : [];
+});
 
 function go(path?: string) {
   if (path) void router.push(path);
@@ -145,18 +259,193 @@ function isGroupOpen(item: MenuItem): boolean {
   );
 }
 
+function resourceId(row: PveRecord) {
+  return String(
+    row.id || `${row.type || ''}/${row.node || ''}/${row.vmid || row.storage || row.name || ''}`,
+  );
+}
+
+function resourceName(row: PveRecord) {
+  return String(row.name || row.storage || row.node || row.vmid || '-');
+}
+
+function resourceTypeIcon(row: PveRecord) {
+  const icons: Record<string, string> = {
+    node: 'dns',
+    qemu: 'desktop_windows',
+    lxc: 'inventory_2',
+    storage: 'storage',
+    pool: 'folder',
+  };
+  return icons[String(row.type)] || 'widgets';
+}
+
+function resourceTypeIconColor(row: PveRecord) {
+  const colors: Record<string, string> = {
+    node: 'primary',
+    qemu: 'indigo',
+    lxc: 'teal',
+    storage: 'orange',
+    pool: 'blue-grey',
+  };
+  return colors[String(row.type)] || 'grey-7';
+}
+
+function resourceRelevance(row: PveRecord, words: string[]) {
+  if (words.length === 0) return 0;
+
+  const fieldsByType: Record<string, string[]> = {
+    pool: ['type', 'pool', 'text'],
+    node: ['type', 'node', 'text'],
+    storage: ['type', 'pool', 'node', 'storage'],
+  };
+  const fields = fieldsByType[String(row.type)] || ['name', 'type', 'node', 'pool', 'vmid'];
+  const values = fields.map((field) => String(row[field] || '').toLowerCase());
+  const tags =
+    typeof row.tags === 'string' ? row.tags.split(/[;, ]/).map((tag) => tag.toLowerCase()) : [];
+
+  return values.concat(tags).reduce((score, value) => {
+    if (!value) return score;
+    return (
+      score +
+      words.reduce((wordScore, word) => {
+        if (!value.includes(word)) return wordScore;
+        return wordScore + (value === word ? 2 : 1);
+      }, 0)
+    );
+  }, 0);
+}
+
+function canOpenResource(row: PveRecord) {
+  return ['node', 'qemu', 'lxc', 'storage'].includes(String(row.type));
+}
+
+function openResource(row: PveRecord | undefined) {
+  if (!row || !canOpenResource(row)) return;
+
+  const node = String(row.node || '');
+  const vmid = String(row.vmid || '');
+  const type = String(row.type);
+
+  if (type === 'qemu' && node && vmid) {
+    void router.push({ name: 'computer-vm-detail', params: { node, vmid } });
+  } else if (type === 'lxc' && node && vmid) {
+    void router.push({ name: 'computer-ct-container-detail', params: { node, vmid } });
+  } else if (type === 'node' && node) {
+    void router.push({ name: 'host-node-detail', params: { node } });
+  } else if (type === 'storage') {
+    void router.push({ name: 'storage-list' });
+  }
+
+  resourceSearch.value = '';
+  resourceSearchOpen.value = false;
+}
+
+function moveResourceSelection(direction: number) {
+  const rows = filteredResources.value;
+  if (rows.length === 0) return;
+  const currentIndex = rows.findIndex(
+    (row) => resourceId(row) === resourceId(selectedResourceRows.value[0] || {}),
+  );
+  const nextIndex = Math.min(Math.max(currentIndex + direction, 0), rows.length - 1);
+  const nextRow = rows[nextIndex];
+  if (nextRow) selectedResourceRows.value = [nextRow];
+}
+
+function openSelectedResource() {
+  openResource(selectedResourceRows.value[0]);
+}
+
+function showResourceSearch() {
+  resourceSearchOpen.value = true;
+  void loadResources();
+}
+
+function toggleResourceSearch(event: KeyboardEvent) {
+  const key = event.key.toLowerCase();
+  if (!event.ctrlKey || !((event.shiftKey && key === 'f') || event.key === ' ')) return;
+
+  event.preventDefault();
+  if (resourceSearchOpen.value) {
+    resourceSearchOpen.value = false;
+    resourceSearchInput.value?.blur();
+  } else {
+    resourceSearchInput.value?.focus();
+  }
+}
+
+async function loadResources() {
+  resourcesLoading.value = true;
+  try {
+    const response = await getClusterResources();
+    resources.value = response.data || [];
+  } finally {
+    resourcesLoading.value = false;
+  }
+}
+
 function logout() {
   session.clearSession();
   void router.push({ name: 'user-login' });
 }
 
 onMounted(() => {
+  document.addEventListener('keydown', toggleResourceSearch);
   refreshHandler = setInterval(() => {
     void session.refreshTicket();
   }, appConfig.keepAliveInterval);
 });
 
 onBeforeUnmount(() => {
+  document.removeEventListener('keydown', toggleResourceSearch);
   if (refreshHandler) clearInterval(refreshHandler);
 });
 </script>
+
+<style scoped>
+.header-resource-search {
+  width: 280px;
+  margin-right: 16px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 18px;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.header-resource-search:focus-within {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.header-resource-search :deep(.q-field__control) {
+  min-height: 32px;
+  height: 32px;
+}
+
+.header-resource-search :deep(.q-field__prepend) {
+  align-self: center;
+  height: 32px;
+  padding-right: 6px;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.header-resource-search :deep(.header-resource-search__input) {
+  align-self: center;
+  line-height: 32px;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.header-resource-search :deep(.header-resource-search__input::placeholder) {
+  color: rgba(255, 255, 255, 0.72);
+  opacity: 1;
+}
+
+.resource-search-menu {
+  overflow: hidden;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+}
+</style>
