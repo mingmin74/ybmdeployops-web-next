@@ -48,7 +48,7 @@ const flagNames = [
 ];
 
 const nodeOptions = computed(() =>
-  nodes.value.map((node) => textValue(node.node || node.name)).filter(Boolean)
+  nodes.value.map((node) => textValue(node.node || node.name)).filter(Boolean),
 );
 const current = computed(() => selected.value[0]);
 const visibleRows = computed(() =>
@@ -62,10 +62,10 @@ const visibleRows = computed(() =>
       parentKey = textValue(parent._parentKey);
     }
     return true;
-  })
+  }),
 );
 const isOsd = computed(() =>
-  Boolean(current.value && (current.value.type === 'osd' || current.value.id !== undefined))
+  Boolean(current.value && (current.value.type === 'osd' || current.value.id !== undefined)),
 );
 const osdId = computed(() => textValue(current.value?.id ?? current.value?.osd));
 const osdHost = computed(() => textValue(current.value?.host));
@@ -160,14 +160,14 @@ async function refreshData() {
       getClusterNodes(),
     ]);
     console.log(osdResponse, 'osdResponse');
-    
+
     if (osdResponse.status === 'fulfilled') {
       rows.value = normalizeRows(osdResponse.value.data);
       console.log(rows.value, 'rows.value');
       expandedKeys.value = Object.fromEntries(
         rows.value
           .filter((row) => Boolean(row._hasChildren))
-          .map((row) => [textValue(row._treeKey), true])
+          .map((row) => [textValue(row._treeKey), true]),
       );
     }
     if (nodesResponse.status === 'fulfilled') nodes.value = normalizeRows(nodesResponse.value.data);
@@ -198,7 +198,7 @@ async function confirm() {
 function serviceAction(action: 'start' | 'stop' | 'restart') {
   if (!isOsd.value) return;
   withConfirmation(`${action} osd.${osdId.value}?`, () =>
-    run(() => changeCephOsdService(osdHost.value, osdId.value, action))
+    run(() => changeCephOsdService(osdHost.value, osdId.value, action)),
   );
 }
 function osdAction(action: 'in' | 'out' | 'scrub', deep = false) {
@@ -208,7 +208,7 @@ function osdAction(action: 'in' | 'out' | 'scrub', deep = false) {
       ? `${deep ? gettext('Deep Scrub') : gettext('Scrub')} osd.${osdId.value}?`
       : `${action} osd.${osdId.value}?`;
   withConfirmation(message, () =>
-    run(() => runCephOsdCommand(osdHost.value, osdId.value, action, deep ? { deep: 1 } : {}))
+    run(() => runCephOsdCommand(osdHost.value, osdId.value, action, deep ? { deep: 1 } : {})),
   );
 }
 function treeIcon(type: unknown) {
@@ -259,7 +259,7 @@ async function saveFlags() {
 function destroy() {
   if (!isOsd.value) return;
   withConfirmation(`${gettext('Destroy')} osd.${osdId.value}?`, () =>
-    run(() => destroyCephOsd(osdHost.value, osdId.value))
+    run(() => destroyCephOsd(osdHost.value, osdId.value)),
   );
 }
 onMounted(() => {
@@ -322,7 +322,7 @@ onMounted(() => {
             :label="gettext('Bulk Restart OSDs')"
             @click="
               withConfirmation(gettext('Restart all OSDs across the cluster?'), () =>
-                run(restartCephOsds)
+                run(restartCephOsds),
               )
             "
           /><q-btn
@@ -425,11 +425,20 @@ onMounted(() => {
       >
       <template #body-cell-status="props"
         ><q-td :props="props"
-          ><div v-if="statusInfo(props.row)" class="osd-status"
-            ><span>{{ statusInfo(props.row)?.status }}</span
-            ><q-icon :name="statusInfo(props.row)?.upIcon" :color="statusInfo(props.row)?.upColor" size="17px" /><span>/ {{ statusInfo(props.row)?.inOut }}</span
-            ><q-icon :name="statusInfo(props.row)?.inIcon" :color="statusInfo(props.row)?.inColor" size="15px" /></div
-          ><span v-else>-</span></q-td
+          ><div v-if="statusInfo(props.row)" class="osd-status">
+            <span>{{ statusInfo(props.row)?.status }}</span
+            ><q-icon
+              :name="statusInfo(props.row)?.upIcon"
+              :color="statusInfo(props.row)?.upColor"
+              size="17px"
+            /><span>/ {{ statusInfo(props.row)?.inOut }}</span
+            ><q-icon
+              :name="statusInfo(props.row)?.inIcon"
+              :color="statusInfo(props.row)?.inColor"
+              size="15px"
+            />
+          </div>
+          <span v-else>-</span></q-td
         ></template
       >
     </q-table>
@@ -467,7 +476,14 @@ onMounted(() => {
             v-model="createForm.encrypted"
             :label="gettext('Encrypt OSD')" /></q-card-section
         ><q-card-actions align="right"
-          ><q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Cancel')" v-close-popup /><q-btn
+          ><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Cancel')"
+            v-close-popup /><q-btn
             flat
             no-caps
             size="12px"
@@ -491,7 +507,14 @@ onMounted(() => {
             :false-value="0"
             :label="flag" /></q-card-section
         ><q-card-actions align="right"
-          ><q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Cancel')" v-close-popup /><q-btn
+          ><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Cancel')"
+            v-close-popup /><q-btn
             flat
             no-caps
             size="12px"
@@ -513,7 +536,14 @@ onMounted(() => {
         ><q-card-section class="text-subtitle1">{{ gettext('Confirm') }}</q-card-section
         ><q-card-section>{{ confirmMessage }}</q-card-section
         ><q-card-actions align="right"
-          ><q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Cancel')" v-close-popup /><q-btn
+          ><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Cancel')"
+            v-close-popup /><q-btn
             flat
             no-caps
             size="12px"

@@ -2,6 +2,8 @@
 import { gettext } from '@/locale';
 import { useCreateCtWizardContext } from './create-ct/context/createCtWizardContext';
 
+defineOptions({ name: 'CtMountsStep' });
+
 const { form, state, errors } = useCreateCtWizardContext();
 const { advanced } = state;
 const { validationErrors } = errors;

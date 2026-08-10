@@ -3,6 +3,7 @@ import { computed, shallowRef, watch } from 'vue';
 import { getNodeConfig, updateNodeConfig } from '@/api/overview';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
+import { textValue } from '@/utils/pveFormat';
 
 const { node = '' } = defineProps<{ node?: string }>();
 const loading = shallowRef(false);
@@ -23,8 +24,8 @@ async function loadNotes() {
   loading.value = true;
   try {
     const response = await getNodeConfig(node);
-    description.value = String(response.data?.description || '');
-    digest.value = String(response.data?.digest || '');
+    description.value = textValue(response.data?.description);
+    digest.value = textValue(response.data?.digest);
   } finally {
     loading.value = false;
   }

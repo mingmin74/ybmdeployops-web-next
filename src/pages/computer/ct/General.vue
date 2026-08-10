@@ -4,6 +4,8 @@ import NodeSelectTable from '@/components/NodeSelectTable.vue';
 import { gettext } from '@/locale';
 import { useCreateCtWizardContext } from './create-ct/context/createCtWizardContext';
 
+defineOptions({ name: 'CtGeneralStep' });
+
 const { form, state, resources, errors } = useCreateCtWizardContext();
 const { advanced } = state;
 const { validationErrors } = errors;
@@ -77,7 +79,7 @@ async function loadSshKey(event: Event) {
             class="q-field--with-bottom"
             :label="gettext('Node')"
             :error="Boolean(validationErrors.node)"
-            :error-message="validationErrors.node"
+            :error-message="validationErrors.node || ''"
           />
           <q-input
             v-model="form.vmid"
@@ -87,7 +89,7 @@ async function loadSshKey(event: Event) {
             class="q-field--with-bottom"
             :label="gettext('VM ID')"
             :error="Boolean(validationErrors.vmid)"
-            :error-message="validationErrors.vmid"
+            :error-message="validationErrors.vmid || ''"
           />
           <q-input
             v-model="form.hostname"
@@ -95,7 +97,7 @@ async function loadSshKey(event: Event) {
             class="q-field--with-bottom"
             :label="gettext('Hostname')"
             :error="Boolean(validationErrors.hostname)"
-            :error-message="validationErrors.hostname"
+            :error-message="validationErrors.hostname || ''"
           />
           <q-checkbox
             v-model="form.unprivileged"

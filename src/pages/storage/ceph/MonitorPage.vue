@@ -35,21 +35,60 @@ const syslogVisible = ref(false);
 const syslogTitle = ref('');
 const syslogText = ref('');
 
-const nodeOptions = computed(() => nodes.value.map((node) => textValue(node.node || node.name)).filter(Boolean));
+const nodeOptions = computed(() =>
+  nodes.value.map((node) => textValue(node.node || node.name)).filter(Boolean),
+);
 const columns: QTableColumn<PveRecord>[] = [
-  { name: 'name', required: true, label: gettext('Name'), align: 'left', field: (row) => row.name || row.id || '-', sortable: true },
-  { name: 'host', label: gettext('Host'), align: 'left', field: (row) => row.host || row.hostname || '-', sortable: true },
-  { name: 'status', label: gettext('Status'), align: 'left', field: (row) => row.state || row.status || row.health || '-', sortable: true },
-  { name: 'address', label: gettext('Address'), align: 'left', field: (row) => row.addr || row.address || '-', sortable: true },
-  { name: 'version', label: gettext('Version'), align: 'left', field: (row) => row.version || '-', sortable: true },
+  {
+    name: 'name',
+    required: true,
+    label: gettext('Name'),
+    align: 'left',
+    field: (row) => row.name || row.id || '-',
+    sortable: true,
+  },
+  {
+    name: 'host',
+    label: gettext('Host'),
+    align: 'left',
+    field: (row) => row.host || row.hostname || '-',
+    sortable: true,
+  },
+  {
+    name: 'status',
+    label: gettext('Status'),
+    align: 'left',
+    field: (row) => row.state || row.status || row.health || '-',
+    sortable: true,
+  },
+  {
+    name: 'address',
+    label: gettext('Address'),
+    align: 'left',
+    field: (row) => row.addr || row.address || '-',
+    sortable: true,
+  },
+  {
+    name: 'version',
+    label: gettext('Version'),
+    align: 'left',
+    field: (row) => row.version || '-',
+    sortable: true,
+  },
 ];
 
 function selectedRow(type: ServiceType) {
   return (type === 'mon' ? selectedMons.value : selectedMgrs.value)[0];
 }
-function serviceName(row: PveRecord) { return textValue(row.name || row.id); }
-function serviceHost(row: PveRecord) { return textValue(row.host || row.hostname); }
-function serviceState(row: PveRecord) { return textValue(row.state || row.status || row.health).toLowerCase(); }
+function serviceName(row: PveRecord) {
+  return textValue(row.name || row.id);
+}
+function serviceHost(row: PveRecord) {
+  return textValue(row.host || row.hostname);
+}
+function serviceState(row: PveRecord) {
+  return textValue(row.state || row.status || row.health).toLowerCase();
+}
 function normalizeRows(value: unknown): PveRecord[] {
   if (Array.isArray(value)) return value as PveRecord[];
   if (value && typeof value === 'object') {
@@ -72,38 +111,72 @@ async function refreshData() {
   loading.value = true;
   try {
     const [monResponse, mgrResponse, nodesResponse] = await Promise.allSettled([
-      getCephMonitors(), getCephManagers(), getClusterNodes(),
+      getCephMonitors(),
+      getCephManagers(),
+      getClusterNodes(),
     ]);
     if (monResponse.status === 'fulfilled') mons.value = normalizeRows(monResponse.value.data);
     if (mgrResponse.status === 'fulfilled') mgrs.value = normalizeRows(mgrResponse.value.data);
     if (nodesResponse.status === 'fulfilled') nodes.value = normalizeRows(nodesResponse.value.data);
-  } finally { loading.value = false; }
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function runAfterAction(action: () => Promise<unknown>) {
   actionLoading.value = true;
-  try { await action(); await refreshData(); } finally { actionLoading.value = false; }
+  try {
+    await action();
+    await refreshData();
+  } finally {
+    actionLoading.value = false;
+  }
 }
 
 function requestServiceAction(type: ServiceType, action: 'start' | 'stop' | 'restart') {
   const row = selectedRow(type);
   if (!row) return;
-  const execute = () => runAfterAction(() => changeCephService(serviceHost(row), type, serviceName(row), action));
-  if (action !== 'stop' || type !== 'mon') { void execute(); return; }
+  const execute = () =>
+    runAfterAction(() => changeCephService(serviceHost(row), type, serviceName(row), action));
+  if (action !== 'stop' || type !== 'mon') {
+    void execute();
+    return;
+  }
   void getCephServiceSafety(serviceHost(row), type, serviceName(row), 'stop').then((response) => {
-    if (response.data.safe) void execute();
-    else confirmAction.value = { title: gettext('Warning'), message: textValue(response.data.status, gettext('Stopping this MON may be unsafe.')), execute };
+    const data = response.data || {};
+    if (data.safe) void execute();
+    else
+      confirmAction.value = {
+        title: gettext('Warning'),
+        message: textValue(data.status, gettext('Stopping this MON may be unsafe.')),
+        execute,
+      };
   });
 }
 
 function requestDestroy(type: ServiceType) {
   const row = selectedRow(type);
   if (!row) return;
-  const execute = () => runAfterAction(() => destroyCephService(serviceHost(row), type, serviceName(row)));
-  if (type !== 'mon') { confirmAction.value = { title: gettext('Destroy'), message: `${gettext('Destroy')} ${type}.${serviceName(row)}?`, execute }; return; }
-  void getCephServiceSafety(serviceHost(row), type, serviceName(row), 'destroy').then((response) => {
-    confirmAction.value = { title: gettext('Warning'), message: textValue(response.data.status, `${gettext('Destroy')} mon.${serviceName(row)}?`), execute };
-  });
+  const execute = () =>
+    runAfterAction(() => destroyCephService(serviceHost(row), type, serviceName(row)));
+  if (type !== 'mon') {
+    confirmAction.value = {
+      title: gettext('Destroy'),
+      message: `${gettext('Destroy')} ${type}.${serviceName(row)}?`,
+      execute,
+    };
+    return;
+  }
+  void getCephServiceSafety(serviceHost(row), type, serviceName(row), 'destroy').then(
+    (response) => {
+      const data = response.data || {};
+      confirmAction.value = {
+        title: gettext('Warning'),
+        message: textValue(data.status, `${gettext('Destroy')} mon.${serviceName(row)}?`),
+        execute,
+      };
+    },
+  );
 }
 
 function requestBulkRestart(type: ServiceType) {
@@ -131,9 +204,13 @@ async function openSyslog(type: ServiceType) {
   try {
     const response = await getCephServiceSyslog(serviceHost(row), type, serviceName(row));
     syslogTitle.value = `${gettext('Syslog')}: ceph-${type}@${serviceName(row)}`;
-    syslogText.value = Array.isArray(response.data) ? response.data.join('\n') : String(response.data || '');
+    syslogText.value = Array.isArray(response.data)
+      ? response.data.join('\n')
+      : String(response.data || '');
     syslogVisible.value = true;
-  } finally { actionLoading.value = false; }
+  } finally {
+    actionLoading.value = false;
+  }
 }
 async function executeConfirmed() {
   const action = confirmAction.value;
@@ -141,25 +218,286 @@ async function executeConfirmed() {
   if (action) await action.execute();
 }
 
-onMounted(() => { void refreshData(); });
+onMounted(() => {
+  void refreshData();
+});
 </script>
 
 <template>
   <div class="column q-gutter-md">
-    <q-btn no-caps outline size="12px" color="primary" class="u-button self-start" :loading="loading" :label="gettext('Refresh')" @click="refreshData" />
-    <q-table v-model:selected="selectedMons" flat row-key="name" selection="single" table-header-class="u-table-header" :title="gettext('Monitor')" :rows="mons" :columns="columns" :loading="loading" :pagination="{ page: 1, rowsPerPage: 5 }" :rows-per-page-options="[5]">
-      <template #top><div class="text-subtitle2">{{ gettext('Monitor') }}</div><q-space /><div class="row q-gutter-sm"><q-btn no-caps outline size="12px" color="primary" class="u-button" icon="play_arrow" :label="gettext('Start')" :disable="!canStart('mon')" @click="requestServiceAction('mon', 'start')" /><q-btn no-caps outline size="12px" color="primary" class="u-button" icon="stop" :label="gettext('Stop')" :disable="!canOperate('mon')" @click="requestServiceAction('mon', 'stop')" /><q-btn no-caps outline size="12px" color="primary" class="u-button" icon="refresh" :label="gettext('Restart')" :disable="!canOperate('mon')" @click="requestServiceAction('mon', 'restart')" /><q-btn no-caps outline size="12px" color="primary" class="u-button" icon="restart_alt" :label="gettext('Cluster-wide Bulk Restart')" @click="requestBulkRestart('mon')" /><q-btn no-caps outline size="12px" color="primary" class="u-button" icon="add" :label="gettext('Create')" @click="openCreate('mon')" /><q-btn no-caps outline size="12px" color="primary" class="u-button" icon="delete" :label="gettext('Destroy')" :disable="!selectedRow('mon')" @click="requestDestroy('mon')" /><q-btn no-caps outline size="12px" color="primary" class="u-button" icon="article" :label="gettext('Syslog')" :disable="!selectedRow('mon')" @click="openSyslog('mon')" /></div></template>
+    <q-btn
+      no-caps
+      outline
+      size="12px"
+      color="primary"
+      class="u-button self-start"
+      :loading="loading"
+      :label="gettext('Refresh')"
+      @click="refreshData"
+    />
+    <q-table
+      v-model:selected="selectedMons"
+      flat
+      row-key="name"
+      selection="single"
+      table-header-class="u-table-header"
+      :title="gettext('Monitor')"
+      :rows="mons"
+      :columns="columns"
+      :loading="loading"
+      :pagination="{ page: 1, rowsPerPage: 5 }"
+      :rows-per-page-options="[5]"
+    >
+      <template #top
+        ><div class="text-subtitle2">{{ gettext('Monitor') }}</div>
+        <q-space />
+        <div class="row q-gutter-sm">
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            icon="play_arrow"
+            :label="gettext('Start')"
+            :disable="!canStart('mon')"
+            @click="requestServiceAction('mon', 'start')"
+          /><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            icon="stop"
+            :label="gettext('Stop')"
+            :disable="!canOperate('mon')"
+            @click="requestServiceAction('mon', 'stop')"
+          /><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            icon="refresh"
+            :label="gettext('Restart')"
+            :disable="!canOperate('mon')"
+            @click="requestServiceAction('mon', 'restart')"
+          /><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            icon="restart_alt"
+            :label="gettext('Cluster-wide Bulk Restart')"
+            @click="requestBulkRestart('mon')"
+          /><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            icon="add"
+            :label="gettext('Create')"
+            @click="openCreate('mon')"
+          /><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            icon="delete"
+            :label="gettext('Destroy')"
+            :disable="!selectedRow('mon')"
+            @click="requestDestroy('mon')"
+          /><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            icon="article"
+            :label="gettext('Syslog')"
+            :disable="!selectedRow('mon')"
+            @click="openSyslog('mon')"
+          /></div
+      ></template>
     </q-table>
-    <q-table v-model:selected="selectedMgrs" flat row-key="name" selection="single" table-header-class="u-table-header" :title="gettext('Manager')" :rows="mgrs" :columns="columns" :loading="loading" :pagination="{ page: 1, rowsPerPage: 5 }" :rows-per-page-options="[5]">
-      <template #top><div class="text-subtitle2">{{ gettext('Manager') }}</div><q-space /><div class="row q-gutter-sm"><q-btn no-caps outline size="12px" color="primary" class="u-button" icon="play_arrow" :label="gettext('Start')" :disable="!canStart('mgr')" @click="requestServiceAction('mgr', 'start')" /><q-btn no-caps outline size="12px" color="primary" class="u-button" icon="stop" :label="gettext('Stop')" :disable="!canOperate('mgr')" @click="requestServiceAction('mgr', 'stop')" /><q-btn no-caps outline size="12px" color="primary" class="u-button" icon="refresh" :label="gettext('Restart')" :disable="!canOperate('mgr')" @click="requestServiceAction('mgr', 'restart')" /><q-btn no-caps outline size="12px" color="primary" class="u-button" icon="restart_alt" :label="gettext('Cluster-wide Bulk Restart')" @click="requestBulkRestart('mgr')" /><q-btn no-caps outline size="12px" color="primary" class="u-button" icon="add" :label="gettext('Create')" @click="openCreate('mgr')" /><q-btn no-caps outline size="12px" color="primary" class="u-button" icon="delete" :label="gettext('Destroy')" :disable="!selectedRow('mgr')" @click="requestDestroy('mgr')" /><q-btn no-caps outline size="12px" color="primary" class="u-button" icon="article" :label="gettext('Syslog')" :disable="!selectedRow('mgr')" @click="openSyslog('mgr')" /></div></template>
+    <q-table
+      v-model:selected="selectedMgrs"
+      flat
+      row-key="name"
+      selection="single"
+      table-header-class="u-table-header"
+      :title="gettext('Manager')"
+      :rows="mgrs"
+      :columns="columns"
+      :loading="loading"
+      :pagination="{ page: 1, rowsPerPage: 5 }"
+      :rows-per-page-options="[5]"
+    >
+      <template #top
+        ><div class="text-subtitle2">{{ gettext('Manager') }}</div>
+        <q-space />
+        <div class="row q-gutter-sm">
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            icon="play_arrow"
+            :label="gettext('Start')"
+            :disable="!canStart('mgr')"
+            @click="requestServiceAction('mgr', 'start')"
+          /><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            icon="stop"
+            :label="gettext('Stop')"
+            :disable="!canOperate('mgr')"
+            @click="requestServiceAction('mgr', 'stop')"
+          /><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            icon="refresh"
+            :label="gettext('Restart')"
+            :disable="!canOperate('mgr')"
+            @click="requestServiceAction('mgr', 'restart')"
+          /><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            icon="restart_alt"
+            :label="gettext('Cluster-wide Bulk Restart')"
+            @click="requestBulkRestart('mgr')"
+          /><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            icon="add"
+            :label="gettext('Create')"
+            @click="openCreate('mgr')"
+          /><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            icon="delete"
+            :label="gettext('Destroy')"
+            :disable="!selectedRow('mgr')"
+            @click="requestDestroy('mgr')"
+          /><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            icon="article"
+            :label="gettext('Syslog')"
+            :disable="!selectedRow('mgr')"
+            @click="openSyslog('mgr')"
+          /></div
+      ></template>
     </q-table>
-    <q-dialog v-model="createVisible" persistent transition-show="scale" transition-hide="scale"><UWindow width="420px" :title="`${gettext('Create')} ${createType === 'mon' ? gettext('Monitor') : gettext('Manager')}`" :loading="actionLoading"><div class="q-pa-md"><q-select v-model="createNode" dense options-dense emit-value map-options class="q-field--with-bottom" :label="gettext('Host')" :options="nodeOptions.map((node) => ({ label: node, value: node }))" /></div><template #foot><q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Cancel')" v-close-popup /><q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :loading="actionLoading" :label="gettext('Create')" @click="createService" /></template></UWindow></q-dialog>
-    <q-dialog :model-value="Boolean(confirmAction)" persistent transition-show="scale" transition-hide="scale" @update:model-value="(visible) => { if (!visible) confirmAction = null; }"><UWindow width="420px" :title="confirmAction?.title || gettext('Confirm')" :loading="actionLoading"><div class="q-pa-md">{{ confirmAction?.message }}</div><template #foot><q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Cancel')" @click="confirmAction = null" /><q-btn no-caps flat size="12px" class="bg-negative text-grey-1 u-button" :loading="actionLoading" :label="gettext('Confirm')" @click="executeConfirmed" /></template></UWindow></q-dialog>
-    <q-dialog v-model="syslogVisible" maximized><q-card><q-card-section class="row items-center"><div class="text-subtitle1">{{ syslogTitle }}</div><q-space /><q-btn flat round dense icon="close" v-close-popup /></q-card-section><q-separator /><q-card-section><pre class="syslog-output">{{ syslogText || '-' }}</pre></q-card-section></q-card></q-dialog>
+    <q-dialog v-model="createVisible" persistent transition-show="scale" transition-hide="scale"
+      ><UWindow
+        width="420px"
+        :title="`${gettext('Create')} ${createType === 'mon' ? gettext('Monitor') : gettext('Manager')}`"
+        :loading="actionLoading"
+        ><div class="q-pa-md">
+          <q-select
+            v-model="createNode"
+            dense
+            options-dense
+            emit-value
+            map-options
+            class="q-field--with-bottom"
+            :label="gettext('Host')"
+            :options="nodeOptions.map((node) => ({ label: node, value: node }))"
+          />
+        </div>
+        <template #foot
+          ><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Cancel')"
+            v-close-popup /><q-btn
+            no-caps
+            flat
+            size="12px"
+            class="bg-primary text-grey-1 u-button"
+            :loading="actionLoading"
+            :label="gettext('Create')"
+            @click="createService" /></template></UWindow
+    ></q-dialog>
+    <q-dialog
+      :model-value="Boolean(confirmAction)"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+      @update:model-value="
+        (visible) => {
+          if (!visible) confirmAction = null;
+        }
+      "
+      ><UWindow
+        width="420px"
+        :title="confirmAction?.title || gettext('Confirm')"
+        :loading="actionLoading"
+        ><div class="q-pa-md">{{ confirmAction?.message }}</div>
+        <template #foot
+          ><q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Cancel')"
+            @click="confirmAction = null" /><q-btn
+            no-caps
+            flat
+            size="12px"
+            class="bg-negative text-grey-1 u-button"
+            :loading="actionLoading"
+            :label="gettext('Confirm')"
+            @click="executeConfirmed" /></template></UWindow
+    ></q-dialog>
+    <q-dialog v-model="syslogVisible" maximized
+      ><q-card
+        ><q-card-section class="row items-center"
+          ><div class="text-subtitle1">{{ syslogTitle }}</div>
+          <q-space /><q-btn flat round dense icon="close" v-close-popup /></q-card-section
+        ><q-separator /><q-card-section>
+          <pre class="syslog-output">{{ syslogText || '-' }}</pre>
+        </q-card-section></q-card
+      ></q-dialog
+    >
   </div>
 </template>
 
 <style scoped>
-.service-dialog { min-width: 360px; }
-.syslog-output { margin: 0; max-height: calc(100vh - 130px); overflow: auto; white-space: pre-wrap; }
+.service-dialog {
+  min-width: 360px;
+}
+.syslog-output {
+  margin: 0;
+  max-height: calc(100vh - 130px);
+  overflow: auto;
+  white-space: pre-wrap;
+}
 </style>

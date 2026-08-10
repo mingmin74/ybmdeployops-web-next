@@ -4,11 +4,7 @@
     <!-- 标题栏 -->
     <q-card-section class="topology-card__header">
       <div class="row items-center justify-between">
-        <div class="topology-card__title">
-          资源拓扑总览
-        </div>
-
-      
+        <div class="topology-card__title">资源拓扑总览</div>
       </div>
     </q-card-section>
 
@@ -25,14 +21,11 @@
           class="topology-image__img"
         />
       </div>
-
- 
     </q-card-section>
   </q-card>
 </template>
 
-<script setup>
-</script>
+<script setup lang="ts"></script>
 
 <style scoped>
 .topology-card {

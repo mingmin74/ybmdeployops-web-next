@@ -5,6 +5,7 @@ import type { PveRecord } from '@/api/resources';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
+import { textValue } from '@/utils/pveFormat';
 
 const visible = defineModel<boolean>({ default: false });
 const { kind = 'usb', canUseDeviceMapping = false } = defineProps<{
@@ -17,8 +18,8 @@ const pcie = shallowRef(false);
 const { loading, nextDeviceKey, node, updateConfig } = useVmHardwareContext();
 const options = computed(() =>
   devices.value.map((item) => ({
-    label: `${item.id || ''}${item.description ? ` - ${item.description}` : ''}`,
-    value: String(item.id || ''),
+    label: `${textValue(item.id)}${textValue(item.description) ? ` - ${textValue(item.description)}` : ''}`,
+    value: textValue(item.id),
   })),
 );
 

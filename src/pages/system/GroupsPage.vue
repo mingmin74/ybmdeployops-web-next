@@ -40,9 +40,6 @@ const canRemove = computed(() => selectedGroups.value.length === 1);
 const dialogTitle = computed(
   () => `${gettext(formData.action === 'add' ? 'Add' : 'Edit')}: ${gettext('Group')}`,
 );
-const submitDisabled = computed(
-  () => dialogLoading.value || groupNameRules(formData.groupid) !== true,
-);
 const filteredGroups = computed(() => {
   const keyword = filter.value.trim().toLowerCase();
   if (!keyword) return groups.value;
@@ -135,7 +132,7 @@ function buildPayload(): EditGroupPayload {
 }
 
 async function submitGroupForm() {
-  if (submitDisabled.value || groupidRef.value?.validate?.() === false) return;
+  if (dialogLoading.value || groupidRef.value?.validate?.() === false) return;
 
   dialogLoading.value = true;
   try {
@@ -292,7 +289,7 @@ onMounted(() => {
               dense
               autofocus
               :disable="formData.action !== 'add'"
-              :label="`${gettext('Group Name')}*`"
+              :label="`${gettext('Group Name')} *`"
               :rules="[groupNameRules]"
             />
             <q-input
@@ -309,10 +306,10 @@ onMounted(() => {
             no-caps
             flat
             size="12px"
-            :disable="submitDisabled"
+            :disable="dialogLoading"
             :label="gettext('OK')"
             :class="
-              submitDisabled ? 'bg-grey-4 text-grey-6 u-button' : 'bg-primary text-grey-1 u-button'
+              dialogLoading ? 'bg-grey-4 text-grey-6 u-button' : 'bg-primary text-grey-1 u-button'
             "
             @click="submitGroupForm"
           />

@@ -185,6 +185,7 @@ import { menuItems, type MenuItem } from '@/config/menu';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 import { useUiStore } from '@/stores/ui';
+import { textValue } from '@/utils/pveFormat';
 
 const route = useRoute();
 const router = useRouter();
@@ -204,28 +205,28 @@ const resourceColumns: QTableColumn<PveRecord>[] = [
   {
     name: 'type',
     label: gettext('Type'),
-    field: (row) => String(row.type || '-'),
+    field: (row) => textValue(row.type, '-'),
     align: 'left',
     sortable: true,
   },
   {
     name: 'text',
     label: gettext('Description'),
-    field: (row) => String(row.text || resourceName(row)),
+    field: (row) => textValue(row.text) || resourceName(row),
     align: 'left',
     sortable: true,
   },
   {
     name: 'node',
     label: gettext('Node'),
-    field: (row) => String(row.node || '-'),
+    field: (row) => textValue(row.node, '-'),
     align: 'left',
     sortable: true,
   },
   {
     name: 'pool',
     label: gettext('Pool'),
-    field: (row) => String(row.pool || '-'),
+    field: (row) => textValue(row.pool, '-'),
     align: 'left',
     sortable: true,
   },
@@ -260,13 +261,19 @@ function isGroupOpen(item: MenuItem): boolean {
 }
 
 function resourceId(row: PveRecord) {
-  return String(
-    row.id || `${row.type || ''}/${row.node || ''}/${row.vmid || row.storage || row.name || ''}`,
-  );
+  const id = textValue(row.id);
+  if (id) return id;
+  return `${textValue(row.type)}/${textValue(row.node)}/${textValue(row.vmid) || textValue(row.storage) || textValue(row.name) || ''}`;
 }
 
 function resourceName(row: PveRecord) {
-  return String(row.name || row.storage || row.node || row.vmid || '-');
+  return (
+    textValue(row.name) ||
+    textValue(row.storage) ||
+    textValue(row.node) ||
+    textValue(row.vmid) ||
+    '-'
+  );
 }
 
 function resourceTypeIcon(row: PveRecord) {
@@ -277,7 +284,7 @@ function resourceTypeIcon(row: PveRecord) {
     storage: 'storage',
     pool: 'folder',
   };
-  return icons[String(row.type)] || 'widgets';
+  return icons[textValue(row.type)] || 'widgets';
 }
 
 function resourceTypeIconColor(row: PveRecord) {
@@ -288,7 +295,7 @@ function resourceTypeIconColor(row: PveRecord) {
     storage: 'orange',
     pool: 'blue-grey',
   };
-  return colors[String(row.type)] || 'grey-7';
+  return colors[textValue(row.type)] || 'grey-7';
 }
 
 function resourceRelevance(row: PveRecord, words: string[]) {
@@ -299,8 +306,8 @@ function resourceRelevance(row: PveRecord, words: string[]) {
     node: ['type', 'node', 'text'],
     storage: ['type', 'pool', 'node', 'storage'],
   };
-  const fields = fieldsByType[String(row.type)] || ['name', 'type', 'node', 'pool', 'vmid'];
-  const values = fields.map((field) => String(row[field] || '').toLowerCase());
+  const fields = fieldsByType[textValue(row.type)] || ['name', 'type', 'node', 'pool', 'vmid'];
+  const values = fields.map((field) => textValue(row[field]).toLowerCase());
   const tags =
     typeof row.tags === 'string' ? row.tags.split(/[;, ]/).map((tag) => tag.toLowerCase()) : [];
 
@@ -317,15 +324,15 @@ function resourceRelevance(row: PveRecord, words: string[]) {
 }
 
 function canOpenResource(row: PveRecord) {
-  return ['node', 'qemu', 'lxc', 'storage'].includes(String(row.type));
+  return ['node', 'qemu', 'lxc', 'storage'].includes(textValue(row.type));
 }
 
 function openResource(row: PveRecord | undefined) {
   if (!row || !canOpenResource(row)) return;
 
-  const node = String(row.node || '');
-  const vmid = String(row.vmid || '');
-  const type = String(row.type);
+  const node = textValue(row.node);
+  const vmid = textValue(row.vmid);
+  const type = textValue(row.type);
 
   if (type === 'qemu' && node && vmid) {
     void router.push({ name: 'computer-vm-detail', params: { node, vmid } });

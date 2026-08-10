@@ -3,6 +3,7 @@ import { createCt, getCtNextId } from '@/api/vm';
 import { getNodes, getPools, type PveNode, type PvePool, type PveRecord } from '@/api/resources';
 import { getNodeStorage, getStorageContent } from '@/api/storageContent';
 import { gettext } from '@/locale';
+import { textValue } from '@/utils/pveFormat';
 import type {
   CreateCtForm,
   CreateCtStepName,
@@ -321,10 +322,11 @@ export function useCreateCtWizard(
   }
   async function moveStep(delta: number) {
     const index = stepOrder.indexOf(step.value);
-    if (index === -1) return;
-    if (delta > 0 && !validateStep(step.value)) return;
+    if (index === -1) return Promise.resolve();
+    if (delta > 0 && !validateStep(step.value)) return Promise.resolve();
     step.value =
       stepOrder[Math.max(0, Math.min(stepOrder.length - 1, index + delta))] || step.value;
+    return Promise.resolve();
   }
 
   async function loadNodes() {
@@ -364,7 +366,7 @@ export function useCreateCtWizard(
     try {
       const response = await getNodeStorage(form.node, 'vztmpl');
       storageOptions.value = (response.data || [])
-        .map((item: PveRecord) => String(item.storage || ''))
+        .map((item: PveRecord) => textValue(item.storage))
         .filter(Boolean);
       form.templateStorage = storageOptions.value[0] || '';
     } catch {
@@ -381,7 +383,7 @@ export function useCreateCtWizard(
     try {
       const response = await getNodeStorage(form.node, 'rootdir');
       rootfsStorageOptions.value = (response.data || [])
-        .map((item: PveRecord) => String(item.storage || ''))
+        .map((item: PveRecord) => textValue(item.storage))
         .filter(Boolean);
       if (!rootfsStorageOptions.value.includes(form.rootfsStorage))
         form.rootfsStorage = rootfsStorageOptions.value[0] || '';
@@ -402,8 +404,8 @@ export function useCreateCtWizard(
       templateRows.value = (response.data || []).filter((item: PveRecord) =>
         Boolean(item.volid || item.filename),
       );
-      templateOptions.value = templateRows.value.map((item) =>
-        String(item.volid || item.filename || ''),
+      templateOptions.value = templateRows.value.map(
+        (item) => textValue(item.volid) || textValue(item.filename),
       );
       form.ostemplate = templateOptions.value[0] || '';
     } catch {

@@ -77,9 +77,9 @@ function parseSshKey(value: string): ParsedSshKey | null {
       ...(keyMatch[3] ? { comment: keyMatch[3] } : {}),
     };
   }
-  if (typePattern.test(keyMatch[2])) {
+  if (typePattern.test(keyMatch[2]) && keyMatch[3]) {
     return {
-      options: keyMatch[1],
+      ...(keyMatch[1] ? { options: keyMatch[1] } : {}),
       type: keyMatch[2],
       key: keyMatch[3],
       ...(keyMatch[4] ? { comment: keyMatch[4] } : {}),
@@ -107,7 +107,8 @@ function readSshKeyFile(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-    reader.onerror = () => reject(reader.error);
+    reader.onerror = () =>
+      reject(reader.error ? reader.error : new Error('Failed to read SSH key file'));
     reader.readAsText(file);
   });
 }

@@ -150,8 +150,9 @@ function toNetworkRow(id: string, raw: string): NetworkRow {
 
 function interfaceAddresses(hwaddr: string) {
   const iface = Object.values(liveInterfaces.value).find(
-    (value) => textValue(value['hardware-address']).toLowerCase() === hwaddr.toLowerCase(),
-  );
+    (value) =>
+      textValue((value as PveRecord)['hardware-address']).toLowerCase() === hwaddr.toLowerCase(),
+  ) as PveRecord | undefined;
   const addresses = Array.isArray(iface?.['ip-addresses'])
     ? (iface['ip-addresses'] as PveRecord[])
     : [];
@@ -186,7 +187,7 @@ async function loadSupplementaryData() {
     getCtInterfaces(props.node, props.vmid),
   ]);
   if (networkResult.status === 'fulfilled') {
-    bridges.value = networkResult.value.data
+    bridges.value = (networkResult.value.data || [])
       .filter((network) => textValue(network.type).toLowerCase().includes('bridge'))
       .map((network) => textValue(network.iface))
       .filter(Boolean)

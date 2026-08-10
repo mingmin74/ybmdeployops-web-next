@@ -76,7 +76,7 @@ onMounted(refreshData);
   >
     <template #top
       ><div class="text-subtitle2">{{ gettext('Resource Pool') }}</div>
-        <q-space /><q-btn
+      <q-space /><q-btn
         no-caps
         outline
         size="12px"

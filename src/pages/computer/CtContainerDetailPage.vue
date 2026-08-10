@@ -9,8 +9,6 @@ import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
 import { toChineseStr } from '@/utils/unicode';
-import UsageProgress from '@/components/UsageProgress.vue';
-import { usagePercent } from '@/utils/format';
 import CtSummaryTab from '@/pages/computer/ct/CtSummaryTab.vue';
 import CtConsoleTab from '@/pages/computer/ct/CtConsoleTab.vue';
 import CtResourcesTab from '@/pages/computer/ct/CtResourcesTab.vue';

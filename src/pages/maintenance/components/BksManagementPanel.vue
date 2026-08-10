@@ -56,7 +56,7 @@ const form = reactive({
 const selectedRow = computed(() => selected.value[0]);
 const canOperate = computed(() => Boolean(selectedRow.value));
 const title = computed(
-  () => `${gettext(action.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Proxmox Backup Server')}`
+  () => `${gettext(action.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Proxmox Backup Server')}`,
 );
 const filteredRows = computed(() => {
   const key = filter.value.trim().toLowerCase();
@@ -66,7 +66,7 @@ const filteredRows = computed(() => {
         [row.storage, row.server, row.username, row.datastore, row.nodes]
           .join(' ')
           .toLowerCase()
-          .includes(key)
+          .includes(key),
       );
 });
 const columns: QTableColumn<BksRow>[] = [
@@ -213,8 +213,8 @@ async function save() {
       form.encryption === 'autogen'
         ? 'autogen'
         : form.encryption === 'upload'
-        ? form.encryptionValue
-        : undefined;
+          ? form.encryptionValue
+          : undefined;
     const base: PveRecord = {
       type: 'pbs',
       storage: form.storage,

@@ -51,7 +51,11 @@ export function createCephMetadataServer(node: string, id: string) {
   return request<string>(`/api2/json/nodes/${node}/ceph/mds/${id}`, { method: 'POST' });
 }
 
-export function changeCephMetadataServer(host: string, name: string, action: 'start' | 'stop' | 'restart') {
+export function changeCephMetadataServer(
+  host: string,
+  name: string,
+  action: 'start' | 'stop' | 'restart',
+) {
   return request<string>(`/api2/json/nodes/${host}/ceph/${action}`, {
     method: 'POST',
     data: { service: `mds.${name}` },
@@ -70,14 +74,24 @@ export function getCephMetadataServerSyslog(host: string, name: string) {
   });
 }
 
-export function changeCephService(host: string, type: 'mon' | 'mgr', name: string, action: 'start' | 'stop' | 'restart') {
+export function changeCephService(
+  host: string,
+  type: 'mon' | 'mgr',
+  name: string,
+  action: 'start' | 'stop' | 'restart',
+) {
   return request<string>(`/api2/json/nodes/${host}/ceph/${action}`, {
     method: 'POST',
     data: { service: `${type}.${name}` },
   });
 }
 
-export function getCephServiceSafety(host: string, type: 'mon' | 'mgr' | 'mds', name: string, action: 'stop' | 'destroy') {
+export function getCephServiceSafety(
+  host: string,
+  type: 'mon' | 'mgr' | 'mds',
+  name: string,
+  action: 'stop' | 'destroy',
+) {
   return request<PveRecord>(`/api2/json/nodes/${host}/ceph/cmd-safety`, {
     method: 'GET',
     params: { service: type, id: name, action },
@@ -115,12 +129,27 @@ export function getCephOsds(node = 'localhost') {
   });
 }
 
-export function changeCephOsdService(host: string, id: string | number, action: 'start' | 'stop' | 'restart') {
-  return request<string>(`/api2/json/nodes/${host}/ceph/${action}`, { method: 'POST', data: { service: `osd.${id}` } });
+export function changeCephOsdService(
+  host: string,
+  id: string | number,
+  action: 'start' | 'stop' | 'restart',
+) {
+  return request<string>(`/api2/json/nodes/${host}/ceph/${action}`, {
+    method: 'POST',
+    data: { service: `osd.${id}` },
+  });
 }
 
-export function runCephOsdCommand(node: string, id: string | number, command: 'in' | 'out' | 'scrub', data: PveRecord = {}) {
-  return request<string>(`/api2/json/nodes/${node}/ceph/osd/${id}/${command}`, { method: 'POST', data });
+export function runCephOsdCommand(
+  node: string,
+  id: string | number,
+  command: 'in' | 'out' | 'scrub',
+  data: PveRecord = {},
+) {
+  return request<string>(`/api2/json/nodes/${node}/ceph/osd/${id}/${command}`, {
+    method: 'POST',
+    data,
+  });
 }
 
 export function createCephOsd(node: string, data: PveRecord) {
@@ -131,11 +160,23 @@ export function destroyCephOsd(host: string, id: string | number) {
   return request<string>(`/api2/json/nodes/${host}/ceph/osd/${id}`, { method: 'DELETE' });
 }
 
-export function getCephOsdFlags() { return request<PveRecord>('/api2/json/cluster/ceph/flags', { method: 'GET', notifyOnError: true }); }
+export function getCephOsdFlags() {
+  return request<PveRecord>('/api2/json/cluster/ceph/flags', {
+    method: 'GET',
+    notifyOnError: true,
+  });
+}
 
-export function setCephOsdFlags(data: PveRecord) { return request<string>('/api2/json/cluster/ceph/flags', { method: 'PUT', data }); }
+export function setCephOsdFlags(data: PveRecord) {
+  return request<string>('/api2/json/cluster/ceph/flags', { method: 'PUT', data });
+}
 
-export function restartCephOsds() { return request<string>('/api2/json/cluster/ceph/restart-bulk', { method: 'POST', data: { 'service-type': 'osd' } }); }
+export function restartCephOsds() {
+  return request<string>('/api2/json/cluster/ceph/restart-bulk', {
+    method: 'POST',
+    data: { 'service-type': 'osd' },
+  });
+}
 
 export function getCephPools(node = 'localhost') {
   return request<PveRecord[]>(`/api2/json/nodes/${node}/ceph/pool`, {

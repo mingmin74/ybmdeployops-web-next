@@ -2,6 +2,8 @@
 import { gettext } from '@/locale';
 import { useCreateCtWizardContext } from './create-ct/context/createCtWizardContext';
 
+defineOptions({ name: 'CtLimitsStep' });
+
 const { form, state, errors } = useCreateCtWizardContext();
 const { networkAdvanced } = state;
 const { validationErrors } = errors;

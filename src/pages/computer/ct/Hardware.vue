@@ -5,6 +5,8 @@ import { gettext } from '@/locale';
 import { useCreateCtWizardContext } from './create-ct/context/createCtWizardContext';
 import type { CtIdMap, CtManagedMount } from './create-ct/types/createCtWizard';
 
+defineOptions({ name: 'CtHardwareStep' });
+
 const { form, resources, errors } = useCreateCtWizardContext();
 const { validationErrors } = errors;
 const diskSplitter = shallowRef(28);

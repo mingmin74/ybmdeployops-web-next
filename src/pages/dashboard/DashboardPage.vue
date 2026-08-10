@@ -1,6 +1,4 @@
-
 <template>
-
   <div class="q-pa-md dashboard-layout">
     <!-- KPI -->
     <KpiCards />
@@ -48,21 +46,19 @@
     <!-- 性能 -->
     <PerformancePanel />
   </div>
-
 </template>
 
-<script setup>
-import KpiCards from './KpiCards.vue'
+<script setup lang="ts">
+import KpiCards from './KpiCards.vue';
 
-
- import TopologyCard from './TopologyCard.vue'
- import HealthPanel from './HealthPanel.vue'
- import GuestsPanel from './GuestsPanel.vue'
-import ResourcesPanel from './ResourcesPanel.vue'
-import NodesTable from './NodesTable.vue'
-import CephStatusPanel from './CephStatusPanel.vue'
-import CephServicesPanel from './CephServicesPanel.vue'
-import PerformancePanel from './PerformancePanel.vue'
+import TopologyCard from './TopologyCard.vue';
+import HealthPanel from './HealthPanel.vue';
+import GuestsPanel from './GuestsPanel.vue';
+import ResourcesPanel from './ResourcesPanel.vue';
+import NodesTable from './NodesTable.vue';
+import CephStatusPanel from './CephStatusPanel.vue';
+import CephServicesPanel from './CephServicesPanel.vue';
+import PerformancePanel from './PerformancePanel.vue';
 </script>
 
 <style scoped>
@@ -111,5 +107,4 @@ import PerformancePanel from './PerformancePanel.vue'
     flex: 1 1 auto;
   }
 }
-
 </style>

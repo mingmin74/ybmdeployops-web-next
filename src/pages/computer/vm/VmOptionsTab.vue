@@ -810,7 +810,7 @@ function syncForm() {
     .filter(Boolean)
     .map((entry) => {
       const [name, ...value] = entry.split('=');
-      return { id: nextEnvRowId++, name, value: value.join('=') };
+      return { id: nextEnvRowId++, name: name || '', value: value.join('=') };
     });
   originalEnv.value = envValue.value;
   original.value = { ...next };

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, @typescript-eslint/consistent-type-imports */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 // Project-wide shims for Vue and compiler macros
 declare module '*.vue' {
   import type { DefineComponent } from 'vue';

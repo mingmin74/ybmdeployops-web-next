@@ -61,7 +61,8 @@ async function refreshData() {
     if (rawResponse.status === 'fulfilled') {
       rawConfig.value = formatRawResponse(rawResponse.value.data);
     }
-    if (crushResponse.status === 'fulfilled') rawCrush.value = formatRawResponse(crushResponse.value.data);
+    if (crushResponse.status === 'fulfilled')
+      rawCrush.value = formatRawResponse(crushResponse.value.data);
     if (dbResponse.status === 'fulfilled') dbRows.value = dbResponse.value.data || [];
   } finally {
     loading.value = false;
@@ -74,26 +75,107 @@ onMounted(refreshData);
 <template>
   <div class="ceph-configuration">
     <div class="configuration-toolbar">
-      <q-btn no-caps outline size="12px" color="primary" class="u-button" :loading="loading" :label="gettext('Refresh')" @click="refreshData" />
+      <q-btn
+        no-caps
+        outline
+        size="12px"
+        color="primary"
+        class="u-button"
+        :loading="loading"
+        :label="gettext('Refresh')"
+        @click="refreshData"
+      />
     </div>
-    <q-splitter v-model="mainSplitter" unit="%" :limits="[30, 70]" class="configuration-main-splitter">
-      <template #before><q-splitter v-model="configSplitter" horizontal unit="%" :limits="[25, 75]" class="configuration-bottom-splitter">
-        <template #before><section class="configuration-pane"><div class="pane-header">{{ gettext('Configuration') }}</div><pre class="ceph-pre">{{ configText }}</pre></section></template>
-        <template #after><section class="configuration-pane configuration-db-pane"><div class="pane-header">{{ gettext('Configuration Database') }}</div><q-table flat row-key="name" table-header-class="u-table-header" :rows="dbRows" :columns="columns" :loading="loading" :pagination="{ page: 1, rowsPerPage: 10 }" :rows-per-page-options="[10]" /></section></template>
-      </q-splitter></template>
-      <template #after><section class="configuration-pane crush-pane"><div class="pane-header">Crush Map</div><pre class="ceph-pre">{{ crushText }}</pre></section></template>
+    <q-splitter
+      v-model="mainSplitter"
+      unit="%"
+      :limits="[30, 70]"
+      class="configuration-main-splitter"
+    >
+      <template #before
+        ><q-splitter
+          v-model="configSplitter"
+          horizontal
+          unit="%"
+          :limits="[25, 75]"
+          class="configuration-bottom-splitter"
+        >
+          <template #before
+            ><section class="configuration-pane">
+              <div class="pane-header">{{ gettext('Configuration') }}</div>
+              <pre class="ceph-pre">{{ configText }}</pre>
+            </section></template
+          >
+          <template #after
+            ><section class="configuration-pane configuration-db-pane">
+              <div class="pane-header">{{ gettext('Configuration Database') }}</div>
+              <q-table
+                flat
+                row-key="name"
+                table-header-class="u-table-header"
+                :rows="dbRows"
+                :columns="columns"
+                :loading="loading"
+                :pagination="{ page: 1, rowsPerPage: 10 }"
+                :rows-per-page-options="[10]"
+              /></section
+          ></template> </q-splitter
+      ></template>
+      <template #after
+        ><section class="configuration-pane crush-pane">
+          <div class="pane-header">Crush Map</div>
+          <pre class="ceph-pre">{{ crushText }}</pre>
+        </section></template
+      >
     </q-splitter>
   </div>
 </template>
 
 <style scoped>
-.ceph-configuration { display: flex; flex-direction: column; height: calc(100vh - 214px); min-height: 560px; padding: 16px; }
-.configuration-toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
-.configuration-main-splitter, .configuration-bottom-splitter { background: #fff; border: 1px solid #dfe1e6; flex: 1; min-height: 0; }
-.configuration-main-splitter :deep(.q-splitter__separator), .configuration-bottom-splitter :deep(.q-splitter__separator) { background: #dfe1e6; }
-.configuration-main-splitter :deep(.q-splitter__separator-area), .configuration-bottom-splitter :deep(.q-splitter__separator-area) { width: 7px; }
-.configuration-pane { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.pane-header { align-items: center; background: #f2f5fc; border-bottom: 1px solid #dfe1e6; color: #174f86; display: flex; flex: 0 0 38px; font-size: 13px; font-weight: 600; padding: 0 14px; }
+.ceph-configuration {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 214px);
+  min-height: 560px;
+  padding: 16px;
+}
+.configuration-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+.configuration-main-splitter,
+.configuration-bottom-splitter {
+  background: #fff;
+  border: 1px solid #dfe1e6;
+  flex: 1;
+  min-height: 0;
+}
+.configuration-main-splitter :deep(.q-splitter__separator),
+.configuration-bottom-splitter :deep(.q-splitter__separator) {
+  background: #dfe1e6;
+}
+.configuration-main-splitter :deep(.q-splitter__separator-area),
+.configuration-bottom-splitter :deep(.q-splitter__separator-area) {
+  width: 7px;
+}
+.configuration-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.pane-header {
+  align-items: center;
+  background: #f2f5fc;
+  border-bottom: 1px solid #dfe1e6;
+  color: #174f86;
+  display: flex;
+  flex: 0 0 38px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0 14px;
+}
 .ceph-pre {
   margin: 0;
   min-height: 0;
@@ -101,7 +183,20 @@ onMounted(refreshData);
   padding: 10px;
   white-space: pre-wrap;
 }
-.configuration-db-pane :deep(.q-table__container) { display: flex; flex: 1; flex-direction: column; min-height: 0; }
-.configuration-db-pane :deep(.q-table__middle) { flex: 1; }
-@media (max-width: 760px) { .ceph-configuration { height: calc(100vh - 174px); min-height: 500px; padding: 10px; } }
+.configuration-db-pane :deep(.q-table__container) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.configuration-db-pane :deep(.q-table__middle) {
+  flex: 1;
+}
+@media (max-width: 760px) {
+  .ceph-configuration {
+    height: calc(100vh - 174px);
+    min-height: 500px;
+    padding: 10px;
+  }
+}
 </style>

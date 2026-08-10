@@ -10,7 +10,6 @@ import {
   type ReplicationTask,
 } from '@/api/maintenance';
 import { getClusterStatus, getNodes, type PveNode } from '@/api/resources';
-import { getClusterResources, type PveRecord } from '@/api/resources';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
@@ -23,7 +22,6 @@ const session = useSessionStore();
 const loading = ref(false);
 const filter = ref('');
 const nodes = ref<PveNode[]>([]);
-const vms = ref<PveRecord[]>([]);
 const tasks = ref<Row[]>([]);
 const selected = ref<Row[]>([]);
 const formVisible = ref(false);
@@ -36,18 +34,28 @@ const form = reactive({
   id: '',
   guest: '',
   target: '',
-  schedule: '*/15',
+  schedule: '',
   rate: '',
   comment: '',
   enabled: true,
   digest: '',
 });
-const onlineNodes = computed(() => nodes.value.filter((item) => item.status === 'online'));
+const formErrors = reactive({
+  guest: '',
+  target: '',
+  rate: '',
+});
 const selectedTask = computed(() => selected.value[0]);
-const sourceNode = computed(() =>
-  vms.value.find((item) => String(item.vmid) === String(form.guest))?.node || '',
+const guestValid = computed(() => {
+  const value = String(form.guest);
+  return /^\d+$/.test(value) && Number(value) >= 100 && Number(value) <= 999999999;
+});
+const targetValid = computed(() =>
+  nodes.value.some((item) => item.node === form.target && item.status === 'online'),
 );
-const rateValid = computed(() => !form.rate || (Number.isFinite(Number(form.rate)) && Number(form.rate) >= 1));
+const rateValid = computed(
+  () => !form.rate || (Number.isFinite(Number(form.rate)) && Number(form.rate) >= 1),
+);
 const canManageReplication = computed(() =>
   Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Backup']),
 );
@@ -68,6 +76,27 @@ const filteredTasks = computed(() => {
 const formTitle = computed(
   () => `${gettext(action.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Replication Job')}`,
 );
+function requiredLabel(label: string) {
+  return `${label} *`;
+}
+const scheduleOptions = [
+  { value: '*/30', label: gettext('Every {0} minutes').replace('{0}', '30') },
+  { value: '*/2:00', label: gettext('Every two hours') },
+  { value: '21:00', label: `${gettext('Every day')} 21:00` },
+  { value: '2,22:30', label: `${gettext('Every day')} 02:30, 22:30` },
+  { value: 'mon..fri 00:00', label: `${gettext('Monday to Friday')} 00:00` },
+  { value: 'mon..fri */1:00', label: `${gettext('Monday to Friday')}: ${gettext('hourly')}` },
+  {
+    value: 'mon..fri 7..18:00/15',
+    label: `${gettext('Monday to Friday')}, ${gettext('{0} to {1}')
+      .replace('{0}', '07:00')
+      .replace('{1}', '18:45')}: ${gettext('Every {0} minutes').replace('{0}', '15')}`,
+  },
+  { value: 'sun 01:00', label: `${gettext('Sunday')} 01:00` },
+  { value: 'monthly', label: `${gettext('Every first day of the Month')} 00:00` },
+  { value: 'sat *-1..7 15:00', label: `${gettext('First Saturday each month')} 15:00` },
+  { value: 'yearly', label: `${gettext('First day of the year')} 00:00` },
+];
 const columns: QTableColumn<Row>[] = [
   { name: 'enabled', label: gettext('Enabled'), field: 'enabled', align: 'center', sortable: true },
   { name: 'id', label: 'ID', field: 'id', align: 'left', sortable: true },
@@ -78,14 +107,7 @@ const columns: QTableColumn<Row>[] = [
   { name: 'rate', label: gettext('Rate limit'), field: 'rateText', align: 'left' },
   { name: 'comment', label: gettext('Comment'), field: 'comment', align: 'left' },
 ];
-const visibleColumns = computed(() => [
-  'enabled',
-  'guest',
-  'job',
-  'target',
-  'schedule',
-  'comment',
-]);
+const visibleColumns = computed(() => ['enabled', 'guest', 'job', 'target', 'schedule', 'comment']);
 function row(task: ReplicationTask): Row {
   return {
     ...task,
@@ -100,8 +122,25 @@ function rowDblClick(_: Event, value: Row) {
   selected.value = [value];
   openForm('edit');
 }
-function selectGuest() {
-  form.target = '';
+function addScheduleOption(
+  value: string,
+  done: (value?: string, mode?: 'add' | 'add-unique' | 'toggle') => void,
+) {
+  done(value.trim(), 'add-unique');
+}
+function validateForm() {
+  formErrors.guest = !form.guest
+    ? gettext('CT/VM ID is required')
+    : !guestValid.value
+      ? gettext('CT/VM ID must be between 100 and 999999999')
+      : '';
+  formErrors.target = !form.target
+    ? gettext('Target is required')
+    : action.value === 'add' && !targetValid.value
+      ? gettext('Target node seems to be offline')
+      : '';
+  formErrors.rate = !rateValid.value ? gettext('Rate limit must be at least 1 MB/s') : '';
+  return !formErrors.guest && !formErrors.target && !formErrors.rate;
 }
 async function reload() {
   loading.value = true;
@@ -120,15 +159,8 @@ async function reload() {
   }
 }
 async function loadInitial() {
-  const [nodeResponse, vmResponse, clusterStatusResponse] = await Promise.all([
-    getNodes(),
-    getClusterResources({ type: 'vm' }),
-    getClusterStatus(),
-  ]);
+  const [nodeResponse, clusterStatusResponse] = await Promise.all([getNodes(), getClusterStatus()]);
   nodes.value = nodeResponse.data || [];
-  vms.value = (vmResponse.data || []).filter(
-    (item) => (item.type === 'qemu' || item.type === 'lxc') && !item.template,
-  );
   standalone.value = !(clusterStatusResponse.data || []).some((item) => item.type === 'cluster');
   await reload();
 }
@@ -137,12 +169,13 @@ function resetForm() {
     id: '',
     guest: '',
     target: '',
-    schedule: '*/15',
+    schedule: '',
     rate: '',
     comment: '',
     enabled: true,
     digest: '',
   });
+  Object.assign(formErrors, { guest: '', target: '', rate: '' });
 }
 function openForm(nextAction: 'add' | 'edit') {
   if (!canManageReplication.value) return;
@@ -183,8 +216,7 @@ async function loadForm(id: string) {
   }
 }
 async function save() {
-  if (!canManageReplication.value || !form.guest || !form.target || !form.schedule || !rateValid.value)
-    return;
+  if (!canManageReplication.value || !validateForm()) return;
   formSaving.value = true;
   try {
     const jobNums = tasks.value
@@ -194,11 +226,14 @@ async function save() {
     const data = {
       id: action.value === 'add' ? `${form.guest}-${Math.max(-1, ...jobNums) + 1}` : form.id,
       target: action.value === 'add' ? form.target : undefined,
-      schedule: form.schedule,
-      rate: form.rate || undefined,
-      comment: form.comment,
+      schedule:
+        action.value === 'add' && (!form.schedule || form.schedule === '*/15')
+          ? undefined
+          : form.schedule,
+      rate: action.value === 'add' && !form.rate ? undefined : form.rate,
+      comment: action.value === 'add' && !form.comment ? undefined : form.comment,
       type: action.value === 'add' ? 'local' : undefined,
-      disable: form.enabled ? 0 : 1,
+      disable: action.value === 'add' && form.enabled ? undefined : form.enabled ? 0 : 1,
       ...(action.value === 'edit' && form.digest ? { digest: form.digest } : {}),
     };
     if (action.value === 'add') await createReplicationTask(data);
@@ -256,7 +291,7 @@ onBeforeUnmount(() => {
       @row-dblclick="rowDblClick"
       ><template #top
         ><div class="row items-center q-gutter-sm">
-       <q-btn
+          <q-btn
             no-caps
             outline
             size="12px"
@@ -297,8 +332,7 @@ onBeforeUnmount(() => {
           ><q-icon
             :name="props.value ? 'check' : 'close'"
             :class="props.value ? 'text-green' : 'text-red'" /></q-td></template
-      ></q-table
-    >
+    ></q-table>
     <q-inner-loading :showing="standalone" class="replication-standalone-mask">
       <div class="replication-standalone-mask__content row items-center no-wrap">
         <q-icon name="warning" size="22px" class="q-mr-sm" />
@@ -311,19 +345,26 @@ onBeforeUnmount(() => {
       ><q-form class="replication-form u-dense q-pa-md" @submit="save"
         ><div class="row q-col-gutter-lg">
           <div class="col-12 col-sm-6">
-            <q-select
+            <q-input
               v-if="action === 'add'"
               v-model="form.guest"
-              @update:model-value="selectGuest"
               dense
-              options-dense
-              emit-value
-              map-options
-              option-value="vmid"
-              :option-label="(item) => `${item.name || ''}--${item.vmid}`"
-              :options="vms"
+              type="number"
+              min="100"
+              max="999999999"
+              :label="requiredLabel('CT/VM ID')"
+              :error="Boolean(formErrors.guest)"
+              :error-message="formErrors.guest"
+              @update:model-value="formErrors.guest = ''"
+              :rules="[
+                (value) => Boolean(value) || gettext('CT/VM ID is required'),
+                (value) =>
+                  (String(value).match(/^\d+$/) &&
+                    Number(value) >= 100 &&
+                    Number(value) <= 999999999) ||
+                  gettext('CT/VM ID must be between 100 and 999999999'),
+              ]"
               class="q-field--with-bottom"
-              label="CT/VM ID"
             /><q-input
               v-else
               v-model="form.guest"
@@ -340,9 +381,16 @@ onBeforeUnmount(() => {
               map-options
               option-value="node"
               option-label="node"
-              :options="onlineNodes.filter((item) => item.node !== sourceNode)"
+              :options="nodes"
+              :label="requiredLabel(gettext('Target'))"
+              :error="Boolean(formErrors.target)"
+              :error-message="formErrors.target"
+              @update:model-value="formErrors.target = ''"
+              :rules="[
+                (value) => Boolean(value) || gettext('Target is required'),
+                () => targetValid || gettext('Target node seems to be offline'),
+              ]"
               class="q-field--with-bottom"
-              :label="gettext('Target')"
             /><q-input
               v-else
               v-model="form.target"
@@ -350,9 +398,19 @@ onBeforeUnmount(() => {
               readonly
               class="q-field--with-bottom"
               :label="gettext('Target')"
-            /><q-input
+            /><q-select
               v-model="form.schedule"
               dense
+              options-dense
+              use-input
+              fill-input
+              hide-selected
+              emit-value
+              map-options
+              option-value="value"
+              option-label="label"
+              :options="scheduleOptions"
+              @new-value="addScheduleOption"
               class="q-field--with-bottom"
               :label="gettext('Schedule')"
               :placeholder="`*/15 - ${gettext('Every {0} minutes').replace('{0}', '15')}`"
@@ -364,6 +422,17 @@ onBeforeUnmount(() => {
               dense
               type="number"
               min="1"
+              step="1"
+              :rules="[
+                (value) =>
+                  !value ||
+                  (Number.isFinite(Number(value)) && Number(value) >= 1) ||
+                  gettext('Rate limit must be at least 1 MB/s'),
+              ]"
+              :error="Boolean(formErrors.rate)"
+              :error-message="formErrors.rate"
+              @update:model-value="formErrors.rate = ''"
+              class="q-field--with-bottom"
               :label="gettext('Rate limit (MB/s)')"
             /><q-input
               v-model="form.comment"
@@ -383,7 +452,7 @@ onBeforeUnmount(() => {
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :disable="formSaving || !form.guest || !form.target || !form.schedule || !rateValid"
+          :disable="formSaving"
           :loading="formSaving"
           :label="gettext(action === 'add' ? 'Add' : 'Save')"
           @click="save" /></template></UWindow
@@ -393,12 +462,6 @@ onBeforeUnmount(() => {
 .replication-tasks-panel {
   position: relative;
   min-height: 160px;
-}
-.replication-form :deep(.q-field--with-bottom) {
-  padding-bottom: 15px;
-}
-.replication-form :deep(.q-field__bottom) {
-  display: none;
 }
 .replication-standalone-mask {
   background: rgba(241, 245, 249, 0.8);

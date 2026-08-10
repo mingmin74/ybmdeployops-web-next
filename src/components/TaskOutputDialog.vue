@@ -57,14 +57,16 @@ function confirmStop() {
     message: gettext('Are you sure to stop the task?'),
     cancel: true,
     persistent: true,
-  }).onOk(async () => {
-    stopping.value = true;
-    try {
-      await stopTask(props.node!, props.upid!);
-      await reload();
-    } finally {
-      stopping.value = false;
-    }
+  }).onOk(() => {
+    void (async () => {
+      stopping.value = true;
+      try {
+        await stopTask(props.node!, props.upid!);
+        await reload();
+      } finally {
+        stopping.value = false;
+      }
+    })();
   });
 }
 

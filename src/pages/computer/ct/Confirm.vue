@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useCreateCtWizardContext } from './create-ct/context/createCtWizardContext';
 
+defineOptions({ name: 'CtConfirmStep' });
+
 const { derived } = useCreateCtWizardContext();
 const { summaryRows } = derived;
 </script>

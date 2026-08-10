@@ -73,12 +73,11 @@
           <span> 集群运行正常，所有节点和 Ceph 服务均处于健康状态 </span>
         </div>
       </div>
-
     </q-card-section>
   </q-card>
 </template>
 
-<script setup></script>
+<script setup lang="ts"></script>
 
 <style scoped>
 .health-card {
@@ -237,5 +236,4 @@
   font-size: 12px;
   line-height: 20px;
 }
-
 </style>

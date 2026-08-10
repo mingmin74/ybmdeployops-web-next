@@ -44,9 +44,7 @@ const tabs = [
           <BksManagementPanel />
         </q-tab-panel>
         <q-tab-panel
-          v-for="tab in tabs.filter(
-            (tab) => !['backup', 'replication', 'bks'].includes(tab.name),
-          )"
+          v-for="tab in tabs.filter((tab) => !['backup', 'replication', 'bks'].includes(tab.name))"
           :key="tab.name"
           :name="tab.name"
         >

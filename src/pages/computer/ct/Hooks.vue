@@ -1,4 +1,6 @@
 <script setup lang="ts">
+defineOptions({ name: 'CtHooksStep' });
+
 const props = withDefaults(
   defineProps<{
     preEnabled: boolean;

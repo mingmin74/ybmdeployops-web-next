@@ -28,9 +28,14 @@ const userOptions = ref<{ userid: string }[]>([]);
 const groupOptions = ref<{ groupid: string }[]>([]);
 const tokenOptions = ref<string[]>([]);
 const roleOptions = ref<{ roleid: string }[]>([]);
+const pathRef = ref();
+const groupRef = ref();
+const userRef = ref();
+const tokenRef = ref();
+const roleRef = ref();
 const form = reactive({
   path: '',
-  type: 'user' as AclType,
+  type: 'user',
   user: '',
   group: '',
   token: '',
@@ -51,19 +56,18 @@ const filteredRules = computed(() => {
         [rule.path, rule.ugid, rule.roleid, rule.type].join(' ').toLowerCase().includes(query),
     );
 });
-const canSubmit = computed(() =>
-  Boolean(
-    form.path &&
-    form.role &&
-    (form.type === 'user' ? form.user : form.type === 'group' ? form.group : form.token),
-  ),
-);
 const formTitle = computed(() => {
   if (!isFixedPath.value) return `${gettext('Add')}: ${gettext('Permission Rule')}`;
   if (form.type === 'group') return `${gettext('Add')}: ${gettext('Group Permission')}`;
   if (form.type === 'apitoken') return `${gettext('Add')}: ${gettext('API Token Permission')}`;
   return `${gettext('Add')}: ${gettext('User Permission')}`;
 });
+function requiredLabel(label: string) {
+  return `${label} *`;
+}
+function requiredFieldRule(value: string | null | undefined) {
+  return value ? true : gettext('This field is required');
+}
 const columns = computed<QTableColumn<RuleRow>[]>(() => {
   const aclColumns: QTableColumn<RuleRow>[] = [
     {
@@ -178,7 +182,16 @@ async function openForm(type: AclType = 'user') {
   }
 }
 async function saveRule() {
-  if (!canSubmit.value) return;
+  const subjectRef =
+    form.type === 'user' ? userRef.value : form.type === 'group' ? groupRef.value : tokenRef.value;
+  if (
+    dialogLoading.value ||
+    (!isFixedPath.value && pathRef.value?.validate?.() === false) ||
+    subjectRef?.validate?.() === false ||
+    roleRef.value?.validate?.() === false
+  ) {
+    return;
+  }
   dialogLoading.value = true;
   try {
     const data: Record<string, unknown> = {
@@ -306,11 +319,13 @@ onMounted(() => void reload());
       ><div class="u-border q-ma-sm q-pa-md u-dense permission-rule-form">
         <q-select
           v-if="!isFixedPath"
+          ref="pathRef"
           v-model="form.path"
           dense
           options-dense
-          :label="gettext('Path')"
+          :label="requiredLabel(gettext('Path'))"
           :options="pathOptions"
+          :rules="[requiredFieldRule]"
           class="q-field--with-bottom"
         /><q-select
           v-if="!isFixedPath"
@@ -328,6 +343,7 @@ onMounted(() => void reload());
           class="q-field--with-bottom"
         /><q-select
           v-if="form.type === 'group'"
+          ref="groupRef"
           v-model="form.group"
           dense
           options-dense
@@ -335,10 +351,12 @@ onMounted(() => void reload());
           map-options
           option-value="groupid"
           option-label="groupid"
-          :label="gettext('Group')"
+          :label="requiredLabel(gettext('Group'))"
           :options="groupOptions"
+          :rules="[requiredFieldRule]"
         /><q-select
           v-if="form.type === 'user'"
+          ref="userRef"
           v-model="form.user"
           dense
           options-dense
@@ -346,18 +364,22 @@ onMounted(() => void reload());
           map-options
           option-value="userid"
           option-label="userid"
-          :label="gettext('User')"
+          :label="requiredLabel(gettext('User'))"
           :options="userOptions"
+          :rules="[requiredFieldRule]"
         /><q-select
           v-if="form.type === 'apitoken'"
+          ref="tokenRef"
           v-model="form.token"
           dense
           options-dense
           emit-value
           map-options
-          :label="gettext('API Token')"
+          :label="requiredLabel(gettext('API Token'))"
           :options="tokenOptions"
+          :rules="[requiredFieldRule]"
         /><q-select
+          ref="roleRef"
           v-model="form.role"
           dense
           options-dense
@@ -365,8 +387,9 @@ onMounted(() => void reload());
           map-options
           option-value="roleid"
           option-label="roleid"
-          :label="gettext('Role')"
+          :label="requiredLabel(gettext('Role'))"
           :options="roleOptions"
+          :rules="[requiredFieldRule]"
         /><q-checkbox
           v-if="!isFixedPath"
           v-model="form.propagate"
@@ -380,11 +403,9 @@ onMounted(() => void reload());
           no-caps
           flat
           size="12px"
-          :disable="!canSubmit || dialogLoading"
+          :disable="dialogLoading"
           :class="
-            canSubmit && !dialogLoading
-              ? 'bg-primary text-grey-1 u-button'
-              : 'bg-grey-4 text-grey-6 u-button'
+            !dialogLoading ? 'bg-primary text-grey-1 u-button' : 'bg-grey-4 text-grey-6 u-button'
           "
           :label="gettext('Add')"
           @click="saveRule" /></template></UWindow

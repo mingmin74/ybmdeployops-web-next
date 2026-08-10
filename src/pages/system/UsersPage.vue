@@ -108,25 +108,6 @@ const passwordForm = reactive({
   password: '',
   confirmPassword: '',
 });
-const createSubmitDisabled = computed(() => {
-  if (dialogLoading.value) return true;
-  if (usernameRules(formData.userid) !== true || emailRules(formData.email) !== true) return true;
-
-  if (formData.action === 'add' && formData.realm === 'pve') {
-    return (
-      passwordRules(formData.password) !== true ||
-      confirmPasswordRules(formData.confirmPassword, formData.password) !== true
-    );
-  }
-
-  return false;
-});
-const passwordSubmitDisabled = computed(
-  () =>
-    dialogLoading.value ||
-    passwordRules(passwordForm.password) !== true ||
-    confirmPasswordRules(passwordForm.confirmPassword, passwordForm.password) !== true,
-);
 
 const useridRef = ref();
 const emailRef = ref();
@@ -601,7 +582,7 @@ onMounted(() => {
                   dense
                   autofocus
                   :disable="formData.action !== 'add'"
-                  :label="`${gettext('Username')}*`"
+                  :label="`${gettext('Username')} *`"
                   :rules="[usernameRules]"
                 />
               </div>
@@ -651,7 +632,7 @@ onMounted(() => {
                   v-model="formData.password"
                   dense
                   type="password"
-                  :label="`${gettext('Password')}*`"
+                  :label="`${gettext('Password')} *`"
                   :rules="[passwordRules]"
                 />
               </div>
@@ -661,7 +642,7 @@ onMounted(() => {
                   v-model="formData.confirmPassword"
                   dense
                   type="password"
-                  :label="`${gettext('Confirm Password')}*`"
+                  :label="`${gettext('Confirm Password')} *`"
                   :rules="[(value: string) => confirmPasswordRules(value, formData.password)]"
                 />
               </div>
@@ -770,12 +751,10 @@ onMounted(() => {
             no-caps
             flat
             size="12px"
-            :disable="createSubmitDisabled"
+            :disable="dialogLoading"
             :label="gettext(formData.action === 'add' ? 'Add' : 'Edit')"
             :class="
-              createSubmitDisabled
-                ? 'bg-grey-4 text-grey-6 u-button'
-                : 'bg-primary text-grey-1 u-button'
+              dialogLoading ? 'bg-grey-4 text-grey-6 u-button' : 'bg-primary text-grey-1 u-button'
             "
             @click="submitUserForm"
           />
@@ -827,12 +806,10 @@ onMounted(() => {
             no-caps
             flat
             size="12px"
-            :disable="passwordSubmitDisabled"
+            :disable="dialogLoading"
             :label="gettext('OK')"
             :class="
-              passwordSubmitDisabled
-                ? 'bg-grey-4 text-grey-6 u-button'
-                : 'bg-primary text-grey-1 u-button'
+              dialogLoading ? 'bg-grey-4 text-grey-6 u-button' : 'bg-primary text-grey-1 u-button'
             "
             @click="submitPassword"
           />

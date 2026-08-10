@@ -14,6 +14,7 @@ import type { PveRecord } from '@/api/resources';
 import { getSystemJournal } from '@/api/maintenance';
 import { gettext } from '@/locale';
 import NodeServicesPanel from './NodeServicesPanel.vue';
+import { textValue } from '@/utils/pveFormat';
 
 const { node } = defineProps<{ node: string }>();
 const splitter = shallowRef(146);
@@ -51,12 +52,12 @@ const dnsRows = computed(() => [
 const optionRows = computed(() => [
   {
     label: gettext('Start on boot delay'),
-    value: String(options.value['startall-onboot-delay'] || '-'),
+    value: textValue(options.value['startall-onboot-delay'], '-'),
   },
-  { label: gettext('MAC address for Wake on LAN'), value: String(options.value.wakeonlan || '-') },
+  { label: gettext('MAC address for Wake on LAN'), value: textValue(options.value.wakeonlan, '-') },
   {
     label: gettext('RAM usage target for ballooning'),
-    value: String(options.value['ballooning-target'] || '-'),
+    value: textValue(options.value['ballooning-target'], '-'),
   },
 ]);
 const timeRows = computed(() => [

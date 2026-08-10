@@ -98,7 +98,7 @@ const simulatorForm = reactive({ schedule: '', iterations: 10 });
 const selectedTask = computed(() => selectedTasks.value[0]);
 const canOperate = computed(() => selectedTasks.value.length === 1);
 const formTitle = computed(
-  () => `${gettext(formAction.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Backup Task')}`
+  () => `${gettext(formAction.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Backup Task')}`,
 );
 const filteredTasks = computed(() => {
   const keyword = filter.value.trim().toLowerCase();
@@ -108,18 +108,18 @@ const filteredTasks = computed(() => {
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
-      .includes(keyword)
+      .includes(keyword),
   );
 });
 const filteredVmOptions = computed(() => {
   const keyword = vmFilter.value.trim().toLowerCase();
   if (!keyword) return vmOptions.value;
   return vmOptions.value.filter((item) =>
-    [item.vmid, item.name, item.node, item.type].join(' ').toLowerCase().includes(keyword)
+    [item.vmid, item.name, item.node, item.type].join(' ').toLowerCase().includes(keyword),
   );
 });
 const selectedVmRows = computed(() =>
-  vmOptions.value.filter((item) => taskForm.selectedVmids.includes(textValue(item.vmid)))
+  vmOptions.value.filter((item) => taskForm.selectedVmids.includes(textValue(item.vmid))),
 );
 const selectedVmSummary = computed(() => {
   return taskForm.selectedVmids.join(', ') || gettext('No VMs selected');
@@ -264,20 +264,20 @@ function detailSelectionMode(task: BackupTaskRow) {
   return task.vmid
     ? gettext('Include selected VMs')
     : task.all
-    ? gettext('All')
-    : task.exclude
-    ? gettext('Exclude selected VMs')
-    : task.pool
-    ? gettext('Pool based')
-    : '-';
+      ? gettext('All')
+      : task.exclude
+        ? gettext('Exclude selected VMs')
+        : task.pool
+          ? gettext('Pool based')
+          : '-';
 }
 function detailNotification(task: BackupTaskRow) {
   const mode = task['notification-mode'];
   return mode === 'notification-system' || (mode === 'auto' && !task.mailto)
     ? gettext('Use global notification settings')
     : task.mailnotification === 'failure'
-    ? gettext('Send email on failure')
-    : gettext('Always send email');
+      ? gettext('Send email on failure')
+      : gettext('Always send email');
 }
 function treeLabel(item: PveRecord) {
   const id = textValue(item.id);
@@ -420,7 +420,9 @@ function validateTaskForm() {
     storage: taskForm.storage ? '' : gettext('Storage is required'),
     schedule: taskForm.schedule ? '' : gettext('Schedule is required'),
     pool:
-      taskForm.selectionMode === 'pool' && !taskForm.pool ? gettext('Pool to backup is required') : '',
+      taskForm.selectionMode === 'pool' && !taskForm.pool
+        ? gettext('Pool to backup is required')
+        : '',
     selectedVmids:
       ['include', 'exclude'].includes(taskForm.selectionMode) && !taskForm.selectedVmids.length
         ? gettext('At least one virtual machine must be selected')
@@ -470,7 +472,7 @@ async function openTaskForm(action: 'add' | 'edit') {
         mailto: textValue(data.mailto),
         mailnotification: textValue(
           data.mailnotification,
-          textValue(data['notification-policy'], 'always')
+          textValue(data['notification-policy'], 'always'),
         ),
         notesTemplate: textValue(data['notes-template'], '{{guestname}}'),
         bwlimit: textValue(data.bwlimit),
@@ -482,10 +484,10 @@ async function openTaskForm(action: 'add' | 'edit') {
       taskForm.selectionMode = data.exclude
         ? 'exclude'
         : data.all
-        ? 'all'
-        : data.pool
-        ? 'pool'
-        : 'include';
+          ? 'all'
+          : data.pool
+            ? 'pool'
+            : 'include';
       taskForm.pool = textValue(data.pool);
       taskForm.selectedVmids = textValue(data.exclude, textValue(data.vmid))
         .split(',')
@@ -540,7 +542,8 @@ async function saveTask() {
       compress: taskForm.compress,
       comment: taskForm.comment,
       'notification-mode': taskForm.notificationMode,
-      mailto: taskForm.notificationMode === 'legacy-sendmail' ? taskForm.mailto || undefined : undefined,
+      mailto:
+        taskForm.notificationMode === 'legacy-sendmail' ? taskForm.mailto || undefined : undefined,
       mailnotification:
         taskForm.notificationMode === 'legacy-sendmail' ? taskForm.mailnotification : undefined,
       'notes-template': taskForm.notesTemplate,
@@ -611,7 +614,7 @@ function createRunPayload(task: BackupTaskRow) {
               Array.isArray(item)
                 ? item.map((entry) => textValue(entry)).join(';')
                 : textValue(item)
-            }`
+            }`,
         )
         .sort()
         .join(',');
@@ -646,10 +649,10 @@ function runSelected() {
           return;
         }
         const results = await Promise.allSettled(
-          targetNodes.map((node) => runBackupTask(node, createRunPayload(task)))
+          targetNodes.map((node) => runBackupTask(node, createRunPayload(task))),
         );
         const failedNodes = results.flatMap((result, index) =>
-          result.status === 'rejected' ? [targetNodes[index]] : []
+          result.status === 'rejected' ? [targetNodes[index]] : [],
         );
         if (failedNodes.length) {
           Notify.create({
@@ -814,107 +817,115 @@ onMounted(() => void reload());
             />
           </div>
           <div class="backup-info-card__content">
-          <div class="row q-col-gutter-md">
-            <div class="col-12 col-md-4 backup-info-column">
-              <div class="backup-info-item">
-                <span class="backup-info-label">{{ gettext('Node') }}</span>
-                <span class="backup-info-value">{{ selectedTask.node || `-- ${gettext('All')} --` }}</span>
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-md-4 backup-info-column">
+                <div class="backup-info-item">
+                  <span class="backup-info-label">{{ gettext('Node') }}</span>
+                  <span class="backup-info-value">{{
+                    selectedTask.node || `-- ${gettext('All')} --`
+                  }}</span>
+                </div>
+                <div class="backup-info-item">
+                  <span class="backup-info-label">{{ gettext('Comment') }}</span>
+                  <span class="backup-info-value">{{ selectedTask.comment || '-' }}</span>
+                </div>
               </div>
-              <div class="backup-info-item">
-                <span class="backup-info-label">{{ gettext('Comment') }}</span>
-                <span class="backup-info-value">{{ selectedTask.comment || '-' }}</span>
+              <div class="col-12 col-md-4 backup-info-column">
+                <div class="backup-info-item">
+                  <span class="backup-info-label">{{ gettext('Schedule') }}</span>
+                  <span class="backup-info-value">{{ selectedTask.schedule || '-' }}</span>
+                </div>
+                <div class="backup-info-item">
+                  <span class="backup-info-label">{{ gettext('Next Run') }}</span>
+                  <span class="backup-info-value backup-info-value--numeric">{{
+                    nextRunText(selectedTask['next-run'])
+                  }}</span>
+                </div>
+                <div class="backup-info-item">
+                  <span class="backup-info-label">{{ gettext('Mode') }}</span>
+                  <span class="backup-info-value">{{
+                    gettext(String(selectedTask.mode || '')) || '-'
+                  }}</span>
+                </div>
+              </div>
+              <div class="col-12 col-md-4 backup-info-column">
+                <div class="backup-info-item">
+                  <span class="backup-info-label">{{ gettext('Storage') }}</span>
+                  <span class="backup-info-value">{{ selectedTask.storage || '-' }}</span>
+                </div>
+                <div class="backup-info-item">
+                  <span class="backup-info-label">{{ gettext('Compression') }}</span>
+                  <span class="backup-info-value">{{ selectedTask.compress || '-' }}</span>
+                </div>
+                <div class="backup-info-item">
+                  <span class="backup-info-label">{{ gettext('Selection Mode') }}</span>
+                  <span class="backup-info-value">{{ detailSelectionMode(selectedTask) }}</span>
+                </div>
+                <div class="backup-info-item">
+                  <span class="backup-info-label">{{ gettext('Notice') }}</span>
+                  <span class="backup-info-value">{{ detailNotification(selectedTask) }}</span>
+                </div>
               </div>
             </div>
-            <div class="col-12 col-md-4 backup-info-column">
-              <div class="backup-info-item">
-                <span class="backup-info-label">{{ gettext('Schedule') }}</span>
-                <span class="backup-info-value">{{ selectedTask.schedule || '-' }}</span>
-              </div>
-              <div class="backup-info-item">
-                <span class="backup-info-label">{{ gettext('Next Run') }}</span>
-                <span class="backup-info-value backup-info-value--numeric">{{ nextRunText(selectedTask['next-run']) }}</span>
-              </div>
-              <div class="backup-info-item">
-                <span class="backup-info-label">{{ gettext('Mode') }}</span>
-                <span class="backup-info-value">{{ gettext(String(selectedTask.mode || '')) || '-' }}</span>
-              </div>
-            </div>
-            <div class="col-12 col-md-4 backup-info-column">
-              <div class="backup-info-item">
-                <span class="backup-info-label">{{ gettext('Storage') }}</span>
-                <span class="backup-info-value">{{ selectedTask.storage || '-' }}</span>
-              </div>
-              <div class="backup-info-item">
-                <span class="backup-info-label">{{ gettext('Compression') }}</span>
-                <span class="backup-info-value">{{ selectedTask.compress || '-' }}</span>
-              </div>
-              <div class="backup-info-item">
-                <span class="backup-info-label">{{ gettext('Selection Mode') }}</span>
-                <span class="backup-info-value">{{ detailSelectionMode(selectedTask) }}</span>
-              </div>
-              <div class="backup-info-item">
-                <span class="backup-info-label">{{ gettext('Notice') }}</span>
-                <span class="backup-info-value">{{ detailNotification(selectedTask) }}</span>
-              </div>
-            </div>
-          </div>
           </div>
         </section>
         <section class="backup-disk-section">
-        <div class="row items-center q-mb-sm backup-disk-section__header">
-          <div class="backup-task-form__section-title backup-disk-section__title">
-            {{ gettext('Included disks') }}
+          <div class="row items-center q-mb-sm backup-disk-section__header">
+            <div class="backup-task-form__section-title backup-disk-section__title">
+              {{ gettext('Included disks') }}
+            </div>
+            <q-space /><q-input
+              v-model="detailFilter"
+              dense
+              outlined
+              class="backup-disk-section__filter"
+              :placeholder="gettext('Filter')"
+              style="width: 200px"
+              ><template #prepend><q-icon name="search" /></template
+              ><template #append
+                ><q-icon
+                  v-if="detailFilter"
+                  name="clear"
+                  class="cursor-pointer"
+                  @click="detailFilter = ''" /></template
+            ></q-input>
           </div>
-          <q-space /><q-input
-            v-model="detailFilter"
-            dense
-            outlined
-            class="backup-disk-section__filter"
-            :placeholder="gettext('Filter')"
-            style="width: 200px"
-            ><template #prepend><q-icon name="search" /></template
-            ><template #append
-              ><q-icon
-                v-if="detailFilter"
-                name="clear"
-                class="cursor-pointer"
-                @click="detailFilter = ''" /></template
-          ></q-input>
-        </div>
-        <div class="backup-tree">
-          <div class="backup-tree__columns">
-            <span>{{ gettext('VMID') }}</span><span>{{ gettext('Type') }}</span><span>{{ gettext('Backup Task') }}</span>
+          <div class="backup-tree">
+            <div class="backup-tree__columns">
+              <span>{{ gettext('VMID') }}</span
+              ><span>{{ gettext('Type') }}</span
+              ><span>{{ gettext('Backup Task') }}</span>
+            </div>
+            <q-tree
+              :nodes="detailTree"
+              node-key="id"
+              label-key="label"
+              children-key="children"
+              default-expand-all
+              no-connectors
+              ><template #default-header="prop"
+                ><div class="row full-width items-center backup-tree__row">
+                  <div class="col backup-tree__label">
+                    <q-icon :name="treeIcon(prop.node)" size="16px" class="q-mr-sm text-grey-7" />
+                    <span>{{ prop.node.label }}</span>
+                  </div>
+                  <div class="col-2 backup-tree__muted">{{ prop.node.type || '-' }}</div>
+                  <div class="col-3 backup-tree__included">
+                    <q-icon
+                      v-if="includedIcon(prop.node)"
+                      :name="includedIcon(prop.node)"
+                      size="16px"
+                      class="q-mr-xs"
+                    />
+                    <span>{{ prop.node.includedText }}</span>
+                  </div>
+                </div></template
+              ></q-tree
+            >
+            <div v-if="!detailTree.length && !detailLoading" class="backup-tree__empty">
+              {{ gettext('No data') }}
+            </div>
           </div>
-          <q-tree
-            :nodes="detailTree"
-            node-key="id"
-            label-key="label"
-            children-key="children"
-            default-expand-all
-            no-connectors
-            ><template #default-header="prop"
-              ><div class="row full-width items-center backup-tree__row">
-                <div class="col backup-tree__label">
-                  <q-icon :name="treeIcon(prop.node)" size="16px" class="q-mr-sm text-grey-7" />
-                  <span>{{ prop.node.label }}</span>
-                </div>
-                <div class="col-2 backup-tree__muted">{{ prop.node.type || '-' }}</div>
-                <div class="col-3 backup-tree__included">
-                  <q-icon
-                    v-if="includedIcon(prop.node)"
-                    :name="includedIcon(prop.node)"
-                    size="16px"
-                    class="q-mr-xs"
-                  />
-                  <span>{{ prop.node.includedText }}</span>
-                </div>
-              </div></template
-            ></q-tree
-          >
-          <div v-if="!detailTree.length && !detailLoading" class="backup-tree__empty">
-            {{ gettext('No data') }}
-          </div>
-        </div>
         </section>
       </div>
       <template #foot
@@ -931,10 +942,7 @@ onMounted(() => void reload());
 
   <q-dialog v-model="formVisible" persistent transition-show="scale" transition-hide="scale">
     <UWindow :title="formTitle" width="760px" :loading="formLoading">
-      <q-form
-        class="backup-dialog-body backup-task-form u-dense "
-        @submit="saveTask"
-      >
+      <q-form class="backup-dialog-body backup-task-form u-dense" @submit="saveTask">
         <q-inner-loading :showing="formLoading || formOptionsLoading" />
         <q-tabs
           v-model="formTab"
@@ -1032,7 +1040,7 @@ onMounted(() => void reload());
                     ]"
                     @update:model-value="
                       taskFormErrors.pool = '';
-                      taskFormErrors.selectedVmids = ''
+                      taskFormErrors.selectedVmids = '';
                     "
                   />
                   <q-select
@@ -1142,7 +1150,7 @@ onMounted(() => void reload());
                         :selected="selectedVmRows"
                         @update:selected="
                           taskForm.selectedVmids = $event.map((row) => String(row.vmid || ''));
-                          taskFormErrors.selectedVmids = ''
+                          taskFormErrors.selectedVmids = '';
                         "
                         :pagination="{ rowsPerPage: 0 }"
                       />
@@ -1153,7 +1161,7 @@ onMounted(() => void reload());
             </section>
           </q-tab-panel>
           <q-tab-panel name="retention" class="q-pa-md">
-            <div class="bg-white  q-pa-sm">
+            <div class="bg-white q-pa-sm">
               <q-checkbox
                 v-model="taskForm.keepAll"
                 dense
@@ -1209,13 +1217,13 @@ onMounted(() => void reload());
             <div class="form-hint q-mt-md">
               {{
                 gettext(
-                  "Without any keep option, the storage's configuration or node's vzdump.conf is used as fallback"
+                  "Without any keep option, the storage's configuration or node's vzdump.conf is used as fallback",
                 )
               }}
             </div>
           </q-tab-panel>
           <q-tab-panel name="notification" class="q-pa-md">
-            <div class="bg-white  q-pa-sm notification-settings">
+            <div class="bg-white q-pa-sm notification-settings">
               <q-option-group
                 v-model="taskForm.notificationMode"
                 class="notification-settings__mode q-field--with-bottom"
@@ -1344,7 +1352,7 @@ onMounted(() => void reload());
                 <p>
                   {{
                     gettext(
-                      "Run jobs as soon as possible if they couldn't start on schedule, for example, due to the node being offline."
+                      "Run jobs as soon as possible if they couldn't start on schedule, for example, due to the node being offline.",
                     )
                   }}
                 </p>
@@ -1369,7 +1377,7 @@ onMounted(() => void reload());
                 <p>
                   {{
                     gettext(
-                      'Mode to detect file changes and switch archive encoding format for container backups.'
+                      'Mode to detect file changes and switch archive encoding format for container backups.',
                     )
                   }}
                 </p>
@@ -1379,7 +1387,7 @@ onMounted(() => void reload());
               <span class="text-weight-bold text-amber-9">{{ gettext('Comment') }}: </span
               >{{
                 gettext(
-                  "The node-specific 'vzdump.conf' or, if this is not set, the default from the config schema is used to determine fallback values."
+                  "The node-specific 'vzdump.conf' or, if this is not set, the default from the config schema is used to determine fallback values.",
                 )
               }}
             </div></q-tab-panel
@@ -1427,7 +1435,13 @@ onMounted(() => void reload());
             :pagination="{ rowsPerPage: 0 }"
           >
             <template #top>
-              <q-input v-model="guestsFilter" borderless dense debounce="300" :placeholder="gettext('Search')">
+              <q-input
+                v-model="guestsFilter"
+                borderless
+                dense
+                debounce="300"
+                :placeholder="gettext('Search')"
+              >
                 <template #append><q-icon name="search" /></template>
               </q-input>
             </template>

@@ -21,7 +21,7 @@ const emit = defineEmits<{
 const wizard = useCreateVmWizard(model, emit);
 provide(createVmWizardKey, wizard);
 
-const { state, form, errors, options, actions, derived } = wizard;
+const { state, errors, options, actions, derived } = wizard;
 const { loading, step, advanced } = state;
 const { validationErrorEntries } = errors;
 const { steps } = options;

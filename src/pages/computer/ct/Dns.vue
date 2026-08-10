@@ -2,6 +2,8 @@
 import { gettext } from '@/locale';
 import { useCreateCtWizardContext } from './create-ct/context/createCtWizardContext';
 
+defineOptions({ name: 'CtDnsStep' });
+
 const { form } = useCreateCtWizardContext();
 </script>
 
