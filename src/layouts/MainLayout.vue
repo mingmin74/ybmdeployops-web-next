@@ -123,6 +123,7 @@
               :default-opened="isGroupOpen(item)"
               :icon="item.icon"
               :label="gettext(item.titleKey)"
+              :to="item.path"
               expand-separator
             >
               <template v-for="child in item.children" :key="child.path || child.titleKey">

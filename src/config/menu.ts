@@ -51,10 +51,16 @@ export const menuItems: MenuItem[] = [
       { titleKey: 'Firewall', path: '/system/firewall', icon: 'security' },
       {
         titleKey: 'SDN',
+        path: '/system/sdn',
         icon: 'account_tree',
         children: [
+          { titleKey: 'Status', path: '/system/sdn', icon: 'monitoring' },
           { titleKey: 'SDN Zones', path: '/system/sdn/zones', icon: 'public' },
+          { titleKey: 'Fabrics', path: '/system/sdn/fabrics', icon: 'account_tree' },
           { titleKey: 'SDN VNets', path: '/system/sdn/vnets', icon: 'hub' },
+          { titleKey: 'Prefix Lists', path: '/system/sdn/prefix-lists', icon: 'filter_list' },
+          { titleKey: 'Route Maps', path: '/system/sdn/route-maps', icon: 'alt_route' },
+          { titleKey: 'VNet Firewall', path: '/system/sdn/firewall', icon: 'security' },
           { titleKey: 'SDN IPAM', path: '/system/sdn/ipam', icon: 'lan' },
           { titleKey: 'SDN Options', path: '/system/sdn/options', icon: 'tune' },
         ],

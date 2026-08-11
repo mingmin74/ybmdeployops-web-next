@@ -69,16 +69,46 @@ const routes: RouteRecordRaw[] = [
         meta: { auth: true, title: 'Firewall' },
       },
       {
+        path: 'system/sdn',
+        name: 'system-sdn-status',
+        component: () => import('@/pages/system/sdn/StatusPage.vue'),
+        meta: { auth: true, title: 'Status' },
+      },
+      {
         path: 'system/sdn/zones',
         name: 'system-sdn-zones',
         component: () => import('@/pages/system/sdn/ZonesPage.vue'),
         meta: { auth: true, title: 'SDN Zones' },
       },
       {
+        path: 'system/sdn/fabrics',
+        name: 'system-sdn-fabrics',
+        component: () => import('@/pages/system/sdn/FabricsPage.vue'),
+        meta: { auth: true, title: 'Fabrics' },
+      },
+      {
         path: 'system/sdn/vnets',
         name: 'system-sdn-vnets',
         component: () => import('@/pages/system/sdn/VnetsPage.vue'),
         meta: { auth: true, title: 'SDN VNets' },
+      },
+      {
+        path: 'system/sdn/prefix-lists',
+        name: 'system-sdn-prefix-lists',
+        component: () => import('@/pages/system/sdn/PrefixListsPage.vue'),
+        meta: { auth: true, title: 'Prefix Lists' },
+      },
+      {
+        path: 'system/sdn/route-maps',
+        name: 'system-sdn-route-maps',
+        component: () => import('@/pages/system/sdn/RouteMapsPage.vue'),
+        meta: { auth: true, title: 'Route Maps' },
+      },
+      {
+        path: 'system/sdn/firewall',
+        name: 'system-sdn-vnet-firewall',
+        component: () => import('@/pages/system/sdn/VnetFirewallPage.vue'),
+        meta: { auth: true, title: 'VNet Firewall' },
       },
       {
         path: 'system/sdn/ipam',

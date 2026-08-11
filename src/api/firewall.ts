@@ -230,6 +230,68 @@ export function deleteFirewallRule(pos: string | number) {
   return request(`/api2/extjs/cluster/firewall/rules/${pos}`, { method: 'DELETE' });
 }
 
+function firewallUrl(baseUrl: string, format: 'json' | 'extjs') {
+  return `/api2/${format}${baseUrl}`;
+}
+
+export function getFirewallRulesByBaseUrl(baseUrl: string) {
+  return request<PveRecord[]>(firewallUrl(baseUrl, 'json'), {
+    method: 'GET',
+    notifyOnError: true,
+  });
+}
+
+export function createFirewallRuleByBaseUrl(baseUrl: string, data: PveRecord) {
+  return request(firewallUrl(baseUrl, 'extjs'), { method: 'POST', data });
+}
+
+export function updateFirewallRuleByBaseUrl(
+  baseUrl: string,
+  pos: string | number,
+  data: PveRecord,
+) {
+  return request(`${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(String(pos))}`, {
+    method: 'PUT',
+    data,
+  });
+}
+
+export function deleteFirewallRuleByBaseUrl(
+  baseUrl: string,
+  pos: string | number,
+  digest?: unknown,
+) {
+  const url = `${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(String(pos))}`;
+  return request(digest ? `${url}?digest=${encodeURIComponent(String(digest))}` : url, {
+    method: 'DELETE',
+  });
+}
+
+export function moveFirewallRuleByBaseUrl(
+  baseUrl: string,
+  pos: string | number,
+  moveto: string | number,
+) {
+  return request(`${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(String(pos))}`, {
+    method: 'PUT',
+    data: { moveto },
+  });
+}
+
+export function getFirewallMacros() {
+  return request<PveRecord[]>('/api2/json/cluster/firewall/macros', {
+    method: 'GET',
+    notifyOnError: true,
+  });
+}
+
+export function getFirewallRefs(baseUrl = '/cluster/firewall/refs') {
+  return request<PveRecord[]>(firewallUrl(baseUrl, 'json'), {
+    method: 'GET',
+    notifyOnError: true,
+  });
+}
+
 export function getFirewallOptions() {
   return request<PveRecord>('/api2/json/cluster/firewall/options', {
     method: 'GET',
@@ -239,6 +301,17 @@ export function getFirewallOptions() {
 
 export function updateFirewallOptions(data: PveRecord) {
   return request('/api2/extjs/cluster/firewall/options', { method: 'PUT', data });
+}
+
+export function getFirewallOptionsByBaseUrl(baseUrl: string) {
+  return request<PveRecord>(firewallUrl(baseUrl, 'json'), {
+    method: 'GET',
+    notifyOnError: true,
+  });
+}
+
+export function updateFirewallOptionsByBaseUrl(baseUrl: string, data: PveRecord) {
+  return request(firewallUrl(baseUrl, 'extjs'), { method: 'PUT', data });
 }
 
 export function getFirewallGroups() {

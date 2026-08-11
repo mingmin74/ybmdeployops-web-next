@@ -17,6 +17,7 @@ const props = withDefaults(
     fieldStyle?: 'outlined' | 'standard';
     error?: boolean;
     errorMessage?: string;
+    autoSelect?: boolean;
   }>(),
   {
     disableOffline: false,
@@ -25,6 +26,7 @@ const props = withDefaults(
     fieldStyle: 'outlined',
     error: false,
     errorMessage: '',
+    autoSelect: true,
   },
 );
 
@@ -102,6 +104,7 @@ function sortNodes(items: PveNode[]) {
 
 function ensureSelectedNode() {
   if (model.value && nodes.value.some((item) => item.node === model.value)) return;
+  if (!props.autoSelect) return;
 
   const candidate =
     nodes.value.find((item) => item.status === 'online') ||
