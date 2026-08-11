@@ -101,9 +101,7 @@ const entryColumns: QTableColumn<PveRecord>[] = [
 const hasSelectedPrefixList = computed(() => selectedPrefixList.value.length === 1);
 
 const selectedPrefixListId = computed(() =>
-  selectedPrefixList.value[0]
-    ? textValue(plValue(selectedPrefixList.value[0], 'id'))
-    : undefined,
+  selectedPrefixList.value[0] ? textValue(plValue(selectedPrefixList.value[0], 'id')) : undefined,
 );
 
 const entryEmptyLabel = computed(() =>
@@ -324,7 +322,9 @@ onMounted(() => void reloadPrefixLists());
     <PrefixListEntryEditor
       v-model="entryEditorVisible"
       :prefix-list-id="selectedPrefixListId || ''"
-      :seq="editingEntry ? (entryValue(editingEntry, 'seq') as string | number | undefined) : undefined"
+      :seq="
+        editingEntry ? (entryValue(editingEntry, 'seq') as string | number | undefined) : undefined
+      "
       :entry-data="editingEntry"
       @saved="reloadEntries"
     />

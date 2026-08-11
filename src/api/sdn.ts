@@ -1,10 +1,10 @@
 import { request } from './request';
 import type { PveRecord } from './resources';
 
-export function getSdnZones() {
+export function getSdnZones(pending = true) {
   return request<PveRecord[]>('/api2/json/cluster/sdn/zones', {
     method: 'GET',
-    params: { pending: 1 },
+    ...(pending ? { params: { pending: 1 } } : {}),
     notifyOnError: true,
   });
 }
@@ -83,8 +83,25 @@ export function getSdnDryRun(node: string) {
   });
 }
 
+export function getSdnZone(zone: string) {
+  return request<PveRecord>(`/api2/json/cluster/sdn/zones/${encodeURIComponent(zone)}`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
+}
+
+export function saveSdnZone(zone: string | undefined, data: PveRecord) {
+  const url = zone
+    ? `/api2/json/cluster/sdn/zones/${encodeURIComponent(zone)}`
+    : '/api2/json/cluster/sdn/zones';
+  return request(url, { method: zone ? 'PUT' : 'POST', data, notifyOnError: true });
+}
+
 export function deleteSdnZone(zone: string) {
-  return request(`/api2/extjs/cluster/sdn/zones//${zone}`, { method: 'DELETE' });
+  return request(`/api2/json/cluster/sdn/zones/${encodeURIComponent(zone)}`, {
+    method: 'DELETE',
+    notifyOnError: true,
+  });
 }
 
 export function getSdnVnets(pending = 1) {
@@ -95,50 +112,139 @@ export function getSdnVnets(pending = 1) {
   });
 }
 
+export function getSdnVnet(vnet: string) {
+  return request<PveRecord>(`/api2/json/cluster/sdn/vnets/${encodeURIComponent(vnet)}`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
+}
+
+export function saveSdnVnet(vnet: string | undefined, data: PveRecord) {
+  const url = vnet
+    ? `/api2/json/cluster/sdn/vnets/${encodeURIComponent(vnet)}`
+    : '/api2/json/cluster/sdn/vnets';
+  return request(url, { method: vnet ? 'PUT' : 'POST', data, notifyOnError: true });
+}
+
 export function deleteSdnVnet(vnet: string) {
-  return request(`/api2/extjs/cluster/sdn/vnets//${vnet}`, { method: 'DELETE' });
+  return request(`/api2/json/cluster/sdn/vnets/${encodeURIComponent(vnet)}`, {
+    method: 'DELETE',
+    notifyOnError: true,
+  });
 }
 
 export function getSdnVnetSubnets(vnet: string, pending = 1) {
-  return request<PveRecord[]>(`/api2/json/cluster/sdn/vnets/${vnet}/subnets`, {
+  return request<PveRecord[]>(`/api2/json/cluster/sdn/vnets/${encodeURIComponent(vnet)}/subnets`, {
     method: 'GET',
     params: { pending },
     notifyOnError: true,
   });
 }
 
-export function deleteSdnVnetSubnet(vnet: string, subnet: string) {
-  return request(`/api2/extjs/cluster/sdn/vnets/${vnet}/subnets//${subnet}`, { method: 'DELETE' });
+export function getSdnVnetSubnet(vnet: string, subnet: string) {
+  return request<PveRecord>(
+    `/api2/json/cluster/sdn/vnets/${encodeURIComponent(vnet)}/subnets/${encodeURIComponent(subnet)}`,
+    {
+      method: 'GET',
+      notifyOnError: true,
+    },
+  );
 }
 
-export function getSdnControllers() {
+export function saveSdnVnetSubnet(vnet: string, subnet: string | undefined, data: PveRecord) {
+  const url = subnet
+    ? `/api2/json/cluster/sdn/vnets/${encodeURIComponent(vnet)}/subnets/${encodeURIComponent(subnet)}`
+    : `/api2/json/cluster/sdn/vnets/${encodeURIComponent(vnet)}/subnets`;
+  return request(url, { method: subnet ? 'PUT' : 'POST', data, notifyOnError: true });
+}
+
+export function deleteSdnVnetSubnet(vnet: string, subnet: string) {
+  return request(
+    `/api2/json/cluster/sdn/vnets/${encodeURIComponent(vnet)}/subnets/${encodeURIComponent(subnet)}`,
+    {
+      method: 'DELETE',
+      notifyOnError: true,
+    },
+  );
+}
+
+export function getSdnControllers(pending = true) {
   return request<PveRecord[]>('/api2/json/cluster/sdn/controllers', {
     method: 'GET',
-    params: { pending: 1 },
+    ...(pending ? { params: { pending: 1 } } : undefined),
     notifyOnError: true,
   });
 }
 
-export function getSdnIpams() {
+export function getSdnController(id: string) {
+  return request<PveRecord>(`/api2/json/cluster/sdn/controllers/${encodeURIComponent(id)}`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
+}
+
+export function saveSdnController(id: string | undefined, data: PveRecord) {
+  const url = id
+    ? `/api2/json/cluster/sdn/controllers/${encodeURIComponent(id)}`
+    : '/api2/json/cluster/sdn/controllers';
+  return request(url, { method: id ? 'PUT' : 'POST', data, notifyOnError: true });
+}
+
+export function getSdnIpams(pending = true) {
   return request<PveRecord[]>('/api2/json/cluster/sdn/ipams', {
     method: 'GET',
-    params: { pending: 1 },
+    ...(pending ? { params: { pending: 1 } } : undefined),
     notifyOnError: true,
   });
 }
 
-export function getSdnDns() {
-  return request<PveRecord[]>('/api2/json/cluster/sdn/dns', {
+export function getSdnIpam(id: string) {
+  return request<PveRecord>(`/api2/json/cluster/sdn/ipams/${encodeURIComponent(id)}`, {
     method: 'GET',
-    params: { pending: 1 },
     notifyOnError: true,
   });
+}
+
+export function saveSdnIpam(id: string | undefined, data: PveRecord) {
+  const url = id
+    ? `/api2/json/cluster/sdn/ipams/${encodeURIComponent(id)}`
+    : '/api2/json/cluster/sdn/ipams';
+  return request(url, { method: id ? 'PUT' : 'POST', data, notifyOnError: true });
+}
+
+export function getSdnDns(pending = true) {
+  return request<PveRecord[]>('/api2/json/cluster/sdn/dns', {
+    method: 'GET',
+    ...(pending ? { params: { pending: 1 } } : undefined),
+    notifyOnError: true,
+  });
+}
+
+export function getSdnDnsServer(id: string) {
+  return request<PveRecord>(`/api2/json/cluster/sdn/dns/${encodeURIComponent(id)}`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
+}
+
+export function saveSdnDns(id: string | undefined, data: PveRecord) {
+  const url = id
+    ? `/api2/json/cluster/sdn/dns/${encodeURIComponent(id)}`
+    : '/api2/json/cluster/sdn/dns';
+  return request(url, { method: id ? 'PUT' : 'POST', data, notifyOnError: true });
 }
 
 export function getSdnRouteMapEntries() {
   return request<PveRecord[]>('/api2/json/cluster/sdn/route-maps/entries', {
     method: 'GET',
     params: { pending: 1 },
+    notifyOnError: true,
+  });
+}
+
+export function getSdnRouteMaps() {
+  return request<PveRecord[]>('/api2/json/cluster/sdn/route-maps', {
+    method: 'GET',
     notifyOnError: true,
   });
 }
@@ -225,15 +331,24 @@ export function deleteSdnPrefixListEntry(prefixListId: string, seq: string | num
 }
 
 export function deleteSdnController(id: string) {
-  return request(`/api2/extjs/cluster/sdn/controllers//${id}`, { method: 'DELETE' });
+  return request(`/api2/json/cluster/sdn/controllers/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    notifyOnError: true,
+  });
 }
 
 export function deleteSdnIpam(id: string) {
-  return request(`/api2/json/cluster/sdn/ipams/${id}`, { method: 'DELETE' });
+  return request(`/api2/json/cluster/sdn/ipams/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    notifyOnError: true,
+  });
 }
 
 export function deleteSdnDns(id: string) {
-  return request(`/api2/json/cluster/sdn/dns/${id}`, { method: 'DELETE' });
+  return request(`/api2/json/cluster/sdn/dns/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    notifyOnError: true,
+  });
 }
 
 export function getIpamsPveStatus() {
@@ -244,14 +359,29 @@ export function getIpamsPveStatus() {
   });
 }
 
-export function createSmvnet(data: PveRecord) {
-  return request('/api2/extjs/cluster/sdn/vnets/smvnet/ips', { method: 'POST', data });
+export function createSdnIpamMapping(vnet: string, data: PveRecord) {
+  return request(`/api2/extjs/cluster/sdn/vnets/${encodeURIComponent(vnet)}/ips`, {
+    method: 'POST',
+    data,
+    notifyOnError: true,
+  });
 }
 
-export function updateSmvnet(data: PveRecord) {
-  return request('/api2/extjs/cluster/sdn/vnets/smvnet/ips', { method: 'PUT', data });
+export function updateSdnIpamMapping(vnet: string, data: PveRecord) {
+  return request(`/api2/extjs/cluster/sdn/vnets/${encodeURIComponent(vnet)}/ips`, {
+    method: 'PUT',
+    data,
+    notifyOnError: true,
+  });
 }
 
-export function deleteSmvnet(data: PveRecord) {
-  return request('/api2/extjs/cluster/sdn/vnets/smvnet/ips', { method: 'DELETE', params: data });
+export function deleteSdnIpamMapping(
+  vnet: string,
+  data: { zone: string; mac: string; ip: string },
+) {
+  return request(`/api2/extjs/cluster/sdn/vnets/${encodeURIComponent(vnet)}/ips`, {
+    method: 'DELETE',
+    params: data,
+    notifyOnError: true,
+  });
 }

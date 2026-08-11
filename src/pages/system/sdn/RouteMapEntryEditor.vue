@@ -223,7 +223,7 @@ async function loadPrefixLists() {
     prefixListOptions.value = data
       .map((item) => {
         const pending = (item.pending as PveRecord) || {};
-        const name = textValue(pending.prefixlist ?? item.prefixlist);
+        const name = textValue(pending.id ?? item.id);
         return { label: name, value: name };
       })
       .filter((o) => o.value);
