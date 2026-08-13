@@ -10,7 +10,17 @@ const { validationErrors } = errors;
 const { cpuFlags } = resources;
 const { cpuModelColumns, cpuFlagColumns, cpuFlagStateOptions } = options;
 const { setCpuFlagState } = actions;
-const { totalCores, cpuModelRows, cpuModelDisplayValue, cpuFlagState, stepContentHeight } = derived;
+const {
+  totalCores,
+  cpuModelRows,
+  cpuModelDisplayValue,
+  cpuFlagState,
+  cpuunitsMin,
+  cpuunitsMax,
+  cpuunitsDefault,
+  canEditCpuAffinity,
+  stepContentHeight,
+} = derived;
 </script>
 
 <template>
@@ -25,7 +35,6 @@ const { totalCores, cpuModelRows, cpuModelDisplayValue, cpuFlagState, stepConten
             dense
             type="number"
             min="1"
-            max="256"
             class="q-field--with-bottom"
             :label="gettext('Sockets')"
           />
@@ -94,6 +103,7 @@ const { totalCores, cpuModelRows, cpuModelDisplayValue, cpuFlagState, stepConten
             v-model="form.affinity"
             dense
             class="q-field--with-bottom"
+            :disable="!canEditCpuAffinity"
             :label="gettext('CPU Affinity')"
             :placeholder="gettext('All Cores')"
           />
@@ -105,9 +115,9 @@ const { totalCores, cpuModelRows, cpuModelDisplayValue, cpuFlagState, stepConten
             :error-message="validationErrors.cpuunits"
             dense
             type="number"
-            min="1"
-            max="10000"
-            placeholder="100"
+            :min="cpuunitsMin"
+            :max="cpuunitsMax"
+            :placeholder="String(cpuunitsDefault)"
             class="q-field--with-bottom"
             :label="gettext('CPU units')"
           />

@@ -253,7 +253,7 @@ onBeforeUnmount(() => {
           :node="node"
           :storage="textValue(storage.storage)"
           :content="item.name"
-          :shared="Boolean(status.shared)"
+          :shared="Number(storage.shared ?? status.shared ?? 0) !== 0"
           :active="tab === item.name"
         />
         <StorageImageView
@@ -261,7 +261,7 @@ onBeforeUnmount(() => {
           :node="node"
           :storage="textValue(storage.storage)"
           :content="item.name === 'images' ? 'images' : 'rootdir'"
-          :shared="Boolean(status.shared)"
+          :shared="Number(storage.shared ?? status.shared ?? 0) !== 0"
           :active="tab === item.name"
         />
         <StorageTemplateView

@@ -27,6 +27,7 @@ const uploadVisible = ref(false);
 const downloadVisible = ref(false);
 const taskVisible = ref(false);
 const taskUpid = ref('');
+const taskTitle = ref('');
 
 const isBackup = computed(() => props.content === 'backup');
 const isImage = computed(() => props.content === 'images' || props.content === 'rootdir');
@@ -172,8 +173,8 @@ watch(() => props.active, (active) => {
         </q-input>
       </template>
     </q-table>
-    <StorageUploadDialog v-if="supportsTransfer" v-model="uploadVisible" :node="node" :storage="storage" :content="content" @done="refreshData" />
-    <StorageDownloadUrlDialog v-if="supportsTransfer" v-model="downloadVisible" :node="node" :storage="storage" :content="content" @task="(upid) => { taskUpid = upid; taskVisible = !!upid }" @done="refreshData" />
-    <TaskOutputDialog v-model="taskVisible" :node="node" :upid="taskUpid" :title="gettext('Download')" />
+    <StorageUploadDialog v-if="supportsTransfer" v-model="uploadVisible" :node="node" :storage="storage" :content="content" @task="(upid) => { taskUpid = upid; taskTitle = gettext('Upload'); taskVisible = !!upid }" />
+    <StorageDownloadUrlDialog v-if="supportsTransfer" v-model="downloadVisible" :node="node" :storage="storage" :content="content" @task="(upid) => { taskUpid = upid; taskTitle = gettext('Download'); taskVisible = !!upid }" />
+    <TaskOutputDialog v-model="taskVisible" :node="node" :upid="taskUpid" :title="taskTitle" @finished="refreshData" />
   </div>
 </template>

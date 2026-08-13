@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { gettext } from '@/locale';
 import { useCreateVmWizardContext } from '../context/createVmWizardContext';
 
 const { form, state, errors, derived } = useCreateVmWizardContext();
@@ -18,7 +19,7 @@ const { stepContentHeight } = derived;
             :error-message="validationErrors.memory"
             dense
             type="number"
-            min="128"
+            min="1"
             step="32"
             class="q-field--with-bottom"
             :label="gettext('Memory (MiB)')"

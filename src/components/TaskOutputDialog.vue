@@ -6,6 +6,7 @@ import { getTaskLog, getTaskStatus, stopTask, type TaskStatus } from '@/api/main
 import { gettext } from '@/locale';
 
 const model = defineModel<boolean>({ required: true });
+const emit = defineEmits<{ finished: [] }>();
 const props = defineProps<{
   node?: string;
   upid?: string;
@@ -21,6 +22,7 @@ const status = shallowRef<TaskStatus>();
 const dialogTitle = computed(() => `${gettext('Task')}: ${props.title || '-'}`);
 const canStop = computed(() => status.value?.status === 'running');
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+let finishedUpid = '';
 
 function formatTime(value?: number) {
   return value ? new Date(value * 1000).toLocaleString() : '-';
@@ -45,6 +47,10 @@ async function reload(silent = false) {
     ]);
     lines.value = (logResponse.data || []).map((item) => String(item.t || ''));
     status.value = statusResponse.data;
+    if (model.value && props.upid && status.value?.status !== 'running' && finishedUpid !== props.upid) {
+      finishedUpid = props.upid;
+      emit('finished');
+    }
   } finally {
     if (!silent) loading.value = false;
     scheduleRefresh();
@@ -74,6 +80,7 @@ watch(
   () => model.value,
   (visible) => {
     if (refreshTimer) clearTimeout(refreshTimer);
+    if (visible) finishedUpid = '';
     if (visible) {
       activeTab.value = 'output';
       void reload();

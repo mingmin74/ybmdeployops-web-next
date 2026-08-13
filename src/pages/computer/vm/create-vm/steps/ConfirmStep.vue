@@ -2,7 +2,7 @@
 import { gettext } from '@/locale';
 import { useCreateVmWizardContext } from '../context/createVmWizardContext';
 
-const { derived } = useCreateVmWizardContext();
+const { form, derived } = useCreateVmWizardContext();
 const { summaryRows, stepContentHeight } = derived;
 </script>
 
@@ -20,8 +20,16 @@ const { summaryRows, stepContentHeight } = derived;
           <td>{{ row[0] }}</td>
           <td class="vm-create-summary-value">{{ row[1] }}</td>
         </tr>
-      </tbody></q-markup-table
-    >
+      </tbody>
+    </q-markup-table>
+    <q-checkbox
+      v-model="form.startAfterCreated"
+      dense
+      right-label
+      color="primary"
+      class="q-mt-md"
+      :label="gettext('Start after created')"
+    />
   </q-scroll-area>
 </template>
 

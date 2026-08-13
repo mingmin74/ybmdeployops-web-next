@@ -89,18 +89,18 @@ export type VmCpuFlag = {
 export type VmMachineType = { id?: string; type?: string; version?: string };
 
 /** CPU models supplied by the selected PVE node. */
-export function getVmCpuModels(node: string) {
+export function getVmCpuModels(node: string, arch?: string) {
   return request<VmCpuModel[]>(
     `/api2/json/nodes/${encodeURIComponent(node)}/capabilities/qemu/cpu`,
-    { method: 'GET', notifyOnError: true },
+    { method: 'GET', params: { arch }, notifyOnError: true },
   );
 }
 
 /** CPU flags supplied by the selected PVE node. */
-export function getVmCpuFlags(node: string) {
+export function getVmCpuFlags(node: string, arch?: string) {
   return request<Array<VmCpuFlag | string>>(
     `/api2/json/nodes/${encodeURIComponent(node)}/capabilities/qemu/cpu-flags`,
-    { method: 'GET', notifyOnError: true },
+    { method: 'GET', params: { arch }, notifyOnError: true },
   );
 }
 
@@ -291,18 +291,22 @@ export function restoreVmBackup(
   node: string,
   data: {
     vmid: number | string;
-    archive: string;
+    archive?: string;
+    ostemplate?: string;
+    restore?: 0 | 1;
     storage?: string;
     bwlimit?: number;
     unique?: 0 | 1;
     force?: 0 | 1;
     name?: string;
+    hostname?: string;
     cores?: number;
     memory?: number;
     sockets?: number;
     start?: 0 | 1;
     'live-restore'?: 0 | 1;
     'ha-managed'?: 0 | 1;
+    unprivileged?: 0 | 1;
   },
   type: 'qemu' | 'lxc' = 'qemu',
 ) {

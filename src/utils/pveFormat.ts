@@ -79,6 +79,7 @@ const contentLabels: Record<string, string> = {
   backup: 'Backup File',
   rootdir: 'Container',
   snippets: 'Snippets',
+  import: 'Import',
 };
 
 export function formatContent(content?: unknown) {

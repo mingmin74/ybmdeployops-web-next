@@ -134,7 +134,12 @@ export function uploadStorageContent(
   file: File,
   content: string,
   onProgress?: (percent: number, total: number) => void,
-  options: { filename?: string; checksumAlgorithm?: string; checksum?: string } = {},
+  options: {
+    filename?: string;
+    checksumAlgorithm?: string;
+    checksum?: string;
+    onAbortReady?: (abort: () => void) => void;
+  } = {},
 ) {
   const session = useSessionStore();
   const form = new FormData();
@@ -175,6 +180,8 @@ export function uploadStorageContent(
       }
     };
     xhr.onerror = () => reject(new Error('Connection error - server offline?'));
+    xhr.onabort = () => reject(new Error('Upload aborted'));
+    options.onAbortReady?.(() => xhr.abort());
     xhr.send(form);
   });
 }

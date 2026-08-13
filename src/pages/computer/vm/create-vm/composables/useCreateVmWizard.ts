@@ -12,6 +12,7 @@ import { getNodes, getPools, type PveNode, type PvePool, type PveRecord } from '
 import { getNodeStorage, getStorageContent } from '@/api/storageContent';
 import { getNodeNetwork } from '@/api/host';
 import { gettext } from '@/locale';
+import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
 import type {
   CreateVmForm,
@@ -57,6 +58,7 @@ export function useCreateVmWizard(
   model: Ref<boolean>,
   emit: CreateVmWizardEmit,
 ): CreateVmWizardContext {
+  const session = useSessionStore();
   const loading = shallowRef(false);
   const step = shallowRef<CreateVmStepName>('general');
   const advanced = shallowRef(false);
@@ -135,6 +137,7 @@ export function useCreateVmWizard(
     balloon: 2048,
     shares: '',
     allowKsm: true,
+    startAfterCreated: false,
     noNetwork: false,
     bridge: 'vmbr0',
     model: 'virtio',
@@ -567,7 +570,8 @@ export function useCreateVmWizard(
       hasValidDiskSize(form.diskSize) &&
       hasValidDiskSlot(form.diskSlot, form.diskBus),
     );
-    const used = new Set([primaryDiskKey.value]);
+    const used = reservedDeviceKeys();
+    used.add(primaryDiskKey.value);
     const extras: Record<number, boolean> = {};
     extraDisks.forEach((disk) => {
       const key = `${disk.bus}${disk.slot}`;
@@ -586,6 +590,16 @@ export function useCreateVmWizard(
     return { primary: primaryValid, extras };
   });
   const totalCores = computed(() => form.sockets * form.cores);
+  const cgroupMode = computed(() => {
+    const node = nodes.value.find((item) => item.node === form.node) as
+      | (PveNode & Record<string, unknown>)
+      | undefined;
+    return Number(node?.['cgroup-mode'] ?? 2);
+  });
+  const cpuunitsMin = computed(() => (cgroupMode.value === 1 ? 2 : 1));
+  const cpuunitsMax = computed(() => (cgroupMode.value === 1 ? 262144 : 10000));
+  const cpuunitsDefault = computed(() => (cgroupMode.value === 1 ? 1024 : 100));
+  const canEditCpuAffinity = computed(() => session.userid === 'root@pam');
   const cpuModelRows = computed<PveRecord[]>(() =>
     cpuModels.value.map((cpu) => ({
       name: textValue(cpu.name),
@@ -597,10 +611,11 @@ export function useCreateVmWizard(
   const cpuModelDisplayValue = computed(
     () =>
       textValue(cpuModelRows.value.find((row) => textValue(row.name) === form.cpu)?.displayname) ||
-      `${gettext('Default')} (kvm64)`,
+      `${gettext('Default')} (${effectiveArch.value === 'x86_64' ? 'x86-64-v2-AES' : 'host'})`,
   );
   const cpuValue = computed(() => {
-    const parts = [form.cpu.trim()];
+    const cpu = form.cpu.trim() || (effectiveArch.value === 'x86_64' ? 'x86-64-v2-AES' : '');
+    const parts = cpu ? [cpu] : [];
     if (form.cpuFlags.trim()) parts.push(`flags=${form.cpuFlags.trim()}`);
     return parts.filter(Boolean).join(',');
   });
@@ -699,7 +714,8 @@ export function useCreateVmWizard(
       form.sockets <= 256 &&
       (!form.vcpus.trim() || (Number(form.vcpus) >= 1 && Number(form.vcpus) <= totalCores.value)) &&
       (!form.cpulimit.trim() || (Number(form.cpulimit) >= 0 && Number(form.cpulimit) <= 128)) &&
-      (!form.cpuunits.trim() || (Number(form.cpuunits) >= 1 && Number(form.cpuunits) <= 10000)) &&
+      (!form.cpuunits.trim() ||
+        (Number(form.cpuunits) >= cpuunitsMin.value && Number(form.cpuunits) <= cpuunitsMax.value)) &&
       (!form.noNetwork && form.vlanTag.trim()
         ? Number(form.vlanTag) >= 1 && Number(form.vlanTag) <= 4094
         : true) &&
@@ -727,9 +743,24 @@ export function useCreateVmWizard(
     // PVE only overrides the backend boot order when the Windows VirtIO CD adds
     // a second CD-ROM drive; otherwise the backend selects the normal default.
     if (!form.enableVirtioDrivers || !form.virtioDriversCdrom.trim()) return '';
-    const devices = [
+    const diskDevices = new Set([
       primaryDiskKey.value,
-      form.mediaType !== 'none' ? cdromDevice.value : '',
+      ...extraDisks.map((disk) => `${disk.bus}${disk.slot}`),
+    ]);
+    let firstDisk = '';
+    for (const bus of ['ide', 'scsi', 'virtio', 'sata'] as DiskBus[]) {
+      for (let slot = 0; slot < diskBusSlotLimits[bus]; slot += 1) {
+        const device = `${bus}${slot}`;
+        if (diskDevices.has(device)) {
+          firstDisk = device;
+          break;
+        }
+      }
+      if (firstDisk) break;
+    }
+    const devices = [
+      firstDisk,
+      'ide2',
       'ide0',
       !form.noNetwork && form.bridge.trim() ? 'net0' : '',
     ].filter(Boolean);
@@ -751,69 +782,55 @@ export function useCreateVmWizard(
     if (form.model === 'virtio' && form.mtu.trim()) values.push(`mtu=${form.mtu.trim()}`);
     return values.join(',');
   });
-  // The final page mirrors PVE's Wizard.getValues() grid: show the real API key
-  // and the value that will be submitted, rather than a lossy human summary.
-  const summaryRows = computed(
-    () =>
-      [
-        ['node', form.node],
-        ['vmid', form.vmid],
-        ...(form.name.trim() ? [['name', form.name.trim()]] : []),
-        ...(form.pool ? [['pool', form.pool]] : []),
-        ...(form.haManaged ? [['ha-managed', '1']] : []),
-        ...(form.onboot ? [['onboot', '1']] : []),
-        ...(startup.value ? [['startup', startup.value]] : []),
-        ...(form.tags.trim() ? [['tags', form.tags.trim()]] : []),
-        ...(form.arch !== '__default__' ? [['arch', form.arch]] : []),
-        ...(crossArchitecture.value ? [['kvm', '0']] : []),
-        ['ostype', form.ostype],
-        [cdromDevice.value, cdromValue.value],
-        ...(form.enableVirtioDrivers && form.virtioDriversCdrom.trim()
-          ? [['ide0', `${form.virtioDriversCdrom.trim()},media=cdrom`]]
-          : []),
-        ...(form.agent ? [['agent', 'enabled=1']] : []),
-        ...(form.vga !== '__default__' ? [['vga', form.vga]] : []),
-        ...Object.entries(serialVgaPayload.value),
-        ['bios', form.bios],
-        ['machine', form.machine],
-        ['scsihw', form.scsihw],
-        ...(form.bios === 'ovmf' && form.addEfiDisk && form.efiStorage
-          ? [
-              [
-                'efidisk0',
-                `${form.efiStorage}:1,efitype=4m,format=${form.efiFormat},pre-enrolled-keys=${
-                  form.preEnrolledKeys ? 1 : 0
-                }`,
-              ],
-            ]
-          : []),
-        ...(form.addTpm && form.tpmStorage
-          ? [
-              [
-                'tpmstate0',
-                `${form.tpmStorage}:1,format=${form.tpmFormat},version=${form.tpmVersion}`,
-              ],
-            ]
-          : []),
-        [primaryDiskKey.value, diskValue(form.storage, form.diskSize, form, form.diskBus)],
-        ...extraDisks.map((disk) => [
-          `${disk.bus}${disk.slot}`,
-          diskValue(disk.storage, disk.size, disk, disk.bus),
-        ]),
-        ...(bootOrder.value ? [['boot', bootOrder.value]] : []),
-        ['sockets', String(form.sockets)],
-        ['cores', String(form.cores)],
-        ...(cpuValue.value ? [['cpu', cpuValue.value]] : []),
-        ...(form.vcpus.trim() ? [['vcpus', form.vcpus.trim()]] : []),
-        ...(form.cpulimit.trim() ? [['cpulimit', form.cpulimit.trim()]] : []),
-        ...(form.cpuunits.trim() ? [['cpuunits', form.cpuunits.trim()]] : []),
-        ...(form.affinity.trim() ? [['affinity', form.affinity.trim()]] : []),
-        ...(form.numa ? [['numa', '1']] : []),
-        ['memory', String(form.memory)],
-        ...Object.entries(memoryPayload.value).map(([key, value]) => [key, String(value)]),
-        ...(form.allowKsm ? [] : [['allow-ksm', '0']]),
-        ...(networkValue.value ? [['net0', networkValue.value]] : []),
-      ] as [string, string][],
+  const createPayload = computed<Record<string, string | number>>(() => ({
+    vmid: form.vmid,
+    ...(form.name.trim() ? { name: form.name.trim() } : {}),
+    ...(form.pool ? { pool: form.pool } : {}),
+    ...(form.haManaged ? { 'ha-managed': 1 } : {}),
+    ...(form.onboot ? { onboot: 1 } : {}),
+    ...(startup.value ? { startup: startup.value } : {}),
+    ...(form.tags.trim() ? { tags: form.tags.trim() } : {}),
+    ...(form.arch !== '__default__' ? { arch: form.arch } : {}),
+    ...(crossArchitecture.value ? { kvm: 0 } : {}),
+    ostype: form.ostype,
+    [cdromDevice.value]: cdromValue.value,
+    ...(form.enableVirtioDrivers && form.virtioDriversCdrom.trim()
+      ? { ide0: `${form.virtioDriversCdrom.trim()},media=cdrom` }
+      : {}),
+    ...(form.agent ? { agent: 'enabled=1' } : {}),
+    ...(form.vga !== '__default__' ? { vga: form.vga } : {}),
+    ...serialVgaPayload.value,
+    ...(form.bios !== '__default__' ? { bios: form.bios } : {}),
+    machine: form.machine,
+    scsihw: form.scsihw,
+    ...(form.bios === 'ovmf' && form.addEfiDisk && form.efiStorage
+      ? { efidisk0: `${form.efiStorage}:1,efitype=4m,format=${form.efiFormat},pre-enrolled-keys=${form.preEnrolledKeys ? 1 : 0}` }
+      : {}),
+    ...(form.addTpm && form.tpmStorage
+      ? { tpmstate0: `${form.tpmStorage}:1,format=${form.tpmFormat},version=${form.tpmVersion}` }
+      : {}),
+    [primaryDiskKey.value]: diskValue(form.storage, form.diskSize, form, form.diskBus),
+    ...extraDiskPayload.value,
+    ...(bootOrder.value ? { boot: bootOrder.value } : {}),
+    sockets: form.sockets,
+    cores: form.cores,
+    ...(cpuValue.value ? { cpu: cpuValue.value } : {}),
+    ...(form.vcpus.trim() ? { vcpus: form.vcpus.trim() } : {}),
+    ...(form.cpulimit.trim() && Number(form.cpulimit) !== 0 ? { cpulimit: form.cpulimit.trim() } : {}),
+    ...(form.cpuunits.trim() && Number(form.cpuunits) !== cpuunitsDefault.value ? { cpuunits: form.cpuunits.trim() } : {}),
+    ...(form.affinity.trim() ? { affinity: form.affinity.trim() } : {}),
+    ...(form.numa ? { numa: 1 } : {}),
+    memory: form.memory,
+    ...memoryPayload.value,
+    ...(form.allowKsm ? {} : { 'allow-ksm': 0 }),
+    ...(networkValue.value ? { net0: networkValue.value } : {}),
+    ...(form.startAfterCreated ? { start: 1 } : {}),
+  }));
+  const summaryRows = computed(() =>
+    Object.entries({ node: form.node, ...createPayload.value })
+      .filter(([key, value]) => key && value !== '')
+      .map(([key, value]) => [key, String(value)] as [string, string])
+      .sort(([left], [right]) => left.localeCompare(right)),
   );
 
   async function loadStorage() {
@@ -919,8 +936,8 @@ export function useCreateVmWizard(
   async function loadCpuCapabilities() {
     if (!form.node) return;
     const [models, flags] = await Promise.all([
-      getVmCpuModels(form.node),
-      getVmCpuFlags(form.node),
+      getVmCpuModels(form.node, effectiveArch.value),
+      getVmCpuFlags(form.node, effectiveArch.value),
     ]);
     cpuModels.value = (models.data || []).sort((left, right) =>
       String(left.displayname || left.name || '').localeCompare(
@@ -1010,7 +1027,7 @@ export function useCreateVmWizard(
     label: string,
     value: unknown,
     min: number,
-    max: number,
+    max: number | undefined,
     optional = false,
     integer = true,
   ) {
@@ -1024,9 +1041,14 @@ export function useCreateVmWizard(
       !Number.isFinite(numericValue) ||
       (integer && !Number.isInteger(numericValue)) ||
       numericValue < min ||
-      numericValue > max
+      (max !== undefined && numericValue > max)
     ) {
-      addValidationError(field, `${label}: ${gettext('Value must be between')} ${min} and ${max}`);
+      addValidationError(
+        field,
+        max === undefined
+          ? `${label}: ${gettext('Value must be at least')} ${min}`
+          : `${label}: ${gettext('Value must be between')} ${min} and ${max}`,
+      );
     }
   }
 
@@ -1156,11 +1178,27 @@ export function useCreateVmWizard(
     }
 
     if (stepName === 'cpu') {
-      validateNumber('sockets', gettext('Sockets'), form.sockets, 1, 4);
+      validateNumber('sockets', gettext('Sockets'), form.sockets, 1, undefined);
       validateNumber('cores', gettext('Cores'), form.cores, 1, 256);
       validateNumber('vcpus', gettext('VCPUs'), form.vcpus, 1, totalCores.value, true);
       validateNumber('cpulimit', gettext('CPU limit'), form.cpulimit, 0, 128, true, false);
-      validateNumber('cpuunits', gettext('CPU units'), form.cpuunits, 1, 10000, true);
+      validateNumber(
+        'cpuunits',
+        gettext('CPU units'),
+        form.cpuunits,
+        cpuunitsMin.value,
+        cpuunitsMax.value,
+        true,
+      );
+      if (
+        effectiveArch.value === 'aarch64' &&
+        !crossArchitecture.value &&
+        form.cpu &&
+        !form.cpu.startsWith('custom-') &&
+        !['host', 'max', 'cortex-a53', 'cortex-a57'].includes(form.cpu)
+      ) {
+        addValidationError('cpu', gettext('CPU model is not usable with KVM on ARM'));
+      }
     }
 
     if (stepName === 'memory') {
@@ -1299,6 +1337,7 @@ export function useCreateVmWizard(
       form.balloon = 2048;
       form.shares = '';
       form.allowKsm = true;
+      form.startAfterCreated = false;
       form.noNetwork = false;
       form.bridge = 'vmbr0';
       form.model = 'virtio';
@@ -1320,24 +1359,40 @@ export function useCreateVmWizard(
     }
   }
 
-  function applyOsDefaults() {
-    const isArm = effectiveArch.value === 'aarch64';
-    if (isArm) {
-      form.osbase = form.osbase === 'Other' ? 'Other' : 'Linux';
-      if (form.ostype.startsWith('win')) form.ostype = 'l26';
-    }
-    const osDefaults: Record<
-      string,
-      { diskBus: DiskBus; model: string; scsihw: string; bios?: string; machine?: string }
-    > = {
-      generic: {
-        diskBus: isArm ? 'scsi' : 'ide',
+  function getOsDefaults(ostype: string, arch: string) {
+    type OsDefaults = {
+      diskBus: DiskBus;
+      model: string;
+      scsihw: string;
+      bios: string;
+      machine: string;
+      busPriority: Record<DiskBus, number>;
+    };
+    const generic: Record<'x86_64' | 'aarch64', OsDefaults> = {
+      x86_64: {
+        diskBus: 'ide',
         model: 'e1000',
         scsihw: 'virtio-scsi-single',
-        bios: isArm ? 'ovmf' : '__default__',
+        bios: '__default__',
         machine: '__default__',
+        busPriority: { ide: 4, sata: 3, scsi: 2, virtio: 1 },
       },
-      l26: { diskBus: 'scsi', model: 'virtio', scsihw: 'virtio-scsi-single' },
+      aarch64: {
+        diskBus: 'scsi',
+        model: 'e1000',
+        scsihw: 'virtio-scsi-single',
+        bios: 'ovmf',
+        machine: '__default__',
+        busPriority: { scsi: 4, sata: 3, virtio: 2, ide: 1 },
+      },
+    };
+    const parent = generic[arch === 'aarch64' ? 'aarch64' : 'x86_64'];
+    const overrides: Record<string, Partial<OsDefaults>> = {
+      l26: {
+        diskBus: 'scsi',
+        model: 'virtio',
+        busPriority: { scsi: 4, virtio: 3, sata: 2, ide: 1 },
+      },
       w2k: { diskBus: 'ide', model: 'rtl8139', scsihw: '__default__' },
       wxp: { diskBus: 'ide', model: 'rtl8139', scsihw: '__default__' },
       win11: {
@@ -1348,7 +1403,16 @@ export function useCreateVmWizard(
         machine: 'q35',
       },
     };
-    const defaults = osDefaults[form.ostype] ?? osDefaults.generic!;
+    return { ...parent, ...(overrides[ostype] || {}) };
+  }
+
+  function applyOsDefaults() {
+    const isArm = effectiveArch.value === 'aarch64';
+    if (isArm) {
+      form.osbase = form.osbase === 'Other' ? 'Other' : 'Linux';
+      if (form.ostype.startsWith('win')) form.ostype = 'l26';
+    }
+    const defaults = getOsDefaults(form.ostype, effectiveArch.value);
     const isWindows11 = form.ostype === 'win11';
     form.diskBus = form.enableVirtioDrivers ? 'scsi' : defaults.diskBus;
     form.model = form.enableVirtioDrivers ? 'virtio' : defaults.model;
@@ -1361,67 +1425,20 @@ export function useCreateVmWizard(
       form.memory = memoryDefault;
       form.balloon = memoryDefault;
     }
-    if (isArm) form.cpu = 'neoverse-n2';
-    else if (form.cpu === 'neoverse-n2') form.cpu = '';
+    if (form.cpu === 'neoverse-n2') form.cpu = '';
+  }
+
+  function applyVirtioDriverDefaults(enabled: boolean) {
+    const defaults = getOsDefaults(form.ostype, effectiveArch.value);
+    form.diskBus = enabled ? 'scsi' : defaults.diskBus;
+    form.model = enabled ? 'virtio' : defaults.model;
   }
 
   async function submit() {
     if (!(await validateAllSteps()) || !canCreate.value) return;
     loading.value = true;
     try {
-      const response = await createVm(form.node, {
-        vmid: form.vmid,
-        ...(form.name.trim() ? { name: form.name.trim() } : {}),
-        ...(form.pool ? { pool: form.pool } : {}),
-        ...(form.haManaged ? { 'ha-managed': 1 } : {}),
-        ...(form.onboot ? { onboot: 1 } : {}),
-        ...(startup.value ? { startup: startup.value } : {}),
-        ...(form.tags.trim() ? { tags: form.tags.trim() } : {}),
-        ...(form.arch !== '__default__' ? { arch: form.arch } : {}),
-        ...(crossArchitecture.value ? { kvm: 0 } : {}),
-        ostype: form.ostype,
-        [cdromDevice.value]: cdromValue.value,
-        ...(form.enableVirtioDrivers && form.virtioDriversCdrom.trim()
-          ? {
-              ide0: `${form.virtioDriversCdrom.trim()}${
-                form.virtioDriversCdrom.includes('media=cdrom') ? '' : ',media=cdrom'
-              }`,
-            }
-          : {}),
-        ...(form.agent ? { agent: 'enabled=1' } : {}),
-        ...(form.vga !== '__default__' ? { vga: form.vga } : {}),
-        ...serialVgaPayload.value,
-        ...(form.bios !== '__default__' ? { bios: form.bios } : {}),
-        machine: form.machine,
-        scsihw: form.scsihw,
-        ...(form.bios === 'ovmf' && form.addEfiDisk && form.efiStorage
-          ? {
-              efidisk0: `${form.efiStorage}:1,efitype=4m,format=${form.efiFormat},pre-enrolled-keys=${
-                form.preEnrolledKeys ? 1 : 0
-              }`,
-            }
-          : {}),
-        ...(form.addTpm && form.tpmStorage
-          ? {
-              tpmstate0: `${form.tpmStorage}:1,format=${form.tpmFormat},version=${form.tpmVersion}`,
-            }
-          : {}),
-        [primaryDiskKey.value]: diskValue(form.storage, form.diskSize, form, form.diskBus),
-        ...extraDiskPayload.value,
-        ...(bootOrder.value ? { boot: bootOrder.value } : {}),
-        sockets: form.sockets,
-        cores: form.cores,
-        ...(cpuValue.value ? { cpu: cpuValue.value } : {}),
-        ...(form.vcpus.trim() ? { vcpus: form.vcpus.trim() } : {}),
-        ...(form.cpulimit.trim() ? { cpulimit: form.cpulimit.trim() } : {}),
-        ...(form.cpuunits.trim() ? { cpuunits: form.cpuunits.trim() } : {}),
-        ...(form.affinity.trim() ? { affinity: form.affinity.trim() } : {}),
-        ...(form.numa ? { numa: 1 } : {}),
-        memory: form.memory,
-        ...memoryPayload.value,
-        ...(form.allowKsm ? {} : { 'allow-ksm': 0 }),
-        ...(networkValue.value ? { net0: networkValue.value } : {}),
-      });
+      const response = await createVm(form.node, createPayload.value);
       model.value = false;
       emit('completed');
       if (response.data)
@@ -1483,13 +1500,17 @@ export function useCreateVmWizard(
       effectiveArch.value === 'aarch64'
         ? ['scsi', 'virtio', 'sata']
         : ['scsi', 'virtio', 'sata', 'ide'];
-    const priorities: DiskBus[] =
-      form.ostype === 'l26' ? ['scsi', 'virtio', 'sata', 'ide'] : ['ide', 'sata', 'scsi', 'virtio'];
-    const used = usedDeviceKeys();
+    const defaults = getOsDefaults(form.ostype, effectiveArch.value);
+    const diskUsage = Object.fromEntries(buses.map((bus) => [bus, 0])) as Record<DiskBus, number>;
+    [primaryDiskKey.value, ...extraDisks.map((disk) => `${disk.bus}${disk.slot}`)].forEach((key) => {
+      const bus = buses.find((candidate) => key.startsWith(candidate));
+      if (bus) diskUsage[bus] += 1;
+    });
     const candidates = [...buses].sort((left, right) => {
-      const leftCount = [...used].filter((key) => key.startsWith(left)).length;
-      const rightCount = [...used].filter((key) => key.startsWith(right)).length;
-      return leftCount === rightCount ? priorities.indexOf(left) - priorities.indexOf(right) : leftCount - rightCount;
+      const priority = (bus: DiskBus) => defaults.busPriority[bus] ?? 0;
+      return diskUsage[left] === diskUsage[right]
+        ? priority(right) - priority(left)
+        : diskUsage[right] - diskUsage[left];
     });
     for (const bus of candidates) {
       const slot = nextFreeDiskSlot(bus);
@@ -1534,6 +1555,15 @@ export function useCreateVmWizard(
     step.value = steps.value[index + offset]?.name || step.value;
   }
 
+  watch(
+    () => form.memory,
+    (memory, previousMemory) => {
+      if (form.balloon === previousMemory) form.balloon = memory;
+    },
+  );
+  watch(effectiveArch, () => {
+    if (model.value && form.node) void loadCpuCapabilities();
+  });
   watch(model, (visible) => {
     if (visible) void initialize();
   });
@@ -1568,7 +1598,7 @@ export function useCreateVmWizard(
     },
   );
   watch([() => form.ostype, effectiveArch], applyOsDefaults);
-  watch(() => form.enableVirtioDrivers, applyOsDefaults);
+  watch(() => form.enableVirtioDrivers, applyVirtioDriverDefaults);
   watch(
     () => form.bios,
     (bios, previousBios) => {
@@ -1753,6 +1783,10 @@ export function useCreateVmWizard(
       totalCores,
       cpuModelRows,
       bridgeRows,
+      cpuunitsMin,
+      cpuunitsMax,
+      cpuunitsDefault,
+      canEditCpuAffinity,
       cpuModelDisplayValue,
       cpuValue,
       memoryPayload,

@@ -93,6 +93,7 @@ export type CreateVmForm = DiskSettings & {
   balloon: number;
   shares: string;
   allowKsm: boolean;
+  startAfterCreated: boolean;
   noNetwork: boolean;
   bridge: string;
   model: string;
@@ -197,6 +198,10 @@ export type CreateVmWizardContext = {
     totalCores: ComputedRef<number>;
     cpuModelRows: ComputedRef<PveRecord[]>;
     bridgeRows: ComputedRef<PveRecord[]>;
+    cpuunitsMin: ComputedRef<number>;
+    cpuunitsMax: ComputedRef<number>;
+    cpuunitsDefault: ComputedRef<number>;
+    canEditCpuAffinity: ComputedRef<boolean>;
     cpuModelDisplayValue: ComputedRef<string>;
     cpuValue: ComputedRef<string>;
     memoryPayload: ComputedRef<Record<string, string | number>>;
