@@ -10,6 +10,7 @@ import {
   getFirewallGroups,
   getFirewallMacros,
   getFirewallRefs,
+  getFirewallRuleByBaseUrl,
   getFirewallRulesByBaseUrl,
   moveFirewallRuleByBaseUrl,
   updateFirewallRuleByBaseUrl,
@@ -306,10 +307,14 @@ async function loadSelectors() {
 async function openDialog(nextMode: EditMode) {
   mode.value = nextMode;
   const editingGroup = nextMode === 'edit' && selectedRule.value?.type === 'group';
+  const detail =
+    nextMode === 'edit' && selectedRule.value
+      ? (await getFirewallRuleByBaseUrl(baseUrl, textValue(selectedRule.value.pos))).data
+      : selectedRule.value;
   form.value =
     nextMode === 'group'
       ? { type: 'group', action: '', enable: 0, comment: '' }
-      : ruleForm(nextMode === 'add' ? undefined : selectedRule.value);
+      : ruleForm(nextMode === 'add' ? undefined : detail);
   if (nextMode === 'copy') {
     delete form.value.pos;
     delete form.value.digest;
@@ -341,9 +346,26 @@ function onProtocolChange(value: string) {
 function acceptNewValue(value: string, done: (value?: string) => void) {
   done(value);
 }
+function ipRefLengthRule(value: unknown) {
+  return String(value || '').length <= 512 || gettext('Too long, consider using IP sets.');
+}
+function cellError(row: PveRecord, field: string) {
+  return textValue((row.errors as PveRecord | undefined)?.[field]);
+}
 
 function payload() {
   const value = { ...form.value } as PveRecord;
+  if (isGroupEditor.value) {
+    const result: PveRecord = {
+      type: 'group',
+      action: value.action,
+      enable: value.enable,
+      comment: value.comment,
+    };
+    if (allowIface) result.iface = value.iface ?? '';
+    if (value.digest) result.digest = value.digest;
+    return result;
+  }
   if (!allowIface) delete value.iface;
   if (hasMacro.value) {
     value.proto = '';
@@ -353,6 +375,9 @@ function payload() {
   }
   if (!isIcmp.value) delete value['icmp-type'];
   if (isIcmp.value) value.dport = '';
+  for (const field of ['source', 'dest', 'macro', 'proto', 'sport', 'dport', 'icmp-type', 'log']) {
+    if (value[field] == null) value[field] = '';
+  }
   delete value.pos;
   delete value.errors;
   return value;
@@ -428,6 +453,12 @@ watch(
   () => baseUrl,
   () => {
     void refreshData();
+  },
+);
+watch(
+  () => listRefsUrl,
+  () => {
+    void loadSelectors();
   },
 );
 </script>
@@ -530,9 +561,14 @@ watch(
               :model-value="Boolean(scope.row.enable)"
               @update:model-value="setEnabled(scope.row, Boolean($event))"
           /></q-td>
-          <q-td v-for="column in columns.slice(2)" :key="column.name" :props="scope">{{
-            scope.row[column.name] || '-'
-          }}</q-td>
+          <q-td v-for="column in columns.slice(2)" :key="column.name" :props="scope">
+            <span :class="{ 'text-negative': cellError(scope.row, String(column.name)) }">{{
+              scope.row[column.name] || '-'
+            }}</span>
+            <q-tooltip v-if="cellError(scope.row, String(column.name))">{{
+              cellError(scope.row, String(column.name))
+            }}</q-tooltip>
+          </q-td>
         </q-tr></template
       >
     </q-table>
@@ -569,6 +605,14 @@ watch(
               outlined
               dense
               :label="gettext('Comment')"
+          /><q-input
+            v-if="allowIface"
+            v-model="form.iface"
+            class="col-12"
+            square
+            outlined
+            dense
+            :label="gettext('Interface')"
           /></template>
           <template v-else
             ><q-select
@@ -632,6 +676,7 @@ watch(
               map-options
               :label="gettext('Source')"
               :options="refOptions"
+              :rules="[ipRefLengthRule]"
               @new-value="acceptNewValue"
             /><q-select
               v-model="form.dest"
@@ -646,6 +691,7 @@ watch(
               map-options
               :label="gettext('Destination')"
               :options="refOptions"
+              :rules="[ipRefLengthRule]"
               @new-value="acceptNewValue"
             /><q-input
               v-model="form.sport"

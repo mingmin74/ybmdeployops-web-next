@@ -241,6 +241,13 @@ export function getFirewallRulesByBaseUrl(baseUrl: string) {
   });
 }
 
+export function getFirewallRuleByBaseUrl(baseUrl: string, pos: string | number) {
+  return request<PveRecord>(
+    `${firewallUrl(baseUrl, 'json')}/${encodeURIComponent(String(pos))}`,
+    { method: 'GET', notifyOnError: true },
+  );
+}
+
 export function createFirewallRuleByBaseUrl(baseUrl: string, data: PveRecord) {
   return request(firewallUrl(baseUrl, 'extjs'), { method: 'POST', data });
 }
@@ -329,8 +336,9 @@ export function updateFirewallGroup(data: PveRecord) {
   return request('/api2/extjs/cluster/firewall/groups', { method: 'POST', data });
 }
 
-export function deleteFirewallGroup(group: string) {
-  return request(`/api2/extjs/cluster/firewall/groups/${group}`, { method: 'DELETE' });
+export function deleteFirewallGroup(group: string, digest?: unknown) {
+  const url = `/api2/extjs/cluster/firewall/groups/${encodeURIComponent(group)}`;
+  return request(digest ? `${url}?digest=${encodeURIComponent(String(digest))}` : url, { method: 'DELETE' });
 }
 
 export function getFirewallGroupRules(group: string) {
@@ -386,25 +394,30 @@ export function updateFirewallIpset(data: PveRecord) {
   return request('/api2/extjs/cluster/firewall/ipset', { method: 'POST', data });
 }
 
-export function deleteFirewallIpset(name: string) {
-  return request(`/api2/extjs/cluster/firewall/ipset/${name}`, { method: 'DELETE' });
+export function deleteFirewallIpset(name: string, digest?: unknown) {
+  const url = `/api2/extjs/cluster/firewall/ipset/${encodeURIComponent(name)}`;
+  return request(digest ? `${url}?digest=${encodeURIComponent(String(digest))}` : url, { method: 'DELETE' });
 }
 
 export function getFirewallIpsetEntries(name: string) {
-  return request<PveRecord[]>(`/api2/json/cluster/firewall/ipset/${name}`, {
+  return request<PveRecord[]>(`/api2/json/cluster/firewall/ipset/${encodeURIComponent(name)}`, {
     method: 'GET',
     notifyOnError: true,
   });
 }
 
 export function createFirewallIpsetEntry(name: string, data: PveRecord) {
-  return request(`/api2/extjs/cluster/firewall/ipset/${name}`, { method: 'POST', data });
+  return request(`/api2/extjs/cluster/firewall/ipset/${encodeURIComponent(name)}`, { method: 'POST', data });
 }
 
 export function updateFirewallIpsetEntry(name: string, cidr: string, data: PveRecord) {
-  return request(`/api2/extjs/cluster/firewall/ipset/${name}/${cidr}`, { method: 'PUT', data });
+  return request(
+    `/api2/extjs/cluster/firewall/ipset/${encodeURIComponent(name)}/${encodeURIComponent(cidr)}`,
+    { method: 'PUT', data },
+  );
 }
 
-export function deleteFirewallIpsetEntry(name: string, cidr: string) {
-  return request(`/api2/extjs/cluster/firewall/ipset/${name}/${cidr}`, { method: 'DELETE' });
+export function deleteFirewallIpsetEntry(name: string, cidr: string, digest?: unknown) {
+  const url = `/api2/extjs/cluster/firewall/ipset/${encodeURIComponent(name)}/${encodeURIComponent(cidr)}`;
+  return request(digest ? `${url}?digest=${encodeURIComponent(String(digest))}` : url, { method: 'DELETE' });
 }

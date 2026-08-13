@@ -56,8 +56,13 @@ const { tags, stepContentHeight } = derived;
             emit-value
             map-options
             class="q-field--with-bottom"
-            :options="pools.map((pool) => ({ label: pool.poolid, value: pool.poolid }))"
-            :label="gettext('Pool')"
+            :options="
+              pools.map((pool) => ({
+                label: pool.comment ? `${pool.poolid} — ${pool.comment}` : pool.poolid,
+                value: pool.poolid,
+              }))
+            "
+            :label="gettext('Resource Pool')"
           />
           <q-input
             v-model="form.name"
@@ -95,9 +100,12 @@ const { tags, stepContentHeight } = derived;
             map-options
             class="q-field--with-bottom"
             :options="[
-              { label: gettext('Default'), value: '__default__' },
-              { label: 'x86_64', value: 'x86_64' },
-              { label: 'aarch64', value: 'aarch64' },
+              {
+                label: `${gettext('Default')} (${gettext('Host Architecture')})`,
+                value: '__default__',
+              },
+              { label: gettext('x86 (64-bit)'), value: 'x86_64' },
+              { label: gettext('ARM (64-bit)'), value: 'aarch64' },
             ]"
             :label="gettext('vCPU Architecture')"
           />

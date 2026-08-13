@@ -122,7 +122,7 @@ export function getNodeNetwork(node: string) {
 
 export function getNodeUsbDevices(node: string) {
   return request<Record<string, unknown>[]>(
-    `/api2/json/nodes/${encodeURIComponent(node)}/scan/usb`,
+    `/api2/json/nodes/${encodeURIComponent(node)}/hardware/usb`,
     { method: 'GET', notifyOnError: true },
   );
 }
@@ -130,7 +130,7 @@ export function getNodeUsbDevices(node: string) {
 export function getNodePciDevices(node: string) {
   return request<Record<string, unknown>[]>(
     `/api2/json/nodes/${encodeURIComponent(node)}/hardware/pci`,
-    { method: 'GET', notifyOnError: true },
+    { method: 'GET', params: { 'pci-class-blacklist': '' }, notifyOnError: true },
   );
 }
 

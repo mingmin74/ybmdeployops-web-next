@@ -28,6 +28,43 @@ export function formatBytes(value?: number | string) {
   return `${size.toFixed(unitIndex === 0 ? 0 : 2)}${units[unitIndex]}`;
 }
 
+export function formatStorageType(type?: unknown, monhost?: unknown) {
+  const value = textValue(type);
+  const labels: Record<string, string> = {
+    dir: 'Directory', lvm: 'LVM', lvmthin: 'LVM-Thin', btrfs: 'BTRFS', nfs: 'NFS',
+    cifs: 'SMB/CIFS', iscsi: 'iSCSI', cephfs: 'CephFS', rbd: 'RBD',
+    zfs: 'ZFS over iSCSI', zfspool: 'ZFS', pbs: 'Proxmox Backup Server', esxi: 'ESXi',
+  };
+  const label = labels[value] || value;
+  return (value === 'rbd' || value === 'cephfs') && !textValue(monhost)
+    ? `${label} (PVE)`
+    : label || '-';
+}
+
+export function formatStorageContent(value?: unknown) {
+  const volid = textValue(value);
+  if (!volid) return '-';
+  const separator = volid.indexOf(':');
+  return separator >= 0 ? volid.slice(separator + 1) : volid;
+}
+
+export function formatContentSize(row: Record<string, unknown>) {
+  if (row.size !== undefined && row.size !== null && row.size !== '') return formatBytes(row.size as number);
+  if (row['approximate-size'] !== undefined && row['approximate-size'] !== null) {
+    return `~${formatBytes(row['approximate-size'] as number)}`;
+  }
+  return gettext('unknown');
+}
+
+export function formatContentDate(row: Record<string, unknown>) {
+  if (textValue(row.content) === 'backup') {
+    const volid = textValue(row.volid);
+    const match = volid.match(/(\d{4})_(\d{2})_(\d{2})-(\d{2})_(\d{2})_(\d{2})/);
+    if (match) return `${match[1]}-${match[2]}-${match[3]} ${match[4]}:${match[5]}:${match[6]}`;
+  }
+  return row.ctime ? timestampToTime(Number(row.ctime) * 1000) : '-';
+}
+
 export function usedPercent(used?: number | string, total?: number | string) {
   const usedNumber = Number(used);
   const totalNumber = Number(total);

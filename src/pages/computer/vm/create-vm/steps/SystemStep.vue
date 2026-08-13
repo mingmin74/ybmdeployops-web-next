@@ -7,9 +7,16 @@ import { useCreateVmWizardContext } from '../context/createVmWizardContext';
 const { form, resources, errors, options, disks, derived } = useCreateVmWizardContext();
 const { validationErrors } = errors;
 const { imageStorageRows, storageNames } = resources;
-const { vgaOptions, machineOptions, scsiControllerOptions, tpmFormatOptions, isoStorageColumns } =
-  options;
-const { tpmFormatDisabled } = disks;
+const {
+  vgaOptions,
+  biosOptions,
+  machineOptions,
+  scsiControllerOptions,
+  efiFormatOptions,
+  tpmFormatOptions,
+  isoStorageColumns,
+} = options;
+const { efiFormatDisabled, tpmFormatDisabled } = disks;
 const { stepContentHeight } = derived;
 </script>
 
@@ -70,11 +77,7 @@ const { stepContentHeight } = derived;
             emit-value
             map-options
             class="q-field--with-bottom"
-            :options="[
-              { label: gettext('Default'), value: '__default__' },
-              { label: 'SeaBIOS', value: 'seabios' },
-              { label: 'OVMF (UEFI)', value: 'ovmf' },
-            ]"
+            :options="biosOptions"
             label="BIOS"
           />
           <q-checkbox
@@ -100,7 +103,10 @@ const { stepContentHeight } = derived;
               v-model="form.efiFormat"
               dense
               options-dense
-              :options="['raw', 'qcow2']"
+              emit-value
+              map-options
+              :options="efiFormatOptions"
+              :disable="efiFormatDisabled(form.efiStorage)"
               :label="gettext('Format')"
             />
             <q-checkbox

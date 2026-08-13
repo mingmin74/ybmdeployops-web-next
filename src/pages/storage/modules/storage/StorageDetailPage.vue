@@ -2,16 +2,19 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import LineMetricChart from '@/components/LineMetricChart.vue';
 import StorageContentTable from '@/components/StorageContentTable.vue';
+import StorageBackupView from './StorageBackupView.vue';
+import StorageImageView from './StorageImageView.vue';
+import StorageTemplateView from './StorageTemplateView.vue';
 import UsageProgress from '@/components/UsageProgress.vue';
 import type { PveRecord } from '@/api/resources';
 import { getStorageRrd } from '@/api/overview';
+import { getStorageStatus } from '@/api/storageContent';
 import { gettext } from '@/locale';
 import {
-  formatBytes,
   formatContent,
+  formatStorageType,
   textValue,
   timestampToTime,
-  usedPercent,
 } from '@/utils/pveFormat';
 
 const props = defineProps<{
@@ -24,6 +27,8 @@ const timeType = ref('hour');
 const rrdConsolidation = ref<'AVERAGE' | 'MAX'>('AVERAGE');
 const chartRows = shallowRef<PveRecord[]>([]);
 const chartTimer = shallowRef<number>();
+const status = shallowRef<PveRecord>({});
+const statusTimer = shallowRef<number>();
 let chartRequestId = 0;
 
 const timeOptions = computed(() => [
@@ -52,12 +57,11 @@ const contentTabs = computed(() => {
     iso: 'ISO Image',
     vztmpl: 'CT Templates',
     snippets: 'Snippets',
+    import: 'Import',
   };
 
   return tokens.filter((item) => map[item]).map((item) => ({ name: item, label: map[item] }));
 });
-
-const usage = computed(() => usedPercent(Number(props.storage.used), Number(props.storage.total)));
 
 const chartXAxis = computed(() =>
   chartRows.value.map((item) => timestampToTime(Number(item.time) * 1000)),
@@ -78,6 +82,27 @@ const storageUsageSeries = computed(() => [
 
 function boolLabel(value: unknown) {
   return value ? gettext('Yes') : gettext('No');
+}
+
+async function loadStatus() {
+  const node = textValue(props.node);
+  const storage = textValue(props.storage.storage);
+  if (!node || !storage) {
+    status.value = {};
+    return;
+  }
+  try {
+    const response = await getStorageStatus(node, storage);
+    status.value = response.data || {};
+  } catch {
+    // Keep the last successful status, matching PVE's polling view.
+  }
+}
+
+function startStatusRefresh() {
+  if (statusTimer.value) window.clearInterval(statusTimer.value);
+  void loadStatus();
+  statusTimer.value = window.setInterval(() => void loadStatus(), 1000);
 }
 
 async function loadChartData() {
@@ -105,15 +130,21 @@ function startChartRefresh() {
   }, 3000);
 }
 
-onMounted(startChartRefresh);
+onMounted(() => {
+  startChartRefresh();
+  startStatusRefresh();
+});
 
 watch(
   [() => props.node, () => props.storage.storage, timeType, rrdConsolidation],
   startChartRefresh,
 );
 
+watch([() => props.node, () => props.storage.storage], startStatusRefresh);
+
 onBeforeUnmount(() => {
   if (chartTimer.value) window.clearInterval(chartTimer.value);
+  if (statusTimer.value) window.clearInterval(statusTimer.value);
 });
 </script>
 
@@ -152,38 +183,22 @@ onBeforeUnmount(() => {
           <div class="summary-fields">
             <div class="summary-field">
               <span>{{ gettext('Type') }}</span
-              ><strong>{{ storage.type || '-' }}</strong>
-            </div>
-            <div class="summary-field">
-              <span>{{ gettext('Node') }}</span
-              ><strong>{{ node || '-' }}</strong>
+              ><strong>{{ formatStorageType(status.type, status.monhost) }}</strong>
             </div>
             <div class="summary-field">
               <span>{{ gettext('Content') }}</span
-              ><strong>{{ formatContent(storage.content) || '-' }}</strong>
+              ><strong>{{ formatContent(status.content) || '-' }}</strong>
             </div>
             <div class="summary-field">
               <span>{{ gettext('Enabled') }}</span
-              ><strong>{{ boolLabel(storage.enabled) }}</strong>
+              ><strong>{{ boolLabel(Number(status.disabled || 0) === 0) }}</strong>
             </div>
             <div class="summary-field">
               <span>{{ gettext('Active') }}</span
-              ><strong>{{ boolLabel(storage.active) }}</strong>
-            </div>
-            <div class="summary-field">
-              <span>{{ gettext('Shared') }}</span
-              ><strong>{{ boolLabel(storage.shared) }}</strong>
-            </div>
-            <div class="summary-field">
-              <span>{{ gettext('Total Size') }}</span
-              ><strong>{{ formatBytes(storage.total as number) }}</strong>
-            </div>
-            <div class="summary-field">
-              <span>{{ gettext('Avail Size') }}</span
-              ><strong>{{ formatBytes(storage.avail as number) }}</strong>
+              ><strong>{{ boolLabel(status.active) }}</strong>
             </div>
           </div>
-          <UsageProgress :percent="usage" />
+          <UsageProgress :percent="(Number(status.used) / Number(status.total || 1)) * 100" />
         </section>
 
         <section class="usage-section q-mt-md">
@@ -226,10 +241,34 @@ onBeforeUnmount(() => {
       </q-tab-panel>
 
       <q-tab-panel v-for="item in contentTabs" :key="item.name" :name="item.name" class="q-pa-md">
+        <StorageBackupView
+          v-if="item.name === 'backup'"
+          :node="node"
+          :storage="textValue(storage.storage)"
+          :storage-type="textValue(status.type, textValue(storage.type))"
+          :active="tab === item.name"
+        />
         <StorageContentTable
+          v-else-if="item.name !== 'images' && item.name !== 'rootdir' && item.name !== 'vztmpl'"
           :node="node"
           :storage="textValue(storage.storage)"
           :content="item.name"
+          :shared="Boolean(status.shared)"
+          :active="tab === item.name"
+        />
+        <StorageImageView
+          v-else-if="item.name === 'images' || item.name === 'rootdir'"
+          :node="node"
+          :storage="textValue(storage.storage)"
+          :content="item.name === 'images' ? 'images' : 'rootdir'"
+          :shared="Boolean(status.shared)"
+          :active="tab === item.name"
+        />
+        <StorageTemplateView
+          v-else
+          :node="node"
+          :storage="textValue(storage.storage)"
+          :active="tab === item.name"
         />
       </q-tab-panel>
     </q-tab-panels>

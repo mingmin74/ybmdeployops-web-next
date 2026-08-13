@@ -7,11 +7,12 @@ import { getFirewallOptionsByBaseUrl, updateFirewallOptionsByBaseUrl } from '@/a
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 
-type FirewallOptionsType = 'dc' | 'vnet';
+type FirewallOptionsType = 'dc' | 'node' | 'vm' | 'vnet';
 type OptionDefinition = {
   label: string;
   defaultValue: string | number;
-  kind: 'boolean' | 'log' | 'policy' | 'text';
+  kind: 'boolean' | 'integer' | 'log' | 'policy' | 'rate-limit' | 'text';
+  min?: number;
   options?: string[];
 };
 
@@ -21,13 +22,48 @@ const { baseUrl = '/cluster/firewall/options', fwtype = 'dc' } = defineProps<{
 }>();
 
 const definitions: Record<FirewallOptionsType, Record<string, OptionDefinition>> = {
+  node: {
+    enable: { label: 'Firewall', defaultValue: 1, kind: 'boolean' },
+    nosmurfs: { label: 'SMURFS filter', defaultValue: 1, kind: 'boolean' },
+    tcpflags: { label: 'TCP flags filter', defaultValue: 0, kind: 'boolean' },
+    ndp: { label: 'NDP', defaultValue: 1, kind: 'boolean' },
+    nf_conntrack_max: { label: 'nf_conntrack_max', defaultValue: '', kind: 'integer', min: 32768 },
+    nf_conntrack_tcp_timeout_established: {
+      label: 'nf_conntrack_tcp_timeout_established',
+      defaultValue: '',
+      kind: 'integer',
+      min: 7875,
+    },
+    log_level_in: { label: 'log_level_in', defaultValue: 'nolog', kind: 'log' },
+    log_level_out: { label: 'log_level_out', defaultValue: 'nolog', kind: 'log' },
+    log_level_forward: { label: 'log_level_forward', defaultValue: 'nolog', kind: 'log' },
+    tcp_flags_log_level: { label: 'tcp_flags_log_level', defaultValue: 'nolog', kind: 'log' },
+    smurf_log_level: { label: 'smurf_log_level', defaultValue: 'nolog', kind: 'log' },
+    nftables: { label: 'nftables (tech preview)', defaultValue: 0, kind: 'boolean' },
+  },
+  vm: {
+    enable: { label: 'Firewall', defaultValue: 0, kind: 'boolean' },
+    dhcp: { label: 'DHCP', defaultValue: 1, kind: 'boolean' },
+    ndp: { label: 'NDP', defaultValue: 1, kind: 'boolean' },
+    radv: { label: 'Router Advertisement', defaultValue: 0, kind: 'boolean' },
+    macfilter: { label: 'MAC filter', defaultValue: 1, kind: 'boolean' },
+    ipfilter: { label: 'IP filter', defaultValue: 0, kind: 'boolean' },
+    log_level_in: { label: 'log_level_in', defaultValue: 'nolog', kind: 'log' },
+    log_level_out: { label: 'log_level_out', defaultValue: 'nolog', kind: 'log' },
+    policy_in: {
+      label: 'Input Policy', defaultValue: 'DROP', kind: 'policy', options: ['ACCEPT', 'REJECT', 'DROP'],
+    },
+    policy_out: {
+      label: 'Output Policy', defaultValue: 'ACCEPT', kind: 'policy', options: ['ACCEPT', 'REJECT', 'DROP'],
+    },
+  },
   dc: {
     enable: { label: 'Firewall', defaultValue: 0, kind: 'boolean' },
     ebtables: { label: 'ebtables', defaultValue: 1, kind: 'boolean' },
     log_ratelimit: {
       label: 'Log rate limit',
       defaultValue: 'enable=1,rate1/second,burst=5',
-      kind: 'text',
+      kind: 'rate-limit',
     },
     policy_in: {
       label: 'Input Policy',
@@ -64,6 +100,7 @@ const loading = shallowRef(false);
 const dialog = shallowRef(false);
 const rows = shallowRef<PveRecord[]>([]);
 const active = ref<PveRecord>({});
+const rateLimit = ref({ enable: 1, rate: 1, unit: 'second', burst: 5 });
 const optionDefinitions = computed(() => definitions[fwtype]);
 const activeDefinition = computed(() => optionDefinitions.value[textValue(active.value.key)]);
 const activeValue = computed<string | number | undefined>({
@@ -74,6 +111,21 @@ const activeValue = computed<string | number | undefined>({
   set(value) {
     active.value.value = value;
   },
+});
+function isEmptyValue(value: unknown) {
+  return value === '' || value == null;
+}
+const activeFormValid = computed(() => {
+  const definition = activeDefinition.value;
+  if (!definition) return false;
+  if (definition.kind === 'integer') {
+    const value = activeValue.value;
+    return isEmptyValue(value) || (Number.isInteger(Number(value)) && Number(value) >= Number(definition.min));
+  }
+  if (definition.kind === 'rate-limit') {
+    return [rateLimit.value.rate, rateLimit.value.burst].every(value => Number.isInteger(value) && value >= 1 && value <= 99);
+  }
+  return true;
 });
 
 const columns: QTableColumn<PveRecord>[] = [
@@ -120,14 +172,29 @@ async function refreshData() {
 
 function openEdit(row: PveRecord) {
   active.value = { ...row };
+  if (activeDefinition.value?.kind === 'rate-limit') {
+    const properties = Object.fromEntries(textValue(row.value).split(',').map(item => item.split('=')));
+    const [rate = '1', unit = 'second'] = String(properties.rate || '1/second').split('/');
+    rateLimit.value = {
+      enable: Number(properties.enable ?? 1) ? 1 : 0,
+      rate: Number(rate) || 1,
+      unit: ['second', 'minute', 'hour', 'day'].includes(unit) ? unit : 'second',
+      burst: Number(properties.burst) || 5,
+    };
+  }
   dialog.value = true;
 }
 async function submitForm() {
+  const key = textValue(active.value.key);
+  const definition = activeDefinition.value;
+  if (!definition || !activeFormValid.value) return;
+  const value = definition.kind === 'rate-limit'
+    ? `enable=${rateLimit.value.enable},rate=${rateLimit.value.rate}/${rateLimit.value.unit},burst=${rateLimit.value.burst}`
+    : active.value.value;
+  const data = definition.kind === 'integer' && isEmptyValue(value) ? { delete: key } : { [key]: value };
   loading.value = true;
   try {
-    await updateFirewallOptionsByBaseUrl(baseUrl, {
-      [textValue(active.value.key)]: active.value.value,
-    });
+    await updateFirewallOptionsByBaseUrl(baseUrl, data);
     dialog.value = false;
     await refreshData();
   } finally {
@@ -137,7 +204,7 @@ async function submitForm() {
 
 onMounted(refreshData);
 watch(
-  () => baseUrl,
+  [() => baseUrl, () => fwtype],
   () => {
     void refreshData();
   },
@@ -211,6 +278,65 @@ watch(
             :label="gettext(activeDefinition.label)"
             :options="activeDefinition.options || []"
           />
+          <q-input
+            v-else-if="activeDefinition?.kind === 'integer'"
+            v-model.number="activeValue"
+            square
+            outlined
+            dense
+            clearable
+            type="number"
+            :label="gettext(activeDefinition.label)"
+            :min="activeDefinition.min"
+            :rules="[
+              value =>
+                value === '' ||
+                value == null ||
+                (Number.isInteger(Number(value)) &&
+                  Number(value) >= Number(activeDefinition?.min)) ||
+                gettext('Value must be at least %s').replace('%s', String(activeDefinition?.min)),
+            ]"
+          />
+          <div v-else-if="activeDefinition?.kind === 'rate-limit'" class="q-gutter-md">
+            <q-checkbox
+              v-model="rateLimit.enable"
+              :true-value="1"
+              :false-value="0"
+              :label="gettext('Enable')"
+            />
+            <div class="row q-col-gutter-sm">
+              <q-input
+                v-model.number="rateLimit.rate"
+                class="col-5"
+                square
+                outlined
+                dense
+                type="number"
+                :min="1"
+                :max="99"
+                :label="gettext('Log rate limit')"
+              />
+              <q-select
+                v-model="rateLimit.unit"
+                class="col-7"
+                square
+                outlined
+                dense
+                :label="gettext('Unit')"
+                :options="['second', 'minute', 'hour', 'day']"
+              />
+            </div>
+            <q-input
+              v-model.number="rateLimit.burst"
+              square
+              outlined
+              dense
+              type="number"
+              :min="1"
+              :max="99"
+              :label="gettext('Log burst limit')"
+            />
+          </div>
           <q-input v-else v-model="activeValue" square outlined dense :label="gettext('Value')" />
         </div>
         <template #foot
@@ -225,6 +351,7 @@ watch(
             flat
             size="12px"
             class="bg-primary text-grey-1 u-button"
+            :disable="!activeFormValid"
             :label="gettext('OK')"
             @click="submitForm" /></template></UWindow
     ></q-dialog>

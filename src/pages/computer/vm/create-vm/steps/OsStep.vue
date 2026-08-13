@@ -6,7 +6,7 @@ import { useCreateVmWizardContext } from '../context/createVmWizardContext';
 
 const { form, resources, errors, options, derived } = useCreateVmWizardContext();
 const { validationErrors } = errors;
-const { isoStorageRows, isoImageRows } = resources;
+const { isoStorageRows, isoImageRows, virtioIsoImageRows } = resources;
 const { osBaseOptions, osVersionOptions, isoStorageColumns, isoImageColumns } = options;
 const { isoImageName, stepContentHeight } = derived;
 </script>
@@ -104,12 +104,25 @@ const { isoImageName, stepContentHeight } = derived;
             />
             <div v-if="form.enableVirtioDrivers" class="q-ml-lg q-pt-md">
               <SelectTable
+                v-model="form.virtioIsoStorage"
+                row-key="storage"
+                field-style="standard"
+                width="500px"
+                style="width: 320px"
+                :rows="isoStorageRows"
+                :columns="isoStorageColumns"
+                :display-value="form.virtioIsoStorage"
+                :get-row-value="(row) => textValue(row.storage)"
+                :label="gettext('Storage')"
+                class="q-field--with-bottom"
+              />
+              <SelectTable
                 v-model="form.virtioDriversCdrom"
                 row-key="volid"
                 field-style="standard"
                 width="500px"
                 style="width: 320px"
-                :rows="isoImageRows"
+                :rows="virtioIsoImageRows"
                 :columns="isoImageColumns"
                 :display-value="isoImageName(form.virtioDriversCdrom)"
                 :get-row-value="(row) => textValue(row.volid)"

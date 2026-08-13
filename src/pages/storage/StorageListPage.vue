@@ -3,12 +3,12 @@ import type { QTableColumn } from 'quasar';
 import { Dialog } from 'quasar';
 import { computed, onMounted, ref, shallowRef } from 'vue';
 import StorageDetailPage from '@/pages/storage/modules/storage/StorageDetailPage.vue';
-import UsageProgress from '@/components/UsageProgress.vue';
-import type { PveRecord } from '@/api/resources';
-import { getClusterResources } from '@/api/resources';
-import { deleteStorage, getNodeStorages, getStorages } from '@/api/storage';
+import StorageEditDialog from '@/pages/storage/modules/storage/StorageEditDialog.vue';
+import type { PveNode, PveRecord } from '@/api/resources';
+import { getClusterResources, getNodes } from '@/api/resources';
+import { deleteStorage, getStorages } from '@/api/storage';
 import { gettext } from '@/locale';
-import { formatBytes, formatContent, textValue, usedPercent } from '@/utils/pveFormat';
+import { formatContent, textValue } from '@/utils/pveFormat';
 
 const loading = ref(false);
 const filter = ref('');
@@ -18,36 +18,59 @@ const current = ref<PveRecord | null>(null);
 const storageNodes = shallowRef<Record<string, string>>({});
 const treeSelected = ref('all');
 const treeExpanded = ref<string[]>([]);
+type StorageType = 'dir' | 'lvm' | 'lvmthin' | 'btrfs' | 'nfs' | 'cifs' | 'iscsi' | 'cephfs' | 'rbd' | 'zfs' | 'zfspool' | 'pbs' | 'esxi';
+const editorVisible = shallowRef(false);
+const editorType = shallowRef<StorageType>('dir');
+const editorStorage = shallowRef<string>();
+const clusterNodes = shallowRef<PveNode[]>([]);
+const addTypes: StorageType[] = ['dir', 'lvm', 'lvmthin', 'btrfs', 'nfs', 'cifs', 'iscsi', 'cephfs', 'rbd', 'zfs', 'zfspool', 'pbs', 'esxi'];
+
+function formatStorageType(row: PveRecord) {
+  const type = textValue(row.type);
+  const labels: Record<string, string> = {
+    dir: 'Directory',
+    lvm: 'LVM',
+    lvmthin: 'LVM-Thin',
+    btrfs: 'BTRFS',
+    nfs: 'NFS',
+    cifs: 'SMB/CIFS',
+    iscsi: 'iSCSI',
+    cephfs: 'CephFS',
+    rbd: 'RBD',
+    zfs: 'ZFS over iSCSI',
+    zfspool: 'ZFS',
+    pbs: 'Proxmox Backup Server',
+    esxi: 'ESXi',
+  };
+
+  if ((type === 'rbd' || type === 'cephfs') && !textValue(row.monhost)) {
+    return `${labels[type]} (PVE)`;
+  }
+  return labels[type] || type || '-';
+}
+
+function storageTypeLabel(type: StorageType) {
+  return {
+    dir: 'Directory', lvm: 'LVM', lvmthin: 'LVM-Thin', btrfs: 'BTRFS', nfs: 'NFS',
+    cifs: 'SMB/CIFS', iscsi: 'iSCSI', cephfs: 'CephFS', rbd: 'RBD',
+    zfs: 'ZFS over iSCSI', zfspool: 'ZFS', pbs: 'Proxmox Backup Server', esxi: 'ESXi',
+  }[type];
+}
 
 const columns: QTableColumn<PveRecord>[] = [
   {
     name: 'storage',
     required: true,
-    label: gettext('Name'),
+    label: gettext('ID'),
     align: 'left',
     field: (row) => row.storage || '-',
     sortable: true,
   },
   {
-    name: 'active',
-    label: gettext('Active'),
-    align: 'left',
-    field: (row) => (row.active ? gettext('Yes') : gettext('No')),
-    sortable: true,
-  },
-  {
-    name: 'avail',
-    label: gettext('Avail Size'),
-    align: 'left',
-    field: (row) => formatBytes(row.avail as number),
-    sortable: true,
-  },
-  { name: 'usage', label: gettext('Usage'), align: 'left', field: 'usage' },
-  {
     name: 'type',
     label: gettext('Type'),
     align: 'left',
-    field: (row) => row.type || '-',
+    field: formatStorageType,
     sortable: true,
   },
   {
@@ -59,9 +82,9 @@ const columns: QTableColumn<PveRecord>[] = [
   },
   {
     name: 'path',
-    label: gettext('Path'),
+    label: `${gettext('Path')}/${gettext('Target')}`,
     align: 'left',
-    field: (row) => row.path || row.target_path || '-',
+    field: (row) => row.target || row.path || '-',
     sortable: true,
   },
   {
@@ -72,10 +95,17 @@ const columns: QTableColumn<PveRecord>[] = [
     sortable: true,
   },
   {
-    name: 'enabled',
+    name: 'disable',
     label: gettext('Enabled'),
     align: 'left',
-    field: (row) => (row.enabled ? gettext('Yes') : gettext('No')),
+    field: (row) => (Number(row.disable || 0) === 0 ? gettext('Yes') : gettext('No')),
+    sortable: true,
+  },
+  {
+    name: 'bwlimit',
+    label: gettext('Bandwidth Limit'),
+    align: 'left',
+    field: (row) => row.bwlimit || '-',
     sortable: true,
   },
 ];
@@ -120,27 +150,20 @@ const tableRows = computed(() => {
 async function refreshData() {
   loading.value = true;
   try {
-    const [configResponse, nodeResponse, resourceResponse] = await Promise.all([
-      getStorages(),
-      getNodeStorages('localhost'),
-      getClusterResources({ type: 'storage' }),
-    ]);
-    const nodeMap: Record<string, PveRecord> = {};
-    (nodeResponse.data || []).forEach((item) => {
-      nodeMap[textValue(item.storage)] = item;
-    });
+    const configResponse = await getStorages();
+    rows.value = [...(configResponse.data || [])].sort((a, b) =>
+      textValue(a.storage).localeCompare(textValue(b.storage)),
+    );
 
+    // The detail page is a project extension, so its node lookup must never prevent
+    // the PVE-compatible storage configuration list from loading.
+    const resourceResponse = await getClusterResources({ type: 'storage' }).catch(() => null);
     const resourceNodeMap: Record<string, string> = {};
-    (resourceResponse.data || []).forEach((item) => {
+    (resourceResponse?.data || []).forEach((item) => {
       const storageName = textValue(item.storage);
       if (storageName && item.node) resourceNodeMap[storageName] = textValue(item.node);
     });
     storageNodes.value = resourceNodeMap;
-
-    rows.value = (configResponse.data || []).map((item) => ({
-      ...item,
-      ...(nodeMap[textValue(item.storage)] || {}),
-    }));
     treeExpanded.value = [
       'all',
       ...new Set(rows.value.map((item) => `type:${textValue(item.type) || gettext('Unknown')}`)),
@@ -184,6 +207,19 @@ function removeSelected() {
   });
 }
 
+function openCreate(type: StorageType) {
+  editorType.value = type;
+  editorStorage.value = undefined;
+  editorVisible.value = true;
+}
+
+function openEdit(row = selected.value[0]) {
+  if (!row) return;
+  editorType.value = textValue(row.type) as StorageType;
+  editorStorage.value = textValue(row.storage);
+  editorVisible.value = true;
+}
+
 function onTreeSelect(id: string) {
   if (id === 'all' || id.startsWith('type:')) {
     current.value = null;
@@ -201,7 +237,16 @@ function backToStorageList() {
   treeSelected.value = 'all';
 }
 
-onMounted(refreshData);
+onMounted(() => {
+  void refreshData();
+  void getNodes()
+    .then((response) => {
+      clusterNodes.value = response.data || [];
+    })
+    .catch(() => {
+      clusterNodes.value = [];
+    });
+});
 </script>
 
 <template>
@@ -242,16 +287,48 @@ onMounted(refreshData);
         :columns="columns"
         :selected="selected"
         :filter="filter"
-        :pagination="{ page: 1, rowsPerPage: 10 }"
+        :pagination="{ page: 1, rowsPerPage: 10, sortBy: 'storage', descending: false }"
         :rows-per-page-options="[10]"
         :loading="loading"
         :no-data-label="gettext('no record can be found')"
         @row-click="rowClick"
-        @row-dblclick="(_, row) => openDetail(row)"
+        @row-dblclick="(_, row) => openEdit(row)"
         @update:selected="selected = [...$event]"
       >
         <template #top>
           <div class="row q-gutter-sm">
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              color="primary"
+              class="u-button"
+              :label="gettext('Add')"
+            >
+              <q-menu>
+                <q-list dense style="min-width: 220px">
+                  <q-item
+                    v-for="type in addTypes"
+                    :key="type"
+                    v-close-popup
+                    clickable
+                    @click="openCreate(type)"
+                  >
+                    <q-item-section>{{ storageTypeLabel(type) }}</q-item-section>
+                  </q-item>
+                </q-list>
+              </q-menu>
+            </q-btn>
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              color="primary"
+              class="u-button"
+              :disable="selected.length !== 1"
+              :label="gettext('Edit')"
+              @click="openEdit()"
+            />
             <q-btn
               no-caps
               outline
@@ -295,16 +372,15 @@ onMounted(refreshData);
             </template>
           </q-input>
         </template>
-        <template #body-cell-usage="scope">
-          <q-td :props="scope">
-            <UsageProgress
-              class="storage-usage"
-              :percent="usedPercent(Number(scope.row.used), Number(scope.row.total))"
-            />
-          </q-td>
-        </template>
       </q-table>
     </div>
+    <StorageEditDialog
+      v-model="editorVisible"
+      :type="editorType"
+      :storage="editorStorage"
+      :nodes="clusterNodes"
+      @saved="refreshData"
+    />
   </div>
 </template>
 
@@ -319,7 +395,4 @@ onMounted(refreshData);
   border-right: 1px solid #eeeeee;
 }
 
-.storage-usage {
-  width: 140px;
-}
 </style>

@@ -26,12 +26,20 @@ export function getStorageConfig(storage: string) {
 }
 
 export function createStorage(data: PveRecord) {
-  return request<string>('/api2/extjs/storage', { method: 'POST', data });
+  return request<PveRecord>('/api2/extjs/storage', { method: 'POST', data });
 }
 
 export function updateStorage(storage: string, data: PveRecord) {
-  return request<string>(`/api2/extjs/storage/${encodeURIComponent(storage)}`, {
+  return request<PveRecord>(`/api2/extjs/storage/${encodeURIComponent(storage)}`, {
     method: 'PUT',
     data,
+  });
+}
+
+export function getStorageScan(node: string, kind: 'lvm' | 'lvmthin' | 'nfs' | 'cifs' | 'iscsi' | 'zfs', params?: PveRecord) {
+  return request<PveRecord[]>(`/api2/json/nodes/${encodeURIComponent(node)}/scan/${kind}`, {
+    method: 'GET',
+    ...(params ? { params } : {}),
+    notifyOnError: true,
   });
 }

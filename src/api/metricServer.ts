@@ -16,7 +16,7 @@ export function getMetricServer(id: string) {
 }
 
 export function createMetricServer(id: string, data: Record<string, unknown>) {
-  return request(`/api2/extjs/cluster/metrics/server//${encodeURIComponent(id)}`, {
+  return request(`/api2/extjs/cluster/metrics/server/${encodeURIComponent(id)}`, {
     method: 'POST',
     data,
     notifyOnError: true,

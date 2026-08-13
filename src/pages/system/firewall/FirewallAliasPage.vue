@@ -81,7 +81,8 @@ async function submitForm() {
   loading.value = true;
   try {
     if (editing.value) {
-      await updateFirewallAlias(originalName.value, form.value);
+      const { name, ...values } = form.value;
+      await updateFirewallAlias(originalName.value, { ...values, rename: textValue(name) });
     } else {
       await createFirewallAlias(form.value);
     }
@@ -182,8 +183,8 @@ onMounted(refreshData);
     <q-dialog v-model="dialog" persistent>
       <UWindow :title="gettext(editing ? 'Edit' : 'Add')" width="480px" :loading="loading">
         <div class="q-pa-md q-gutter-sm">
-          <q-input v-model="form.name" square outlined dense :label="gettext('Name')" />
-          <q-input v-model="form.cidr" square outlined dense label="CIDR" />
+          <q-input v-model="form.name" square outlined dense :label="gettext('Name')" :rules="[value => !!value || gettext('This field is required')]" />
+          <q-input v-model="form.cidr" square outlined dense label="CIDR" :rules="[value => !!value || gettext('This field is required')]" />
           <q-input v-model="form.comment" square outlined dense :label="gettext('Comment')" />
         </div>
         <template #foot>
@@ -200,6 +201,7 @@ onMounted(refreshData);
             flat
             size="12px"
             class="bg-primary text-grey-1 u-button"
+            :disable="!form.name || !form.cidr"
             :label="gettext('OK')"
             @click="submitForm"
           />

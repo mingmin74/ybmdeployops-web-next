@@ -60,6 +60,7 @@ export type CreateVmForm = DiskSettings & {
   isoStorage: string;
   cdrom: string;
   enableVirtioDrivers: boolean;
+  virtioIsoStorage: string;
   virtioDriversCdrom: string;
   agent: boolean;
   vga: string;
@@ -123,6 +124,7 @@ export type CreateVmWizardContext = {
     imageStorageRows: Ref<PveRecord[]>;
     isoStorageRows: Ref<PveRecord[]>;
     isoImageRows: Ref<PveRecord[]>;
+    virtioIsoImageRows: Ref<PveRecord[]>;
     importStorageRows: Ref<PveRecord[]>;
     importImageRows: Record<string, PveRecord[]>;
     cpuModels: Ref<VmCpuModel[]>;
@@ -146,8 +148,10 @@ export type CreateVmWizardContext = {
     cacheOptions: WizardOption[];
     aioOptions: WizardOption[];
     vgaOptions: WizardOption[];
+    biosOptions: ComputedRef<WizardOption[]>;
     machineOptions: ComputedRef<WizardOption[]>;
     scsiControllerOptions: ComputedRef<WizardOption[]>;
+    efiFormatOptions: ComputedRef<WizardOption[]>;
     tpmFormatOptions: ComputedRef<WizardOption[]>;
     cpuFlagStateOptions: WizardOption[];
     isoStorageColumns: QTableColumn<PveRecord>[];
@@ -171,6 +175,7 @@ export type CreateVmWizardContext = {
     diskFormatOptions: (storage: string) => WizardOption[];
     diskFormatDisabled: (storage: string) => boolean;
     tpmFormatDisabled: (storage: string) => boolean;
+    efiFormatDisabled: (storage: string) => boolean;
   };
   actions: {
     initialize: () => Promise<void>;

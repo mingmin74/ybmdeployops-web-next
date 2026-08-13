@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { QTableColumn, QTreeNode } from 'quasar';
-import { computed, onMounted, shallowRef, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   getVmResources,
@@ -12,6 +12,7 @@ import {
   type VmResource,
 } from '@/api/vm';
 import { getNodes, type PveNode } from '@/api/resources';
+import { getTaskLogs } from '@/api/maintenance';
 import { getNodeStorage } from '@/api/storageContent';
 import UWindow from '@/components/UWindow.vue';
 import UsageProgress from '@/components/UsageProgress.vue';
@@ -23,7 +24,13 @@ import { useSessionStore } from '@/stores/session';
 import { usagePercent } from '@/utils/format';
 import { textValue } from '@/utils/pveFormat';
 import { toChineseStr } from '@/utils/unicode';
-import { createVmSnapshot, getVmConfig, updateVmConfig } from '@/api/overview';
+import {
+  createVmSnapshot,
+  getVmConfig,
+  getVmCurrent,
+  getVmSnapshotFeature,
+  updateVmConfig,
+} from '@/api/overview';
 
 type VmTreeNode = QTreeNode & {
   kind: 'node' | 'category' | 'vm';
@@ -46,6 +53,13 @@ const pendingCommand = shallowRef<VmPowerCommand>();
 const pendingCommandData = shallowRef<Record<string, unknown>>();
 const pendingCommandTitle = shallowRef('');
 const commandLoading = shallowRef(false);
+const stopVisible = shallowRef(false);
+const stopOverruleAvailable = shallowRef(false);
+const stopOverruleShutdown = shallowRef(false);
+const standalone = shallowRef(true);
+const snapshotSupported = shallowRef(false);
+const consoleSpiceAvailable = shallowRef(false);
+const consoleXtermAvailable = shallowRef(false);
 const session = useSessionStore();
 const router = useRouter();
 const operationDialogVisible = shallowRef(false);
@@ -162,57 +176,62 @@ const selectedCategory = computed(() =>
 );
 
 const selectedVm = computed(() => selectedRows.value[0]);
+const hasSingleSelection = computed(() => selectedRows.value.length === 1);
 const isStopped = computed(() => selectedVm.value?.status === 'stopped');
 const isSuspended = computed(() =>
   ['paused', 'suspended'].includes(String(selectedVm.value?.status || '')),
 );
 const isTemplate = computed(() => Boolean(selectedVm.value?.template));
 const canPowerManage = computed(() => hasCapability('VM.PowerMgmt'));
-const canUseConsole = computed(() => hasCapability('VM.Console') && !isTemplate.value);
+const canUseConsole = computed(
+  () => hasSingleSelection.value && hasCapability('VM.Console') && !isTemplate.value,
+);
 const canStart = computed(
-  () => Boolean(selectedVm.value) && canPowerManage.value && isStopped.value && !isTemplate.value,
+  () => hasSingleSelection.value && canPowerManage.value && isStopped.value && !isTemplate.value,
 );
 const canStop = computed(
-  () => Boolean(selectedVm.value) && canPowerManage.value && !isStopped.value,
+  () => hasSingleSelection.value && canPowerManage.value && !isStopped.value && !isTemplate.value,
 );
 const canShutdown = computed(
   () =>
-    Boolean(selectedVm.value) &&
+    hasSingleSelection.value &&
     canPowerManage.value &&
     selectedVm.value?.status === 'running' &&
     !isTemplate.value,
 );
 const canReboot = computed(
   () =>
-    Boolean(selectedVm.value) &&
+    hasSingleSelection.value &&
     canPowerManage.value &&
-    selectedVm.value?.status === 'running' &&
+    ['running', 'paused', 'suspended'].includes(String(selectedVm.value?.status || '')) &&
     !isTemplate.value,
 );
 const canSuspend = computed(
   () =>
-    Boolean(selectedVm.value) &&
+    hasSingleSelection.value &&
     canPowerManage.value &&
     selectedVm.value?.status === 'running' &&
     !isTemplate.value,
 );
 const canResume = computed(
-  () => Boolean(selectedVm.value) && canPowerManage.value && isSuspended.value && !isTemplate.value,
+  () => hasSingleSelection.value && canPowerManage.value && isSuspended.value && !isTemplate.value,
 );
 const canMigrate = computed(
-  () => Boolean(selectedVm.value) && hasCapability('VM.Migrate') && !isTemplate.value,
+  () => hasSingleSelection.value && hasCapability('VM.Migrate') && !standalone.value,
 );
-const canClone = computed(() => Boolean(selectedVm.value) && hasCapability('VM.Clone'));
-const canDelete = computed(() => Boolean(selectedVm.value) && hasCapability('VM.Allocate'));
+const canClone = computed(() => hasSingleSelection.value && hasCapability('VM.Clone'));
+const canDelete = computed(
+  () => hasSingleSelection.value && hasCapability('VM.Allocate') && isStopped.value,
+);
 const canConvertTemplate = computed(
-  () => Boolean(selectedVm.value) && hasCapability('VM.Allocate') && !isTemplate.value,
+  () => hasSingleSelection.value && hasCapability('VM.Allocate') && !isTemplate.value,
 );
 const canCreate = computed(() => hasCapability('VM.Allocate'));
 const canSnapshot = computed(
-  () => Boolean(selectedVm.value) && hasCapability('VM.Snapshot') && !isTemplate.value,
+  () => hasSingleSelection.value && hasCapability('VM.Snapshot') && snapshotSupported.value,
 );
 const canBackup = computed(
-  () => Boolean(selectedVm.value) && hasCapability('VM.Backup') && !isTemplate.value,
+  () => hasSingleSelection.value && hasCapability('VM.Backup'),
 );
 const pendingCommandLabel = computed(
   () => pendingCommandTitle.value || commandLabel(pendingCommand.value),
@@ -222,8 +241,24 @@ const confirmationText = computed(() => {
   if (!vm || !pendingCommand.value) return '';
   return `${gettext('Are you sure you want to')} ${pendingCommandLabel.value}: ${vmDisplayName(vm) || vm.vmid} ?`;
 });
-const canBulkPower = computed(
-  () => canPowerManage.value && selectedRows.value.some((row) => !row.template),
+const canBulkStart = computed(
+  () => canPowerManage.value && selectedRows.value.some((row) => !row.template && row.status === 'stopped'),
+);
+const canBulkShutdown = computed(
+  () => canPowerManage.value && selectedRows.value.some((row) => !row.template && row.status === 'running'),
+);
+const canBulkSuspend = computed(
+  () => canPowerManage.value && selectedRows.value.some((row) => !row.template && row.status === 'running'),
+);
+const canBulkStop = computed(
+  () =>
+    canPowerManage.value &&
+    selectedRows.value.some((row) =>
+      !row.template && ['running', 'paused', 'suspended'].includes(String(row.status || '')),
+    ),
+);
+const canBulkMigrate = computed(
+  () => selectedRows.value.length > 0 && hasCapability('VM.Migrate') && !standalone.value,
 );
 
 const filteredRows = computed(() => {
@@ -344,18 +379,26 @@ function statusText(status: unknown) {
   const value = textValue(status) || 'unknown';
   if (value === 'running') return gettext('Running');
   if (value === 'stopped') return gettext('Stopped');
+  if (value === 'paused') return gettext('Paused');
+  if (value === 'suspended') return gettext('Suspended');
   return gettext('Unknown');
 }
 
 function statusColor(status: unknown) {
   if (status === 'running') return 'green';
   if (status === 'stopped') return 'red';
+  if (status === 'paused' || status === 'suspended') return 'orange';
   return 'grey';
 }
 
 function hasCapability(capability: string) {
   const caps = session.caps as { vms?: Record<string, unknown> };
   return Boolean(caps.vms?.[capability]);
+}
+
+function hasNodeCapability(capability: string) {
+  const caps = session.caps as { nodes?: Record<string, unknown> };
+  return Boolean(caps.nodes?.[capability]);
 }
 
 function commandLabel(command?: VmPowerCommand) {
@@ -397,7 +440,11 @@ function toggleRowSelection(_event: Event, row: VmResource) {
 }
 
 function requestCommand(command: VmPowerCommand, data?: Record<string, unknown>, title = '') {
-  if (!selectedVm.value) return;
+  if (!hasSingleSelection.value) return;
+  if (command === 'start' || command === 'resume') {
+    void runCommand(command, data, title);
+    return;
+  }
   pendingCommand.value = command;
   pendingCommandData.value = data;
   pendingCommandTitle.value = title;
@@ -405,26 +452,71 @@ function requestCommand(command: VmPowerCommand, data?: Record<string, unknown>,
 }
 
 async function confirmCommand() {
+  await runCommand(pendingCommand.value, pendingCommandData.value, pendingCommandTitle.value, true);
+}
+
+async function runCommand(
+  command?: VmPowerCommand,
+  data?: Record<string, unknown>,
+  title = '',
+  closeConfirm = false,
+) {
   const vm = selectedVm.value;
-  const command = pendingCommand.value;
-  if (!vm?.node || !vm.vmid || !command) return;
+  if (!hasSingleSelection.value || !vm?.node || !vm.vmid || !command) return false;
 
   commandLoading.value = true;
   try {
-    const taskCommandLabel = pendingCommandLabel.value || commandLabel(command);
-    const response = await runVmPowerCommand(vm.node, vm.vmid, command, pendingCommandData.value);
-    confirmVisible.value = false;
+    const taskCommandLabel = title || commandLabel(command);
+    const response = await runVmPowerCommand(vm.node, vm.vmid, command, data);
+    if (closeConfirm) confirmVisible.value = false;
     pendingCommandData.value = undefined;
     pendingCommandTitle.value = '';
     await reload();
     if (response.data)
       openTask(vm.node, response.data, `${vmDisplayName(vm) || vm.vmid}: ${taskCommandLabel}`);
+    return true;
   } finally {
     commandLoading.value = false;
   }
 }
 
-async function bulkCommand(command: 'start' | 'shutdown' | 'stop') {
+async function openStop() {
+  const vm = selectedVm.value;
+  if (!canStop.value || !vm?.vmid) return;
+
+  stopOverruleAvailable.value = false;
+  stopOverruleShutdown.value = false;
+  const haState = (vm as VmResource & { hastate?: string }).hastate;
+  const haEnabled = Boolean(haState && haState !== 'unmanaged');
+  const canManageNode = hasNodeCapability('Sys.Modify');
+  const tasks = await getTaskLogs().catch(() => null);
+  const hasActiveShutdown = Boolean(
+    tasks?.data?.some(
+      (task) =>
+        String(task.id) === String(vm.vmid) &&
+        task.status === undefined &&
+        task.type === 'qmshutdown' &&
+        (canManageNode || task.user === session.userid),
+    ),
+  );
+  const askOverrule = !haEnabled && hasActiveShutdown;
+  stopOverruleAvailable.value = askOverrule;
+  stopOverruleShutdown.value = askOverrule;
+  stopVisible.value = true;
+}
+
+async function confirmStop() {
+  const completed = await runCommand(
+    'stop',
+    stopOverruleAvailable.value && stopOverruleShutdown.value
+      ? { 'overrule-shutdown': 1 }
+      : undefined,
+    gettext('Stop'),
+  );
+  if (completed) stopVisible.value = false;
+}
+
+async function bulkCommand(command: 'start' | 'shutdown' | 'suspend' | 'stop') {
   const targets = selectedRows.value.filter(
     (row) =>
       !row.template &&
@@ -434,7 +526,9 @@ async function bulkCommand(command: 'start' | 'shutdown' | 'stop') {
         ? row.status === 'stopped'
         : command === 'shutdown'
           ? row.status === 'running'
-          : row.status !== 'stopped'),
+          : command === 'suspend'
+            ? row.status === 'running'
+            : ['running', 'paused', 'suspended'].includes(String(row.status || ''))),
   );
   if (!targets.length) return;
   commandLoading.value = true;
@@ -485,6 +579,7 @@ async function saveTags() {
 }
 
 async function openBulkMigrate() {
+  if (!canBulkMigrate.value) return;
   bulkMigrateLoading.value = true;
   try {
     const response = await getNodes();
@@ -612,9 +707,19 @@ function openDetail(row: VmResource) {
   });
 }
 
-function openConsole(type: 'noVNC' | 'xterm.js' = 'noVNC') {
+async function refreshConsoleAvailability(vm: VmResource) {
+  if (!vm.node || vm.vmid === undefined || vm.vmid === null) return false;
+  const response = await getVmCurrent(vm.node, vm.vmid).catch(() => null);
+  consoleSpiceAvailable.value = Boolean(response?.data?.spice);
+  consoleXtermAvailable.value = Boolean(response?.data?.serial);
+  return Boolean(response);
+}
+
+async function openConsole(type: 'noVNC' | 'xterm.js' = 'noVNC') {
   const vm = selectedVm.value;
   if (!vm?.node || !vm.vmid || !canUseConsole.value) return;
+  await refreshConsoleAvailability(vm);
+  if (type === 'xterm.js' && !consoleXtermAvailable.value) return;
 
   const params = new URLSearchParams({
     console: 'kvm',
@@ -645,6 +750,8 @@ function openConsole(type: 'noVNC' | 'xterm.js' = 'noVNC') {
 async function downloadSpice() {
   const vm = selectedVm.value;
   if (!vm?.node || !vm.vmid || !canUseConsole.value) return;
+  await refreshConsoleAvailability(vm);
+  if (!consoleSpiceAvailable.value) return;
   commandLoading.value = true;
   try {
     const response = await getVmSpiceProxy(vm.node, vm.vmid, window.location.hostname);
@@ -663,10 +770,14 @@ async function downloadSpice() {
   }
 }
 
-async function reload() {
-  loading.value = true;
+async function reload(silent = false) {
+  if (!silent) loading.value = true;
   try {
-    const response = await getVmResources();
+    const [response, nodesResponse] = await Promise.all([
+      getVmResources(),
+      getNodes().catch(() => null),
+    ]);
+    standalone.value = (nodesResponse?.data || []).length < 2;
     resources.value = (response.data || [])
       .filter((row) => row.type === 'qemu')
       .map(mergeVmDisplayName);
@@ -678,12 +789,67 @@ async function reload() {
       .map((selected) => resources.value.find((row) => vmKey(row) === vmKey(selected)))
       .filter((row): row is VmResource => Boolean(row));
   } finally {
-    loading.value = false;
+    if (!silent) loading.value = false;
   }
 }
 
+let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+let disposed = false;
+
+function scheduleRefresh() {
+  if (disposed) return;
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => {
+    if (disposed) return;
+    if (commandLoading.value) {
+      scheduleRefresh();
+      return;
+    }
+    void reload(true).finally(() => {
+      if (!disposed) scheduleRefresh();
+    });
+  }, 3000);
+}
+
+watch(
+  () => {
+    const vm = selectedVm.value;
+    return hasSingleSelection.value && vm?.node && vm.vmid !== undefined
+      ? `${vm.node}/${vm.vmid}`
+      : '';
+  },
+  async (selection, _previous, onCleanup) => {
+    snapshotSupported.value = false;
+    consoleSpiceAvailable.value = false;
+    consoleXtermAvailable.value = false;
+    if (!selection) return;
+
+    let cancelled = false;
+    onCleanup(() => {
+      cancelled = true;
+    });
+    const vm = selectedVm.value;
+    if (!vm?.node || vm.vmid === undefined || vm.vmid === null) return;
+
+    const [featureResponse, statusResponse] = await Promise.all([
+      hasCapability('VM.Snapshot') ? getVmSnapshotFeature(vm.node, vm.vmid).catch(() => null) : null,
+      getVmCurrent(vm.node, vm.vmid).catch(() => null),
+    ]);
+    if (cancelled) return;
+    snapshotSupported.value = Boolean(featureResponse?.data?.hasFeature);
+    consoleSpiceAvailable.value = Boolean(statusResponse?.data?.spice);
+    consoleXtermAvailable.value = Boolean(statusResponse?.data?.serial);
+  },
+  { immediate: true },
+);
+
 onMounted(() => {
-  void reload();
+  void reload().finally(scheduleRefresh);
+});
+
+onBeforeUnmount(() => {
+  disposed = true;
+  if (refreshTimer) clearTimeout(refreshTimer);
 });
 </script>
 
@@ -795,7 +961,7 @@ onMounted(() => {
                         v-close-popup
                         clickable
                         :disable="!canStop"
-                        @click="requestCommand('stop')"
+                        @click="openStop"
                         ><q-item-section class="text-red">{{
                           gettext('Stop')
                         }}</q-item-section></q-item
@@ -839,13 +1005,13 @@ onMounted(() => {
                     color="primary"
                     class="u-button"
                     :label="gettext('Console')"
-                    :disable="!selectedVm || !canUseConsole || commandLoading"
+                    :disable="!canUseConsole || commandLoading"
                     ><q-list dense
                       ><q-item v-close-popup clickable @click="openConsole('noVNC')"
                         ><q-item-section>noVNC</q-item-section></q-item
-                      ><q-item v-close-popup clickable @click="downloadSpice"
+                      ><q-item v-close-popup clickable :disable="!consoleSpiceAvailable" @click="downloadSpice"
                         ><q-item-section>SPICE</q-item-section></q-item
-                      ><q-item v-close-popup clickable @click="openConsole('xterm.js')"
+                      ><q-item v-close-popup clickable :disable="!consoleXtermAvailable" @click="openConsole('xterm.js')"
                         ><q-item-section>xterm.js</q-item-section></q-item
                       ></q-list
                     ></q-btn-dropdown
@@ -862,25 +1028,31 @@ onMounted(() => {
                       ><q-item
                         v-close-popup
                         clickable
-                        :disable="!canBulkPower"
+                        :disable="!canBulkStart"
                         @click="bulkCommand('start')"
                         ><q-item-section>{{ gettext('Bulk Start') }}</q-item-section></q-item
                       ><q-item
                         v-close-popup
                         clickable
-                        :disable="!canBulkPower"
+                        :disable="!canBulkShutdown"
                         @click="bulkCommand('shutdown')"
                         ><q-item-section>{{ gettext('Bulk Shutdown') }}</q-item-section></q-item
                       ><q-item
                         v-close-popup
                         clickable
-                        :disable="!canBulkPower"
+                        :disable="!canBulkSuspend"
+                        @click="bulkCommand('suspend')"
+                        ><q-item-section>{{ gettext('Bulk Suspend') }}</q-item-section></q-item
+                      ><q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canBulkStop"
                         @click="bulkCommand('stop')"
                         ><q-item-section>{{ gettext('Bulk Stop') }}</q-item-section></q-item
                       ><q-item
                         v-close-popup
                         clickable
-                        :disable="!hasCapability('VM.Migrate')"
+                        :disable="!canBulkMigrate"
                         @click="openBulkMigrate"
                         ><q-item-section>{{ gettext('Bulk Migrate') }}</q-item-section></q-item
                       ></q-list
@@ -948,7 +1120,7 @@ onMounted(() => {
                       icon="stop"
                       :label="gettext('Stop')"
                       :disable="!canStop || commandLoading"
-                      @click="requestCommand('stop')"
+                      @click="openStop"
                     />
                     <q-btn
                       no-caps
@@ -979,7 +1151,7 @@ onMounted(() => {
                       color="primary"
                       class="u-button"
                       :label="gettext('Bulk Start')"
-                      :disable="!canBulkPower || commandLoading"
+                      :disable="!canBulkStart || commandLoading"
                       @click="bulkCommand('start')"
                     />
                     <q-btn
@@ -989,8 +1161,18 @@ onMounted(() => {
                       color="primary"
                       class="u-button"
                       :label="gettext('Bulk Shutdown')"
-                      :disable="!canBulkPower || commandLoading"
+                      :disable="!canBulkShutdown || commandLoading"
                       @click="bulkCommand('shutdown')"
+                    />
+                    <q-btn
+                      no-caps
+                      outline
+                      size="12px"
+                      color="primary"
+                      class="u-button"
+                      :label="gettext('Bulk Suspend')"
+                      :disable="!canBulkSuspend || commandLoading"
+                      @click="bulkCommand('suspend')"
                     />
                     <q-btn
                       no-caps
@@ -999,7 +1181,7 @@ onMounted(() => {
                       color="negative"
                       class="u-button"
                       :label="gettext('Bulk Stop')"
-                      :disable="!canBulkPower || commandLoading"
+                      :disable="!canBulkStop || commandLoading"
                       @click="bulkCommand('stop')"
                     />
                     <q-btn
@@ -1009,7 +1191,7 @@ onMounted(() => {
                       color="primary"
                       class="u-button"
                       :label="gettext('Bulk Migrate')"
-                      :disable="!selectedRows.length || !hasCapability('VM.Migrate')"
+                      :disable="!canBulkMigrate"
                       @click="openBulkMigrate"
                     />
                     <q-btn
@@ -1030,7 +1212,7 @@ onMounted(() => {
                       class="u-button"
                       icon="terminal"
                       :label="gettext('Console')"
-                      :disable="!selectedVm || !canUseConsole"
+                      :disable="!canUseConsole"
                       @click="() => openConsole('noVNC')"
                     />
                   </div>
@@ -1094,7 +1276,7 @@ onMounted(() => {
                     icon="refresh"
                     :aria-label="gettext('Refresh')"
                     :loading="loading"
-                    @click="reload"
+                    @click="() => reload()"
                   />
                   <q-space />
                   <q-input
@@ -1161,6 +1343,37 @@ onMounted(() => {
         </div>
       </q-card-section>
     </q-card>
+
+    <q-dialog v-model="stopVisible" persistent transition-show="scale" transition-hide="scale">
+      <UWindow :title="gettext('Confirm')" width="420px" :loading="commandLoading">
+        <div class="q-pa-md q-gutter-md">
+          <div class="u-size-12">
+            {{
+              `${gettext('Are you sure you want to')} ${gettext('Stop')}: ${selectedVm ? vmDisplayName(selectedVm) || selectedVm.vmid : '-'} ?`
+            }}
+          </div>
+          <q-checkbox
+            v-if="stopOverruleAvailable"
+            v-model="stopOverruleShutdown"
+            dense
+            color="primary"
+            :label="gettext('Overrule active shutdown tasks')"
+          />
+        </div>
+        <template #foot>
+          <q-btn v-close-popup no-caps flat size="12px" class="u-button" :label="gettext('Cancel')" />
+          <q-btn
+            no-caps
+            flat
+            size="12px"
+            class="bg-negative text-grey-1 u-button"
+            :loading="commandLoading"
+            :label="gettext('Stop')"
+            @click="confirmStop"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
 
     <q-dialog v-model="confirmVisible" persistent transition-show="scale" transition-hide="scale">
       <UWindow :title="gettext('Confirm')" width="420px" :loading="commandLoading">

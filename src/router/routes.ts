@@ -57,6 +57,24 @@ const routes: RouteRecordRaw[] = [
         meta: { auth: true, title: 'Options' },
       },
       {
+        path: 'system/resource-mappings',
+        name: 'system-resource-mappings',
+        component: () => import('@/pages/system/ResourceMappingsPage.vue'),
+        meta: { auth: true, title: 'Resource Mappings' },
+      },
+      {
+        path: 'system/directory-mappings',
+        name: 'system-directory-mappings',
+        component: () => import('@/pages/system/DirectoryMappingsPage.vue'),
+        meta: { auth: true, title: 'Directory Mappings' },
+      },
+      {
+        path: 'system/cpu-types',
+        name: 'system-cpu-types',
+        component: () => import('@/pages/system/CpuTypesPage.vue'),
+        meta: { auth: true, title: 'CPU Types' },
+      },
+      {
         path: 'system/metric-server',
         name: 'system-metric-server',
         component: () => import('@/pages/system/MetricServerPage.vue'),
