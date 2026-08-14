@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Dialog } from 'quasar';
 import { computed, provide, reactive, shallowRef, watch } from 'vue';
-import { getVmPendingConfig, revertVmConfig, updateVmConfig } from '@/api/overview';
+import { getVmConfig, getVmPendingConfig, revertVmConfig, updateVmConfig } from '@/api/overview';
 import type { PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
@@ -29,6 +29,7 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ updated: [] }>();
 const session = useSessionStore();
+const currentConfig = shallowRef<PveRecord>({ ...props.config });
 const loading = shallowRef(false);
 const addVisible = shallowRef(false);
 const resizeVisible = shallowRef(false);
@@ -87,6 +88,15 @@ function renderMachine(value: unknown) {
 function deviceRow(key: string, config: PveRecord): HardwareRow | undefined {
   if (config[key] === undefined) return undefined;
   const value = textValue(config[key]) || '-';
+  if (/^unused\d+$/.test(key)) {
+    return {
+      key,
+      type: 'unused-disk',
+      name: `${gettext('Unused Disk')} ${key.replace('unused', '')}`,
+      value,
+      editable: true,
+    };
+  }
   if (/^(ide|scsi|sata|virtio)\d+$/.test(key) && value.includes('cloudinit')) {
     return {
       key,
@@ -160,7 +170,7 @@ const pendingByKey = computed<Record<string, PveRecord>>(() =>
 );
 
 const rows = computed<HardwareRow[]>(() => {
-  const config = props.config;
+  const config = currentConfig.value;
   if (props.guestType === 'lxc') {
     const cpuLimit = numberValue(config.cpulimit, 0);
     const cpuUnits = numberValue(config.cpuunits, 0);
@@ -272,7 +282,7 @@ const rows = computed<HardwareRow[]>(() => {
   const devices = Object.keys(config)
     .filter(
       (key) =>
-        /^(ide|scsi|sata|virtio|net|usb|hostpci|serial|virtiofs)\d+$/.test(key) ||
+        /^(ide|scsi|sata|virtio|net|usb|hostpci|serial|virtiofs|unused)\d+$/.test(key) ||
         ['efidisk0', 'tpmstate0', 'audio0', 'rng0'].includes(key),
     )
     .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
@@ -301,8 +311,17 @@ const selectedCanSave = computed(() =>
   Boolean(selectedDevice.value?.editable && canEditRow(selectedDevice.value)),
 );
 const isDisk = computed(() => selectedDevice.value?.type === 'disk');
-function selectHardware(row: HardwareRow) {
-  selectedKey.value = row.key;
+async function refreshConfig() {
+  const response = await getVmConfig(props.node, props.vmid, props.guestType);
+  currentConfig.value = { ...currentConfig.value, ...(response.data || {}) };
+}
+async function selectHardware(row: HardwareRow) {
+  selectedKey.value = '';
+  try {
+    await refreshConfig();
+  } finally {
+    selectedKey.value = row.key;
+  }
 }
 function pendingValue(key: string) {
   const pending = pendingByKey.value[key];
@@ -314,7 +333,10 @@ function hasPendingChange(key: string) {
   if (!pending) return false;
   if (pending.delete) return true;
   const nextValue = textValue(pending.pending);
-  return nextValue !== '' && nextValue !== textValue(props.config[key]);
+  return nextValue !== '' && nextValue !== textValue(currentConfig.value[key]);
+}
+function isPendingDelete(key: string) {
+  return Boolean(pendingByKey.value[key]?.delete);
 }
 function hasVmCapability(capability: string) {
   return Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.[capability]);
@@ -341,11 +363,18 @@ async function revertSelected() {
 }
 
 watch(
-  () => [props.node, props.vmid, textValue(props.config.digest)],
+  () => [props.node, props.vmid, textValue(currentConfig.value.digest)],
   () => {
     void loadPending();
   },
   { immediate: true },
+);
+watch(
+  () => props.config,
+  (config) => {
+    currentConfig.value = { ...config };
+  },
+  { deep: true },
 );
 
 watch(
@@ -361,13 +390,14 @@ watch(
   () => [selectedDevice.value?.key, selectedDevice.value?.value],
   () => {
     const device = selectedDevice.value;
-    form.deviceValue = device?.editable ? textValue(props.config[device.key]) : '';
+    form.deviceValue = device?.editable ? textValue(currentConfig.value[device.key]) : '';
     form.advanced = Boolean(device?.editable && form.deviceValue.includes(','));
   },
   { immediate: true },
 );
 
 function canEditRow(row: HardwareRow) {
+  if (isPendingDelete(row.key)) return false;
   switch (row.type) {
     case 'cpu':
       return hasVmCapability('VM.Config.CPU') || hasVmCapability('VM.Config.HWType');
@@ -500,13 +530,14 @@ const vmHardwareContext = useVmHardware({
   node: computed(() => props.node),
   vmid: computed(() => props.vmid),
   guestType: computed(() => props.guestType),
-  config: computed(() => props.config),
+  config: computed(() => currentConfig.value),
   loading,
   selectedDevice,
   pendingByKey,
   hasVmCapability,
   canEditRow,
   hasPendingChange,
+  isPendingDelete,
   pendingValue,
   notifyUpdated: () => emit('updated'),
   nextDeviceKey,

@@ -88,6 +88,7 @@ function parseDrive(value: unknown) {
     iops_wr_max: '',
   };
   const preserved: string[] = [];
+  let hasDriveFile = false;
   textValue(value)
     .split(',')
     .forEach((part) => {
@@ -98,9 +99,14 @@ function parseDrive(value: unknown) {
       if (!key) return;
       if (optionValue === undefined) {
         form.file = key;
+        hasDriveFile = true;
         return;
       }
-      if (key === 'cache') form.cache = optionValue || '__default__';
+      if (key === 'volume' && !form.file) {
+        form.file = optionValue;
+        hasDriveFile = true;
+      } else if (key === 'cache')
+        form.cache = optionValue === 'off' ? 'none' : optionValue || '__default__';
       else if (key === 'discard') form.discard = optionValue === 'on' || parseEnabled(optionValue);
       else if (key === 'iothread') form.iothread = parseEnabled(optionValue);
       else if (key === 'ssd') form.ssd = parseEnabled(optionValue);
@@ -111,14 +117,15 @@ function parseDrive(value: unknown) {
       else if (bandwidthKeys.includes(key as (typeof bandwidthKeys)[number]))
         form[key as (typeof bandwidthKeys)[number]] = optionValue;
       else if (!preservedKeys.has(key)) preserved.push(part);
-      else preserved.push(part);
     });
-  return { form, preserved };
+  return { form, preserved, malformed: Boolean(textValue(value).trim() && !hasDriveFile) };
 }
 
 const parsedDrive = parseDrive(config.value[device.key]);
 const form = reactive(parsedDrive.form);
 const preservedOptions = shallowRef(parsedDrive.preserved);
+const malformed = shallowRef(parsedDrive.malformed);
+const editable = computed(() => canEditRow(device));
 const bus = computed(() => device.key.replace(/\d+$/, ''));
 const supportsIoThread = computed(() => bus.value === 'scsi' || bus.value === 'virtio');
 const advanced = shallowRef(
@@ -154,6 +161,7 @@ function optionalNumberValid(value: string, min: number) {
 
 const canSave = computed(() =>
   Boolean(
+    !malformed.value &&
     form.file.trim() &&
     optionalNumberValid(form.mbps_rd, 1) &&
     optionalNumberValid(form.mbps_wr, 1) &&
@@ -175,26 +183,27 @@ function diskValue() {
   if (form.cache !== '__default__') parts.push(`cache=${form.cache}`);
   if (form.discard) parts.push('discard=on');
   if (supportsIoThread.value && form.iothread) parts.push('iothread=on');
-  if (advanced.value) {
-    if (bus.value !== 'virtio' && form.ssd) parts.push('ssd=on');
-    if (supportsIoThread.value && form.readOnly) parts.push('ro=on');
-    if (!form.backup) parts.push('backup=0');
-    if (form.skipReplication) parts.push('replicate=no');
-    if (form.aio !== '__default__') parts.push(`aio=${form.aio}`);
-    bandwidthKeys.forEach((key) => pushOptional(parts, key, form[key]));
-  }
+  if (bus.value !== 'virtio' && form.ssd) parts.push('ssd=on');
+  if (supportsIoThread.value && form.readOnly) parts.push('ro=on');
+  if (!form.backup) parts.push('backup=0');
+  if (form.skipReplication) parts.push('replicate=no');
+  if (form.aio !== '__default__') parts.push(`aio=${form.aio}`);
+  bandwidthKeys.forEach((key) => pushOptional(parts, key, form[key]));
   return parts.join(',');
 }
 
 async function save() {
-  if (!canEditRow(device) || !canSave.value) return;
-  await updateConfig({ [device.key]: diskValue() });
+  if (!editable.value || !canSave.value) return;
+  await updateConfig({ [device.key]: diskValue(), background_delay: 5 });
 }
 </script>
 
 <template>
-  <div class="hardware-special-editor">
+  <div class="hardware-special-editor" :class="{ 'hardware-special-editor--disabled': !editable }">
     <div class="row q-col-gutter-sm hardware-special-editor__fields">
+      <div v-if="malformed" class="col-12 hardware-editor-error">
+        {{ gettext('This disk configuration cannot be parsed safely and was not changed.') }}
+      </div>
       <div class="col-12">
         <q-input v-model="form.file" dense disable :label="gettext('Disk image')" />
       </div>
@@ -346,7 +355,7 @@ async function save() {
         no-caps
         size="12px"
         class="bg-primary text-grey-1 u-button"
-        :disable="!canSave"
+        :disable="!canSave || !editable"
         :label="gettext('Save')"
         @click="save"
       />
@@ -370,5 +379,17 @@ async function save() {
   padding: 8px 12px;
   border-top: 1px solid #d7dce2;
   background: #f5f7fa;
+}
+.hardware-editor-error {
+  padding: 8px 10px;
+  border: 1px solid #ef9a9a;
+  background: #ffebee;
+  color: #b71c1c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.hardware-special-editor--disabled .hardware-special-editor__fields {
+  pointer-events: none;
+  opacity: 0.6;
 }
 </style>

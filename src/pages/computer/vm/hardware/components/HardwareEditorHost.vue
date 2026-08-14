@@ -23,6 +23,7 @@ const activeEditor = computed(() => {
     machine: MachineHardwareEditor,
     'scsi-controller': ScsiControllerHardwareEditor,
     disk: DiskHardwareEditor,
+    'unused-disk': DiskHardwareEditor,
     cdrom: CdromHardwareEditor,
     network: NetworkHardwareEditor,
   };

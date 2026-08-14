@@ -13,8 +13,9 @@ export interface VmHardwareContext {
   hasVmCapability: (capability: string) => boolean;
   canEditRow: (row: HardwareRow) => boolean;
   hasPendingChange: (key: string) => boolean;
+  isPendingDelete: (key: string) => boolean;
   pendingValue: (key: string) => string;
-  updateConfig: (data: PveRecord) => Promise<void>;
+  updateConfig: (data: PveRecord) => Promise<unknown>;
   notifyUpdated: () => void;
   nextDeviceKey: (prefix: DevicePrefix, limit?: number) => string;
 }

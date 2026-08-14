@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive, shallowRef } from 'vue';
+import { computed, onMounted, reactive, shallowRef } from 'vue';
+import { getNodeNetwork } from '@/api/host';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
@@ -13,6 +14,7 @@ const networkModels = [
   'e1000-82540em',
   'e1000-82544gc',
   'e1000-82545em',
+  'e1000e',
   'vmxnet3',
   'rtl8139',
   'pcnet',
@@ -35,6 +37,7 @@ function parseNetwork(value: unknown) {
     mtu: '',
     disconnect: false,
   };
+  const preserved: string[] = [];
   textValue(value)
     .split(',')
     .forEach((part) => {
@@ -56,13 +59,28 @@ function parseNetwork(value: unknown) {
       else if (key === 'queues') result.queues = option;
       else if (key === 'mtu') result.mtu = option;
       else if (key === 'link_down') result.disconnect = option === '1';
+      else preserved.push(part);
     });
-  return result;
+  return { form: result, preserved };
 }
 
-const form = reactive(parseNetwork(config.value[device.key]));
+const parsedNetwork = parseNetwork(config.value[device.key]);
+const form = reactive(parsedNetwork.form);
+const preservedOptions = shallowRef(parsedNetwork.preserved);
+const bridgeRows = shallowRef<PveRecord[]>([]);
+const editable = computed(() => canEditRow(device));
 const advanced = shallowRef(Boolean(form.rate || form.queues || form.mtu || form.disconnect));
 const modelOptions = computed(() => networkModels);
+const bridgeOptions = computed(() =>
+  bridgeRows.value
+    .map((row) => textValue(row.iface))
+    .filter(Boolean)
+    .sort()
+    .map((bridge) => ({ label: bridge, value: bridge })),
+);
+const bridgeValid = computed(() =>
+  bridgeOptions.value.some((option) => option.value === form.bridge),
+);
 const macValid = computed(
   () => !form.macaddr.trim() || /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(form.macaddr.trim()),
 );
@@ -88,7 +106,7 @@ const mtuValid = computed(() => {
 });
 const canSave = computed(() =>
   Boolean(
-    form.bridge.trim() &&
+    bridgeValid.value &&
     macValid.value &&
     tagValid.value &&
     rateValid.value &&
@@ -103,30 +121,42 @@ function networkValue() {
   parts.push(`bridge=${form.bridge.trim()}`);
   if (form.tag.trim()) parts.push(`tag=${form.tag.trim()}`);
   if (form.firewall) parts.push('firewall=1');
-  if (advanced.value) {
-    if (form.rate.trim()) parts.push(`rate=${form.rate.trim()}`);
-    if (form.queues.trim()) parts.push(`queues=${form.queues.trim()}`);
-    if (form.mtu.trim()) parts.push(`mtu=${form.mtu.trim()}`);
-    if (form.disconnect) parts.push('link_down=1');
-  }
+  if (form.rate.trim()) parts.push(`rate=${form.rate.trim()}`);
+  if (form.queues.trim()) parts.push(`queues=${form.queues.trim()}`);
+  if (form.model === 'virtio' && form.mtu.trim()) parts.push(`mtu=${form.mtu.trim()}`);
+  if (form.disconnect) parts.push('link_down=1');
+  parts.push(...preservedOptions.value);
   return parts.join(',');
 }
 
+async function loadBridges() {
+  bridgeRows.value = (await getNodeNetwork(node.value)).data || [];
+  bridgeRows.value = bridgeRows.value.filter((row) => textValue(row.type) === 'bridge');
+}
+
 async function save() {
-  if (!canEditRow(device) || !canSave.value) return;
+  if (!editable.value || !canSave.value) return;
   await updateConfig({ [device.key]: networkValue() });
 }
+
+onMounted(() => {
+  void loadBridges();
+});
 </script>
 
 <template>
-  <div class="hardware-special-editor">
+  <div class="hardware-special-editor" :class="{ 'hardware-special-editor--disabled': !editable }">
     <div class="row q-col-gutter-sm hardware-special-editor__fields">
       <div class="col-6">
-        <q-input
+        <q-select
           v-model="form.bridge"
           dense
-          :error="!form.bridge.trim()"
-          :error-message="gettext('This field is required')"
+          options-dense
+          emit-value
+          map-options
+          :options="bridgeOptions"
+          :error="!bridgeValid"
+          :error-message="gettext('Please select a valid bridge')"
           :label="gettext('Bridge')"
         />
       </div>
@@ -227,7 +257,7 @@ async function save() {
         no-caps
         size="12px"
         class="bg-primary text-grey-1 u-button"
-        :disable="!canSave"
+        :disable="!canSave || !editable"
         :label="gettext('Save')"
         @click="save"
       />
@@ -259,5 +289,9 @@ async function save() {
   color: #1f5f9f;
   font-size: 12px;
   line-height: 1.5;
+}
+.hardware-special-editor--disabled .hardware-special-editor__fields {
+  pointer-events: none;
+  opacity: 0.6;
 }
 </style>
