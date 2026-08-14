@@ -113,14 +113,13 @@ watch(
       align="left"
       class="tag-tabs"
     >
-      <q-route-tab
+      <q-tab
         v-for="(tag, index) in tagView"
         :key="`${tag.path}-${index}`"
-        class="tag-item"
-        active-class="tag-item--active"
-        :to="tag.path"
         :name="tag.path"
+        :class="['tag-item', tag.path === activePath ? 'tag-item--active' : '']"
         no-caps
+        @click="router.push(tag.path)"
       >
         <q-icon name="widgets" size="16px" />
         <div class="tag-label">{{ gettext(tag.title) }}</div>
@@ -131,7 +130,7 @@ watch(
           class="tag-close"
           @click.prevent.stop="removeTag(index, tag)"
         />
-      </q-route-tab>
+      </q-tab>
     </q-tabs>
   </div>
 </template>
@@ -158,9 +157,7 @@ watch(
   color: #333333;
 }
 
-.tag-item.tag-item--active,
-.tag-item.q-tab--active,
-.tag-item.q-router-link--exact-active {
+.tag-item.tag-item--active {
   background: linear-gradient(#2f8ae5, #1976d2);
   color: #ffffff;
   box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
