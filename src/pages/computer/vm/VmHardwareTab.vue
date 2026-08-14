@@ -30,6 +30,7 @@ const props = withDefaults(
 const emit = defineEmits<{ updated: []; task: [node: string, upid: string, title: string] }>();
 const session = useSessionStore();
 const currentConfig = shallowRef<PveRecord>({ ...props.config });
+const editDigest = shallowRef('');
 const loading = shallowRef(false);
 const addVisible = shallowRef(false);
 const resizeVisible = shallowRef(false);
@@ -320,6 +321,7 @@ async function selectHardware(row: HardwareRow) {
   selectedKey.value = '';
   try {
     await refreshConfig();
+    editDigest.value = textValue(currentConfig.value.digest);
     selectedKey.value = row.key;
   } catch {
     // Do not edit from cached data when the authoritative config could not be loaded.
@@ -537,6 +539,7 @@ const vmHardwareContext = useVmHardware({
   vmid: computed(() => props.vmid),
   guestType: computed(() => props.guestType),
   config: computed(() => currentConfig.value),
+  editDigest,
   loading,
   selectedDevice,
   pendingByKey,

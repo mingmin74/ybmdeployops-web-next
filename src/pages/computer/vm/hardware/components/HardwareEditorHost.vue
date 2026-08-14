@@ -8,7 +8,6 @@ import DisplayHardwareEditor from '../editors/DisplayHardwareEditor.vue';
 import MachineHardwareEditor from '../editors/MachineHardwareEditor.vue';
 import ScsiControllerHardwareEditor from '../editors/ScsiControllerHardwareEditor.vue';
 import DiskHardwareEditor from '../editors/DiskHardwareEditor.vue';
-import UnusedDiskHardwareEditor from '../editors/UnusedDiskHardwareEditor.vue';
 import CdromHardwareEditor from '../editors/CdromHardwareEditor.vue';
 import NetworkHardwareEditor from '../editors/NetworkHardwareEditor.vue';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
@@ -24,7 +23,7 @@ const activeEditor = computed(() => {
     machine: MachineHardwareEditor,
     'scsi-controller': ScsiControllerHardwareEditor,
     disk: DiskHardwareEditor,
-    'unused-disk': UnusedDiskHardwareEditor,
+    'unused-disk': DiskHardwareEditor,
     cdrom: CdromHardwareEditor,
     network: NetworkHardwareEditor,
   };

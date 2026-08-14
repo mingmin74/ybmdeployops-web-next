@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, reactive, shallowRef } from 'vue';
+import { computed, reactive, shallowRef, watch } from 'vue';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
+import { getGuestArchitecture } from '../vmHardwareUtils';
 import type { HardwareRow } from '../types';
 
 type DriveForm = {
@@ -136,6 +137,39 @@ const form = reactive(parsedDrive.form);
 const preservedOptions = shallowRef(parsedDrive.preserved);
 const malformed = shallowRef(parsedDrive.malformed);
 const editable = computed(() => canEditRow(device));
+const isUnused = computed(() => /^unused\d+$/.test(device.key));
+const selectedUnusedKey = shallowRef(device.key);
+const unusedDiskOptions = computed(() =>
+  Object.keys(config.value)
+    .filter((key) => /^unused\d+$/.test(key))
+    .map((key) => ({ label: key, value: key })),
+);
+const controllerOptions = computed(() => {
+  const options = [
+    { label: 'SCSI', value: 'scsi', limit: 31 },
+    { label: 'VirtIO Block', value: 'virtio', limit: 16 },
+    { label: 'SATA', value: 'sata', limit: 6 },
+  ];
+  if (getGuestArchitecture(config.value) !== 'aarch64') {
+    options.unshift({ label: 'IDE', value: 'ide', limit: 4 });
+  }
+  return options;
+});
+const attachment = reactive({ controller: 'scsi', deviceid: 0 });
+const attachmentController = computed(
+  () =>
+    controllerOptions.value.find((option) => option.value === attachment.controller) ||
+    controllerOptions.value[0]!,
+);
+const attachmentOptions = computed(() =>
+  Array.from({ length: attachmentController.value.limit }, (_, value) => ({
+    label: String(value),
+    value,
+    disable: Boolean(config.value[`${attachment.controller}${value}`]),
+  })),
+);
+const attachmentKey = computed(() => `${attachment.controller}${attachment.deviceid}`);
+const attachmentFree = computed(() => !config.value[attachmentKey.value]);
 const bus = computed(() => device.key.replace(/\d+$/, ''));
 const supportsIoThread = computed(() => bus.value === 'scsi' || bus.value === 'virtio');
 const advanced = shallowRef(
@@ -163,24 +197,25 @@ const aioOptions = [
   { label: 'io_uring', value: 'io_uring' },
 ];
 
-function optionalNumberValid(value: string, min: number) {
+function optionalNumberValid(value: string, min: number, integer = false) {
   if (!value.trim()) return true;
   const number = Number(value);
-  return Number.isFinite(number) && number >= min;
+  return Number.isFinite(number) && number >= min && (!integer || Number.isInteger(number));
 }
 
 const canSave = computed(() =>
   Boolean(
     !malformed.value &&
     form.file.trim() &&
+    (!isUnused.value || attachmentFree.value) &&
     optionalNumberValid(form.mbps_rd, 1) &&
     optionalNumberValid(form.mbps_wr, 1) &&
-    optionalNumberValid(form.iops_rd, 10) &&
-    optionalNumberValid(form.iops_wr, 10) &&
+    optionalNumberValid(form.iops_rd, 10, true) &&
+    optionalNumberValid(form.iops_wr, 10, true) &&
     optionalNumberValid(form.mbps_rd_max, 1) &&
     optionalNumberValid(form.mbps_wr_max, 1) &&
-    optionalNumberValid(form.iops_rd_max, 10) &&
-    optionalNumberValid(form.iops_wr_max, 10),
+    optionalNumberValid(form.iops_rd_max, 10, true) &&
+    optionalNumberValid(form.iops_wr_max, 10, true),
   ),
 );
 
@@ -202,10 +237,26 @@ function diskValue() {
   return parts.join(',');
 }
 
+function loadUnusedDrive(key: string) {
+  const parsed = parseDrive(config.value[key]);
+  Object.assign(form, parsed.form);
+  preservedOptions.value = parsed.preserved;
+  malformed.value = parsed.malformed;
+}
+
+watch(selectedUnusedKey, loadUnusedDrive);
+watch(
+  () => attachment.controller,
+  () => {
+    attachment.deviceid = attachmentOptions.value.find((option) => !option.disable)?.value ?? 0;
+  },
+  { immediate: true },
+);
+
 async function save() {
   if (!editable.value || !canSave.value) return;
   await updateConfig(
-    { [device.key]: diskValue(), background_delay: 5 },
+    { [isUnused.value ? attachmentKey.value : device.key]: diskValue(), background_delay: 5 },
     'POST',
     gettext('Update disk'),
   );
@@ -218,9 +269,44 @@ async function save() {
       <div v-if="malformed" class="col-12 hardware-editor-error">
         {{ gettext('This disk configuration cannot be parsed safely and was not changed.') }}
       </div>
-      <div class="col-12">
+      <div v-if="isUnused" class="col-12">
+        <q-select
+          v-model="selectedUnusedKey"
+          dense
+          options-dense
+          emit-value
+          map-options
+          :options="unusedDiskOptions"
+          :label="gettext('Disk image')"
+        />
+      </div>
+      <div v-else class="col-12">
         <q-input v-model="form.file" dense disable :label="gettext('Disk image')" />
       </div>
+      <template v-if="isUnused">
+        <div class="col-6">
+          <q-select
+            v-model="attachment.controller"
+            dense
+            options-dense
+            emit-value
+            map-options
+            :options="controllerOptions"
+            :label="gettext('Bus/Device')"
+          />
+        </div>
+        <div class="col-6">
+          <q-select
+            v-model="attachment.deviceid"
+            dense
+            options-dense
+            emit-value
+            map-options
+            :options="attachmentOptions"
+            :label="gettext('Device')"
+          />
+        </div>
+      </template>
       <div class="col-12">
         <q-select
           v-model="form.cache"

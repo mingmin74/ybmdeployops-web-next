@@ -35,42 +35,45 @@ function parseNetwork(value: unknown) {
     macaddr: '',
     rate: '',
     queues: '',
+    trunks: '',
     mtu: '',
     disconnect: false,
   };
-  const preserved: string[] = [];
-  textValue(value)
-    .split(',')
-    .forEach((part) => {
-      if (!part) return;
-      const segments = part.split('=', 2);
-      const key = segments[0] || '';
-      const optionValue = segments[1];
-      if (!key) return;
-      const option = optionValue ?? '';
-      if (networkModels.includes(key) && optionValue === undefined) {
-        result.model = key;
-      } else if (networkModels.includes(key) && optionValue !== undefined) {
-        result.model = key;
-        result.macaddr = option;
-      } else if (key === 'bridge') result.bridge = option;
-      else if (key === 'tag') result.tag = option;
-      else if (key === 'firewall') result.firewall = option === '1';
-      else if (key === 'rate') result.rate = option;
-      else if (key === 'queues') result.queues = option;
-      else if (key === 'mtu') result.mtu = option;
-      else if (key === 'link_down') result.disconnect = option === '1';
-      else preserved.push(part);
-    });
-  return { form: result, preserved };
+  const raw = textValue(value);
+  let hasModel = false;
+  let malformed = !raw;
+  raw.split(',').forEach((part) => {
+    let match: RegExpMatchArray | null;
+    if (
+      (match = part.match(
+        /^(ne2k_pci|e1000e?|e1000-82540em|e1000-82544gc|e1000-82545em|vmxnet3|rtl8139|pcnet|virtio|ne2k_isa|i82551|i82557b|i82559er)(=([0-9a-f]{2}(:[0-9a-f]{2}){5}))?$/i,
+      ))
+    ) {
+      result.model = match[1]!.toLowerCase();
+      result.macaddr = match[3] || '';
+      hasModel = true;
+    } else if ((match = part.match(/^bridge=(\S+)$/))) result.bridge = match[1]!;
+    else if ((match = part.match(/^rate=(\d+(\.\d+)?|\.\d+)$/))) result.rate = match[1]!;
+    else if ((match = part.match(/^tag=(\d+(\.\d+)?)$/))) result.tag = match[1]!;
+    else if ((match = part.match(/^firewall=(\d+)$/))) result.firewall = match[1] === '1';
+    else if ((match = part.match(/^link_down=(\d+)$/))) result.disconnect = match[1] === '1';
+    else if ((match = part.match(/^queues=(\d+)$/))) result.queues = match[1]!;
+    else if ((match = part.match(/^trunks=(\d+(?:-\d+)?(?:;\d+(?:-\d+)?)*)$/)))
+      result.trunks = match[1]!;
+    else if ((match = part.match(/^mtu=(\d+)$/))) result.mtu = match[1]!;
+    else malformed = true;
+  });
+  return { form: result, malformed: malformed || !hasModel };
 }
 
 const parsedNetwork = parseNetwork(config.value[device.key]);
 const form = reactive(parsedNetwork.form);
-const preservedOptions = shallowRef(parsedNetwork.preserved);
+const malformed = shallowRef(parsedNetwork.malformed);
 const bridgeRows = shallowRef<PveRecord[]>([]);
 const editable = computed(() => canEditRow(device));
-const advanced = shallowRef(Boolean(form.rate || form.queues || form.mtu || form.disconnect));
+const advanced = shallowRef(
+  Boolean(form.rate || form.queues || form.trunks || form.mtu || form.disconnect),
+);
 const modelOptions = computed(() => networkModels);
 const bridgeOptions = computed(() =>
   bridgeRows.value
@@ -105,14 +108,19 @@ const mtuValid = computed(() => {
   const value = Number(form.mtu);
   return Number.isInteger(value) && value >= 1 && value <= 65520 && (value === 1 || value >= 576);
 });
+const trunksValid = computed(
+  () => !form.trunks.trim() || /^\d+(?:-\d+)?(?:;\d+(?:-\d+)?)*$/.test(form.trunks.trim()),
+);
 const canSave = computed(() =>
   Boolean(
+    !malformed.value &&
     bridgeValid.value &&
     macValid.value &&
     tagValid.value &&
     rateValid.value &&
     queuesValid.value &&
-    mtuValid.value,
+    mtuValid.value &&
+    trunksValid.value,
   ),
 );
 const showMtuHint = computed(() => form.mtu.trim() === '1');
@@ -124,9 +132,9 @@ function networkValue() {
   if (form.firewall) parts.push('firewall=1');
   if (form.rate.trim()) parts.push(`rate=${form.rate.trim()}`);
   if (form.queues.trim()) parts.push(`queues=${form.queues.trim()}`);
+  if (form.trunks.trim()) parts.push(`trunks=${form.trunks.trim()}`);
   if (form.model === 'virtio' && form.mtu.trim()) parts.push(`mtu=${form.mtu.trim()}`);
   if (form.disconnect) parts.push('link_down=1');
-  parts.push(...preservedOptions.value);
   return parts.join(',');
 }
 
@@ -147,6 +155,9 @@ onMounted(() => {
 <template>
   <div class="hardware-special-editor" :class="{ 'hardware-special-editor--disabled': !editable }">
     <div class="row q-col-gutter-sm hardware-special-editor__fields">
+      <div v-if="malformed" class="col-12 hardware-editor-error">
+        {{ gettext('This network configuration cannot be parsed safely and was not changed.') }}
+      </div>
       <div class="col-6">
         <q-select
           v-model="form.bridge"
@@ -222,6 +233,15 @@ onMounted(() => {
         </div>
         <div class="col-6">
           <q-input
+            v-model="form.trunks"
+            dense
+            :error="!trunksValid"
+            :error-message="gettext('Invalid Value')"
+            :label="gettext('VLAN trunks')"
+          />
+        </div>
+        <div class="col-6">
+          <q-input
             v-model="form.mtu"
             dense
             type="number"
@@ -287,6 +307,14 @@ onMounted(() => {
   border: 1px solid #b8d9ff;
   background: #e8f3ff;
   color: #1f5f9f;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.hardware-editor-error {
+  padding: 8px 10px;
+  border: 1px solid #ef9a9a;
+  background: #ffebee;
+  color: #b71c1c;
   font-size: 12px;
   line-height: 1.5;
 }

@@ -6,7 +6,7 @@ export interface VmHardwareContext {
   node: ComputedRef<string>;
   vmid: ComputedRef<string>;
   config: ComputedRef<PveRecord>;
-  digest: ComputedRef<string>;
+  digest: Readonly<Ref<string>>;
   loading: Ref<boolean>;
   selectedDevice: Readonly<Ref<HardwareRow | undefined>>;
   pendingByKey: ComputedRef<Record<string, PveRecord>>;

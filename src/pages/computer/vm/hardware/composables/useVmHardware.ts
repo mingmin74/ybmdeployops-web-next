@@ -1,4 +1,4 @@
-import { computed, type ComputedRef, type Ref } from 'vue';
+import { type ComputedRef, type Ref } from 'vue';
 import { updateVmConfig } from '@/api/overview';
 import type { PveRecord } from '@/api/resources';
 import { textValue } from '@/utils/pveFormat';
@@ -10,6 +10,7 @@ interface UseVmHardwareOptions {
   vmid: ComputedRef<string>;
   guestType: ComputedRef<'qemu' | 'lxc'>;
   config: ComputedRef<PveRecord>;
+  editDigest: Readonly<Ref<string>>;
   loading: Ref<boolean>;
   selectedDevice: Readonly<Ref<HardwareRow | undefined>>;
   pendingByKey: ComputedRef<Record<string, PveRecord>>;
@@ -24,7 +25,7 @@ interface UseVmHardwareOptions {
 }
 
 export function useVmHardware(options: UseVmHardwareOptions): VmHardwareContext {
-  const digest = computed(() => textValue(options.config.value.digest));
+  const digest = options.editDigest;
 
   async function updateConfig(data: PveRecord, method: 'PUT' | 'POST' = 'PUT', taskTitle = '') {
     options.loading.value = true;
