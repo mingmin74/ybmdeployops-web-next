@@ -545,6 +545,7 @@ onUnmounted(() => {
       :node="taskNode"
       :upid="taskUpid"
       :title="taskTitle"
+      @finished="reload"
     />
   </div>
 </template>

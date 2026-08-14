@@ -282,9 +282,9 @@ async function importDisk() {
   loading.value = true;
   try {
     const result = await updateVmConfig(node.value, vmid.value, { digest: openedDigest.value, background_delay: 5, [diskKey.value]: diskValue() }, 'qemu', 'POST');
-    notifyUpdated();
     const upid = textValue((result as { data?: unknown }).data);
     if (upid.startsWith('UPID:')) notifyTask(upid, gettext('Import Hard Disk'));
+    else notifyUpdated();
   } finally { loading.value = false; }
   visible.value = false;
 }

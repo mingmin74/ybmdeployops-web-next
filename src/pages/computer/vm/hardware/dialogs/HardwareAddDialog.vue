@@ -583,9 +583,9 @@ async function addDevice() {
     loading.value = true;
     try {
       const result = await updateVmConfig(node.value, vmid.value, { digest: openedDigest.value, background_delay: 5, [key]: value }, 'qemu', 'POST');
-      notifyUpdated();
       const upid = textValue((result as { data?: unknown }).data);
       if (upid.startsWith('UPID:')) notifyTask(upid, gettext('Add Hard Disk'));
+      else notifyUpdated();
     } finally { loading.value = false; }
   } else await updateConfig({ [key]: value });
   visible.value = false;
