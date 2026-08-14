@@ -20,7 +20,10 @@ interface AddCdromFormModel {
 }
 
 const form = defineModel<AddCdromFormModel>('form', { required: true });
-const { deviceInUse = false } = defineProps<{ deviceInUse?: boolean }>();
+const { deviceInUse = false, busOptions } = defineProps<{
+  deviceInUse?: boolean;
+  busOptions: { label: string; value: CdromBus }[];
+}>();
 const { node } = useVmHardwareContext();
 
 const storageRows = shallowRef<PveRecord[]>([]);
@@ -33,12 +36,6 @@ const cdromBusLimits: Record<CdromBus, number> = {
   sata: 6,
   scsi: 31,
 };
-
-const busOptions = [
-  { label: 'IDE', value: 'ide' },
-  { label: 'SATA', value: 'sata' },
-  { label: 'SCSI', value: 'scsi' },
-];
 
 const storageColumns: QTableColumn<PveRecord>[] = [
   {
@@ -116,16 +113,12 @@ async function loadStorages() {
     storageRows.value = [...(response.data || [])].sort((left, right) =>
       textValue(left.storage).localeCompare(textValue(right.storage)),
     );
-    const storageNames = storageRows.value.map((row) => textValue(row.storage)).filter(Boolean);
-    if (!storageNames.includes(form.value.cdromStorage)) {
-      form.value.cdromStorage = storageNames[0] || '';
-    }
   } finally {
     storageLoading.value = false;
   }
 }
 
-async function loadIsoImages(selectFirst = false) {
+async function loadIsoImages() {
   if (!form.value.cdromStorage) {
     isoRows.value = [];
     form.value.cdromVolid = '';
@@ -137,12 +130,6 @@ async function loadIsoImages(selectFirst = false) {
     isoRows.value = [...(response.data || [])].sort((left, right) =>
       textValue(left.volid).localeCompare(textValue(right.volid)),
     );
-    const selectedExists = isoRows.value.some(
-      (row) => textValue(row.volid) === form.value.cdromVolid,
-    );
-    if (selectFirst || !selectedExists) {
-      form.value.cdromVolid = textValue(isoRows.value[0]?.volid);
-    }
   } finally {
     isoLoading.value = false;
   }
@@ -151,20 +138,22 @@ async function loadIsoImages(selectFirst = false) {
 watch(
   () => form.value.cdromStorage,
   () => {
-    if (form.value.cdromMediaType === 'iso') void loadIsoImages(true);
+    form.value.cdromVolid = '';
+    isoRows.value = [];
+    if (form.value.cdromMediaType === 'iso') void loadIsoImages();
   },
 );
 
 watch(
   () => form.value.cdromMediaType,
   (mediaType) => {
-    if (mediaType === 'iso') void loadIsoImages(false);
+    if (mediaType !== 'iso') form.value.cdromVolid = '';
+    if (mediaType === 'iso') void loadIsoImages();
   },
 );
 
 onMounted(async () => {
   await loadStorages();
-  if (form.value.cdromMediaType === 'iso') await loadIsoImages(false);
 });
 </script>
 

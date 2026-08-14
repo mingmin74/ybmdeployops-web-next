@@ -515,6 +515,7 @@ function openImportDisk() {
 }
 
 function openAddHardware(kind: 'disk' | 'cdrom' | 'net' | 'usb' | 'pci' | 'serial' | 'audio') {
+  if (kind === 'cdrom' && !hasVmCapability('VM.Config.CDROM')) return;
   addInitialKind.value = kind;
   addVisible.value = true;
 }
@@ -563,6 +564,7 @@ provide(vmHardwareKey, vmHardwareContext);
       :is-disk="isDisk"
       :can-remove="canRemove"
       :can-revert="canRevert"
+      :can-add-cdrom="hasVmCapability('VM.Config.CDROM')"
       :guest-type="props.guestType"
       @add="openAddHardware"
       @add-firmware="openFirmware"

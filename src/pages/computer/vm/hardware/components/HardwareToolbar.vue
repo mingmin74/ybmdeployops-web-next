@@ -7,9 +7,10 @@ const props = withDefaults(
     isDisk: boolean;
     canRemove: boolean;
     canRevert: boolean;
+    canAddCdrom?: boolean;
     guestType?: 'qemu' | 'lxc';
   }>(),
-  { guestType: 'qemu' },
+  { guestType: 'qemu', canAddCdrom: true },
 );
 
 const emit = defineEmits<{
@@ -25,10 +26,10 @@ const emit = defineEmits<{
   revert: [];
 }>();
 
-const qemuAddItems: { label: string; action: () => void }[] = [
+const qemuAddItems = computed<{ label: string; action: () => void; disable?: boolean }[]>(() => [
   { label: gettext('Hard Disk'), action: () => emit('add', 'disk') },
   { label: gettext('Import Hard Disk'), action: () => emit('importDisk') },
-  { label: gettext('CD/DVD Drive'), action: () => emit('add', 'cdrom') },
+  { label: gettext('CD/DVD Drive'), action: () => emit('add', 'cdrom'), disable: !props.canAddCdrom },
   { label: gettext('Network Device'), action: () => emit('add', 'net') },
   { label: gettext('EFI Disk'), action: () => emit('addFirmware', 'efi') },
   { label: gettext('TPM State'), action: () => emit('addFirmware', 'tpm') },
@@ -39,14 +40,14 @@ const qemuAddItems: { label: string; action: () => void }[] = [
   { label: gettext('Audio Device'), action: () => emit('add', 'audio') },
   { label: gettext('VirtIO RNG'), action: () => emit('addRng') },
   { label: gettext('Virtiofs'), action: () => emit('addVirtiofs') },
-];
+]);
 const addItems = computed(() =>
   props.guestType === 'lxc'
     ? [
         { label: gettext('Mount Point'), action: () => emit('add', 'disk') },
         { label: gettext('Device Passthrough'), action: () => emit('add', 'pci') },
       ]
-    : qemuAddItems,
+    : qemuAddItems.value,
 );
 </script>
 
@@ -67,6 +68,7 @@ const addItems = computed(() =>
           v-close-popup
           clickable
           dense
+          :disable="item.disable"
           @click="item.action"
         >
           <q-item-section>{{ item.label }}</q-item-section>

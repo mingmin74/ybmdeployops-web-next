@@ -89,8 +89,10 @@ const hostArch = shallowRef('x86_64');
 const storages = shallowRef<PveRecord[]>([]);
 const existingVolumes = shallowRef<PveRecord[]>([]);
 const storageLoaded = shallowRef(false);
+const cdromConfigLoaded = shallowRef(false);
 let dialogSession = 0;
 let existingVolumeRequest = 0;
+let cdromConfigSession = 0;
 const addDiskFormKey = shallowRef(0);
 const addCdromFormKey = shallowRef(0);
 const addDiskAdvanced = shallowRef(false);
@@ -155,6 +157,7 @@ const form = reactive<AddHardwareForm>({
 });
 
 const diskConfig = computed(() => openedConfig.value || config.value);
+const cdromConfig = computed(() => openedConfig.value || config.value);
 const selectedStorage = computed(() => storages.value.find((item) => textValue(item.storage) === form.storage));
 const diskFormatOptions = computed(() => storageFormats(selectedStorage.value).values);
 const selectExisting = computed(() => Boolean(selectedStorage.value?.select_existing));
@@ -163,7 +166,12 @@ const supportsDiskIoThread = computed(() => form.diskBus === 'scsi' || form.disk
 const diskKey = computed(() => `${form.diskBus}${form.diskDeviceId}`);
 const diskKeyAvailable = computed(() => validDiskDeviceId(diskConfig.value, form.diskBus, form.diskDeviceId));
 const cdromKey = computed(() => `${form.cdromBus}${form.cdromDeviceId}`);
-const cdromKeyAvailable = computed(() => !config.value[cdromKey.value]);
+const cdromKeyAvailable = computed(() => !cdromConfig.value[cdromKey.value]);
+const cdromBusOptions = computed(() =>
+  allowedDiskBusses(cdromConfig.value, hostArch.value)
+    .filter((bus): bus is CdromBus => bus !== 'virtio')
+    .map((value) => ({ label: value.toUpperCase(), value })),
+);
 const scsiControllerOptions = [
   { label: `${gettext('Default')} (LSI 53C895A)`, value: '__default__' },
   { label: 'LSI 53C895A', value: 'lsi' },
@@ -191,6 +199,7 @@ const canAdd = computed(() => {
   if (form.kind === 'disk') return Boolean(storageLoaded.value && selectedStorage.value && diskFormatOptions.value.includes(form.diskFormat) && diskKeyAvailable.value && validDiskBandwidth(form) && (selectExisting.value ? form.existingVolume.trim() && existingVolumes.value.some((item) => textValue(item.volid || item.text) === form.existingVolume) : validDiskSize(form.size)));
   if (form.kind === 'cdrom') {
     return Boolean(
+      cdromConfigLoaded.value &&
       cdromKeyAvailable.value &&
       form.cdromDeviceId >= 0 &&
       form.cdromDeviceId < cdromBusLimits[form.cdromBus] &&
@@ -225,12 +234,15 @@ const serialKeyAvailable = computed(() => serialIdValid.value && !config.value[s
 const audioKeyAvailable = computed(() => config.value.audio0 === undefined);
 
 function nextFreeCdromSlot(preferredBusses: CdromBus[] = ['ide', 'scsi', 'sata']) {
-  if (preferredBusses.includes('ide') && config.value.ide2 === undefined) {
+  if (preferredBusses.includes('ide') && cdromConfig.value.ide2 === undefined) {
     return { bus: 'ide' as const, id: 2 };
+  }
+  if (preferredBusses.includes('scsi') && cdromConfig.value.scsi2 === undefined) {
+    return { bus: 'scsi' as const, id: 2 };
   }
   for (const bus of preferredBusses) {
     for (let id = 0; id < cdromBusLimits[bus]; id += 1) {
-      if (config.value[`${bus}${id}`] === undefined) return { bus, id };
+      if (cdromConfig.value[`${bus}${id}`] === undefined) return { bus, id };
     }
   }
   const bus = preferredBusses[0] || 'ide';
@@ -266,7 +278,9 @@ function resetDiskDefaults() {
 }
 
 function resetCdromDefaults() {
-  const slot = nextFreeCdromSlot();
+  const slot = nextFreeCdromSlot(
+    hostArch.value === 'aarch64' ? ['scsi', 'sata'] : ['ide', 'scsi', 'sata'],
+  );
   Object.assign(form, {
     cdromMediaType: 'iso',
     cdromStorage: '',
@@ -353,7 +367,7 @@ watch(visible, (isVisible) => {
     addNetworkAdvanced.value = false;
   }
   if (initialKind === 'cdrom') {
-    resetCdromDefaults();
+    void initializeCdrom();
     addCdromFormKey.value += 1;
   }
   if (initialKind === 'net') resetNetworkDefaults();
@@ -362,6 +376,30 @@ watch(visible, (isVisible) => {
   if (initialKind === 'serial') resetSerialDefaults();
   if (initialKind === 'audio') resetAudioDefaults();
 });
+
+async function initializeCdrom() {
+  if (!hasVmCapability('VM.Config.CDROM')) return;
+  const session = ++cdromConfigSession;
+  cdromConfigLoaded.value = false;
+  openedConfig.value = null;
+  openedDigest.value = '';
+  Object.assign(form, { cdromStorage: '', cdromVolid: '', cdromBus: 'scsi', cdromDeviceId: 0 });
+  loading.value = true;
+  try {
+    const [configResponse, nodesResponse] = await Promise.all([
+      getVmConfig(node.value, vmid.value), getNodes(),
+    ]);
+    if (session !== cdromConfigSession || !visible.value) return;
+    openedConfig.value = configResponse.data || null;
+    openedDigest.value = textValue(configResponse.data?.digest);
+    hostArch.value = textValue(nodesResponse.data?.find((item) => item.node === node.value)?.['host-arch']) || 'x86_64';
+    resetCdromDefaults();
+    cdromConfigLoaded.value = true;
+    addCdromFormKey.value += 1;
+  } finally {
+    if (session === cdromConfigSession) loading.value = false;
+  }
+}
 
 watch(
   () => form.diskBus,
@@ -587,6 +625,12 @@ async function addDevice() {
       if (upid.startsWith('UPID:')) notifyTask(upid, gettext('Add Hard Disk'));
       else notifyUpdated();
     } finally { loading.value = false; }
+  } else if (form.kind === 'cdrom') {
+    loading.value = true;
+    try {
+      await updateVmConfig(node.value, vmid.value, { digest: openedDigest.value, [key]: value });
+      notifyUpdated();
+    } finally { loading.value = false; }
   } else await updateConfig({ [key]: value });
   visible.value = false;
 }
@@ -618,6 +662,7 @@ async function addDevice() {
           :key="addCdromFormKey"
           v-model:form="form"
           :device-in-use="!cdromKeyAvailable"
+          :bus-options="cdromBusOptions"
         />
         <AddUsbForm
           v-else-if="form.kind === 'usb'"
