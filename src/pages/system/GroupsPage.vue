@@ -38,7 +38,7 @@ const selectedGroup = computed(() => selectedGroups.value[0]);
 const canEdit = computed(() => selectedGroups.value.length === 1);
 const canRemove = computed(() => selectedGroups.value.length === 1);
 const dialogTitle = computed(
-  () => `${gettext(formData.action === 'add' ? 'Add' : 'Edit')}: ${gettext('Group')}`,
+  () => `${gettext(formData.action === 'add' ? 'Create' : 'Edit')}: ${gettext('Group')}`,
 );
 const filteredGroups = computed(() => {
   const keyword = filter.value.trim().toLowerCase();
@@ -53,7 +53,7 @@ const tableColumns: QTableColumn<PveGroup>[] = [
   {
     name: 'groupid',
     required: true,
-    label: gettext('Group Name'),
+    label: gettext('Name'),
     align: 'left',
     field: 'groupid',
     sortable: true,
@@ -65,8 +65,9 @@ const tableColumns: QTableColumn<PveGroup>[] = [
     field: 'comment',
     sortable: false,
   },
+  { name: 'users', label: gettext('Users'), align: 'left', field: 'users', sortable: false },
 ];
-const visibleColumns = ['groupid', 'comment'];
+const visibleColumns = ['groupid', 'comment', 'users'];
 
 function createDefaultForm(): GroupFormModel {
   return {
@@ -80,15 +81,10 @@ function resetForm(action: GroupFormAction) {
   Object.assign(formData, createDefaultForm(), { action });
 }
 
-function groupNameRules(value: string) {
-  if (!value) return gettext('This field is required');
-  return /^[a-zA-Z][a-zA-Z0-9\-_.]{0,30}[a-zA-Z0-9]$/.test(value)
-    ? true
-    : gettext('Allowed name characters are letters, numbers, "-", "_" and "."');
-}
+function requiredRule(value: string) { return value ? true : gettext('This field is required'); }
 
 function rowClick(_: Event, row: PveGroup) {
-  selectedGroups.value = selectedGroup.value === row ? [] : [row];
+  selectedGroups.value = [row];
 }
 
 function sortByGroupid(items: PveGroup[]) {
@@ -187,6 +183,8 @@ watch(dialogVisible, (visible) => {
 onMounted(() => {
   void loadGroupsData();
 });
+
+defineExpose({ reload: loadGroupsData });
 </script>
 
 <template>
@@ -210,6 +208,7 @@ onMounted(() => {
         :loading="loading"
         :no-data-label="gettext('no record can be found')"
         @row-click="rowClick"
+        @row-dblclick="() => canEdit && openDialog('edit')"
       >
         <template #top>
           <div class="q-gutter-sm">
@@ -219,7 +218,7 @@ onMounted(() => {
               size="12px"
               color="primary"
               class="u-button"
-              :label="gettext('Add')"
+              :label="gettext('Create')"
               @click="openDialog('add')"
             />
             <q-btn
@@ -289,8 +288,8 @@ onMounted(() => {
               dense
               autofocus
               :disable="formData.action !== 'add'"
-              :label="`${gettext('Group Name')} *`"
-              :rules="[groupNameRules]"
+              :label="`${gettext('Name')} *`"
+              :rules="[requiredRule]"
             />
             <q-input
               v-model="formData.comment"

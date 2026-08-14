@@ -4,20 +4,21 @@ import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
 import type { HardwareRow } from '../types';
+import {
+  parseVmHardwarePropertyString,
+  PVE_QEMU_VGA_DRIVERS,
+  printVmHardwarePropertyString,
+} from '../vmHardwareUtils';
 
 const { device } = defineProps<{ device: HardwareRow }>();
 const { config, canEditRow, updateConfig } = useVmHardwareContext();
 
 function parseVga(value: unknown) {
   const result = { type: '__default__', memory: '', clipboard: '__default__' };
-  const raw = textValue(value);
-  if (!raw) return result;
-  raw.split(',').forEach((part) => {
-    const [key, optionValue] = part.split('=', 2);
-    if (optionValue === undefined) result.type = key || '__default__';
-    else if (key === 'memory') result.memory = optionValue;
-    else if (key === 'clipboard') result.clipboard = optionValue;
-  });
+  const parsed = parseVmHardwarePropertyString(value, 'type');
+  if (parsed.type) result.type = parsed.type;
+  if (parsed.memory) result.memory = parsed.memory;
+  if (parsed.clipboard) result.clipboard = parsed.clipboard;
   return result;
 }
 
@@ -25,23 +26,12 @@ const parsed = parseVga(config.value.vga);
 const form = reactive(parsed);
 const advanced = shallowRef(Boolean(parsed.clipboard && parsed.clipboard !== '__default__'));
 
-const displayOptions = computed(() => [
-  { label: gettext('Default'), value: '__default__' },
-  { label: gettext('Standard VGA'), value: 'std' },
-  { label: 'Cirrus Logic GD5446', value: 'cirrus' },
-  { label: 'VMware compatible', value: 'vmware' },
-  { label: 'SPICE', value: 'qxl' },
-  { label: 'SPICE dual monitor', value: 'qxl2' },
-  { label: 'SPICE three monitors', value: 'qxl3' },
-  { label: 'SPICE four monitors', value: 'qxl4' },
-  { label: 'Serial terminal 0', value: 'serial0' },
-  { label: 'Serial terminal 1', value: 'serial1' },
-  { label: 'Serial terminal 2', value: 'serial2' },
-  { label: 'Serial terminal 3', value: 'serial3' },
-  { label: 'VirtIO-GPU', value: 'virtio' },
-  { label: 'VirtIO-GPU (VirGL)', value: 'virtio-gl' },
-  { label: gettext('None'), value: 'none' },
-]);
+const displayOptions = computed(() =>
+  PVE_QEMU_VGA_DRIVERS.map((option) => ({
+    label: option.localize ? gettext(option.label) : option.label,
+    value: option.value,
+  })),
+);
 const clipboardOptions = computed(() => [
   { label: gettext('Default'), value: '__default__' },
   { label: 'VNC', value: 'vnc' },
@@ -68,11 +58,14 @@ const canSave = computed(() => memoryValid.value && serialValid.value);
 function buildVgaValue() {
   if (form.type === '__default__' && !form.memory.trim() && form.clipboard === '__default__')
     return '';
-  const parts = [form.type === '__default__' ? 'std' : form.type];
-  if (!isNonGui.value && form.memory.trim()) parts.push(`memory=${form.memory.trim()}`);
-  if (!isNonGui.value && form.clipboard !== '__default__')
-    parts.push(`clipboard=${form.clipboard}`);
-  return parts.join(',');
+  return printVmHardwarePropertyString(
+    {
+      type: form.type === '__default__' ? 'std' : form.type,
+      ...(!isNonGui.value && form.memory.trim() ? { memory: form.memory.trim() } : {}),
+      ...(!isNonGui.value && form.clipboard !== '__default__' ? { clipboard: form.clipboard } : {}),
+    },
+    'type',
+  );
 }
 
 async function save() {

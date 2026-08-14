@@ -8,6 +8,8 @@ import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
 import { vmHardwareKey } from './hardware/context/vmHardwareContext';
 import { useVmHardware } from './hardware/composables/useVmHardware';
+import { hardwareMeta } from './hardware/hardwareRegistry';
+import { parseVmHardwarePropertyString } from './hardware/vmHardwareUtils';
 import type { HardwareRow } from './hardware/types';
 import HardwareList from './hardware/components/HardwareList.vue';
 import HardwareToolbar from './hardware/components/HardwareToolbar.vue';
@@ -50,23 +52,8 @@ function numberValue(value: unknown, fallback: number) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
-function parsePropertyString(value: unknown, defaultKey: string) {
-  const result: Record<string, string> = {};
-  textValue(value)
-    .split(',')
-    .filter(Boolean)
-    .forEach((part) => {
-      const segments = part.split('=', 2);
-      const key = segments[0] || '';
-      const optionValue = segments[1];
-      if (!key) return;
-      if (optionValue === undefined) result[defaultKey] = key;
-      else result[key] = optionValue;
-    });
-  return result;
-}
 function renderDisplay(value: unknown) {
-  const vga = parsePropertyString(value, 'type');
+  const vga = parseVmHardwarePropertyString(value, 'type');
   const labels: Record<string, string> = {
     __default__: gettext('Default'),
     std: gettext('Standard VGA'),
@@ -91,7 +78,7 @@ function renderDisplay(value: unknown) {
   return parts.join(', ');
 }
 function renderMachine(value: unknown) {
-  const machine = parsePropertyString(value, 'type');
+  const machine = parseVmHardwarePropertyString(value, 'type');
   const type = machine.type || '__default__';
   const displayType =
     type === 'pc' || type === '__default__' ? `${gettext('Default')} (i440fx)` : type;
@@ -295,8 +282,11 @@ const rows = computed<HardwareRow[]>(() => {
 });
 
 const selectedDevice = computed(() => rows.value.find((row) => row.key === selectedKey.value));
+function pendingKeysFor(row: HardwareRow) {
+  return hardwareMeta[row.type]?.pendingKeys || [row.key];
+}
 const selectedPending = computed(() =>
-  Boolean(selectedDevice.value && hasPendingChange(selectedDevice.value.key)),
+  Boolean(selectedDevice.value && pendingKeysFor(selectedDevice.value).some(hasPendingChange)),
 );
 const canRemove = computed(() => {
   const device = selectedDevice.value;
@@ -337,17 +327,12 @@ async function loadPending() {
 
 async function revertSelected() {
   const row = selectedDevice.value;
-  if (!row || !pendingByKey.value[row.key]) return;
-  const grouped: Record<string, string[]> = {
-    cpu: ['cpu', 'cores', 'sockets', 'numa', 'vcpus', 'cpulimit', 'cpuunits', 'affinity'],
-    memory: ['memory', 'balloon', 'shares', 'allow-ksm'],
-    bios: ['bios'],
-    machine: ['machine'],
-    scsihw: ['scsihw'],
-  };
+  if (!row) return;
+  const keys = pendingKeysFor(row);
+  if (!keys.some((key) => pendingByKey.value[key])) return;
   loading.value = true;
   try {
-    await revertVmConfig(props.node, props.vmid, grouped[row.key] || [row.key], props.guestType);
+    await revertVmConfig(props.node, props.vmid, keys, props.guestType);
     await loadPending();
     emit('updated');
   } finally {
@@ -391,8 +376,9 @@ function canEditRow(row: HardwareRow) {
     case 'bios':
       return hasVmCapability('VM.Config.Options');
     case 'machine':
-    case 'scsi-controller':
       return hasVmCapability('VM.Config.HWType');
+    case 'scsi-controller':
+      return hasVmCapability('VM.Config.Options');
     case 'network':
       return hasVmCapability('VM.Config.Network');
     case 'cdrom':

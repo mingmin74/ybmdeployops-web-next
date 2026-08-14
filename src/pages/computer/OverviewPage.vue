@@ -4,8 +4,8 @@ import { computed, onMounted, onUnmounted, shallowRef } from 'vue';
 import LineMetricChart from '@/components/LineMetricChart.vue';
 import SelectTable from '@/components/SelectTable.vue';
 import UWindow from '@/components/UWindow.vue';
-import type { PveNode, PveRecord } from '@/api/resources';
-import { getClusterResources, getNodes } from '@/api/resources';
+import type { PveRecord } from '@/api/resources';
+import { getClusterResources } from '@/api/resources';
 import {
   getVmConfig,
   getVmCurrent,
@@ -18,6 +18,7 @@ import lxcOverviewIcon from '@/assets/overview/left4.png';
 import { gettext } from '@/locale';
 import { formatBytes, textValue, usedPercent } from '@/utils/pveFormat';
 import { resourceProgressColor } from '@/utils/format';
+import { useSessionStore } from '@/stores/session';
 
 type TimeOption = {
   label: string;
@@ -35,8 +36,11 @@ const props = defineProps<{
   fixedVmid?: string;
   fixedResourceType?: 'qemu' | 'lxc';
   hideVmSelector?: boolean;
+  currentStatus?: PveRecord;
+  template?: boolean;
 }>();
 
+const session = useSessionStore();
 const loading = shallowRef(false);
 const isExistVM = shallowRef(true);
 const selectedId = shallowRef('');
@@ -44,19 +48,21 @@ const timeType = shallowRef('hour');
 const rrdConsolidation = shallowRef<'AVERAGE' | 'MAX'>('AVERAGE');
 const agentWin = shallowRef(false);
 const vmOptions = shallowRef<PveRecord[]>([]);
-const current = shallowRef<PveRecord>({});
+const fetchedCurrent = shallowRef<PveRecord>({});
 const rrdRows = shallowRef<PveRecord[]>([]);
 const networkList = shallowRef<NetworkInterface[]>([]);
-const nodes = shallowRef<PveNode[]>([]);
 const remarkEditing = shallowRef(false);
 const remarkSaving = shallowRef(false);
 const remarkCollapsed = shallowRef(false);
 const remarkText = shallowRef('');
 const remarkDraft = shallowRef('');
 const configDigest = shallowRef('');
+const configIsTemplate = shallowRef(false);
 const agentText = shallowRef<string[] | string>('');
 const statusTimer = shallowRef<number>();
 const chartTimer = shallowRef<number>();
+const agentTimer = shallowRef<number>();
+const current = computed(() => props.currentStatus ?? fetchedCurrent.value);
 
 const timeOptions = computed<TimeOption[]>(() => [
   { label: gettext('Hour'), value: 'hour' },
@@ -136,6 +142,13 @@ const selectedType = computed(() =>
       ? 'lxc'
       : 'qemu',
 );
+const isTemplate = computed(() =>
+  Boolean(props.template || current.value.template || configIsTemplate.value),
+);
+const vmCaps = computed(
+  () => (session.caps as unknown as { vms?: Record<string, unknown> }).vms || {},
+);
+const canAuditGuestAgent = computed(() => Boolean(vmCaps.value['VM.GuestAgent.Audit']));
 const basicInformationTitle = computed(() =>
   selectedType.value === 'lxc'
     ? gettext('Container Basic Information')
@@ -175,10 +188,6 @@ const primaryIp = computed(() => {
   return agentText.value || '-';
 });
 const remark = computed(() => remarkText.value || '-');
-const currentNode = computed(() => nodes.value.find((item) => item.node === nodeName.value));
-const hostMemPercent = computed(() =>
-  usedPercent(currentNode.value?.mem as number, currentNode.value?.maxmem as number),
-);
 const haStatus = computed(() => {
   const ha = current.value.ha as PveRecord | undefined;
   if (!ha || !ha.managed) return gettext('None');
@@ -187,10 +196,11 @@ const haStatus = computed(() => {
     gettext('None'),
   )}`;
 });
-const agentHasMore = computed(() => Array.isArray(agentText.value) && agentText.value.length > 0);
+const agentHasMore = computed(() => networkList.value.length > 0);
 const cpuValues = computed(() => rrdRows.value.map((item) => Number(item.cpu || 0) * 100));
 const memoryUsedValues = computed(() => rrdRows.value.map((item) => Number(item.mem || 0)));
 const memoryTotalValues = computed(() => rrdRows.value.map((item) => Number(item.maxmem || 0)));
+const memoryHostValues = computed(() => rrdRows.value.map((item) => Number(item.memhost || 0)));
 const netInValues = computed(() => rrdRows.value.map((item) => Number(item.netin || 0)));
 const netOutValues = computed(() => rrdRows.value.map((item) => Number(item.netout || 0)));
 const diskReadValues = computed(() => rrdRows.value.map((item) => Number(item.diskread || 0)));
@@ -226,6 +236,7 @@ const cpuSeries = computed(() => [
 const memorySeries = computed(() => [
   { name: gettext('Total'), data: memoryTotalValues.value, color: '#8c96a8' },
   { name: gettext('RAM Used'), data: memoryUsedValues.value, color: '#2e7d32' },
+  { name: gettext('Host Memory Usage'), data: memoryHostValues.value, color: '#7b1fa2' },
 ]);
 const networkSeries = computed(() => [
   { name: gettext('NetIn'), data: netInValues.value, color: '#00838f' },
@@ -355,8 +366,10 @@ async function saveRemark() {
 function clearTimers() {
   if (statusTimer.value) window.clearTimeout(statusTimer.value);
   if (chartTimer.value) window.clearTimeout(chartTimer.value);
+  if (agentTimer.value) window.clearTimeout(agentTimer.value);
   statusTimer.value = undefined;
   chartTimer.value = undefined;
+  agentTimer.value = undefined;
 }
 
 function scheduleStatusRefresh() {
@@ -373,6 +386,13 @@ function scheduleChartRefresh() {
   }, 30000);
 }
 
+function scheduleGuestAgentRefresh() {
+  if (agentTimer.value) window.clearTimeout(agentTimer.value);
+  agentTimer.value = window.setTimeout(() => {
+    void loadGuestAgentInfo();
+  }, 10_000);
+}
+
 async function loadVmList() {
   loading.value = true;
   try {
@@ -380,7 +400,7 @@ async function loadVmList() {
       vmOptions.value = [fixedVm.value];
       isExistVM.value = true;
       selectedId.value = resourceId(fixedVm.value);
-      await Promise.all([refreshData(), loadNodes()]);
+      await refreshData();
       return;
     }
 
@@ -390,30 +410,24 @@ async function loadVmList() {
       .sort((a, b) => Number(a.vmid || 0) - Number(b.vmid || 0));
     isExistVM.value = vmOptions.value.length > 0;
     selectedId.value = resourceId(vmOptions.value[0] || {});
-    await Promise.all([refreshData(), loadNodes()]);
+    await refreshData();
   } finally {
     loading.value = false;
   }
 }
 
-async function loadNodes() {
-  try {
-    const response = await getNodes();
-    nodes.value = response.data || [];
-  } catch {
-    nodes.value = [];
-  }
-}
-
 async function refreshData() {
   clearTimers();
-  current.value = {};
+  fetchedCurrent.value = {};
   rrdRows.value = [];
   networkList.value = [];
   agentText.value = '';
   remarkText.value = '';
   configDigest.value = '';
-  await Promise.all([loadVMInfo(), loadChartData(), loadVmConfig()]);
+  configIsTemplate.value = false;
+  await loadVmConfig();
+  await loadVMInfo();
+  if (!isTemplate.value) await loadChartData();
 }
 
 async function loadVmConfig() {
@@ -428,9 +442,11 @@ async function loadVmConfig() {
     );
     remarkText.value = textValue(response.data?.description, '');
     configDigest.value = textValue(response.data?.digest, '');
+    configIsTemplate.value = Boolean(response.data?.template);
   } catch {
     remarkText.value = '';
     configDigest.value = '';
+    configIsTemplate.value = false;
   }
 }
 
@@ -438,28 +454,40 @@ async function loadVMInfo(fromTimer = false) {
   const row = selectedVm.value;
   if (!row.vmid || !row.node) return;
   try {
-    const response = await getVmCurrent(
-      textValue(row.node),
-      textValue(row.vmid),
-      selectedType.value,
-    );
-    current.value = response.data || {};
+    if (props.currentStatus === undefined) {
+      const response = await getVmCurrent(
+        textValue(row.node),
+        textValue(row.vmid),
+        selectedType.value,
+      );
+      fetchedCurrent.value = response.data || {};
+    }
+    if (isTemplate.value) return;
     await loadGuestAgentInfo();
   } finally {
-    if (fromTimer || selectedId.value) scheduleStatusRefresh();
+    if (props.currentStatus === undefined && (fromTimer || selectedId.value))
+      scheduleStatusRefresh();
   }
 }
 
 async function loadGuestAgentInfo() {
   const row = selectedVm.value;
+  if (isTemplate.value) return;
+  if (!canAuditGuestAgent.value) {
+    agentText.value = gettext("Requires 'VM.GuestAgent.Audit' Privileges");
+    networkList.value = [];
+    return;
+  }
   if (!current.value.agent) {
     agentText.value = gettext('No Guest Agent configured');
     networkList.value = [];
+    scheduleGuestAgentRefresh();
     return;
   }
   if (current.value.status !== 'running') {
     agentText.value = gettext('Guest Agent is not running');
     networkList.value = [];
+    scheduleGuestAgentRefresh();
     return;
   }
 
@@ -478,11 +506,14 @@ async function loadGuestAgentInfo() {
   } catch {
     agentText.value = gettext('Guest Agent is not running');
     networkList.value = [];
+  } finally {
+    scheduleGuestAgentRefresh();
   }
 }
 
 async function loadChartData(fromTimer = false) {
   const row = selectedVm.value;
+  if (isTemplate.value) return;
   if (!row.vmid || !row.node) return;
   try {
     const response = await getVmRrd(
@@ -507,7 +538,11 @@ function parseAgentInterfaces(items: PveRecord[]) {
       name: textValue(item.name, '-'),
       macAddress: textValue(item['hardware-address'], '-'),
       ipInfo: addresses
-        .map((address) => textValue(address['ip-address']))
+        .map((address) => {
+          const ipAddress = textValue(address['ip-address']);
+          const prefix = textValue(address.prefix);
+          return ipAddress && prefix ? `${ipAddress}/${prefix}` : ipAddress;
+        })
         .filter((address) => address && address !== '127.0.0.1' && address !== '::1'),
     };
   });
@@ -706,22 +741,7 @@ onUnmounted(clearTimers);
             </section>
             <section class="resource-card resource-card-compare">
               <div class="resource-card-title">{{ gettext('Host Memory Usage') }}</div>
-              <strong>{{ hostMemPercent.toFixed(2) }}%</strong>
-              <div class="resource-card-meta">
-                <span>{{ gettext('Used') }}</span
-                ><span>{{ dataSize(currentNode?.mem) }}</span>
-              </div>
-              <q-circular-progress
-                show-value
-                class="resource-card-progress"
-                size="80px"
-                :thickness="0.18"
-                :value="hostMemPercent"
-                :color="resourceProgressColor(hostMemPercent)"
-                track-color="blue-grey-1"
-              >
-                {{ hostMemPercent.toFixed(0) }}%
-              </q-circular-progress>
+              <strong>{{ dataSize(current.memhost) }}</strong>
             </section>
           </div>
         </q-card-section>
@@ -763,7 +783,7 @@ onUnmounted(clearTimers);
       </q-card>
     </div>
 
-    <div class="row q-col-gutter-sm chart-grid">
+    <div v-if="!isTemplate" class="row q-col-gutter-sm chart-grid">
       <div class="col-12 col-md-6">
         <q-card class="chart-panel no-shadow no-border-radius">
           <q-card-section class="chart-card-section">
@@ -911,7 +931,7 @@ onUnmounted(clearTimers);
             autogrow
             label-color="text-grey-8"
             :label="gettext('Remark')"
-            maxlength="4096"
+            maxlength="8192"
           />
         </q-form>
         <template #foot>

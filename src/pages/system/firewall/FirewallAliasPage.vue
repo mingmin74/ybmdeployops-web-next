@@ -5,13 +5,15 @@ import { onMounted, ref, shallowRef } from 'vue';
 import UWindow from '@/components/UWindow.vue';
 import type { PveRecord } from '@/api/resources';
 import {
-  createFirewallAlias,
-  deleteFirewallAlias,
-  getFirewallAliases,
-  updateFirewallAlias,
+  createFirewallAliasByBaseUrl,
+  deleteFirewallAliasByBaseUrl,
+  getFirewallAliasesByBaseUrl,
+  updateFirewallAliasByBaseUrl,
 } from '@/api/firewall';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
+
+const { baseUrl = '/cluster/firewall/aliases' } = defineProps<{ baseUrl?: string }>();
 
 const loading = ref(false);
 const dialog = ref(false);
@@ -51,7 +53,7 @@ const columns: QTableColumn<PveRecord>[] = [
 async function refreshData() {
   loading.value = true;
   try {
-    const response = await getFirewallAliases();
+    const response = await getFirewallAliasesByBaseUrl(baseUrl);
     rows.value = response.data || [];
     selected.value = [];
   } finally {
@@ -82,9 +84,9 @@ async function submitForm() {
   try {
     if (editing.value) {
       const { name, ...values } = form.value;
-      await updateFirewallAlias(originalName.value, { ...values, rename: textValue(name) });
+      await updateFirewallAliasByBaseUrl(baseUrl, originalName.value, { ...values, rename: textValue(name) });
     } else {
-      await createFirewallAlias(form.value);
+      await createFirewallAliasByBaseUrl(baseUrl, form.value);
     }
     dialog.value = false;
     await refreshData();
@@ -104,7 +106,7 @@ function removeSelected() {
     persistent: true,
   }).onOk(() => {
     loading.value = true;
-    void deleteFirewallAlias(name)
+    void deleteFirewallAliasByBaseUrl(baseUrl, name, row.digest)
       .then(refreshData)
       .finally(() => {
         loading.value = false;

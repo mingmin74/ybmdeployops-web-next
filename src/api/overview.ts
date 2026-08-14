@@ -158,7 +158,7 @@ export function getVmGuestAgentInterfaces(node: string, vmid: string | number, t
   return request<PveRecord>(
     `/api2/json/nodes/${node}/${type}/${vmid}/agent/network-get-interfaces`,
     {
-      method: 'GET',
+      method: 'POST',
       notifyOnError: false,
     },
   );

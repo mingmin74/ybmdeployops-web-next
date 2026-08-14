@@ -56,12 +56,13 @@ function remove() {
     Notify.create({ type: 'negative', message: `${gettext("Cannot remove image, a guest with VMID '%s' exists!").replace('%s', textValue(row.vmid))} ${gettext("You can delete the image from the guest's hardware pane")}` });
     return;
   }
-  Dialog.create({ title: gettext("Destroy '%s'").replace('%s', textValue(row.volid)), message: gettext('This action cannot be undone.'), cancel: true, persistent: true }).onOk(() => {
+  const expectedId = textValue(row.vmid, textValue(row.volid));
+  Dialog.create({ title: gettext("Destroy '%s'").replace('%s', textValue(row.volid)), message: `${gettext('This action cannot be undone.')} ${gettext('Type the resource ID to confirm')}: ${expectedId}`, prompt: { model: '', type: 'text', isValid: (value) => value === expectedId }, cancel: true, persistent: true }).onOk(() => {
     loading.value = true;
     void deleteStorageContent(props.node, props.storage, textValue(row.volid)).then((response) => {
       taskUpid.value = String(response.data || '');
       taskVisible.value = !!taskUpid.value;
-      return reload();
+      if (!taskUpid.value) return reload();
     }).finally(() => { loading.value = false; });
   });
 }
@@ -75,5 +76,5 @@ watch(() => props.active, (active) => { if (active) void reload(); }, { immediat
       <q-space /><q-input v-model="filter" borderless dense debounce="300" :placeholder="gettext('Search')"><template #append><q-icon name="search" /></template></q-input>
     </template>
   </q-table>
-  <TaskOutputDialog v-model="taskVisible" :node="node" :upid="taskUpid" :title="gettext('Destroy')" />
+  <TaskOutputDialog v-model="taskVisible" :node="node" :upid="taskUpid" :title="gettext('Destroy')" @finished="reload" />
 </template>

@@ -183,7 +183,7 @@ onBeforeUnmount(() => {
           <div class="summary-fields">
             <div class="summary-field">
               <span>{{ gettext('Type') }}</span
-              ><strong>{{ formatStorageType(status.type, status.monhost) }}</strong>
+              ><strong>{{ formatStorageType(status.type, status.monhost, true) }}</strong>
             </div>
             <div class="summary-field">
               <span>{{ gettext('Content') }}</span

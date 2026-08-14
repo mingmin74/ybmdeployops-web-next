@@ -28,7 +28,7 @@ export function formatBytes(value?: number | string) {
   return `${size.toFixed(unitIndex === 0 ? 0 : 2)}${units[unitIndex]}`;
 }
 
-export function formatStorageType(type?: unknown, monhost?: unknown) {
+export function formatStorageType(type?: unknown, monhost?: unknown, statusView = false) {
   const value = textValue(type);
   const labels: Record<string, string> = {
     dir: 'Directory', lvm: 'LVM', lvmthin: 'LVM-Thin', btrfs: 'BTRFS', nfs: 'NFS',
@@ -36,7 +36,7 @@ export function formatStorageType(type?: unknown, monhost?: unknown) {
     zfs: 'ZFS over iSCSI', zfspool: 'ZFS', pbs: 'Proxmox Backup Server', esxi: 'ESXi',
   };
   const label = labels[value] || value;
-  return (value === 'rbd' || value === 'cephfs') && !textValue(monhost)
+  return !statusView && (value === 'rbd' || value === 'cephfs') && !textValue(monhost)
     ? `${label} (PVE)`
     : label || '-';
 }

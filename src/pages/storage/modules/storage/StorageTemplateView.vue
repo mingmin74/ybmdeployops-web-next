@@ -32,8 +32,9 @@ const downloadVisible = ref(false);
 const oci = reactive({ reference: '', tag: '', filename: '' });
 const ociTags = shallowRef<string[]>([]);
 const selectedRow = computed(() => selected.value[0]);
-const ociReferencePattern = /^(?:(?:[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?)(?::\d+)?\/)?[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?(?:\/[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?)*$/;
-const validOciReference = computed(() => ociReferencePattern.test(oci.reference.trim()));
+const ociReferencePattern = /^((?:[a-zA-Z\d](?:[a-zA-Z\d-]*[a-zA-Z\d])?(?:\.(?:[a-zA-Z\d](?:[a-zA-Z\d-]*[a-zA-Z\d])?))*(?::\d+)?\/)?[a-z\d]+(?:(?:[._]|__|-+)[a-z\d]+)*(?:\/[a-z\d]+(?:(?:[._]|__|-+)[a-z\d]+)*)*)(?::(\w[\w.-]{0,127}))?$/;
+function parseOciReference(value: string) { return value.trim().match(ociReferencePattern); }
+const validOciReference = computed(() => !!parseOciReference(oci.reference));
 const visibleTemplates = computed(() => {
   if (showAllArchitectures.value || !nodeArchitecture.value) return templates.value;
   return templates.value.filter((template) => {
@@ -41,10 +42,22 @@ const visibleTemplates = computed(() => {
     return !architecture || architecture === 'all' || architecture === nodeArchitecture.value;
   });
 });
+const templateSections = computed(() => {
+  const groups = new Map<string, PveRecord[]>();
+  visibleTemplates.value.forEach((template) => {
+    const section = textValue(template.section, gettext('Other'));
+    groups.set(section, [...(groups.get(section) || []), template]);
+  });
+  return [...groups.entries()].map(([section, rows]) => ({ section, rows }));
+});
 function normalizeArchitecture(value: string) {
   if (value === 'amd64') return 'x86_64';
   if (value === 'arm64') return 'aarch64';
   return value;
+}
+function isForeignArchitecture(template: PveRecord) {
+  const architecture = normalizeArchitecture(textValue(template.architecture));
+  return !!nodeArchitecture.value && !!architecture && architecture !== 'all' && architecture !== nodeArchitecture.value;
 }
 const templateColumns: QTableColumn<PveRecord>[] = [
   { name: 'type', label: gettext('Type'), align: 'left', field: 'type', sortable: true },
@@ -81,7 +94,7 @@ async function downloadTemplate() {
 async function queryTags() {
   if (!oci.reference.trim() || !validOciReference.value) return;
   loading.value = true;
-  try { ociTags.value = (await queryOciRepositoryTags(props.node, oci.reference.trim())).data || []; }
+  try { oci.tag = ''; ociTags.value = (await queryOciRepositoryTags(props.node, oci.reference.trim())).data || []; }
   finally { loading.value = false; }
 }
 async function pullOci() {
@@ -97,14 +110,14 @@ function remove() {
 }
 watch(() => props.active, (active) => { if (active) void reload(); }, { immediate: true });
 watch(() => oci.reference, (value, previous) => {
-  const trimmed = value.trim();
-  const separator = trimmed.lastIndexOf(':');
-  if (separator > trimmed.lastIndexOf('/')) {
-    oci.reference = trimmed.slice(0, separator);
-    oci.tag = trimmed.slice(separator + 1);
+  const parsed = parseOciReference(value);
+  if (parsed?.[2]) {
+    oci.reference = parsed[1] || '';
+    oci.tag = parsed[2];
+    ociTags.value = [];
     return;
   }
-  if (trimmed !== previous.trim()) ociTags.value = [];
+  if (value.trim() !== previous.trim()) { ociTags.value = []; oci.tag = ''; }
 });
 </script>
 
@@ -112,7 +125,7 @@ watch(() => oci.reference, (value, previous) => {
   <q-table flat row-key="volid" table-header-class="u-table-header" selection="single" :rows="rows" :columns="contentColumns" :selected="selected" :filter="filter" :pagination="{ page: 1, rowsPerPage: 10 }" :rows-per-page-options="[10]" :loading="loading" :no-data-label="gettext('no record can be found')" @row-click="(_, row) => selected = selected[0] === row ? [] : [row]" @update:selected="selected = [...$event]">
     <template #top><div class="row q-gutter-sm"><q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Templates')" @click="openTemplates" /><q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Pull from OCI Registry')" @click="ociVisible = true" /><q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Upload')" @click="uploadVisible = true" /><q-btn no-caps outline size="12px" color="primary" class="u-button" :label="gettext('Download from URL')" @click="downloadVisible = true" /><q-btn no-caps outline size="12px" class="u-button" :color="selectedRow ? 'red' : 'grey'" :disable="!selectedRow" :label="gettext('Remove')" @click="remove" /></div><q-space /><q-input v-model="filter" borderless dense debounce="300" :placeholder="gettext('Search')"><template #append><q-icon name="search" /></template></q-input></template>
   </q-table>
-  <q-dialog v-model="templatesVisible" persistent><UWindow :title="gettext('Templates')" width="900px" :loading="loading"><div class="q-pa-md"><div class="row items-center q-mb-sm"><q-input v-model="templateFilter" outlined dense class="col" :placeholder="gettext('Search')" /><q-checkbox v-model="showAllArchitectures" dense class="q-ml-md" :label="gettext('Show all architectures')" /></div><div v-if="nodeArchitecture && !showAllArchitectures" class="text-caption text-grey-7 q-mb-sm">{{ gettext('Showing templates for architecture') }}: {{ nodeArchitecture }}</div><q-table flat dense row-key="template" :rows="visibleTemplates" :columns="templateColumns" :filter="templateFilter" :pagination="{ rowsPerPage: 10 }" @row-click="templateRowClick" /></div><template #foot><q-btn v-close-popup no-caps flat :label="gettext('Cancel')" /><q-btn no-caps flat color="primary" :disable="!selectedTemplate" :label="gettext('Download')" @click="downloadTemplate" /></template></UWindow></q-dialog>
+  <q-dialog v-model="templatesVisible" persistent><UWindow :title="gettext('Templates')" width="900px" :loading="loading"><div class="q-pa-md"><div class="row items-center q-mb-sm"><q-input v-model="templateFilter" outlined dense class="col" :placeholder="gettext('Search')" /><q-checkbox v-model="showAllArchitectures" dense class="q-ml-md" :label="gettext('Show all architectures')" /></div><div v-if="nodeArchitecture && !showAllArchitectures" class="text-caption text-grey-7 q-mb-sm">{{ gettext('Showing templates for architecture') }}: {{ nodeArchitecture }}</div><div v-for="group in templateSections" :key="group.section" class="q-mb-md"><div class="text-subtitle2 q-mb-xs">{{ group.section }}</div><q-table flat dense row-key="template" :rows="group.rows" :columns="templateColumns" :filter="templateFilter" :pagination="{ rowsPerPage: 10 }" @row-click="templateRowClick"><template #body-cell-architecture="scope"><q-td :props="scope">{{ scope.value }}<q-icon v-if="isForeignArchitecture(scope.row)" name="info" color="info" size="16px" class="q-ml-xs"><q-tooltip>{{ gettext('This template cannot run natively on this node and requires binfmt_misc with qemu-user-static.') }}</q-tooltip></q-icon></q-td></template></q-table></div></div><template #foot><q-btn v-close-popup no-caps flat :label="gettext('Cancel')" /><q-btn no-caps flat color="primary" :disable="!selectedTemplate" :label="gettext('Download')" @click="downloadTemplate" /></template></UWindow></q-dialog>
   <q-dialog v-model="ociVisible" persistent><UWindow :title="gettext('Pull from OCI Registry')" width="450px" :loading="loading"><div class="q-pa-md q-gutter-md"><div class="row no-wrap q-gutter-sm"><q-input v-model="oci.reference" dense outlined class="col" :label="gettext('Reference')" :error="!!oci.reference && !validOciReference" :error-message="gettext('Invalid OCI reference')" /><q-btn no-caps outline :disable="!validOciReference" :label="gettext('Query Tags')" @click="queryTags" /></div><q-select v-model="oci.tag" dense outlined use-input input-debounce="0" new-value-mode="add-unique" :options="ociTags" :label="gettext('Tag')" /><q-input v-model="oci.filename" dense outlined :label="gettext('File name')" /></div><template #foot><q-btn v-close-popup no-caps flat :label="gettext('Cancel')" /><q-btn no-caps flat color="primary" :disable="!validOciReference || !oci.tag.trim()" :label="gettext('Download')" @click="pullOci" /></template></UWindow></q-dialog>
   <TaskOutputDialog v-model="taskVisible" :node="node" :upid="taskUpid" :title="taskTitle" @finished="reload" />
   <StorageUploadDialog v-model="uploadVisible" :node="node" :storage="storage" content="vztmpl" @task="(upid) => { taskUpid = upid; taskTitle = gettext('Upload'); taskVisible = !!upid }" />

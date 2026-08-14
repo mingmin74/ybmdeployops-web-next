@@ -5,22 +5,23 @@ import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
 import type { HardwareRow } from '../types';
+import {
+  getGuestArchitecture,
+  parseVmHardwarePropertyString,
+  printVmHardwarePropertyString,
+} from '../vmHardwareUtils';
 
 const { device } = defineProps<{ device: HardwareRow }>();
 const { node, config, canEditRow, updateConfig } = useVmHardwareContext();
+const arch = computed(() => getGuestArchitecture(config.value));
+const isArm = computed(() => arch.value === 'aarch64');
+const isWindows = computed(() => /^win/.test(textValue(config.value.ostype)));
 
 function parseMachine(value: unknown) {
   const result = { machine: '__default__', version: 'latest', viommu: '__default__' };
-  const raw = textValue(value);
-  if (!raw) return result;
-  raw.split(',').forEach((part) => {
-    const segments = part.split('=', 2);
-    const key = segments[0] || '';
-    const optionValue = segments[1];
-    if (!key) return;
-    if (optionValue === undefined || key === 'type') result.machine = optionValue || key;
-    else if (key === 'viommu') result.viommu = optionValue;
-  });
+  const parsed = parseVmHardwarePropertyString(value, 'type');
+  if (parsed.type) result.machine = parsed.type;
+  if (parsed.viommu) result.viommu = parsed.viommu;
   if (result.machine === 'pc') result.machine = '__default__';
   if (result.machine !== '__default__' && result.machine !== 'q35') {
     result.version = result.machine;
@@ -30,6 +31,9 @@ function parseMachine(value: unknown) {
 }
 
 const form = reactive(parseMachine(config.value.machine));
+const rawMachine = textValue(config.value.machine);
+if (isWindows.value && (!rawMachine || rawMachine === 'pc')) form.version = 'pc-i440fx-5.1';
+if (isWindows.value && rawMachine === 'q35') form.version = 'pc-q35-5.1';
 const advanced = shallowRef(
   Boolean(
     config.value.machine &&
@@ -57,10 +61,14 @@ function machineRowOption(row: { id?: string; type?: string; version?: string })
   };
 }
 
-const machineOptions = computed(() => [
-  { label: `${gettext('Default')} (i440fx)`, value: '__default__' },
-  { label: 'q35', value: 'q35' },
-]);
+const machineOptions = computed(() =>
+  isArm.value
+    ? [{ label: `${gettext('Default')} (virt)`, value: '__default__' }]
+    : [
+        { label: `${gettext('Default')} (i440fx)`, value: '__default__' },
+        { label: 'q35', value: 'q35' },
+      ],
+);
 const versionOptions = computed(() => {
   const type = form.machine === 'q35' ? 'q35' : 'i440fx';
   const matchedRows = machineRows.value.filter((row) => machineRowKind(row) === type);
@@ -68,7 +76,10 @@ const versionOptions = computed(() => {
     .map(machineRowOption)
     .filter((row) => row.value);
   const uniqueRows = Array.from(new Map(rows.map((row) => [row.value, row])).values());
-  return [{ label: gettext('Latest'), value: 'latest' }, ...uniqueRows];
+  return [
+    ...(isWindows.value ? [] : [{ label: gettext('Latest'), value: 'latest' }]),
+    ...uniqueRows,
+  ];
 });
 const viommuOptions = computed(() => {
   const base = [{ label: `${gettext('Default')} (${gettext('None')})`, value: '__default__' }];
@@ -90,9 +101,22 @@ function buildMachineValue() {
         : form.machine;
   if (form.machine === '__default__' && form.version === 'latest' && form.viommu === '__default__')
     return '';
-  const parts = [machine];
-  if (advanced.value && form.viommu !== '__default__') parts.push(`viommu=${form.viommu}`);
-  return parts.join(',');
+  return printVmHardwarePropertyString(
+    { type: machine, ...(form.viommu !== '__default__' ? { viommu: form.viommu } : {}) },
+    'type',
+  );
+}
+
+function machineVersionSuffix(value: string) {
+  return /^pc-(?:i440fx|q35)-(.+)$/.exec(value)?.[1] || '';
+}
+
+function matchingMachineVersion(machine: string, previousVersion: string) {
+  const suffix = machineVersionSuffix(previousVersion);
+  if (!suffix) return '';
+  const prefix = machine === 'q35' ? 'pc-q35-' : 'pc-i440fx-';
+  const expected = `${prefix}${suffix}`;
+  return versionOptions.value.some((option) => option.value === expected) ? expected : '';
 }
 
 async function save() {
@@ -103,18 +127,24 @@ async function save() {
 
 watch(
   () => form.machine,
-  () => {
-    if (!versionOptions.value.some((option) => option.value === form.version))
-      form.version = 'latest';
+  (machine) => {
+    const matchedVersion = matchingMachineVersion(machine, form.version);
+    if (matchedVersion) {
+      form.version = matchedVersion;
+      return;
+    }
+    if (!versionOptions.value.some((option) => option.value === form.version)) {
+      form.version = isWindows.value
+        ? machine === 'q35'
+          ? 'pc-q35-5.1'
+          : 'pc-i440fx-5.1'
+        : 'latest';
+    }
   },
 );
 
 onMounted(async () => {
-  const arch = textValue(config.value.arch) || 'x86_64';
-  machineRows.value = (await getVmMachineTypes(node.value, arch)).data || [];
-  if (!machineRows.value.length && arch !== 'x86_64') {
-    machineRows.value = (await getVmMachineTypes(node.value, 'x86_64')).data || [];
-  }
+  machineRows.value = (await getVmMachineTypes(node.value, arch.value)).data || [];
 });
 </script>
 

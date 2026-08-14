@@ -2,15 +2,21 @@
 import type { QTableColumn } from 'quasar';
 import { computed, onMounted, reactive, shallowRef } from 'vue';
 import { getVmCpuFlags, getVmCpuModels, type VmCpuFlag } from '@/api/vm';
-import type { PveRecord } from '@/api/resources';
+import { getNodes, type PveRecord } from '@/api/resources';
 import SelectTable from '@/components/SelectTable.vue';
 import { gettext } from '@/locale';
+import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
 import type { HardwareRow } from '../types';
+import { getGuestArchitecture, isKvmEnabled } from '../vmHardwareUtils';
 
 const { device } = defineProps<{ device: HardwareRow }>();
 const { node, config, canEditRow, updateConfig } = useVmHardwareContext();
+const session = useSessionStore();
+const arch = computed(() => getGuestArchitecture(config.value));
+const kvmEnabled = computed(() => isKvmEnabled(config.value));
+const cgroupMode = shallowRef(2);
 const cpuModels = shallowRef<PveRecord[]>([]);
 const cpuFlags = shallowRef<VmCpuFlag[]>([]);
 const cpuModelsLoading = shallowRef(false);
@@ -111,18 +117,34 @@ const advanced = shallowRef(
   ),
 );
 const totalCores = computed(() => Math.max(1, Number(form.sockets || 1) * Number(form.cores || 1)));
-const cpuModelRows = computed<PveRecord[]>(() =>
-  cpuModels.value.map((cpu) => ({
-    name: textValue(cpu.name),
-    displayname: textValue(cpu.displayname) || textValue(cpu.name).replace(/^custom-/, ''),
-    vendor: textValue(cpu.name) === 'host' ? 'Host' : textValue(cpu.vendor),
-  })),
+const cpuunitsMin = computed(() => (cgroupMode.value === 1 ? 2 : 1));
+const cpuunitsMax = computed(() => (cgroupMode.value === 1 ? 262144 : 10000));
+const cpuunitsDefault = computed(() => (cgroupMode.value === 1 ? 1024 : 100));
+const canEditCpuAffinity = computed(() => session.userid === 'root@pam');
+const cpuModelRows = computed<PveRecord[]>(() => {
+  const rows = cpuModels.value
+    .filter((cpu) => isCpuModelAvailable(textValue(cpu.name)))
+    .map((cpu) => ({
+      name: textValue(cpu.name),
+      displayname: textValue(cpu.displayname) || textValue(cpu.name).replace(/^custom-/, ''),
+      vendor: textValue(cpu.name) === 'host' ? 'Host' : textValue(cpu.vendor),
+    }));
+  if (form.cpu && !rows.some((row) => textValue(row.name) === form.cpu)) {
+    rows.push({ name: form.cpu, displayname: form.cpu.replace(/^custom-/, ''), vendor: '' });
+  }
+  return rows;
+});
+const customCpuUnavailable = computed(
+  () =>
+    form.cpu.startsWith('custom-') &&
+    !cpuModels.value.some((model) => textValue(model.name) === form.cpu),
 );
+const visibleCpuFlags = computed(() => (kvmEnabled.value ? cpuFlags.value : []));
 const cpuModelDisplayValue = computed(
   () =>
     textValue(cpuModelRows.value.find((row) => textValue(row.name) === form.cpu)?.displayname) ||
     form.cpu ||
-    `${gettext('Default')} (kvm64)`,
+    `${gettext('Default')} (${arch.value === 'x86_64' ? 'x86-64-v2-AES' : 'host'})`,
 );
 const cpuValue = computed(() => {
   const parts = [form.cpu.trim()];
@@ -133,10 +155,14 @@ const cpuValue = computed(() => {
 async function loadCpuCapabilities() {
   cpuModelsLoading.value = true;
   try {
-    const [modelsResponse, flagsResponse] = await Promise.all([
-      getVmCpuModels(node.value),
-      getVmCpuFlags(node.value),
+    const [modelsResponse, flagsResponse, nodesResponse] = await Promise.all([
+      getVmCpuModels(node.value, arch.value),
+      getVmCpuFlags(node.value, arch.value),
+      getNodes(),
     ]);
+    const currentNode = (nodesResponse.data || []).find((item) => item.node === node.value) as
+      (PveRecord & { 'cgroup-mode'?: unknown }) | undefined;
+    cgroupMode.value = Number(currentNode?.['cgroup-mode'] ?? 2);
     cpuModels.value = (modelsResponse.data || []).sort((left, right) =>
       textValue(left.name).localeCompare(textValue(right.name)),
     );
@@ -171,8 +197,25 @@ function addDelete(deletedKeys: string[], key: string) {
   if (!deletedKeys.includes(key)) deletedKeys.push(key);
 }
 
+function isValidCpuSet(value: string) {
+  if (!value.trim()) return true;
+  return value.split(',').every((part) => {
+    const match = /^(\d+)(?:-(\d+))?$/.exec(part.trim());
+    return Boolean(match && (!match[2] || Number(match[1]) <= Number(match[2])));
+  });
+}
+
+function isCpuModelAvailable(name: string) {
+  if (kvmEnabled.value) return true;
+  if (arch.value === 'aarch64') return ['max', 'cortex-a53', 'cortex-a57'].includes(name);
+  return ['max', 'qemu32', 'qemu64'].includes(name);
+}
+
+const affinityValid = computed(() => isValidCpuSet(form.affinity));
+const canSave = computed(() => affinityValid.value);
+
 async function save() {
-  if (!canEditRow(device)) return;
+  if (!canEditRow(device) || !canSave.value) return;
   const data = { cores: form.cores, sockets: form.sockets } as Record<string, string | number>;
   const deletedKeys: string[] = [];
   if (cpuValue.value) data.cpu = cpuValue.value;
@@ -188,23 +231,16 @@ async function save() {
     else data.args = form.args.replace('-cpu EPYC,vendor=AuthenticAMD', '').trim();
   }
 
-  if (advanced.value) {
-    data.numa = form.numa ? 1 : 0;
-    if (form.vcpus.trim() && form.vcpusEdited) data.vcpus = form.vcpus.trim();
-    else addDelete(deletedKeys, 'vcpus');
-    if (Number(form.cpulimit) > 0) data.cpulimit = form.cpulimit.trim();
-    else addDelete(deletedKeys, 'cpulimit');
-    if (form.affinity.trim()) data.affinity = form.affinity.trim();
-    else addDelete(deletedKeys, 'affinity');
-    if (form.cpuunits.trim() && form.cpuunits.trim() !== '100')
-      data.cpuunits = form.cpuunits.trim();
-    else addDelete(deletedKeys, 'cpuunits');
-  } else {
-    data.numa = 0;
-    (['vcpus', 'cpulimit', 'cpuunits', 'affinity'] as const).forEach((key) =>
-      addDelete(deletedKeys, key),
-    );
-  }
+  data.numa = form.numa ? 1 : 0;
+  if (form.vcpus.trim() && form.vcpusEdited) data.vcpus = form.vcpus.trim();
+  else addDelete(deletedKeys, 'vcpus');
+  if (Number(form.cpulimit) > 0) data.cpulimit = form.cpulimit.trim();
+  else addDelete(deletedKeys, 'cpulimit');
+  if (form.affinity.trim()) data.affinity = form.affinity.trim();
+  else addDelete(deletedKeys, 'affinity');
+  if (form.cpuunits.trim() && Number(form.cpuunits) !== cpuunitsDefault.value)
+    data.cpuunits = form.cpuunits.trim();
+  else addDelete(deletedKeys, 'cpuunits');
   if (deletedKeys.length) data.delete = deletedKeys.join(',');
   await updateConfig(data);
 }
@@ -224,7 +260,6 @@ onMounted(() => {
           :label="gettext('Sockets')"
           type="number"
           min="1"
-          max="4"
         />
       </div>
       <div class="col-6">
@@ -241,6 +276,13 @@ onMounted(() => {
           :label="gettext('Type')"
         />
       </div>
+      <div v-if="customCpuUnavailable" class="col-12 hardware-editor-warning">
+        {{
+          gettext(
+            'The current user cannot configure this custom CPU type. If you change it, you may not be able to select it again.',
+          )
+        }}
+      </div>
       <div class="col-6">
         <q-input
           v-model.number="form.cores"
@@ -248,6 +290,7 @@ onMounted(() => {
           :label="gettext('Cores')"
           type="number"
           min="1"
+          max="256"
         />
       </div>
       <div class="col-6">
@@ -272,9 +315,9 @@ onMounted(() => {
             dense
             :label="gettext('CPU units')"
             type="number"
-            min="1"
-            max="10000"
-            placeholder="100"
+            :min="cpuunitsMin"
+            :max="cpuunitsMax"
+            :placeholder="String(cpuunitsDefault)"
           />
         </div>
         <div class="col-6">
@@ -293,6 +336,9 @@ onMounted(() => {
             dense
             :label="gettext('CPU Affinity')"
             :placeholder="gettext('All Cores')"
+            :disable="!canEditCpuAffinity"
+            :error="!affinityValid"
+            :error-message="gettext('Use CPU indexes or ranges, for example 0-3,5.')"
           />
         </div>
         <div class="col-6">
@@ -308,7 +354,7 @@ onMounted(() => {
             row-key="name"
             class="vm-cpu-flags-table"
             table-header-class="u-table-header"
-            :rows="cpuFlags"
+            :rows="visibleCpuFlags"
             :columns="cpuFlagColumns"
             :pagination="{ rowsPerPage: 0 }"
             :loading="cpuModelsLoading"
@@ -340,6 +386,7 @@ onMounted(() => {
         size="12px"
         class="bg-primary text-grey-1 u-button"
         :label="gettext('Save')"
+        :disable="!canSave"
         @click="save"
       />
     </div>
@@ -377,5 +424,13 @@ onMounted(() => {
 }
 .vm-cpu-flags-table :deep(.q-btn-toggle .q-btn) {
   font-size: 11px;
+}
+.hardware-editor-warning {
+  padding: 8px 10px;
+  border: 1px solid #f0d38a;
+  background: #fff8e1;
+  color: #7a5713;
+  font-size: 12px;
+  line-height: 1.5;
 }
 </style>

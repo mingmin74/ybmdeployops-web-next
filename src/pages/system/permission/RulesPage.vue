@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Dialog, Notify, type QTableColumn } from 'quasar';
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import {
   getAccessRules,
   getEnabledAccessUsers,
@@ -8,8 +8,8 @@ import {
   updateAccessRule,
   type AccessRule,
 } from '@/api/system';
-import { getApiTokens, getRoles, type PveRecord } from '@/api/resources';
-import { getGroups } from '@/api/users';
+import { getApiTokens, getRoles, type PveRecord, type PveRole } from '@/api/resources';
+import { getGroups, type PveGroup, type PveUser } from '@/api/users';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 
@@ -23,11 +23,16 @@ const filter = ref('');
 const rules = ref<RuleRow[]>([]);
 const selectedRules = ref<RuleRow[]>([]);
 const formVisible = ref(false);
-const pathOptions = ref<string[]>([]);
-const userOptions = ref<{ userid: string }[]>([]);
-const groupOptions = ref<{ groupid: string }[]>([]);
-const tokenOptions = ref<string[]>([]);
-const roleOptions = ref<{ roleid: string }[]>([]);
+const pathOptions = shallowRef<string[]>([]);
+const filteredPathOptions = shallowRef<string[]>([]);
+const userOptions = shallowRef<PveUser[]>([]);
+const filteredUserOptions = shallowRef<PveUser[]>([]);
+const groupOptions = shallowRef<PveGroup[]>([]);
+const filteredGroupOptions = shallowRef<PveGroup[]>([]);
+const tokenOptions = shallowRef<{ value: string; comment: string }[]>([]);
+const filteredTokenOptions = shallowRef<{ value: string; comment: string }[]>([]);
+const roleOptions = shallowRef<PveRole[]>([]);
+const filteredRoleOptions = shallowRef<PveRole[]>([]);
 const pathRef = ref();
 const groupRef = ref();
 const userRef = ref();
@@ -57,7 +62,6 @@ const filteredRules = computed(() => {
     );
 });
 const formTitle = computed(() => {
-  if (!isFixedPath.value) return `${gettext('Add')}: ${gettext('Permission Rule')}`;
   if (form.type === 'group') return `${gettext('Add')}: ${gettext('Group Permission')}`;
   if (form.type === 'apitoken') return `${gettext('Add')}: ${gettext('API Token Permission')}`;
   return `${gettext('Add')}: ${gettext('User Permission')}`;
@@ -118,14 +122,82 @@ function resetForm(type: AclType = 'user') {
   });
 }
 function resourcePaths(resources: PveRecord[]) {
-  const paths = new Set(['/', '/access', '/nodes', '/pool', '/storage', '/vms']);
+  const paths = new Set([
+    '/',
+    '/access',
+    '/access/groups',
+    '/access/realm',
+    '/mapping',
+    '/mapping/cpu',
+    '/mapping/hwrng',
+    '/mapping/notifications',
+    '/mapping/pci',
+    '/mapping/usb',
+    '/nodes',
+    '/pool',
+    '/sdn/fabrics',
+    '/sdn/zones',
+    '/storage',
+    '/vms',
+  ]);
   resources.forEach((item) => {
     if (item.type === 'node') paths.add(`/nodes/${String(item.node)}`);
     if (item.type === 'qemu' || item.type === 'lxc') paths.add(`/vms/${String(item.vmid)}`);
     if (item.type === 'storage') paths.add(`/storage/${String(item.storage)}`);
     if (item.type === 'pool') paths.add(`/pool/${String(item.pool)}`);
+    if (item.type === 'network') {
+      const networkType = String(item['network-type'] || '');
+      const network = String(item.network || '');
+      if (networkType && network) paths.add(`/sdn/${networkType}s/${network}`);
+    }
+    if (item.type === 'sdn' && item.sdn) paths.add(`/sdn/zones/${String(item.sdn)}`);
   });
   return [...paths].sort();
+}
+type SelectFilterDone = (callback: () => void) => void;
+function filterOptions<T>(
+  value: string,
+  done: SelectFilterDone,
+  source: T[],
+  update: (options: T[]) => void,
+  searchableText: (option: T) => string,
+) {
+  const keyword = value.trim().toLowerCase();
+  done(() => update(keyword ? source.filter((option) => searchableText(option).toLowerCase().includes(keyword)) : source));
+}
+function filterPaths(value: string, done: SelectFilterDone) {
+  filterOptions(value, done, pathOptions.value, (options) => (filteredPathOptions.value = options), (option) => option);
+}
+function filterUsers(value: string, done: SelectFilterDone) {
+  filterOptions(value, done, userOptions.value, (options) => (filteredUserOptions.value = options), (option) =>
+    [option.userid, option.firstname, option.lastname, option.comment].join(' '),
+  );
+}
+function filterGroups(value: string, done: SelectFilterDone) {
+  filterOptions(value, done, groupOptions.value, (options) => (filteredGroupOptions.value = options), (option) =>
+    [option.groupid, option.comment, option.users].join(' '),
+  );
+}
+function filterTokens(value: string, done: SelectFilterDone) {
+  filterOptions(value, done, tokenOptions.value, (options) => (filteredTokenOptions.value = options), (option) =>
+    [option.value, option.comment].join(' '),
+  );
+}
+function filterRoles(value: string, done: SelectFilterDone) {
+  filterOptions(value, done, roleOptions.value, (options) => (filteredRoleOptions.value = options), (option) =>
+    [option.roleid, option.privs].join(' '),
+  );
+}
+function addPath(value: string, done: (value?: string, mode?: 'add' | 'add-unique' | 'toggle') => void) {
+  const path = value.trim();
+  done(path || undefined, 'add-unique');
+}
+function formatPrivileges(privileges?: string) {
+  return (privileges || '')
+    .split(',')
+    .map((privilege) => privilege.trim())
+    .filter(Boolean)
+    .join(', ');
 }
 async function reload() {
   loading.value = true;
@@ -151,32 +223,37 @@ async function openForm(type: AclType = 'user') {
     const resourceRequest = isFixedPath.value
       ? Promise.resolve({ data: [] as PveRecord[] })
       : getClusterResources();
-    const [resources, roles, groups, users, tokens] = await Promise.all([
+    const [resources, roles] = await Promise.all([
       resourceRequest,
       getRoles(),
-      getGroups(),
-      getEnabledAccessUsers(),
-      getApiTokens(),
     ]);
     pathOptions.value = props.resourcePath
       ? [props.resourcePath]
       : resourcePaths((resources.data || []) as PveRecord[]);
-    roleOptions.value = ((roles.data || []) as { roleid: string }[]).sort(
-      (a: { roleid: string }, b: { roleid: string }) => a.roleid.localeCompare(b.roleid),
-    );
-    groupOptions.value = ((groups.data || []) as { groupid: string }[]).sort(
-      (a: { groupid: string }, b: { groupid: string }) => a.groupid.localeCompare(b.groupid),
-    );
-    userOptions.value = ((users.data || []) as { userid: string }[])
-      .filter((item: { userid: string }) => item.userid !== 'root@pam')
-      .sort((a: { userid: string }, b: { userid: string }) => a.userid.localeCompare(b.userid));
-    tokenOptions.value = (tokens.data || []).flatMap((user: PveRecord) =>
-      Array.isArray(user.tokens)
-        ? (user.tokens as PveRecord[]).map(
-            (token: PveRecord) => `${String(user.userid)}!${String(token.tokenid)}`,
-          )
-        : [],
-    );
+    filteredPathOptions.value = pathOptions.value;
+    roleOptions.value = ([...(roles.data || [])] as PveRole[]).sort((a, b) => a.roleid.localeCompare(b.roleid));
+    filteredRoleOptions.value = roleOptions.value;
+    if (type === 'group') {
+      const groups = await getGroups();
+      groupOptions.value = ([...(groups.data || [])] as PveGroup[]).sort((a, b) => a.groupid.localeCompare(b.groupid));
+      filteredGroupOptions.value = groupOptions.value;
+    } else if (type === 'user') {
+      const users = await getEnabledAccessUsers();
+      userOptions.value = ([...(users.data || [])] as PveUser[]).sort((a, b) => a.userid.localeCompare(b.userid));
+      filteredUserOptions.value = userOptions.value;
+    } else {
+      const tokens = await getApiTokens();
+      tokenOptions.value = (tokens.data || [])
+        .flatMap((user: PveRecord) =>
+          Array.isArray(user.tokens)
+            ? (user.tokens as PveRecord[]).map(
+                (token: PveRecord) => ({ value: `${String(user.userid)}!${String(token.tokenid)}`, comment: String(token.comment || '') }),
+              )
+            : [],
+        )
+        .sort((a, b) => a.value.localeCompare(b.value));
+      filteredTokenOptions.value = tokenOptions.value;
+    }
   } finally {
     dialogLoading.value = false;
   }
@@ -197,8 +274,8 @@ async function saveRule() {
     const data: Record<string, unknown> = {
       path: form.path,
       roles: form.role,
-      propagate: form.propagate ? 1 : 0,
     };
+    if (!isFixedPath.value) data.propagate = form.propagate ? 1 : 0;
     if (form.type === 'user') data.users = form.user;
     else if (form.type === 'group') data.groups = form.group;
     else data.tokens = form.token;
@@ -238,6 +315,7 @@ watch(
   },
 );
 onMounted(() => void reload());
+defineExpose({ reload });
 </script>
 
 <template>
@@ -257,17 +335,7 @@ onMounted(() => void reload());
     >
       <template #top
         ><div class="q-gutter-sm">
-          <q-btn
-            v-if="!isFixedPath"
-            no-caps
-            outline
-            size="12px"
-            color="primary"
-            class="u-button"
-            :label="gettext('Add')"
-            @click="openForm()"
-          /><q-btn-dropdown
-            v-else
+          <q-btn-dropdown
             no-caps
             outline
             size="12px"
@@ -324,23 +392,14 @@ onMounted(() => void reload());
           dense
           options-dense
           :label="requiredLabel(gettext('Path'))"
-          :options="pathOptions"
           :rules="[requiredFieldRule]"
           class="q-field--with-bottom"
-        /><q-select
-          v-if="!isFixedPath"
-          v-model="form.type"
-          dense
-          options-dense
-          emit-value
-          map-options
-          :label="gettext('Type')"
-          :options="[
-            { label: gettext('User'), value: 'user' },
-            { label: gettext('Group'), value: 'group' },
-            { label: gettext('API Token'), value: 'apitoken' },
-          ]"
-          class="q-field--with-bottom"
+          use-input
+          input-debounce="0"
+          new-value-mode="add-unique"
+          @filter="filterPaths"
+          @new-value="addPath"
+          :options="filteredPathOptions"
         /><q-select
           v-if="form.type === 'group'"
           ref="groupRef"
@@ -352,9 +411,15 @@ onMounted(() => void reload());
           option-value="groupid"
           option-label="groupid"
           :label="requiredLabel(gettext('Group'))"
-          :options="groupOptions"
+          use-input
+          input-debounce="0"
+          @filter="filterGroups"
+          :options="filteredGroupOptions"
           :rules="[requiredFieldRule]"
-        /><q-select
+        ><template #option="scope"
+          ><q-item v-bind="scope.itemProps"><q-item-section><q-item-label>{{ scope.opt.groupid }}</q-item-label><q-item-label caption>{{ scope.opt.comment }}</q-item-label><q-item-label v-if="scope.opt.users" caption>{{ gettext('Users') }}: {{ scope.opt.users }}</q-item-label></q-item-section></q-item
+        ></template></q-select
+        ><q-select
           v-if="form.type === 'user'"
           ref="userRef"
           v-model="form.user"
@@ -365,9 +430,15 @@ onMounted(() => void reload());
           option-value="userid"
           option-label="userid"
           :label="requiredLabel(gettext('User'))"
-          :options="userOptions"
+          use-input
+          input-debounce="0"
+          @filter="filterUsers"
+          :options="filteredUserOptions"
           :rules="[requiredFieldRule]"
-        /><q-select
+        ><template #option="scope"
+          ><q-item v-bind="scope.itemProps"><q-item-section><q-item-label>{{ scope.opt.userid }}</q-item-label><q-item-label caption>{{ [scope.opt.firstname, scope.opt.lastname].filter(Boolean).join(' ') }}{{ scope.opt.comment ? ` · ${scope.opt.comment}` : '' }}</q-item-label></q-item-section></q-item
+        ></template></q-select
+        ><q-select
           v-if="form.type === 'apitoken'"
           ref="tokenRef"
           v-model="form.token"
@@ -375,10 +446,18 @@ onMounted(() => void reload());
           options-dense
           emit-value
           map-options
+          option-value="value"
+          option-label="value"
           :label="requiredLabel(gettext('API Token'))"
-          :options="tokenOptions"
+          use-input
+          input-debounce="0"
+          @filter="filterTokens"
+          :options="filteredTokenOptions"
           :rules="[requiredFieldRule]"
-        /><q-select
+        ><template #option="scope"
+          ><q-item v-bind="scope.itemProps"><q-item-section><q-item-label>{{ scope.opt.value }}</q-item-label><q-item-label caption>{{ scope.opt.comment }}</q-item-label></q-item-section></q-item
+        ></template></q-select
+        ><q-select
           ref="roleRef"
           v-model="form.role"
           dense
@@ -388,9 +467,15 @@ onMounted(() => void reload());
           option-value="roleid"
           option-label="roleid"
           :label="requiredLabel(gettext('Role'))"
-          :options="roleOptions"
+          use-input
+          input-debounce="0"
+          @filter="filterRoles"
+          :options="filteredRoleOptions"
           :rules="[requiredFieldRule]"
-        /><q-checkbox
+        ><template #option="scope"
+          ><q-item v-bind="scope.itemProps"><q-item-section><q-item-label>{{ scope.opt.roleid }}</q-item-label><q-item-label caption>{{ formatPrivileges(scope.opt.privs) }}</q-item-label></q-item-section></q-item
+        ></template></q-select
+        ><q-checkbox
           v-if="!isFixedPath"
           v-model="form.propagate"
           left-label

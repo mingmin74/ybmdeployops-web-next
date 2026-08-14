@@ -21,8 +21,10 @@
   },
   "dependencies": {
     "@quasar/extras": "^2.0.0",
+    "@types/qrcode": "^1.5.6",
     "echarts": "^6.1.0",
     "pinia": "^3.0.1",
+    "qrcode": "^1.5.4",
     "quasar": "^2.21.1",
     "sortablejs": "^1.15.7",
     "vue": "^3.5.22",

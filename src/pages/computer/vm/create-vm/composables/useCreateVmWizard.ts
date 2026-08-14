@@ -564,13 +564,14 @@ export function useCreateVmWizard(
     return Number.isInteger(slot) && slot >= 0 && slot < diskBusSlotLimits[bus];
   }
   const diskValidation = computed(() => {
+    const used = reservedDeviceKeys();
     const primaryValid = Boolean(
       form.storage.trim() &&
       form.format &&
       hasValidDiskSize(form.diskSize) &&
-      hasValidDiskSlot(form.diskSlot, form.diskBus),
+      hasValidDiskSlot(form.diskSlot, form.diskBus) &&
+      !used.has(primaryDiskKey.value),
     );
-    const used = reservedDeviceKeys();
     used.add(primaryDiskKey.value);
     const extras: Record<number, boolean> = {};
     extraDisks.forEach((disk) => {
@@ -637,7 +638,9 @@ export function useCreateVmWizard(
     };
   });
   const extraDisksValid = computed(() => {
-    const keys = new Set([primaryDiskKey.value]);
+    const keys = reservedDeviceKeys();
+    if (keys.has(primaryDiskKey.value)) return false;
+    keys.add(primaryDiskKey.value);
     return extraDisks.every((disk) => {
       const key = `${disk.bus}${disk.slot}`;
       if (
@@ -706,12 +709,12 @@ export function useCreateVmWizard(
       form.format &&
       hasValidDiskSlot(form.diskSlot, form.diskBus) &&
       hasValidDiskSize(form.diskSize) &&
+      !reservedDeviceKeys().has(primaryDiskKey.value) &&
       extraDisksValid.value &&
       form.memory >= 1 &&
       form.cores >= 1 &&
       form.cores <= 256 &&
       form.sockets >= 1 &&
-      form.sockets <= 256 &&
       (!form.vcpus.trim() || (Number(form.vcpus) >= 1 && Number(form.vcpus) <= totalCores.value)) &&
       (!form.cpulimit.trim() || (Number(form.cpulimit) >= 0 && Number(form.cpulimit) <= 128)) &&
       (!form.cpuunits.trim() ||
@@ -840,7 +843,9 @@ export function useCreateVmWizard(
       form.storage = '';
       return;
     }
-    const response = await getNodeStorage(form.node, 'images');
+    const node = form.node;
+    const response = await getNodeStorage(node, 'images');
+    if (node !== form.node) return;
     imageStorageRows.value = [...(response.data || [])].sort((left, right) =>
       textValue(left.storage).localeCompare(textValue(right.storage)),
     );
@@ -852,6 +857,19 @@ export function useCreateVmWizard(
       form.storage = diskStorageNames.value[0] || '';
       resetDiskFormat(form, form.storage);
     }
+    const validStorages = new Set(diskStorageNames.value);
+    extraDisks.forEach((disk) => {
+      if (!validStorages.has(disk.storage)) {
+        disk.storage = diskStorageNames.value[0] || '';
+        resetDiskFormat(disk, disk.storage);
+      }
+    });
+    if (form.efiStorage && !validStorages.has(form.efiStorage)) {
+      form.efiStorage = diskStorageNames.value[0] || '';
+    }
+    if (form.tpmStorage && !validStorages.has(form.tpmStorage)) {
+      form.tpmStorage = diskStorageNames.value[0] || '';
+    }
   }
 
   async function loadImportStorage() {
@@ -859,7 +877,9 @@ export function useCreateVmWizard(
       importStorageRows.value = [];
       return;
     }
-    const response = await getNodeStorage(form.node, 'import');
+    const node = form.node;
+    const response = await getNodeStorage(node, 'import');
+    if (node !== form.node) return;
     importStorageRows.value = [...(response.data || [])].sort((left, right) =>
       textValue(left.storage).localeCompare(textValue(right.storage)),
     );
@@ -867,7 +887,9 @@ export function useCreateVmWizard(
 
   async function loadImportImages(storage: string) {
     if (!form.node || !storage) return;
-    const response = await getStorageContent(form.node, storage, 'import');
+    const node = form.node;
+    const response = await getStorageContent(node, storage, 'import');
+    if (node !== form.node) return;
     importImageRows[storage] = [...(response.data || [])]
       .filter((row) => ['raw', 'qcow2', 'vmdk'].includes(textValue(row.format)))
       .sort((left, right) => textValue(left.volid).localeCompare(textValue(right.volid)));
@@ -1387,12 +1409,18 @@ export function useCreateVmWizard(
       },
     };
     const parent = generic[arch === 'aarch64' ? 'aarch64' : 'x86_64'];
-    const overrides: Record<string, Partial<OsDefaults>> = {
-      l26: {
-        diskBus: 'scsi',
+    if (ostype === 'l26') {
+      return {
+        ...parent,
+        diskBus: 'scsi' as DiskBus,
         model: 'virtio',
-        busPriority: { scsi: 4, virtio: 3, sata: 2, ide: 1 },
-      },
+        busPriority:
+          arch === 'aarch64'
+            ? { scsi: 4, virtio: 2, sata: 2, ide: 1 }
+            : { scsi: 4, virtio: 3, sata: 2, ide: 1 },
+      };
+    }
+    const overrides: Record<string, Partial<OsDefaults>> = {
       w2k: { diskBus: 'ide', model: 'rtl8139', scsihw: '__default__' },
       wxp: { diskBus: 'ide', model: 'rtl8139', scsihw: '__default__' },
       win11: {
@@ -1571,6 +1599,12 @@ export function useCreateVmWizard(
     () => form.node,
     (node) => {
       if (model.value && node) {
+        importStorageRows.value = [];
+        Object.keys(importImageRows).forEach((storage) => delete importImageRows[storage]);
+        extraDisks.filter((disk) => disk.isImport).forEach((disk) => {
+          disk.importSourceStorage = '';
+          disk.importFrom = '';
+        });
         void loadStorage();
         void loadIsoStorage();
         void loadCpuCapabilities();

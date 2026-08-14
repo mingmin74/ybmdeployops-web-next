@@ -4,9 +4,7 @@ import ResourceOverviewPanel from '@/components/ResourceOverviewPanel.vue';
 import { gettext } from '@/locale';
 import NodeShellPanel from './NodeShellPanel.vue';
 import NodeDiskPanel from './NodeDiskPanel.vue';
-import NodeFirewallLogsPanel from './NodeFirewallLogsPanel.vue';
-import NodeFirewallOptionsPanel from './NodeFirewallOptionsPanel.vue';
-import NodeFirewallRulesPanel from './NodeFirewallRulesPanel.vue';
+import FirewallResourcePanel from '@/pages/system/firewall/FirewallResourcePanel.vue';
 import NodeSystemPanel from './NodeSystemPanel.vue';
 import NodeTaskHistoryPanel from './NodeTaskHistoryPanel.vue';
 
@@ -31,7 +29,6 @@ defineEmits<{
 }>();
 
 const activeTab = shallowRef('overview');
-const firewallTab = shallowRef('rules');
 
 const modules = [
   { name: 'overview', label: gettext('Overview'), icon: 'dashboard' },
@@ -154,37 +151,11 @@ const modules = [
         ><NodeTaskHistoryPanel :node="node.node"
       /></q-tab-panel>
       <q-tab-panel name="firewall" class="q-pa-none">
-        <q-splitter :model-value="146" unit="px" disable class="node-detail__module-splitter">
-          <template #before>
-            <q-tabs
-              v-model="firewallTab"
-              vertical
-              dense
-              inline-label
-              align="left"
-              active-bg-color="blue-1"
-              active-color="primary"
-              class="node-detail__side-tabs"
-            >
-              <q-tab name="rules" icon="format_list_bulleted" :label="gettext('Rules')" />
-              <q-tab name="options" icon="tune" :label="gettext('Options')" />
-              <q-tab name="logs" icon="receipt_long" :label="gettext('Logs')" />
-            </q-tabs>
-          </template>
-          <template #after>
-            <q-tab-panels v-model="firewallTab" class="bg-white full-height">
-              <q-tab-panel name="rules" class="q-pa-none"
-                ><NodeFirewallRulesPanel :node="node.node"
-              /></q-tab-panel>
-              <q-tab-panel name="options" class="q-pa-none"
-                ><NodeFirewallOptionsPanel :node="node.node"
-              /></q-tab-panel>
-              <q-tab-panel name="logs" class="q-pa-none"
-                ><NodeFirewallLogsPanel :node="node.node"
-              /></q-tab-panel>
-            </q-tab-panels>
-          </template>
-        </q-splitter>
+        <FirewallResourcePanel
+          :base-path="`/nodes/${encodeURIComponent(node.node)}/firewall`"
+          firewall-type="node"
+          allow-iface
+        />
       </q-tab-panel>
       <q-tab-panel
         v-for="module in modules.filter(

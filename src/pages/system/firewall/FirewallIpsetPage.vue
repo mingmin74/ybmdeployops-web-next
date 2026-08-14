@@ -4,9 +4,14 @@ import { Dialog } from 'quasar';
 import { computed, onMounted, ref, shallowRef, watch } from 'vue';
 import UWindow from '@/components/UWindow.vue';
 import type { PveRecord } from '@/api/resources';
-import { createFirewallIpset, createFirewallIpsetEntry, deleteFirewallIpset, deleteFirewallIpsetEntry, getFirewallIpsetEntries, getFirewallIpsets, getFirewallRefs, updateFirewallIpset, updateFirewallIpsetEntry } from '@/api/firewall';
+import { createFirewallIpsetByBaseUrl, createFirewallIpsetEntryByBaseUrl, deleteFirewallIpsetByBaseUrl, deleteFirewallIpsetEntryByBaseUrl, getFirewallIpsetEntriesByBaseUrl, getFirewallIpsetsByBaseUrl, getFirewallRefs, updateFirewallIpsetByBaseUrl, updateFirewallIpsetEntryByBaseUrl } from '@/api/firewall';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
+
+const {
+  baseUrl = '/cluster/firewall/ipset',
+  refsUrl = '/cluster/firewall/refs',
+} = defineProps<{ baseUrl?: string; refsUrl?: string }>();
 
 const loading = shallowRef(false);
 const entryLoading = shallowRef(false);
@@ -40,7 +45,7 @@ const entryColumns: QTableColumn<PveRecord>[] = [
 async function refreshIpsets() {
   loading.value = true;
   try {
-    ipsets.value = (await getFirewallIpsets()).data || [];
+    ipsets.value = (await getFirewallIpsetsByBaseUrl(baseUrl)).data || [];
     const current = ipsets.value.find(item => textValue(item.name) === textValue(selectedSet.value?.name));
     selectedIpset.value = current ? [current] : ipsets.value[0] ? [ipsets.value[0]] : [];
   } finally { loading.value = false; }
@@ -49,10 +54,10 @@ async function refreshEntries() {
   const name = textValue(selectedSet.value?.name);
   if (!name) { entries.value = []; return; }
   entryLoading.value = true;
-  try { entries.value = (await getFirewallIpsetEntries(name)).data || []; selectedEntry.value = []; }
+  try { entries.value = (await getFirewallIpsetEntriesByBaseUrl(baseUrl, name)).data || []; selectedEntry.value = []; }
   finally { entryLoading.value = false; }
 }
-async function loadAliases() { aliasRefs.value = (await getFirewallRefs('/cluster/firewall/refs')).data || []; }
+async function loadAliases() { aliasRefs.value = (await getFirewallRefs(refsUrl)).data || []; }
 
 function openIpsetDialog(mode: 'add' | 'edit') {
   editingIpset.value = mode === 'edit';
@@ -73,8 +78,8 @@ async function submitIpset() {
   if (!name) return;
   loading.value = true;
   try {
-    if (editingIpset.value) await updateFirewallIpset({ ...ipsetForm.value, rename: originalIpsetName.value });
-    else await createFirewallIpset(ipsetForm.value);
+    if (editingIpset.value) await updateFirewallIpsetByBaseUrl(baseUrl, { ...ipsetForm.value, rename: originalIpsetName.value });
+    else await createFirewallIpsetByBaseUrl(baseUrl, ipsetForm.value);
     ipsetDialog.value = false;
     await refreshIpsets();
   } finally { loading.value = false; }
@@ -86,9 +91,10 @@ async function submitEntry() {
   entryLoading.value = true;
   try {
     if (editingEntry.value) {
-      const { cidr: _cidr, ...data } = entryForm.value;
-      await updateFirewallIpsetEntry(name, originalCidr.value, data);
-    } else await createFirewallIpsetEntry(name, entryForm.value);
+      const data = { ...entryForm.value };
+      delete data.cidr;
+      await updateFirewallIpsetEntryByBaseUrl(baseUrl, name, originalCidr.value, data);
+    } else await createFirewallIpsetEntryByBaseUrl(baseUrl, name, entryForm.value);
     entryDialog.value = false;
     await refreshEntries();
   } finally { entryLoading.value = false; }
@@ -96,13 +102,13 @@ async function submitEntry() {
 function removeIpset() {
   const item = selectedSet.value; const name = textValue(item?.name); if (!name) return;
   Dialog.create({ title: gettext('Confirm'), message: gettext('Are you sure to delete [%s]?').replace('%s', name), cancel: true, persistent: true }).onOk(() => {
-    loading.value = true; void deleteFirewallIpset(name, item?.digest).then(refreshIpsets).finally(() => { loading.value = false; });
+    loading.value = true; void deleteFirewallIpsetByBaseUrl(baseUrl, name, item?.digest).then(refreshIpsets).finally(() => { loading.value = false; });
   });
 }
 function removeEntry() {
   const item = selectedCidr.value; const name = textValue(selectedSet.value?.name); const cidr = textValue(item?.cidr || item?.name); if (!name || !cidr) return;
   Dialog.create({ title: gettext('Confirm'), message: gettext('Are you sure to delete [%s]?').replace('%s', cidr), cancel: true, persistent: true }).onOk(() => {
-    entryLoading.value = true; void deleteFirewallIpsetEntry(name, cidr, item?.digest).then(refreshEntries).finally(() => { entryLoading.value = false; });
+    entryLoading.value = true; void deleteFirewallIpsetEntryByBaseUrl(baseUrl, name, cidr, item?.digest).then(refreshEntries).finally(() => { entryLoading.value = false; });
   });
 }
 function cellError(row: PveRecord, field: string) { return textValue((row.errors as PveRecord | undefined)?.[field]); }

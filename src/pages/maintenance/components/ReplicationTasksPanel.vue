@@ -4,6 +4,7 @@ import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue';
 import {
   createReplicationTask,
   getClusterReplicationTasks,
+  getReplicationTasks,
   getReplicationTask,
   removeReplicationTask,
   updateReplicationTask,
@@ -13,6 +14,16 @@ import { getClusterStatus, getNodes, type PveNode } from '@/api/resources';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
+
+const props = withDefaults(
+  defineProps<{
+    node?: string;
+    vmid?: string | number;
+    guestType?: 'qemu' | 'lxc';
+    embedded?: boolean;
+  }>(),
+  { guestType: 'qemu', embedded: false },
+);
 
 type Row = ReplicationTask & {
   enabled: boolean;
@@ -46,6 +57,7 @@ const formErrors = reactive({
   rate: '',
 });
 const selectedTask = computed(() => selected.value[0]);
+const isGuestScope = computed(() => Boolean(props.node && props.vmid !== undefined));
 const guestValid = computed(() => {
   const value = String(form.guest);
   return /^\d+$/.test(value) && Number(value) >= 100 && Number(value) <= 999999999;
@@ -145,7 +157,9 @@ function validateForm() {
 async function reload() {
   loading.value = true;
   try {
-    const response = await getClusterReplicationTasks();
+    const response = isGuestScope.value
+      ? await getReplicationTasks(props.node!, props.vmid)
+      : await getClusterReplicationTasks();
     tasks.value = [...(response.data || [])]
       .map(row)
       .sort(
@@ -167,7 +181,7 @@ async function loadInitial() {
 function resetForm() {
   Object.assign(form, {
     id: '',
-    guest: '',
+    guest: isGuestScope.value ? String(props.vmid) : '',
     target: '',
     schedule: '',
     rate: '',
@@ -350,6 +364,7 @@ onBeforeUnmount(() => {
               v-model="form.guest"
               dense
               type="number"
+              :readonly="isGuestScope"
               min="100"
               max="999999999"
               :label="requiredLabel('CT/VM ID')"

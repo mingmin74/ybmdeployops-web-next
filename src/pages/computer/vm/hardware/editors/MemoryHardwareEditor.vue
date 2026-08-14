@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, shallowRef } from 'vue';
+import { reactive, shallowRef, watch } from 'vue';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
@@ -32,6 +32,7 @@ async function save() {
   data.balloon = form.balloon;
   if (!form.ballooning) {
     data.balloon = 0;
+    if (config.value.shares !== undefined) deleted.push('shares');
   } else if (form.balloon === form.memory) {
     delete data.balloon;
     if (config.value.balloon !== undefined) deleted.push('balloon');
@@ -42,9 +43,21 @@ async function save() {
     deleted.push('shares');
   }
 
+  if (form.allowKsm) {
+    if (config.value['allow-ksm'] !== undefined) deleted.push('allow-ksm');
+    delete data['allow-ksm'];
+  }
+
   if (deleted.length) data.delete = deleted.join(',');
   await updateConfig(data);
 }
+
+watch(
+  () => form.memory,
+  (memory, previousMemory) => {
+    if (form.balloon === previousMemory) form.balloon = memory;
+  },
+);
 </script>
 
 <template>
@@ -56,7 +69,7 @@ async function save() {
           dense
           :label="gettext('Memory (MiB)')"
           type="number"
-          min="32"
+          min="1"
           step="32"
         />
       </div>
@@ -68,7 +81,7 @@ async function save() {
             :disable="!form.ballooning"
             :label="`${gettext('Minimum memory')} (MiB)`"
             type="number"
-            min="32"
+            min="1"
             :max="form.memory"
             step="32"
           />

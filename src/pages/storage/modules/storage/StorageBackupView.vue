@@ -29,11 +29,14 @@ const fileRestoreVisible = ref(false);
 const notes = ref('');
 const configuration = ref('');
 const restoreStorages = shallowRef<PveRecord[]>([]);
+const restoreStorageRequired = ref(false);
 const restorePlaceholders = reactive({ name: '', cores: '', memory: '', sockets: '' });
 const restoreForm = reactive({ vmid: '', storage: '', bwlimit: '', unique: false, haManaged: false, name: '', cores: '', memory: '', sockets: '', unprivileged: 'keep', start: false, liveRestore: false });
 const pruneForm = reactive({ last: '', hourly: '', daily: '', weekly: '', monthly: '', yearly: '' });
 const selectedRow = computed(() => selected.value[0]);
 const selectedVolid = computed(() => textValue(selectedRow.value?.volid));
+const dnsNamePattern = /^(?=.{1,253}$)(?!-)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)(?:\.(?!-)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?))*$/;
+const validRestoreName = computed(() => !restoreForm.name.trim() || dnsNamePattern.test(restoreForm.name.trim()));
 const isPbs = computed(() => props.storageType === 'pbs' || textValue(selectedRow.value?.format).startsWith('pbs-'));
 const guestType = computed<'qemu' | 'lxc' | undefined>(() => {
   const volid = selectedVolid.value;
@@ -52,7 +55,7 @@ const pruneParams = computed(() => {
   const rules = [
     ['keep-last', pruneForm.last], ['keep-hourly', pruneForm.hourly], ['keep-daily', pruneForm.daily],
     ['keep-weekly', pruneForm.weekly], ['keep-monthly', pruneForm.monthly], ['keep-yearly', pruneForm.yearly],
-  ].filter(([, value]) => value !== '').map(([key, value]) => `${key}=${value}`).join(',');
+  ].filter(([, value]) => value !== '' && Number(value) >= 1).map(([key, value]) => `${key}=${value}`).join(',');
   return { type: guestType.value, vmid: textValue(selectedRow.value?.vmid), 'prune-backups': rules };
 });
 
@@ -66,11 +69,18 @@ const columns = computed<QTableColumn<PveRecord>[]>(() => {
     { name: 'size', label: gettext('Size'), align: 'left', field: formatContentSize, sortable: true },
   ];
   if (isPbs.value) base.push(
-    { name: 'encrypted', label: gettext('Encrypted'), align: 'left', field: (row) => row.encrypted ? gettext('Yes') : gettext('No'), sortable: true },
-    { name: 'verification', label: gettext('Verify State'), align: 'left', field: (row) => textValue((row.verification as PveRecord | undefined)?.state, '-'), sortable: true },
+    { name: 'encrypted', label: gettext('Encrypted'), align: 'left', field: (row) => formatBackupEncryption(row.encrypted), sortable: true },
+    { name: 'verification', label: gettext('Verify State'), align: 'left', field: (row) => formatVerificationState(textValue((row.verification as PveRecord | undefined)?.state)), sortable: true },
   );
   return base;
 });
+function formatVerificationState(state: string) {
+  const labels: Record<string, string> = { ok: gettext('OK'), failed: gettext('Failed'), none: gettext('None'), outdated: gettext('Outdated') };
+  return labels[state] || (state ? state : '-');
+}
+function formatBackupEncryption(value: unknown) {
+  return value ? gettext('Encrypted') : gettext('No');
+}
 
 async function reload() {
   if (!props.node || !props.storage) { rows.value = []; return; }
@@ -106,6 +116,7 @@ function openRestore() {
   if (!canRestore.value) return;
   Object.assign(restoreForm, { vmid: '', storage: '', bwlimit: '', unique: false, haManaged: false, name: '', cores: '', memory: '', sockets: '', unprivileged: 'keep', start: false, liveRestore: false });
   Object.assign(restorePlaceholders, { name: '', cores: '', memory: '', sockets: '' });
+  restoreStorageRequired.value = false;
   void loadRestoreDefaults();
 }
 function applyRestoreConfiguration(value: string) {
@@ -115,16 +126,15 @@ function applyRestoreConfiguration(value: string) {
     if (!match) return;
     const key = match[1] || '';
     const configValue = match[2] || '';
-    if (key === 'name' || key === 'hostname') restorePlaceholders.name = configValue;
-    if (key === 'memory') restorePlaceholders.memory = configValue;
-    if (key === 'cores') restorePlaceholders.cores = configValue;
-    if (key === 'sockets') restorePlaceholders.sockets = configValue;
-    if (key.startsWith('scsi') || key.startsWith('sata') || key.startsWith('virtio') || key === 'rootfs') {
-      const storageHint = configValue.split(':')[0] || '';
-      allStoragesAvailable = allStoragesAvailable && restoreStorages.value.some((row) => textValue(row.storage) === storageHint);
-    }
+    if (key === '#qmdump#map') {
+      const storageHint = configValue.match(/^(\S+):(\S+):(\S*):(\S*):$/)?.[3] || '';
+      allStoragesAvailable = allStoragesAvailable && !!storageHint && restoreStorages.value.some((row) => textValue(row.storage) === storageHint);
+    } else if (key === 'name' || key === 'hostname') restorePlaceholders.name = configValue;
+    else if (key === 'memory') restorePlaceholders.memory = configValue;
+    else if (key === 'cores') restorePlaceholders.cores = configValue;
+    else if (key === 'sockets') restorePlaceholders.sockets = configValue;
   });
-  if (!allStoragesAvailable && !restoreForm.storage) restoreForm.storage = textValue(restoreStorages.value[0]?.storage);
+  restoreStorageRequired.value = guestType.value === 'lxc' || !allStoragesAvailable;
 }
 async function loadRestoreDefaults() {
   loading.value = true;
@@ -140,7 +150,7 @@ async function loadRestoreDefaults() {
 }
 function openFileRestore() { if (isPbs.value && selectedVolid.value) fileRestoreVisible.value = true; }
 async function restore() {
-  if (!canRestore.value || !restoreForm.vmid || !guestType.value) return;
+  if (!canRestore.value || !restoreForm.vmid || !guestType.value || !validRestoreName.value) return;
   loading.value = true;
   try {
     if (guestType.value === 'lxc' && !restoreForm.storage) return;
@@ -168,7 +178,7 @@ async function openPrune() {
 async function prune() {
   if (!guestType.value || !selectedRow.value?.vmid) return;
   loading.value = true;
-  try { taskUpid.value = String((await pruneStorageBackups(props.node, props.storage, pruneParams.value)).data || ''); taskTitle.value = gettext('Prune'); pruneVisible.value = false; taskVisible.value = !!taskUpid.value; await reload(); }
+  try { await pruneStorageBackups(props.node, props.storage, pruneParams.value); pruneVisible.value = false; await reload(); }
   finally { loading.value = false; }
 }
 function keepReason(row: PveRecord) {
@@ -182,8 +192,9 @@ function addKeepReasons(backups: PveRecord[]) {
   let ruleIndex = -1;
   let currentRule = 'keep-all';
   let count = 0;
+  const hasRule = (rule: string) => Number(pruneForm[rule.replace('keep-', '') as keyof typeof pruneForm]) > 0;
   const nextRule = () => {
-    do { ruleIndex += 1; } while (ruleIndex < rules.length && !pruneForm[rules[ruleIndex]!.replace('keep-', '') as keyof typeof pruneForm]);
+    do { ruleIndex += 1; } while (ruleIndex < rules.length && !hasRule(rules[ruleIndex]!));
     currentRule = rules[ruleIndex] || 'keep-all';
     count = 0;
   };
@@ -226,10 +237,10 @@ watch(() => props.active, (active) => { if (active) void reload(); }, { immediat
   </q-table>
   <q-dialog v-model="notesVisible" persistent><UWindow :title="gettext('Notes')" width="600px" :loading="loading"><div class="q-pa-md"><q-input v-model="notes" type="textarea" autogrow outlined dense /></div><template #foot><q-btn v-close-popup no-caps flat :label="gettext('Cancel')" /><q-btn no-caps flat color="primary" :label="gettext('OK')" @click="saveNotes" /></template></UWindow></q-dialog>
   <q-dialog v-model="configVisible"><UWindow :title="gettext('Show Configuration')" width="640px"><pre class="q-pa-md backup-config">{{ configuration }}</pre></UWindow></q-dialog>
-  <q-dialog v-model="restoreVisible" persistent><UWindow :title="gettext('Restore')" width="640px" :loading="loading"><div class="q-pa-md"><div class="row q-col-gutter-md"><q-input v-model="restoreForm.vmid" class="col-6" dense outlined :label="guestType === 'lxc' ? gettext('CT ID') : gettext('VM ID')" /><q-input v-model="restoreForm.name" class="col-6" dense outlined :placeholder="restorePlaceholders.name" :label="guestType === 'lxc' ? gettext('Hostname') : gettext('Name')" /><q-select v-model="restoreForm.storage" class="col-12" dense outlined emit-value map-options :clearable="guestType !== 'lxc'" :options="restoreStorages.map((row) => ({ label: textValue(row.storage), value: textValue(row.storage) }))" :label="gettext('Target Storage')" /><q-input v-model="restoreForm.cores" class="col-4" dense outlined type="number" :placeholder="restorePlaceholders.cores" :label="gettext('Cores')" /><q-input v-if="guestType === 'qemu'" v-model="restoreForm.sockets" class="col-4" dense outlined type="number" :placeholder="restorePlaceholders.sockets" :label="gettext('Sockets')" /><q-input v-model="restoreForm.memory" :class="guestType === 'qemu' ? 'col-4' : 'col-8'" dense outlined type="number" :placeholder="restorePlaceholders.memory" :label="gettext('Memory (MiB)')" /><q-input v-model="restoreForm.bwlimit" class="col-6" dense outlined type="number" :label="gettext('Bandwidth Limit (KiB/s)')" /><q-select v-if="guestType === 'lxc'" v-model="restoreForm.unprivileged" class="col-6" dense outlined emit-value map-options :label="gettext('Privilege Level')" :options="[{ label: gettext('From Backup'), value: 'keep' }, { label: gettext('Unprivileged'), value: '1' }, { label: gettext('Privileged'), value: '0' }]" /><div class="col-6"><q-checkbox v-model="restoreForm.unique" dense :label="gettext('Unique')" /></div><div class="col-6"><q-checkbox v-model="restoreForm.haManaged" dense :label="gettext('Add to HA')" /></div><div class="col-6"><q-checkbox v-model="restoreForm.start" dense :disable="restoreForm.liveRestore" :label="gettext('Start after restore')" /></div><div v-if="isPbs && guestType === 'qemu'" class="col-6"><q-checkbox v-model="restoreForm.liveRestore" dense :label="gettext('Live restore')" /></div></div></div><template #foot><q-btn v-close-popup no-caps flat :label="gettext('Cancel')" /><q-btn no-caps flat color="primary" :disable="!restoreForm.vmid || (guestType === 'lxc' && !restoreForm.storage)" :label="gettext('Restore')" @click="restore" /></template></UWindow></q-dialog>
-  <q-dialog v-model="pruneVisible" persistent><UWindow :title="pruneTitle" width="760px" :loading="loading"><div class="q-pa-md q-gutter-md"><div class="row q-col-gutter-sm"><q-input v-model="pruneForm.last" class="col-4" type="number" dense outlined :label="gettext('keep-last')" @update:model-value="previewPrune" /><q-input v-model="pruneForm.hourly" class="col-4" type="number" dense outlined :label="gettext('keep-hourly')" @update:model-value="previewPrune" /><q-input v-model="pruneForm.daily" class="col-4" type="number" dense outlined :label="gettext('keep-daily')" @update:model-value="previewPrune" /><q-input v-model="pruneForm.weekly" class="col-4" type="number" dense outlined :label="gettext('keep-weekly')" @update:model-value="previewPrune" /><q-input v-model="pruneForm.monthly" class="col-4" type="number" dense outlined :label="gettext('keep-monthly')" @update:model-value="previewPrune" /><q-input v-model="pruneForm.yearly" class="col-4" type="number" dense outlined :label="gettext('keep-yearly')" @update:model-value="previewPrune" /></div><q-table flat dense row-key="volid" :rows="pruneRows" :columns="pruneColumns" :pagination="{ rowsPerPage: 5 }" /></div><template #foot><q-btn v-close-popup no-caps flat :label="gettext('Cancel')" /><q-btn no-caps flat color="primary" :label="gettext('Prune')" @click="prune" /></template></UWindow></q-dialog>
+  <q-dialog v-model="restoreVisible" persistent><UWindow :title="gettext('Restore')" width="640px" :loading="loading"><div class="q-pa-md"><div class="text-caption text-grey-7 q-mb-md">{{ gettext('Source') }}: {{ selectedVolid }}</div><div class="row q-col-gutter-md"><q-input v-model="restoreForm.vmid" class="col-6" dense outlined type="number" min="100" :label="guestType === 'lxc' ? gettext('CT ID') : gettext('VM ID')" /><q-input v-model="restoreForm.name" class="col-6" dense outlined :placeholder="restorePlaceholders.name" :label="guestType === 'lxc' ? gettext('Hostname') : gettext('Name')" :error="!validRestoreName" :error-message="gettext('Invalid DNS name')" /><q-select v-model="restoreForm.storage" class="col-12" dense outlined emit-value map-options :clearable="guestType !== 'lxc'" :options="restoreStorages.map((row) => ({ label: textValue(row.storage), value: textValue(row.storage) }))" :label="gettext('Target Storage')" /><q-input v-model="restoreForm.cores" class="col-4" dense outlined type="number" min="1" max="128" :placeholder="restorePlaceholders.cores" :label="gettext('Cores')" /><q-input v-if="guestType === 'qemu'" v-model="restoreForm.sockets" class="col-4" dense outlined type="number" min="1" max="4" :placeholder="restorePlaceholders.sockets" :label="gettext('Sockets')" /><q-input v-model="restoreForm.memory" :class="guestType === 'qemu' ? 'col-4' : 'col-8'" dense outlined type="number" min="16" :placeholder="restorePlaceholders.memory" :label="gettext('Memory (MiB)')" /><q-input v-model="restoreForm.bwlimit" class="col-6" dense outlined type="number" min="0" :label="gettext('Bandwidth Limit (KiB/s)')" /><q-select v-if="guestType === 'lxc'" v-model="restoreForm.unprivileged" class="col-6" dense outlined emit-value map-options :label="gettext('Privilege Level')" :options="[{ label: gettext('From Backup'), value: 'keep' }, { label: gettext('Unprivileged'), value: '1' }, { label: gettext('Privileged'), value: '0' }]" /><div class="col-6"><q-checkbox v-model="restoreForm.unique" dense :label="gettext('Unique')" /></div><div class="col-6"><q-checkbox v-model="restoreForm.haManaged" dense :label="gettext('Add to HA')" /></div><div class="col-6"><q-checkbox v-model="restoreForm.start" dense :disable="restoreForm.liveRestore" :label="gettext('Start after restore')" /></div><div v-if="isPbs && guestType === 'qemu'" class="col-6"><q-checkbox v-model="restoreForm.liveRestore" dense :label="gettext('Live restore')" /></div><div v-if="restoreForm.liveRestore && isPbs && guestType === 'qemu'" class="col-12 text-warning text-caption">{{ gettext('If live restore fails, data written to the VM during restore may be lost.') }}</div></div></div><template #foot><q-btn v-close-popup no-caps flat :label="gettext('Cancel')" /><q-btn no-caps flat color="primary" :disable="!restoreForm.vmid || !validRestoreName || (restoreStorageRequired && !restoreForm.storage)" :label="gettext('Restore')" @click="restore" /></template></UWindow></q-dialog>
+  <q-dialog v-model="pruneVisible" persistent><UWindow :title="pruneTitle" width="760px" :loading="loading"><div class="q-pa-md q-gutter-md"><div class="row q-col-gutter-sm"><q-input v-model="pruneForm.last" class="col-4" type="number" min="1" dense outlined :label="gettext('keep-last')" @update:model-value="previewPrune" /><q-input v-model="pruneForm.hourly" class="col-4" type="number" min="1" dense outlined :label="gettext('keep-hourly')" @update:model-value="previewPrune" /><q-input v-model="pruneForm.daily" class="col-4" type="number" min="1" dense outlined :label="gettext('keep-daily')" @update:model-value="previewPrune" /><q-input v-model="pruneForm.weekly" class="col-4" type="number" min="1" dense outlined :label="gettext('keep-weekly')" @update:model-value="previewPrune" /><q-input v-model="pruneForm.monthly" class="col-4" type="number" min="1" dense outlined :label="gettext('keep-monthly')" @update:model-value="previewPrune" /><q-input v-model="pruneForm.yearly" class="col-4" type="number" min="1" dense outlined :label="gettext('keep-yearly')" @update:model-value="previewPrune" /></div><q-table flat dense row-key="volid" :rows="pruneRows" :columns="pruneColumns" :pagination="{ rowsPerPage: 5 }" /></div><template #foot><q-btn v-close-popup no-caps flat :label="gettext('Cancel')" /><q-btn no-caps flat color="primary" :label="gettext('Prune')" @click="prune" /></template></UWindow></q-dialog>
   <TaskOutputDialog v-model="taskVisible" :node="node" :upid="taskUpid" :title="taskTitle" @finished="reload" />
-  <StorageFileRestoreDialog v-model="fileRestoreVisible" :storage="storage" :volume="selectedVolid" :vm-archive="guestType === 'qemu'" />
+  <StorageFileRestoreDialog v-model="fileRestoreVisible" :storage="storage" :volume="selectedVolid" />
 </template>
 
 <style scoped>

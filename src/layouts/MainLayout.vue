@@ -128,7 +128,7 @@
             >
               <template v-for="child in item.children" :key="child.path || child.titleKey">
                 <q-item
-                  v-if="!child.children"
+                v-if="canShowMenuItem(child) && !child.children"
                   clickable
                   class="menu-child"
                   :active="isActive(child.path)"
@@ -140,7 +140,7 @@
                 </q-item>
 
                 <q-expansion-item
-                  v-else
+                v-else-if="canShowMenuItem(child)"
                   header-class="menu-child"
                   :default-opened="isGroupOpen(child)"
                   :icon="child.icon"
@@ -253,6 +253,12 @@ function go(path?: string) {
 
 function isActive(path?: string) {
   return Boolean(path && route.path === path);
+}
+
+function canShowMenuItem(item: MenuItem) {
+  if (!item.requiresDcCap) return true;
+  const dcCaps = (session.caps as unknown as { dc?: Record<string, unknown> }).dc || {};
+  return Boolean(dcCaps[item.requiresDcCap]);
 }
 
 function isGroupOpen(item: MenuItem): boolean {

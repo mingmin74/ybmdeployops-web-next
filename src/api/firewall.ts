@@ -299,6 +299,60 @@ export function getFirewallRefs(baseUrl = '/cluster/firewall/refs') {
   });
 }
 
+export function getFirewallAliasesByBaseUrl(baseUrl: string) {
+  return request<PveRecord[]>(firewallUrl(baseUrl, 'json'), { method: 'GET', notifyOnError: true });
+}
+
+export function createFirewallAliasByBaseUrl(baseUrl: string, data: PveRecord) {
+  return request(firewallUrl(baseUrl, 'extjs'), { method: 'POST', data });
+}
+
+export function updateFirewallAliasByBaseUrl(baseUrl: string, name: string, data: PveRecord) {
+  return request(`${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(name)}`, { method: 'PUT', data });
+}
+
+export function deleteFirewallAliasByBaseUrl(baseUrl: string, name: string, digest?: unknown) {
+  const url = `${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(name)}`;
+  const digestValue = typeof digest === 'string' || typeof digest === 'number' ? String(digest) : '';
+  return request(digestValue ? `${url}?digest=${encodeURIComponent(digestValue)}` : url, { method: 'DELETE' });
+}
+
+export function getFirewallIpsetsByBaseUrl(baseUrl: string) {
+  return request<PveRecord[]>(firewallUrl(baseUrl, 'json'), { method: 'GET', notifyOnError: true });
+}
+
+export function createFirewallIpsetByBaseUrl(baseUrl: string, data: PveRecord) {
+  return request(firewallUrl(baseUrl, 'extjs'), { method: 'POST', data });
+}
+
+export function updateFirewallIpsetByBaseUrl(baseUrl: string, data: PveRecord) {
+  return request(firewallUrl(baseUrl, 'extjs'), { method: 'POST', data });
+}
+
+export function deleteFirewallIpsetByBaseUrl(baseUrl: string, name: string, digest?: unknown) {
+  const url = `${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(name)}`;
+  const digestValue = typeof digest === 'string' || typeof digest === 'number' ? String(digest) : '';
+  return request(digestValue ? `${url}?digest=${encodeURIComponent(digestValue)}` : url, { method: 'DELETE' });
+}
+
+export function getFirewallIpsetEntriesByBaseUrl(baseUrl: string, name: string) {
+  return request<PveRecord[]>(`${firewallUrl(baseUrl, 'json')}/${encodeURIComponent(name)}`, { method: 'GET', notifyOnError: true });
+}
+
+export function createFirewallIpsetEntryByBaseUrl(baseUrl: string, name: string, data: PveRecord) {
+  return request(`${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(name)}`, { method: 'POST', data });
+}
+
+export function updateFirewallIpsetEntryByBaseUrl(baseUrl: string, name: string, cidr: string, data: PveRecord) {
+  return request(`${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(name)}/${encodeURIComponent(cidr)}`, { method: 'PUT', data });
+}
+
+export function deleteFirewallIpsetEntryByBaseUrl(baseUrl: string, name: string, cidr: string, digest?: unknown) {
+  const url = `${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(name)}/${encodeURIComponent(cidr)}`;
+  const digestValue = typeof digest === 'string' || typeof digest === 'number' ? String(digest) : '';
+  return request(digestValue ? `${url}?digest=${encodeURIComponent(digestValue)}` : url, { method: 'DELETE' });
+}
+
 export function getFirewallOptions() {
   return request<PveRecord>('/api2/json/cluster/firewall/options', {
     method: 'GET',

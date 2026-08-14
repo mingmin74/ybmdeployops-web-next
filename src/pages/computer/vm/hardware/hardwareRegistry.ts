@@ -48,7 +48,7 @@ export const hardwareMeta: Partial<Record<HardwareType, HardwareMeta>> = {
   machine: { icon: 'settings', capabilities: ['VM.Config.HWType'], pendingKeys: ['machine'] },
   'scsi-controller': {
     icon: 'settings',
-    capabilities: ['VM.Config.HWType'],
+    capabilities: ['VM.Config.Options'],
     pendingKeys: ['scsihw'],
   },
   system: {

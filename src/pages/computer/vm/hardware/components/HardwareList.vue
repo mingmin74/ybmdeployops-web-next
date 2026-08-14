@@ -1,11 +1,24 @@
 <script setup lang="ts">
 import { useVmHardwareContext } from '../context/vmHardwareContext';
-import { hardwareIcon } from '../hardwareRegistry';
+import { hardwareIcon, hardwareMeta } from '../hardwareRegistry';
 import type { HardwareRow } from '../types';
 
 defineProps<{ rows: HardwareRow[] }>();
 const emit = defineEmits<{ select: [row: HardwareRow] }>();
 const { selectedDevice, hasPendingChange, pendingValue } = useVmHardwareContext();
+
+function pendingKeysFor(row: HardwareRow) {
+  return hardwareMeta[row.type]?.pendingKeys || [row.key];
+}
+
+function hasRowPendingChange(row: HardwareRow) {
+  return pendingKeysFor(row).some(hasPendingChange);
+}
+
+function rowPendingValue(row: HardwareRow) {
+  const key = pendingKeysFor(row).find(hasPendingChange);
+  return key ? pendingValue(key) : '';
+}
 </script>
 
 <template>
@@ -27,7 +40,7 @@ const { selectedDevice, hasPendingChange, pendingValue } = useVmHardwareContext(
       </div>
       <div class="col-8 text-grey-8 hardware-list-value">
         {{ row.value }}
-        <div v-if="hasPendingChange(row.key)" class="text-red">{{ pendingValue(row.key) }}</div>
+        <div v-if="hasRowPendingChange(row)" class="text-red">{{ rowPendingValue(row) }}</div>
       </div>
     </div>
   </div>

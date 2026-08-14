@@ -29,7 +29,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'system/users',
         name: 'system-users',
-        component: () => import('@/pages/system/UsersPage.vue'),
+        redirect: { name: 'system-permissions', query: { tab: 'users' } },
         meta: { auth: true, title: 'Users' },
       },
       {
@@ -45,9 +45,15 @@ const routes: RouteRecordRaw[] = [
         meta: { auth: true, title: 'Permissions' },
       },
       {
+        path: 'system/realm-sync-jobs',
+        name: 'system-realm-sync-jobs',
+        component: () => import('@/pages/system/RealmSyncJobsPage.vue'),
+        meta: { auth: true, title: 'Realm Sync Job' },
+      },
+      {
         path: 'system/pools',
         name: 'system-pools',
-        component: () => import('@/pages/system/PoolsPage.vue'),
+        redirect: { name: 'system-permissions', query: { tab: 'pools' } },
         meta: { auth: true, title: 'Pools' },
       },
       {

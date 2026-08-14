@@ -4,18 +4,25 @@ import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
 import type { HardwareRow } from '../types';
+import { getGuestArchitecture } from '../vmHardwareUtils';
 
 const { device } = defineProps<{ device: HardwareRow }>();
 const { config, canEditRow, updateConfig } = useVmHardwareContext();
+const isArm = computed(() => getGuestArchitecture(config.value) === 'aarch64');
 const form = reactive({
-  bios: textValue(config.value.bios),
+  bios: textValue(config.value.bios) || (isArm.value ? 'ovmf' : ''),
 });
+const needsEfiDisk = computed(() => form.bios === 'ovmf' && config.value.efidisk0 === undefined);
 
-const biosOptions = computed(() => [
-  { label: `${gettext('Default')} (SeaBIOS)`, value: '' },
-  { label: 'SeaBIOS', value: 'seabios' },
-  { label: 'OVMF (UEFI)', value: 'ovmf' },
-]);
+const biosOptions = computed(() =>
+  isArm.value
+    ? [{ label: 'OVMF (UEFI)', value: 'ovmf' }]
+    : [
+        { label: `${gettext('Default')} (SeaBIOS)`, value: '' },
+        { label: 'SeaBIOS', value: 'seabios' },
+        { label: 'OVMF (UEFI)', value: 'ovmf' },
+      ],
+);
 
 async function save() {
   if (!canEditRow(device)) return;
@@ -36,6 +43,9 @@ async function save() {
           :options="biosOptions"
           :label="gettext('BIOS')"
         />
+      </div>
+      <div v-if="needsEfiDisk" class="col-12 hardware-editor-hint">
+        {{ gettext('For OVMF (UEFI), an EFI Disk is recommended.') }}
       </div>
     </div>
     <div class="hardware-special-editor__footer row items-center justify-end">
@@ -66,5 +76,13 @@ async function save() {
   padding: 8px 12px;
   border-top: 1px solid #d7dce2;
   background: #f5f7fa;
+}
+.hardware-editor-hint {
+  padding: 8px 10px;
+  border: 1px solid #f0d38a;
+  background: #fff8e1;
+  color: #7a5713;
+  font-size: 12px;
+  line-height: 1.5;
 }
 </style>

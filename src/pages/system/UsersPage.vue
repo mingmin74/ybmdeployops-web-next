@@ -10,6 +10,7 @@ import {
   getUser,
   getUsers,
   removeUser,
+  unlockUserTfa,
   updateUser,
   updateUserPassword,
   type EditUserPayload,
@@ -18,6 +19,7 @@ import {
   type PveUser,
 } from '@/api/users';
 import { gettext } from '@/locale';
+import GrantedPermissionsDialog from './permission/GrantedPermissionsDialog.vue';
 
 defineProps<{
   embedded?: boolean;
@@ -33,7 +35,7 @@ type UserFormModel = {
   confirmPassword: string;
   realm: string;
   lastname: string;
-  groups: string;
+  groups: string[];
   email: string;
   enable: boolean;
   expire: string;
@@ -62,6 +64,7 @@ const users = ref<UserRow[]>([]);
 const selectedUsers = ref<UserRow[]>([]);
 const createDialogVisible = ref(false);
 const passwordDialogVisible = ref(false);
+const permissionsDialogVisible = ref(false);
 const groupOptions = ref<PveGroup[]>([]);
 const realmOptions = ref<RealmOption[]>([]);
 
@@ -76,12 +79,19 @@ const canModifyUsers = computed(() => {
 });
 const selectedUser = computed(() => selectedUsers.value[0]);
 const canEdit = computed(() => canModifyUsers.value && selectedUsers.value.length === 1);
-const canRemove = computed(() => canModifyUsers.value && selectedUsers.value.length === 1);
 const canChangePassword = computed(() => {
   if (selectedUsers.value.length !== 1) return false;
-  const userid = selectedUser.value?.userid || '';
-  return userid.includes('uscale') || userid.includes('pam');
+  return ['ad', 'ldap', 'pam', 'pve'].includes(selectedUser.value?.['realm-type'] || '');
 });
+const canRemove = computed(
+  () => canModifyUsers.value && selectedUsers.value.length === 1 && selectedUser.value?.userid !== 'root@pam',
+);
+const isTfaLocked = computed(() => {
+  const user = selectedUser.value;
+  return Boolean(user?.['totp-locked'] || user?.['tfa-locked-until']);
+});
+const canUnlockTfa = computed(() => canModifyUsers.value && selectedUsers.value.length === 1 && isTfaLocked.value);
+const legacyKeysLocked = computed(() => ['x', 'x!oath', 'x!u2f', 'x!yubico'].includes(formData.keys));
 const filteredUsers = computed(() => {
   const keyword = filter.value.trim().toLowerCase();
   if (!keyword) return users.value;
@@ -105,6 +115,7 @@ const filteredUsers = computed(() => {
 
 const formData = reactive<UserFormModel>(createDefaultForm());
 const passwordForm = reactive({
+  currentPassword: '',
   password: '',
   confirmPassword: '',
 });
@@ -115,6 +126,7 @@ const passwordRef = ref();
 const confirmPasswordRef = ref();
 const passwordDialogPasswordRef = ref();
 const passwordDialogConfirmRef = ref();
+const passwordDialogCurrentRef = ref();
 
 const tableColumns: QTableColumn<UserRow>[] = [
   {
@@ -155,6 +167,8 @@ const tableColumns: QTableColumn<UserRow>[] = [
     field: 'fullName',
     sortable: true,
   },
+  { name: 'tfa', label: gettext('TFA'), align: 'left', field: (row) => formatUserTfa(row), sortable: true },
+  { name: 'groups', label: gettext('Groups'), align: 'left', field: (row) => row.groups || '' },
   {
     name: 'comment',
     label: gettext('Comment'),
@@ -162,7 +176,7 @@ const tableColumns: QTableColumn<UserRow>[] = [
     field: 'comment',
   },
 ];
-const visibleColumns = ['userid', 'enable', 'expire', 'firstname', 'lastname', 'comment'];
+const visibleColumns = ['userid', 'realm', 'enable', 'expire', 'name', 'tfa', 'groups', 'comment'];
 
 function createDefaultForm(): UserFormModel {
   return {
@@ -173,7 +187,7 @@ function createDefaultForm(): UserFormModel {
     confirmPassword: '',
     realm: '',
     lastname: '',
-    groups: '',
+    groups: [],
     email: '',
     enable: true,
     expire: '',
@@ -187,6 +201,7 @@ function resetForm(action: UserFormAction) {
 }
 
 function resetPasswordForm() {
+  passwordForm.currentPassword = '';
   passwordForm.password = '';
   passwordForm.confirmPassword = '';
 }
@@ -210,6 +225,17 @@ function timestampToDateText(timestamp?: number) {
   if (!timestamp) return gettext('never');
   const text = formatDate(new Date(timestamp * 1000));
   return text === '1970-01-01' ? gettext('never') : text;
+}
+
+function formatUserTfa(user: PveUser) {
+  const keys = user.keys || '';
+  if (!keys) return gettext('No');
+  if (keys === 'x!oath') return 'totp';
+  if (keys.startsWith('x!')) return keys.slice(2);
+  if (keys !== '1') return gettext('No');
+  if ((user['tfa-locked-until'] || 0) > Date.now() / 1000) return gettext('Locked');
+  if (user['totp-locked']) return gettext('TOTP Locked');
+  return gettext('Yes');
 }
 
 function userToRow(user: PveUser): UserRow {
@@ -238,32 +264,23 @@ function formatRealmOption(realm: PveRealm): RealmOption {
 }
 
 function usernameRules(value: string) {
-  const trimmedValue = value.trim();
-  if (formData.action === 'add' && !trimmedValue) {
-    return gettext('This field is required');
-  }
-  if (!trimmedValue) {
-    return true;
-  }
-
-  const normalized = trimmedValue.replace('@', '');
-  return /^[a-zA-Z][a-zA-Z0-9\-_.]{0,30}[a-zA-Z0-9]$/.test(normalized)
+  return formData.action !== 'add' || value.trim()
     ? true
-    : gettext('Allowed username characters are letters, numbers, "-", "_" and "."');
+    : gettext('This field is required');
 }
 
 function emailRules(value: string) {
   if (!value) return true;
-  return /^[a-zA-Z0-9][a-zA-Z0-9_\-.]+@(?:[A-Za-z0-9]+\.)+[A-Za-z]{2,4}$/.test(value)
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
     ? true
     : gettext('Please enter a valid email address');
 }
 
 function passwordRules(value: string) {
   if (!value) return gettext('This field is required');
-  return value.length >= 5 && value.length <= 64
+  return value.length >= 8 && value.length <= 64
     ? true
-    : `${gettext('The length for this field is')}: [5-64]`;
+    : `${gettext('The length for this field is')}: [8-64]`;
 }
 
 function confirmPasswordRules(value: string, password: string) {
@@ -287,14 +304,16 @@ function validateCreateForm() {
 }
 
 function validatePasswordForm() {
-  return validateRefs([passwordDialogPasswordRef.value, passwordDialogConfirmRef.value]);
+  const refs = [passwordDialogPasswordRef.value, passwordDialogConfirmRef.value];
+  if (session.userid !== 'root@pam') refs.unshift(passwordDialogCurrentRef.value);
+  return validateRefs(refs);
 }
 
 function buildSubmitPayload() {
   const expireTimestamp = formData.expire ? new Date(formData.expire).getTime() / 1000 : 0;
   const payload: EditUserPayload = {
     userid: `${formData.userid}@${formData.realm}`,
-    groups: formData.groups || '',
+    groups: formData.groups.join(','),
     expire: Number.isFinite(expireTimestamp) ? expireTimestamp : 0,
     enable: formData.enable ? 1 : 0,
     firstname: formData.firstname,
@@ -314,7 +333,7 @@ function buildSubmitPayload() {
 async function loadUsersData() {
   loading.value = true;
   try {
-    const response = await getUsers();
+    const response = await getUsers(true);
     users.value = sortByUserid(response.data || []).map(userToRow);
     selectedUsers.value = selectedUser.value
       ? users.value.filter((item) => item.userid === selectedUser.value?.userid)
@@ -353,7 +372,11 @@ async function openCreateDialog(action: UserFormAction) {
       formData.realm = realmName;
       formData.firstname = user.firstname || '';
       formData.lastname = user.lastname || '';
-      formData.groups = user.groups || '';
+      formData.groups = Array.isArray(user.groups)
+        ? user.groups
+        : user.groups
+          ? user.groups.split(',').filter(Boolean)
+          : [];
       formData.email = user.email || '';
       formData.enable = Boolean(user.enable);
       formData.comment = user.comment || '';
@@ -396,12 +419,20 @@ function openPasswordDialog() {
   passwordDialogVisible.value = true;
 }
 
+function openGrantedPermissions() {
+  if (selectedUser.value) permissionsDialogVisible.value = true;
+}
+
 async function submitPassword() {
   if (!selectedUser.value || !validatePasswordForm()) return;
 
   dialogLoading.value = true;
   try {
-    await updateUserPassword(selectedUser.value.userid, passwordForm.password);
+    await updateUserPassword(
+      selectedUser.value.userid,
+      passwordForm.password,
+      session.userid === 'root@pam' ? undefined : passwordForm.currentPassword,
+    );
     passwordDialogVisible.value = false;
   } finally {
     dialogLoading.value = false;
@@ -424,7 +455,7 @@ function confirmRemoveUser() {
 }
 
 async function removeSelectedUser() {
-  if (!selectedUser.value) return;
+  if (!selectedUser.value || selectedUser.value.userid === 'root@pam') return;
 
   loading.value = true;
   try {
@@ -434,6 +465,28 @@ async function removeSelectedUser() {
   } finally {
     loading.value = false;
   }
+}
+async function unlockSelectedUserTfa() {
+  if (!selectedUser.value || !canUnlockTfa.value) return;
+  loading.value = true;
+  try {
+    await unlockUserTfa(selectedUser.value.userid);
+    await loadUsersData();
+  } finally {
+    loading.value = false;
+  }
+}
+
+function confirmUnlockSelectedUserTfa() {
+  const user = selectedUser.value;
+  if (!user || !canUnlockTfa.value) return;
+  Dialog.create({
+    title: gettext('Unlock TFA authentication for {0}').replace('{0}', user.userid),
+    message: gettext("Locked 2nd factors can happen if the user's password was leaked. Are you sure you want to unlock the user?"),
+    cancel: { flat: true, label: gettext('Cancel') },
+    ok: { flat: true, label: gettext('Confirm'), color: 'primary' },
+    persistent: true,
+  }).onOk(() => void unlockSelectedUserTfa());
 }
 
 watch(createDialogVisible, (visible) => {
@@ -451,6 +504,7 @@ watch(passwordDialogVisible, (visible) => {
 onMounted(() => {
   void loadUsersData();
 });
+defineExpose({ reload: loadUsersData });
 </script>
 
 <template>
@@ -474,6 +528,7 @@ onMounted(() => {
         :loading="loading"
         :no-data-label="gettext('no record can be found')"
         @row-click="rowClick"
+        @row-dblclick="() => canEdit && openCreateDialog('edit')"
       >
         <template #top>
           <div class="q-gutter-sm">
@@ -507,6 +562,18 @@ onMounted(() => {
               :disable="!canChangePassword"
               :label="gettext('Password')"
               @click="openPasswordDialog"
+            />
+            <q-btn no-caps outline size="12px" class="u-button" :color="selectedUser ? 'primary' : 'grey'" :disable="!selectedUser" :label="gettext('Permissions')" @click="openGrantedPermissions" />
+            <q-btn
+              v-if="canModifyUsers"
+              no-caps
+              outline
+              size="12px"
+              class="u-button"
+              :color="canUnlockTfa ? 'primary' : 'grey'"
+              :disable="!canUnlockTfa"
+              :label="gettext('Unlock TFA')"
+              @click="confirmUnlockSelectedUserTfa"
             />
             <q-btn
               v-if="canModifyUsers"
@@ -652,6 +719,7 @@ onMounted(() => {
               <div class="col">
                 <q-select
                   v-model="formData.groups"
+                  multiple
                   dense
                   clearable
                   option-value="groupid"
@@ -729,6 +797,7 @@ onMounted(() => {
                 <q-input
                   v-model="formData.keys"
                   dense
+                  :disable="formData.action === 'edit' && legacyKeysLocked"
                   :label="gettext('Key IDs')"
                   class="q-field--with-bottom"
                 />
@@ -780,6 +849,18 @@ onMounted(() => {
         <q-card-section class="q-pa-none u-hidden-error">
           <div class="u-border q-ma-sm q-pa-md">
             <q-input
+              v-if="session.userid !== 'root@pam'"
+              ref="passwordDialogCurrentRef"
+              v-model="passwordForm.currentPassword"
+              dense
+              type="password"
+              :label="`${gettext('Your Current Password')} *`"
+              :rules="[(value: string) => value ? true : gettext('This field is required')]"
+            />
+            <div v-if="selectedUser?.['realm-type'] === 'pam'" class="text-caption text-grey-7 q-mb-sm">
+              {{ gettext('For the PAM realm, this applies only to the connected node.') }}
+            </div>
+            <q-input
               ref="passwordDialogPasswordRef"
               v-model="passwordForm.password"
               dense
@@ -816,6 +897,7 @@ onMounted(() => {
         </q-card-actions>
       </q-card>
     </q-dialog>
+    <GrantedPermissionsDialog v-model="permissionsDialogVisible" :userid="selectedUser?.userid || ''" />
   </q-card>
 </template>
 

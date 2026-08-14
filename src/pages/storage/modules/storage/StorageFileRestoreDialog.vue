@@ -7,7 +7,7 @@ import { listStorageBackupFiles } from '@/api/storageContent';
 import { gettext } from '@/locale';
 import { formatBytes, textValue, timestampToTime } from '@/utils/pveFormat';
 const model = defineModel<boolean>({ required: true });
-const props = defineProps<{ storage: string; volume: string; vmArchive?: boolean }>();
+const props = defineProps<{ storage: string; volume: string }>();
 const loading = ref(false); const rows = shallowRef<PveRecord[]>([]); const selected = ref<PveRecord[]>([]); const currentPath = ref('');
 const columns = computed<QTableColumn<PveRecord>[]>(() => [
   { name: 'text', label: gettext('Name'), align: 'left', field: (row) => textValue(row.text, '-'), sortable: true },
@@ -17,7 +17,7 @@ const columns = computed<QTableColumn<PveRecord>[]>(() => [
 ]);
 async function load(filepath = currentPath.value) { if (!props.storage || !props.volume) return; loading.value = true; try { rows.value = (await listStorageBackupFiles(props.storage, props.volume, filepath)).data || []; selected.value = []; currentPath.value = filepath; } finally { loading.value = false; } }
 function openRow(_: Event, row: PveRecord) { if (textValue(row.type) === 'd') void load(textValue(row.filepath)); else selected.value = [row]; }
-function download(tar = false) { const row = selected.value[0]; if (!row) return; const query = new URLSearchParams({ volume: props.volume, filepath: textValue(row.filepath), ...(props.vmArchive ? { archive: 'all' } : {}), ...(tar ? { tar: '1' } : {}) }); window.open(`/api2/json/nodes/localhost/storage/${encodeURIComponent(props.storage)}/file-restore/download?${query.toString()}`, '_blank', 'noopener'); }
+function download(tar = false) { const row = selected.value[0]; if (!row) return; const query = new URLSearchParams({ volume: props.volume, filepath: textValue(row.filepath), ...(tar ? { tar: '1' } : {}) }); window.open(`/api2/json/nodes/localhost/storage/${encodeURIComponent(props.storage)}/file-restore/download?${query.toString()}`, '_blank', 'noopener'); }
 function up() { const encoded = currentPath.value; if (!encoded) return; try { const decoded = atob(encoded); const parent = decoded.replace(/\/?[^/]+\/?$/, '') || '/'; void load(btoa(parent)); } catch { void load(''); } }
 watch(model, (visible) => { if (visible) { currentPath.value = ''; void load(''); } });
 </script>

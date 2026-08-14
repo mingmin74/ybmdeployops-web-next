@@ -59,3 +59,13 @@ export function getEnabledAccessUsers() {
     notifyOnError: true,
   });
 }
+
+export type GrantedPermissions = Record<string, Record<string, number>>;
+
+export function getGrantedPermissions(userid: string) {
+  return request<GrantedPermissions>('/api2/json/access/permissions', {
+    method: 'GET',
+    params: { userid },
+    notifyOnError: true,
+  });
+}

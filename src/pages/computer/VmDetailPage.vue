@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, shallowRef } from 'vue';
+import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getVmConfig, getVmCurrent } from '@/api/overview';
 import { getVmSpiceProxy, runVmPowerCommand, type VmPowerCommand, type VmResource } from '@/api/vm';
@@ -52,11 +52,12 @@ const taskTitle = shallowRef('');
 const powerCommandLoading = shallowRef(false);
 const operationDialogVisible = shallowRef(false);
 const operation = shallowRef<'migrate' | 'clone' | 'delete' | 'template'>();
+const consoleKey = shallowRef(0);
 
 const name = computed(() => decodeVmName(current.value.name || config.value.name) || vmid.value);
 const status = computed(() => textValue(current.value.status) || 'unknown');
 const consoleUrl = computed(() => {
-  if (!node.value || !vmid.value) return '';
+  if (tab.value !== 'console' || !node.value || !vmid.value) return '';
   const params = new URLSearchParams({
     console: 'kvm',
     novnc: '1',
@@ -68,9 +69,11 @@ const consoleUrl = computed(() => {
   });
   return `/?${params.toString()}`;
 });
-const canSpice = computed(() => Boolean(config.value.spice));
-const canXterm = computed(() => Boolean(config.value.serial));
-const isTemplate = computed(() => Boolean(config.value.template));
+const qmpStatus = computed(() => textValue(current.value.qmpstatus));
+const lock = computed(() => textValue(current.value.lock));
+const canSpice = computed(() => Boolean(current.value.spice));
+const canXterm = computed(() => Boolean(current.value.serial));
+const isTemplate = computed(() => Boolean(current.value.template || config.value.template));
 const vmCaps = computed(
   () => (session.caps as unknown as { vms?: Record<string, unknown> }).vms || {},
 );
@@ -92,11 +95,18 @@ const canViewSnapshots = computed(
 const canViewFirewall = computed(() => Boolean(vmCaps.value['VM.Audit']));
 const canManagePermissions = computed(() => Boolean(vmCaps.value['Permissions.Modify']));
 const canPowerManage = computed(() => Boolean(vmCaps.value['VM.PowerMgmt']) && !isTemplate.value);
-const canStart = computed(() => canPowerManage.value && status.value === 'stopped');
+const resumeState = computed(
+  () =>
+    ['prelaunch', 'paused', 'suspended'].includes(qmpStatus.value) || lock.value === 'suspended',
+);
+const guestRunning = computed(
+  () => status.value === 'running' && !['shutdown', 'prelaunch'].includes(qmpStatus.value),
+);
+const canStart = computed(() => canPowerManage.value && !resumeState.value && !guestRunning.value);
 const canShutdown = computed(() => canPowerManage.value && status.value === 'running');
 const canStop = computed(() => canPowerManage.value && status.value !== 'stopped');
 const canSuspend = computed(() => canPowerManage.value && status.value === 'running');
-const canResume = computed(() => canPowerManage.value && status.value === 'suspended');
+const canResume = computed(() => canPowerManage.value && resumeState.value);
 const canMigrate = computed(() => Boolean(vmCaps.value['VM.Migrate']) && !isTemplate.value);
 const canClone = computed(() => Boolean(vmCaps.value['VM.Clone']));
 const canDelete = computed(() => Boolean(vmCaps.value['VM.Allocate']));
@@ -147,6 +157,12 @@ async function reload() {
   } finally {
     loading.value = false;
   }
+}
+
+async function reloadCurrent() {
+  if (!node.value || !vmid.value) return;
+  const response = await getVmCurrent(node.value, vmid.value);
+  current.value = response.data || {};
 }
 
 async function runPowerCommand(command: VmPowerCommand, data?: Record<string, unknown>) {
@@ -201,6 +217,10 @@ function openConsole(type: 'noVNC' | 'xterm.js') {
   );
 }
 
+function openDefaultConsole() {
+  openConsole('noVNC');
+}
+
 async function downloadSpice() {
   loading.value = true;
   try {
@@ -223,8 +243,14 @@ async function downloadSpice() {
 onMounted(() => {
   void reload();
   refreshTimer.value = window.setInterval(() => {
-    void reload();
-  }, 10_000);
+    void reloadCurrent();
+  }, 1_000);
+});
+
+watch(qmpStatus, (nextStatus, previousStatus) => {
+  if (['prelaunch', 'stopped', 'suspended'].includes(previousStatus) && nextStatus === 'running') {
+    consoleKey.value += 1;
+  }
 });
 
 onUnmounted(() => {
@@ -269,7 +295,12 @@ onUnmounted(() => {
             :disable="!canPowerManage || powerCommandLoading"
           >
             <q-list dense>
-              <q-item v-close-popup clickable :disable="!canStart" @click="runPowerCommand('start')"
+              <q-item
+                v-if="!resumeState"
+                v-close-popup
+                clickable
+                :disable="!canStart"
+                @click="runPowerCommand('start')"
                 ><q-item-section>{{ gettext('Start') }}</q-item-section></q-item
               >
               <q-item
@@ -316,6 +347,7 @@ onUnmounted(() => {
             </q-list>
           </q-btn-dropdown>
           <q-btn-dropdown
+            split
             no-caps
             outline
             size="12px"
@@ -323,6 +355,7 @@ onUnmounted(() => {
             class="u-button"
             :label="gettext('Console')"
             :disable="!canViewConsole || powerCommandLoading"
+            @click="openDefaultConsole"
           >
             <q-list dense>
               <q-item v-close-popup clickable @click="openConsole('noVNC')"
@@ -441,11 +474,18 @@ onUnmounted(() => {
       <q-separator />
       <q-tab-panels v-model="tab" animated>
         <q-tab-panel name="summary" class="q-pa-none">
-          <OverviewPage :fixed-node="node" :fixed-vmid="vmid" hide-vm-selector />
+          <OverviewPage
+            :fixed-node="node"
+            :fixed-vmid="vmid"
+            :current-status="current"
+            :template="isTemplate"
+            hide-vm-selector
+          />
         </q-tab-panel>
         <q-tab-panel v-if="canViewConsole" name="console" class="q-pa-none">
           <iframe
             v-if="consoleUrl"
+            :key="consoleKey"
             :src="consoleUrl"
             class="vm-console"
             frameborder="0"

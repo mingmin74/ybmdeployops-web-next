@@ -6,6 +6,7 @@ import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
 import type { HardwareRow } from '../types';
+import { parseQemuDrive, printQemuDrive, type QemuDrive } from '../vmHardwareUtils';
 
 type MediaType = 'iso' | 'cdrom' | 'none';
 
@@ -19,11 +20,10 @@ const form = reactive<{ mediaType: MediaType; storage: string; volid: string }>(
   volid: '',
 });
 
-function parseCdrom(value: unknown): { mediaType: MediaType; storage: string; volid: string } {
-  const raw = textValue(value);
-  if (raw === 'cdrom,media=cdrom') return { mediaType: 'cdrom', storage: '', volid: '' };
-  if (raw === 'none,media=cdrom') return { mediaType: 'none', storage: '', volid: '' };
-  const volid = raw.split(',')[0] || '';
+function parseCdrom(drive: QemuDrive): { mediaType: MediaType; storage: string; volid: string } {
+  const volid = drive.file;
+  if (volid === 'cdrom') return { mediaType: 'cdrom', storage: '', volid: '' };
+  if (volid === 'none') return { mediaType: 'none', storage: '', volid: '' };
   return {
     mediaType: 'iso',
     storage: volid.includes(':') ? volid.split(':')[0] || '' : '',
@@ -31,7 +31,8 @@ function parseCdrom(value: unknown): { mediaType: MediaType; storage: string; vo
   };
 }
 
-Object.assign(form, parseCdrom(config.value[device.key]));
+const drive = parseQemuDrive(config.value[device.key]);
+Object.assign(form, parseCdrom(drive));
 
 const storageOptions = computed(() =>
   storageRows.value
@@ -73,9 +74,9 @@ async function loadIsoImages(selectFirst = false) {
 }
 
 function cdromValue() {
-  if (form.mediaType === 'cdrom') return 'cdrom,media=cdrom';
-  if (form.mediaType === 'none') return 'none,media=cdrom';
-  return `${form.volid},media=cdrom`;
+  drive.file = form.mediaType === 'iso' ? form.volid : form.mediaType;
+  drive.media = 'cdrom';
+  return printQemuDrive(drive);
 }
 
 async function save() {

@@ -3,6 +3,7 @@ export type MenuItem = {
   path?: string;
   icon: string;
   children?: MenuItem[];
+  requiresDcCap?: string;
 };
 
 export const menuItems: MenuItem[] = [
@@ -44,9 +45,13 @@ export const menuItems: MenuItem[] = [
     titleKey: 'System',
     icon: 'settings',
     children: [
-      { titleKey: 'Users', path: '/system/users', icon: 'group' },
-      { titleKey: 'Permissions', path: '/system/permissions', icon: 'admin_panel_settings' },
-      { titleKey: 'Pools', path: '/system/pools', icon: 'folder_shared' },
+      {
+        titleKey: 'Permissions',
+        path: '/system/permissions',
+        icon: 'admin_panel_settings',
+        requiresDcCap: 'Sys.Audit',
+      },
+      { titleKey: 'Realm Sync Job', path: '/system/realm-sync-jobs', icon: 'sync', requiresDcCap: 'Sys.Audit' },
       { titleKey: 'Service', path: '/system/service', icon: 'miscellaneous_services' },
       { titleKey: 'Firewall', path: '/system/firewall', icon: 'security' },
       {

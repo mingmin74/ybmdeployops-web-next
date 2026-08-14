@@ -4,21 +4,19 @@ import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
 import type { HardwareRow } from '../types';
+import { allowedScsiControllers, getGuestArchitecture } from '../vmHardwareUtils';
 
 const { device } = defineProps<{ device: HardwareRow }>();
 const { config, canEditRow, updateConfig } = useVmHardwareContext();
 const form = reactive({
   scsihw: textValue(config.value.scsihw),
 });
-const scsiOptions = computed(() => [
-  { label: gettext('Default'), value: '' },
-  { label: 'VirtIO SCSI single', value: 'virtio-scsi-single' },
-  { label: 'VirtIO SCSI', value: 'virtio-scsi-pci' },
-  { label: 'LSI 53C895A', value: 'lsi' },
-  { label: 'LSI 53C810', value: 'lsi53c810' },
-  { label: 'MegaRAID SAS 8708EM2', value: 'megasas' },
-  { label: 'VMware PVSCSI', value: 'pvscsi' },
-]);
+const scsiOptions = computed(() =>
+  allowedScsiControllers(getGuestArchitecture(config.value)).map((option) => ({
+    label: option.localize ? gettext(option.label) : option.label,
+    value: option.value,
+  })),
+);
 
 async function save() {
   if (!canEditRow(device)) return;
