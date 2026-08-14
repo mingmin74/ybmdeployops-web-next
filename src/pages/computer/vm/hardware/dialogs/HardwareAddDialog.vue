@@ -105,6 +105,9 @@ const {
   notifyTask,
   notifyUpdated,
 } = useVmHardwareContext();
+const serialConfig = shallowRef<PveRecord | null>(null);
+const serialDigest = shallowRef('');
+const serialConfigLoaded = shallowRef(false);
 const openedConfig = shallowRef<PveRecord | null>(null);
 const openedDigest = shallowRef('');
 const usbConfig = shallowRef<PveRecord | null>(null);
@@ -124,6 +127,7 @@ let dialogSession = 0;
 let existingVolumeRequest = 0;
 let cdromConfigSession = 0;
 let networkConfigSession = 0;
+let serialConfigSession = 0;
 const addDiskFormKey = shallowRef(0);
 const addCdromFormKey = shallowRef(0);
 const addDiskAdvanced = shallowRef(false);
@@ -276,7 +280,13 @@ const canAdd = computed(() => {
     return Boolean(
       passthroughConfigLoaded.value && pciKeyAvailable.value && pciValue() && pciIdsValid(),
     );
-  if (form.kind === 'serial') return Boolean(serialIdValid.value && serialKeyAvailable.value);
+  if (form.kind === 'serial')
+    return Boolean(
+      hasVmCapability('VM.Config.HWType') &&
+        serialConfigLoaded.value &&
+        serialIdValid.value &&
+        serialKeyAvailable.value,
+    );
   if (form.kind === 'audio') return Boolean(audioKeyAvailable.value && audioValue());
   return true;
 });
@@ -289,6 +299,7 @@ const cdromBusLimits: Record<CdromBus, number> = {
 
 const activeUsbConfig = computed(() => usbConfig.value || config.value);
 const activePciConfig = computed(() => pciConfig.value || config.value);
+const activeSerialConfig = computed(() => serialConfig.value || config.value);
 function nextFreePassthroughKey(prefix: 'usb' | 'hostpci', limit: number, source: PveRecord) {
   for (let index = 0; index < limit; index += 1) {
     const key = `${prefix}${index}`;
@@ -306,7 +317,12 @@ const serialIdValid = computed(
   () => Number.isInteger(form.serialId) && form.serialId >= 0 && form.serialId <= 3,
 );
 const serialKey = computed(() => `serial${form.serialId}`);
-const serialKeyAvailable = computed(() => serialIdValid.value && !config.value[serialKey.value]);
+const serialKeyAvailable = computed(
+  () =>
+    serialIdValid.value &&
+    activeSerialConfig.value[serialKey.value] === undefined &&
+    !pendingByKey.value[serialKey.value],
+);
 const audioKeyAvailable = computed(() => config.value.audio0 === undefined);
 
 function nextFreeCdromSlot(preferredBusses: CdromBus[] = ['ide', 'scsi', 'sata']) {
@@ -417,14 +433,15 @@ function resetPciDefaults() {
 
 function nextFreeSerialId() {
   for (let id = 0; id < 4; id += 1) {
-    if (config.value[`serial${id}`] === undefined) return id;
+    const key = `serial${id}`;
+    if (activeSerialConfig.value[key] === undefined && !pendingByKey.value[key]) return id;
   }
-  return 0;
+  return undefined;
 }
 
 function resetSerialDefaults() {
   Object.assign(form, {
-    serialId: nextFreeSerialId(),
+    serialId: nextFreeSerialId() ?? -1,
   });
 }
 
@@ -460,7 +477,7 @@ watch(visible, (isVisible) => {
     resetPciDefaults();
     void initializePci();
   }
-  if (initialKind === 'serial') resetSerialDefaults();
+  if (initialKind === 'serial') void initializeSerial();
   if (initialKind === 'audio') resetAudioDefaults();
 });
 
@@ -514,6 +531,26 @@ async function initializePci() {
   pciConfig.value = null;
   pciDigest.value = '';
   await initializePassthrough('pci');
+}
+
+async function initializeSerial() {
+  if (!hasVmCapability('VM.Config.HWType')) return;
+  const session = ++serialConfigSession;
+  serialConfigLoaded.value = false;
+  serialConfig.value = null;
+  serialDigest.value = '';
+  form.serialId = -1;
+  loading.value = true;
+  try {
+    const response = await getVmConfig(node.value, vmid.value);
+    if (session !== serialConfigSession || !visible.value || !response.data) return;
+    serialConfig.value = response.data;
+    serialDigest.value = textValue(response.data.digest);
+    resetSerialDefaults();
+    serialConfigLoaded.value = true;
+  } finally {
+    if (session === serialConfigSession) loading.value = false;
+  }
 }
 
 async function initializeCdrom() {
@@ -823,6 +860,14 @@ async function addDevice() {
         digest: form.kind === 'usb' ? usbDigest.value : pciDigest.value,
         [key]: value,
       });
+      notifyUpdated();
+    } finally {
+      loading.value = false;
+    }
+  } else if (form.kind === 'serial') {
+    loading.value = true;
+    try {
+      await updateVmConfig(node.value, vmid.value, { digest: serialDigest.value, [key]: value });
       notifyUpdated();
     } finally {
       loading.value = false;

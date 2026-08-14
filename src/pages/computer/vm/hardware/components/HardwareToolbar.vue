@@ -11,6 +11,8 @@ const props = withDefaults(
     canAddNetwork?: boolean;
     canAddUsb?: boolean;
     canAddPci?: boolean;
+    canAddSerial?: boolean;
+    canAddCloudInit?: boolean;
     canAddEfi?: boolean;
     canAddTpm?: boolean;
     guestType?: 'qemu' | 'lxc';
@@ -21,6 +23,8 @@ const props = withDefaults(
     canAddNetwork: true,
     canAddUsb: true,
     canAddPci: true,
+    canAddSerial: true,
+    canAddCloudInit: true,
     canAddEfi: true,
     canAddTpm: true,
   },
@@ -64,8 +68,16 @@ const qemuAddItems = computed<{ label: string; action: () => void; disable?: boo
   },
   { label: gettext('USB Device'), action: () => emit('add', 'usb'), disable: !props.canAddUsb },
   { label: gettext('PCI Device'), action: () => emit('add', 'pci'), disable: !props.canAddPci },
-  { label: gettext('Serial Port'), action: () => emit('add', 'serial') },
-  { label: gettext('CloudInit Drive'), action: () => emit('addCloudInit') },
+  {
+    label: gettext('Serial Port'),
+    action: () => emit('add', 'serial'),
+    disable: !props.canAddSerial,
+  },
+  {
+    label: gettext('CloudInit Drive'),
+    action: () => emit('addCloudInit'),
+    disable: !props.canAddCloudInit,
+  },
   { label: gettext('Audio Device'), action: () => emit('add', 'audio') },
   { label: gettext('VirtIO RNG'), action: () => emit('addRng') },
   { label: gettext('Virtiofs'), action: () => emit('addVirtiofs') },

@@ -534,6 +534,7 @@ function openAddHardware(kind: 'disk' | 'cdrom' | 'net' | 'usb' | 'pci' | 'seria
     return;
   if (kind === 'usb' && !canAddUsb.value) return;
   if (kind === 'pci' && !canAddPci.value) return;
+  if (kind === 'serial' && !canAddSerial.value) return;
   addInitialKind.value = kind;
   addVisible.value = true;
 }
@@ -567,8 +568,9 @@ const networkDeviceCount = computed(() => {
 const pendingHardwareKeys = computed(
   () => new Set(pendingRows.value.map((row) => textValue(row.key))),
 );
-function hardwareDeviceCount(prefix: 'usb' | 'hostpci') {
-  const pattern = prefix === 'usb' ? /^usb\d+$/ : /^hostpci\d+$/;
+function hardwareDeviceCount(prefix: 'usb' | 'hostpci' | 'serial') {
+  const pattern =
+    prefix === 'usb' ? /^usb\d+$/ : prefix === 'hostpci' ? /^hostpci\d+$/ : /^serial\d+$/;
   return new Set(
     [...Object.keys(currentConfig.value), ...pendingHardwareKeys.value].filter((key) =>
       pattern.test(key),
@@ -588,6 +590,29 @@ const canAddUsb = computed(
 );
 const canAddPci = computed(
   () => hasVmCapability('VM.Config.HWType') && hardwareDeviceCount('hostpci') < 16,
+);
+const canAddSerial = computed(
+  () => hasVmCapability('VM.Config.HWType') && hardwareDeviceCount('serial') < 4,
+);
+function isCloudInitDriveValue(value: unknown) {
+  return /vm-.*-cloudinit/.test(textValue(value));
+}
+const hasCloudInitDrive = computed(() =>
+  [...Object.entries(currentConfig.value), ...Object.entries(pendingByKey.value)].some(
+    ([key, value]) =>
+      /^(ide|scsi|sata|virtio)\d+$/.test(key) &&
+      (isCloudInitDriveValue(value) ||
+        (typeof value === 'object' &&
+          value !== null &&
+          (isCloudInitDriveValue((value as PveRecord).value) ||
+            isCloudInitDriveValue((value as PveRecord).pending)))),
+  ),
+);
+const canAddCloudInit = computed(
+  () =>
+    hasVmCapability('VM.Config.CDROM') &&
+    hasVmCapability('VM.Config.Cloudinit') &&
+    !hasCloudInitDrive.value,
 );
 const vmHardwareContext = useVmHardware({
   node: computed(() => props.node),
@@ -622,12 +647,14 @@ provide(vmHardwareKey, vmHardwareContext);
       :can-add-network="hasVmCapability('VM.Config.Network') && networkDeviceCount < 32"
       :can-add-usb="canAddUsb"
       :can-add-pci="canAddPci"
+      :can-add-serial="canAddSerial"
+      :can-add-cloud-init="canAddCloudInit"
       :can-add-efi="canAddEfi"
       :can-add-tpm="canAddTpm"
       :guest-type="props.guestType"
       @add="openAddHardware"
       @add-firmware="openFirmware"
-      @add-cloud-init="cloudInitVisible = true"
+      @add-cloud-init="canAddCloudInit && (cloudInitVisible = true)"
       @add-rng="rngVisible = true"
       @add-virtiofs="virtiofsVisible = true"
       @import-disk="openImportDisk"
@@ -701,7 +728,7 @@ provide(vmHardwareKey, vmHardwareContext);
       :can-add-firmware="firmwareKind === 'efi' ? canAddEfi : canAddTpm"
       :uses-efi-bios="usesEfiBios"
     />
-    <HardwareCloudInitDriveDialog v-model="cloudInitVisible" />
+    <HardwareCloudInitDriveDialog v-model="cloudInitVisible" :can-add-cloud-init="canAddCloudInit" />
     <HardwareRngDialog v-model="rngVisible" />
     <HardwareVirtiofsDialog v-model="virtiofsVisible" />
     <HardwareResizeDiskDialog v-model="resizeVisible" />

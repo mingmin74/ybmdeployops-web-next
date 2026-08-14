@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import type { QTableColumn } from 'quasar';
 import { computed, reactive, shallowRef, watch } from 'vue';
+import { getVmConfig, updateVmConfig } from '@/api/overview';
 import { getNodeStorage } from '@/api/storageContent';
-import type { PveRecord } from '@/api/resources';
+import { getNodes, type PveRecord } from '@/api/resources';
 import SelectTable from '@/components/SelectTable.vue';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 import { formatBytes, textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
+import { allowedDiskBusses, diskBusLimits } from '../utils/diskController';
 
 type CloudInitBus = 'ide' | 'sata' | 'scsi';
 
 const visible = defineModel<boolean>({ default: false });
+const { canAddCloudInit = false } = defineProps<{ canAddCloudInit?: boolean }>();
 const form = reactive<{
   bus: CloudInitBus;
   deviceId: number;
@@ -25,19 +28,23 @@ const form = reactive<{
 });
 const imageStorageRows = shallowRef<PveRecord[]>([]);
 const storageLoading = shallowRef(false);
-const { config, hasVmCapability, loading, node, updateConfig } = useVmHardwareContext();
+const cloudInitConfig = shallowRef<PveRecord | null>(null);
+const cloudInitDigest = shallowRef('');
+const cloudInitConfigLoaded = shallowRef(false);
+const hostArch = shallowRef('x86_64');
+let cloudInitConfigSession = 0;
+const { config, hasVmCapability, loading, node, vmid, pendingByKey, notifyUpdated } =
+  useVmHardwareContext();
 
-const busOptions = [
-  { label: 'IDE', value: 'ide' },
-  { label: 'SATA', value: 'sata' },
-  { label: 'SCSI', value: 'scsi' },
-];
-
-const busMaxIds: Record<CloudInitBus, number> = {
-  ide: 3,
-  sata: 5,
-  scsi: 13,
-};
+const activeConfig = computed(() => cloudInitConfig.value || config.value);
+const allowedBusses = computed(() =>
+  allowedDiskBusses(activeConfig.value, hostArch.value).filter(
+    (bus): bus is CloudInitBus => bus !== 'virtio',
+  ),
+);
+const busOptions = computed(() =>
+  allowedBusses.value.map((value) => ({ label: value.toUpperCase(), value })),
+);
 
 const storageColumns: QTableColumn<PveRecord>[] = [
   {
@@ -76,24 +83,37 @@ const diskFormatOptions = computed(() =>
 );
 const storageFormats = computed(() => storageFormatInfo(form.storage));
 const diskFormatDisabled = computed(() => diskFormatOptions.value.length <= 1);
-const deviceMax = computed(() => busMaxIds[form.bus]);
+const deviceMax = computed(() => diskBusLimits[form.bus] - 1);
 const deviceIdValid = computed(
   () => Number.isInteger(form.deviceId) && form.deviceId >= 0 && form.deviceId <= deviceMax.value,
 );
 const deviceKey = computed(() => `${form.bus}${form.deviceId}`);
 const deviceInUse = computed(
-  () => deviceIdValid.value && config.value[deviceKey.value] !== undefined,
+  () =>
+    deviceIdValid.value &&
+    (activeConfig.value[deviceKey.value] !== undefined || Boolean(pendingByKey.value[deviceKey.value])),
 );
+function isCloudInitValue(value: unknown) {
+  return /vm-.*-cloudinit/.test(textValue(value));
+}
 const hasCloudInitDrive = computed(() =>
-  Object.entries(config.value).some(
-    ([key, value]) => /^(ide|scsi|sata)\d+$/.test(key) && textValue(value).includes('cloudinit'),
+  [...Object.entries(activeConfig.value), ...Object.entries(pendingByKey.value)].some(
+    ([key, value]) =>
+      /^(ide|scsi|sata|virtio)\d+$/.test(key) &&
+      (isCloudInitValue(value) ||
+        (typeof value === 'object' &&
+          value !== null &&
+          (isCloudInitValue((value as PveRecord).value) ||
+            isCloudInitValue((value as PveRecord).pending)))),
   ),
 );
 const dialogLoading = computed(() => loading.value || storageLoading.value);
 const canAdd = computed(
   () =>
+    canAddCloudInit &&
     hasVmCapability('VM.Config.CDROM') &&
     hasVmCapability('VM.Config.Cloudinit') &&
+    cloudInitConfigLoaded.value &&
     !hasCloudInitDrive.value &&
     Boolean(form.storage.trim()) &&
     deviceIdValid.value &&
@@ -143,22 +163,26 @@ function canSelectStorage(row: PveRecord) {
   return row.avail === undefined || Number(row.avail) > 0;
 }
 
-function nextFreeDevice(preferredBusses: CloudInitBus[] = ['ide', 'scsi', 'sata']) {
-  if (preferredBusses.includes('ide') && config.value.ide2 === undefined) {
+function nextFreeDevice(preferredBusses = allowedBusses.value) {
+  if (preferredBusses.includes('ide') && activeConfig.value.ide2 === undefined) {
     return { bus: 'ide' as const, id: 2 };
   }
+  if (preferredBusses.includes('scsi') && activeConfig.value.scsi2 === undefined) {
+    return { bus: 'scsi' as const, id: 2 };
+  }
   for (const bus of preferredBusses) {
-    for (let id = 0; id <= busMaxIds[bus]; id += 1) {
-      if (config.value[`${bus}${id}`] === undefined) return { bus, id };
+    for (let id = 0; id < diskBusLimits[bus]; id += 1) {
+      const key = `${bus}${id}`;
+      if (activeConfig.value[key] === undefined && !pendingByKey.value[key]) return { bus, id };
     }
   }
-  return { bus: preferredBusses[0] || 'ide', id: 0 };
+  return undefined;
 }
 
 function resetDevice() {
   const slot = nextFreeDevice();
-  form.bus = slot.bus;
-  form.deviceId = slot.id;
+  form.bus = slot?.bus || allowedBusses.value[0] || 'scsi';
+  form.deviceId = slot?.id ?? -1;
 }
 
 function clampDeviceId() {
@@ -177,8 +201,6 @@ async function loadImageStorages() {
     imageStorageRows.value = [...(response.data || [])].sort((left, right) =>
       textValue(left.storage).localeCompare(textValue(right.storage)),
     );
-    const firstUsable = imageStorageRows.value.find(canSelectStorage);
-    form.storage = textValue(firstUsable?.storage);
     resetDiskFormat();
   } finally {
     storageLoading.value = false;
@@ -188,7 +210,7 @@ async function loadImageStorages() {
 watch(visible, (isVisible) => {
   if (!isVisible) return;
   Object.assign(form, { storage: '', format: 'raw' });
-  resetDevice();
+  void initializeCloudInit();
   void loadImageStorages();
 });
 
@@ -196,7 +218,7 @@ watch(
   () => form.bus,
   (bus) => {
     const slot = nextFreeDevice([bus]);
-    form.deviceId = slot.id;
+    form.deviceId = slot?.id ?? -1;
   },
 );
 
@@ -211,8 +233,44 @@ async function addCloudInitDrive() {
   if (!canAdd.value) return;
   const parts = [`${form.storage.trim()}:cloudinit`];
   if (!diskFormatDisabled.value && form.format) parts.push(`format=${form.format}`);
-  await updateConfig({ [deviceKey.value]: parts.join(',') });
-  visible.value = false;
+  loading.value = true;
+  try {
+    await updateVmConfig(node.value, vmid.value, {
+      digest: cloudInitDigest.value,
+      [deviceKey.value]: parts.join(','),
+    });
+    notifyUpdated();
+    visible.value = false;
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function initializeCloudInit() {
+  if (!hasVmCapability('VM.Config.CDROM') || !hasVmCapability('VM.Config.Cloudinit')) return;
+  const session = ++cloudInitConfigSession;
+  cloudInitConfigLoaded.value = false;
+  cloudInitConfig.value = null;
+  cloudInitDigest.value = '';
+  form.deviceId = -1;
+  loading.value = true;
+  try {
+    const [configResponse, nodesResponse] = await Promise.all([
+      getVmConfig(node.value, vmid.value),
+      getNodes(),
+    ]);
+    if (session !== cloudInitConfigSession || !visible.value || !configResponse.data) return;
+    cloudInitConfig.value = configResponse.data;
+    cloudInitDigest.value = textValue(configResponse.data.digest);
+    const selectedNode = nodesResponse.data?.find((item) => item.node === node.value) as
+      | PveRecord
+      | undefined;
+    hostArch.value = textValue(selectedNode?.['host-arch']) || 'x86_64';
+    resetDevice();
+    cloudInitConfigLoaded.value = true;
+  } finally {
+    if (session === cloudInitConfigSession) loading.value = false;
+  }
 }
 </script>
 
