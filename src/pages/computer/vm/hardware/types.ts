@@ -21,7 +21,8 @@ export type HardwareType =
   | 'rng'
   | 'efi'
   | 'tpm'
-  | 'cloudinit';
+  | 'cloudinit'
+  | 'vmstate';
 
 export type DevicePrefix =
   'scsi' | 'virtio' | 'sata' | 'ide' | 'net' | 'usb' | 'hostpci' | 'serial' | 'virtiofs';

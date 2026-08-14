@@ -162,6 +162,15 @@ function deviceRow(key: string, config: PveRecord, pending?: PveRecord): Hardwar
   if (key === 'rng0') {
     return { key, type: 'rng', name: gettext('VirtIO RNG'), value, editable: true };
   }
+  if (key === 'vmstate') {
+    return {
+      key,
+      type: 'vmstate',
+      name: gettext('Hibernation VM State'),
+      value,
+      editable: false,
+    };
+  }
   if (/^virtiofs\d+$/.test(key)) {
     return {
       key,
@@ -292,7 +301,7 @@ const rows = computed<HardwareRow[]>(() => {
     .filter(
       (key) =>
         /^(ide|scsi|sata|virtio|net|usb|hostpci|serial|virtiofs|unused)\d+$/.test(key) ||
-        ['efidisk0', 'tpmstate0', 'audio0', 'rng0'].includes(key)
+        ['efidisk0', 'tpmstate0', 'audio0', 'rng0', 'vmstate'].includes(key)
     )
     .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
     .map((key) => deviceRow(key, config, pendingByKey.value[key]))
@@ -331,6 +340,7 @@ function canRemoveRow(device: HardwareRow) {
     case 'rng':
       return hasVmCapability('VM.Config.HWType') || hasMappingCapability('Mapping.Use');
     case 'virtiofs':
+    case 'vmstate':
       return true;
     default:
       return false;
@@ -560,6 +570,9 @@ function removeDevice() {
     message: [
       gettext(device.type === 'disk' ? 'Are you sure you want to detach entry %s?' : 'Are you sure you want to remove entry %s?').replace('%s', device.name),
       ...(isUnusedDisk ? [gettext('This will permanently erase all data.')] : []),
+      ...(device.type === 'vmstate'
+        ? [gettext('The saved VM state will be permanently lost.')]
+        : []),
     ].join('<br>'),
     cancel: true,
     persistent: true,
