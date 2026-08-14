@@ -27,16 +27,18 @@ interface UseVmHardwareOptions {
 export function useVmHardware(options: UseVmHardwareOptions): VmHardwareContext {
   const digest = options.editDigest;
 
-  async function updateConfig(data: PveRecord, method: 'PUT' | 'POST' = 'PUT', taskTitle = '') {
+  async function updateConfig(
+    data: PveRecord,
+    method: 'PUT' | 'POST' = 'PUT',
+    taskTitle = '',
+    includeDigest = true,
+  ) {
     options.loading.value = true;
     try {
       const result = await updateVmConfig(
         options.node.value,
         options.vmid.value,
-        {
-          digest: digest.value,
-          ...data,
-        },
+        { ...(includeDigest ? { digest: digest.value } : {}), ...data },
         options.guestType.value,
         method,
       );

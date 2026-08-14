@@ -89,10 +89,19 @@ const selectedStorage = computed(() =>
   imageStorageRows.value.find((row) => textValue(row.storage) === form.storage),
 );
 const selectExisting = computed(() => Boolean(selectedStorage.value?.select_existing));
+const hasSelectedExistingVolume = computed(() =>
+  existingVolumes.value.some(
+    (row) => textValue(row.volid || row.text) === textValue(form.existingVolume),
+  ),
+);
 const diskFormatDisabled = computed(() => diskFormatOptions.value.length <= 1);
 const canAdd = computed(() => {
   return Boolean(
-    canAddFirmware && form.storage && selectedStorage.value && canSelectStorage(selectedStorage.value),
+    canAddFirmware &&
+      form.storage &&
+      selectedStorage.value &&
+      canSelectStorage(selectedStorage.value) &&
+      (!selectExisting.value || hasSelectedExistingVolume.value),
   );
 });
 
@@ -192,7 +201,7 @@ async function loadExistingVolumes() {
 async function addFirmware() {
   const key = kind === 'efi' ? 'efidisk0' : 'tpmstate0';
   if (!canAdd.value) return;
-  const volume = textValue(form.existingVolume).trim() || `${form.storage}:1`;
+  const volume = selectExisting.value ? form.existingVolume : `${form.storage}:1`;
   await updateConfig(
     {
       ...(kind === 'efi' ? { background_delay: 5 } : {}),
@@ -203,6 +212,7 @@ async function addFirmware() {
     },
     kind === 'efi' ? 'POST' : 'PUT',
     gettext(kind === 'efi' ? 'Add EFI Disk' : 'Add TPM State'),
+    false,
   );
   visible.value = false;
 }
@@ -242,8 +252,9 @@ async function addFirmware() {
               :display-value="form.existingVolume"
               :loading="existingVolumeLoading"
               :get-row-value="(row) => textValue(row.volid || row.text)"
-              :label="gettext('Existing disk image (optional)')"
-              clearable
+              :error="!hasSelectedExistingVolume"
+              :error-message="gettext('This field is required')"
+              :label="gettext('Existing disk image')"
             />
             <q-select
               v-model="form.format"
@@ -298,8 +309,9 @@ async function addFirmware() {
               :display-value="form.existingVolume"
               :loading="existingVolumeLoading"
               :get-row-value="(row) => textValue(row.volid || row.text)"
-              :label="gettext('Existing disk image (optional)')"
-              clearable
+              :error="!hasSelectedExistingVolume"
+              :error-message="gettext('This field is required')"
+              :label="gettext('Existing disk image')"
             />
             <q-select
               v-model="form.format"
