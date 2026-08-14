@@ -15,6 +15,7 @@ import {
 } from '@/api/resources';
 import { gettext } from '@/locale';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
+import UWindow from '@/components/UWindow.vue';
 
 const { embedded = false } = defineProps<{ embedded?: boolean }>();
 const loading = ref(false);
@@ -435,22 +436,18 @@ defineExpose({ reload });
   <q-dialog
     v-model="dialog"
     persistent
+    transition-show="scale"
+    transition-hide="scale"
   >
-    <q-card class="job-dialog">
-      <q-card-section class="row items-center bg-blue-8 text-grey-1 q-pa-sm">
-        <div class="text-weight-bold">{{ title }}</div>
-        <q-space />
-        <q-btn
-          v-close-popup
-          icon="close"
-          flat
-          dense
-        />
-      </q-card-section>
-      <q-card-section class="q-gutter-sm">
+    <UWindow
+      width="520px"
+      :title="title"
+    >
+      <div class="u-border q-ma-sm q-pa-md u-dense">
         <q-select
           v-model="form.realm"
           dense
+          options-dense
           emit-value
           map-options
           :disable="action === 'edit'"
@@ -458,24 +455,31 @@ defineExpose({ reload });
           option-label="realm"
           :options="ldapAdRealms"
           :label="`${gettext('Realm')} *`"
+          class="q-field--with-bottom"
         />
         <q-select
           v-model="form.schedule"
           dense
+          options-dense
           use-input
           fill-input
           hide-selected
           :disable="action === 'add' && !form.realm"
           :options="scheduleOptions"
           :label="`${gettext('Schedule')} *`"
+          class="q-field--with-bottom"
         />
-        <q-toggle
+        <q-checkbox
           v-model="form.enabled"
+          dense
+          right-label
+          color="primary"
           :label="gettext('Enable Job')"
         />
         <q-select
           v-model="form.scope"
           dense
+          options-dense
           emit-value
           map-options
           :disable="action === 'add' && !form.realm"
@@ -485,56 +489,66 @@ defineExpose({ reload });
             { label: gettext('Users and Groups'), value: 'both' },
           ]"
           :label="gettext('Scope')"
+          class="q-field--with-bottom"
         />
-        <q-toggle
+        <q-checkbox
           v-model="form.enableNew"
+          dense
+          right-label
+          color="primary"
           :disable="action === 'add' && !form.realm"
           :label="gettext('Enable New')"
         />
-        <q-list bordered>
-          <q-item-label header>{{ gettext('Remove Vanished Options') }}</q-item-label>
-          <q-item>
-            <q-checkbox
-              v-model="form.acl"
-              :label="gettext('ACL')"
-            />
-          </q-item>
-          <q-item>
-            <q-checkbox
-              v-model="form.entry"
-              :label="gettext('Entry')"
-            />
-          </q-item>
-          <q-item>
-            <q-checkbox
-              v-model="form.properties"
-              :label="gettext('Properties')"
-            />
-          </q-item>
-        </q-list>
+        <div class="text-sm text-grey-7 q-mt-sm q-mb-xs">
+          {{ gettext('Remove Vanished Options') }}
+        </div>
+        <q-checkbox
+          v-model="form.acl"
+          dense
+          right-label
+          color="primary"
+          :label="gettext('ACL')"
+        />
+        <q-checkbox
+          v-model="form.entry"
+          dense
+          right-label
+          color="primary"
+          :label="gettext('Entry')"
+        />
+        <q-checkbox
+          v-model="form.properties"
+          dense
+          right-label
+          color="primary"
+          :label="gettext('Properties')"
+        />
         <q-input
           v-model="form.comment"
           dense
           :label="gettext('Job Comment')"
+          class="q-field--with-bottom"
         />
         <q-inner-loading :showing="saving" />
-      </q-card-section>
-      <q-card-actions align="right">
+      </div>
+      <template #foot>
         <q-btn
           v-close-popup
           flat
           no-caps
+          size="12px"
           :label="gettext('Cancel')"
         />
         <q-btn
-          flat
           no-caps
-          color="primary"
+          flat
+          size="12px"
           :label="gettext('OK')"
+          class="bg-primary text-grey-1 u-button"
           @click="save"
         />
-      </q-card-actions>
-    </q-card>
+      </template>
+    </UWindow>
   </q-dialog>
   <TaskOutputDialog
     v-model="task.visible"
@@ -544,9 +558,3 @@ defineExpose({ reload });
     @finished="reload"
   />
 </template>
-<style scoped>
-.job-dialog {
-  width: 520px;
-  max-width: 95vw;
-}
-</style>
