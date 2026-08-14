@@ -27,13 +27,8 @@ type DriveForm = {
 
 const { device } = defineProps<{ device: HardwareRow }>();
 const { config, canEditRow, updateConfig } = useVmHardwareContext();
-const preservedKeys = new Set([
-  'size',
-  'format',
-  'media',
-  'serial',
-  'wwn',
-  'snapshot',
+const managedDriveKeys = new Set([
+  'volume',
   'backup',
   'replicate',
   'cache',
@@ -89,36 +84,51 @@ function parseDrive(value: unknown) {
   };
   const preserved: string[] = [];
   let hasDriveFile = false;
-  textValue(value)
-    .split(',')
-    .forEach((part) => {
-      if (!part) return;
-      const segments = part.split('=', 2);
-      const key = segments[0] || '';
-      const optionValue = segments[1];
-      if (!key) return;
-      if (optionValue === undefined) {
-        form.file = key;
-        hasDriveFile = true;
+  let malformed = false;
+  const seenKeys = new Set<string>();
+  const raw = textValue(value).trim();
+  raw.split(',').forEach((part) => {
+    if (!part) {
+      malformed = true;
+      return;
+    }
+    const separator = part.indexOf('=');
+    if (separator === -1) {
+      if (hasDriveFile) {
+        malformed = true;
         return;
       }
-      if (key === 'volume' && !form.file) {
+      form.file = part;
+      hasDriveFile = true;
+      return;
+    }
+    const key = part.slice(0, separator);
+    const optionValue = part.slice(separator + 1);
+    if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(key) || !optionValue || seenKeys.has(key)) {
+      malformed = true;
+      return;
+    }
+    seenKeys.add(key);
+    if (key === 'volume') {
+      if (hasDriveFile) malformed = true;
+      else {
         form.file = optionValue;
         hasDriveFile = true;
-      } else if (key === 'cache')
-        form.cache = optionValue === 'off' ? 'none' : optionValue || '__default__';
-      else if (key === 'discard') form.discard = optionValue === 'on' || parseEnabled(optionValue);
-      else if (key === 'iothread') form.iothread = parseEnabled(optionValue);
-      else if (key === 'ssd') form.ssd = parseEnabled(optionValue);
-      else if (key === 'ro') form.readOnly = parseEnabled(optionValue);
-      else if (key === 'backup') form.backup = parseEnabled(optionValue, true);
-      else if (key === 'replicate') form.skipReplication = !parseEnabled(optionValue, true);
-      else if (key === 'aio') form.aio = optionValue || '__default__';
-      else if (bandwidthKeys.includes(key as (typeof bandwidthKeys)[number]))
-        form[key as (typeof bandwidthKeys)[number]] = optionValue;
-      else if (!preservedKeys.has(key)) preserved.push(part);
-    });
-  return { form, preserved, malformed: Boolean(textValue(value).trim() && !hasDriveFile) };
+      }
+    } else if (key === 'cache') {
+      form.cache = optionValue === 'off' ? 'none' : optionValue || '__default__';
+    } else if (key === 'discard') form.discard = optionValue === 'on' || parseEnabled(optionValue);
+    else if (key === 'iothread') form.iothread = parseEnabled(optionValue);
+    else if (key === 'ssd') form.ssd = parseEnabled(optionValue);
+    else if (key === 'ro') form.readOnly = parseEnabled(optionValue);
+    else if (key === 'backup') form.backup = parseEnabled(optionValue, true);
+    else if (key === 'replicate') form.skipReplication = !parseEnabled(optionValue, true);
+    else if (key === 'aio') form.aio = optionValue || '__default__';
+    else if (bandwidthKeys.includes(key as (typeof bandwidthKeys)[number])) {
+      form[key as (typeof bandwidthKeys)[number]] = optionValue;
+    } else if (!managedDriveKeys.has(key)) preserved.push(part);
+  });
+  return { form, preserved, malformed: Boolean(raw && (!hasDriveFile || malformed)) };
 }
 
 const parsedDrive = parseDrive(config.value[device.key]);
@@ -194,7 +204,11 @@ function diskValue() {
 
 async function save() {
   if (!editable.value || !canSave.value) return;
-  await updateConfig({ [device.key]: diskValue(), background_delay: 5 });
+  await updateConfig(
+    { [device.key]: diskValue(), background_delay: 5 },
+    'POST',
+    gettext('Update disk'),
+  );
 }
 </script>
 

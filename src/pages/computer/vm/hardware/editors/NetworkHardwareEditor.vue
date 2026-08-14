@@ -4,10 +4,11 @@ import { getNodeNetwork } from '@/api/host';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
+import type { PveRecord } from '@/api/resources';
 import type { HardwareRow } from '../types';
 
 const { device } = defineProps<{ device: HardwareRow }>();
-const { config, canEditRow, updateConfig } = useVmHardwareContext();
+const { config, node, canEditRow, updateConfig } = useVmHardwareContext();
 const networkModels = [
   'ne2k_pci',
   'e1000',
@@ -130,8 +131,7 @@ function networkValue() {
 }
 
 async function loadBridges() {
-  bridgeRows.value = (await getNodeNetwork(node.value)).data || [];
-  bridgeRows.value = bridgeRows.value.filter((row) => textValue(row.type) === 'bridge');
+  bridgeRows.value = (await getNodeNetwork(node.value, { type: 'any_bridge' })).data || [];
 }
 
 async function save() {

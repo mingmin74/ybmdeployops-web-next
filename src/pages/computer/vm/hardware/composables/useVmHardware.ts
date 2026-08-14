@@ -1,5 +1,5 @@
 import { computed, type ComputedRef, type Ref } from 'vue';
-import { getVmConfig, updateVmConfig } from '@/api/overview';
+import { updateVmConfig } from '@/api/overview';
 import type { PveRecord } from '@/api/resources';
 import { textValue } from '@/utils/pveFormat';
 import type { VmHardwareContext } from '../context/vmHardwareContext';
@@ -19,31 +19,29 @@ interface UseVmHardwareOptions {
   isPendingDelete: (key: string) => boolean;
   pendingValue: (key: string) => string;
   notifyUpdated: () => void;
+  notifyTask: (upid: string, title: string) => void;
   nextDeviceKey: (prefix: DevicePrefix, limit?: number) => string;
 }
 
 export function useVmHardware(options: UseVmHardwareOptions): VmHardwareContext {
   const digest = computed(() => textValue(options.config.value.digest));
 
-  async function updateConfig(data: PveRecord) {
+  async function updateConfig(data: PveRecord, method: 'PUT' | 'POST' = 'PUT', taskTitle = '') {
     options.loading.value = true;
     try {
-      const latest = await getVmConfig(
-        options.node.value,
-        options.vmid.value,
-        options.guestType.value,
-      );
-      const latestConfig = latest.data || options.config.value;
       const result = await updateVmConfig(
         options.node.value,
         options.vmid.value,
         {
-          digest: textValue(latestConfig.digest) || digest.value,
+          digest: digest.value,
           ...data,
         },
         options.guestType.value,
+        method,
       );
       options.notifyUpdated();
+      const upid = textValue((result as { data?: unknown }).data);
+      if (method === 'POST' && upid.startsWith('UPID:')) options.notifyTask(upid, taskTitle);
       return result;
     } finally {
       options.loading.value = false;

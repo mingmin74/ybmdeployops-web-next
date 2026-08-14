@@ -113,10 +113,10 @@ export function getNodeTasks(node: string, params: Record<string, unknown>) {
   });
 }
 
-export function getNodeNetwork(node: string) {
+export function getNodeNetwork(node: string, params?: Record<string, unknown>) {
   return request<Record<string, unknown>[]>(
     `/api2/extjs/nodes/${encodeURIComponent(node)}/network`,
-    { method: 'GET', notifyOnError: true },
+    { method: 'GET', notifyOnError: true, ...(params ? { params } : {}) },
   );
 }
 

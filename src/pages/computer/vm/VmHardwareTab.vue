@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Dialog } from 'quasar';
+import { Dialog, Notify } from 'quasar';
 import { computed, provide, reactive, shallowRef, watch } from 'vue';
 import { getVmConfig, getVmPendingConfig, revertVmConfig, updateVmConfig } from '@/api/overview';
 import type { PveRecord } from '@/api/resources';
@@ -27,7 +27,7 @@ const props = withDefaults(
   defineProps<{ node: string; vmid: string; config: PveRecord; guestType?: 'qemu' | 'lxc' }>(),
   { guestType: 'qemu' },
 );
-const emit = defineEmits<{ updated: [] }>();
+const emit = defineEmits<{ updated: []; task: [node: string, upid: string, title: string] }>();
 const session = useSessionStore();
 const currentConfig = shallowRef<PveRecord>({ ...props.config });
 const loading = shallowRef(false);
@@ -313,14 +313,20 @@ const selectedCanSave = computed(() =>
 const isDisk = computed(() => selectedDevice.value?.type === 'disk');
 async function refreshConfig() {
   const response = await getVmConfig(props.node, props.vmid, props.guestType);
-  currentConfig.value = { ...currentConfig.value, ...(response.data || {}) };
+  if (!response.data) throw new Error('Unable to load the current VM configuration');
+  currentConfig.value = { ...response.data };
 }
 async function selectHardware(row: HardwareRow) {
   selectedKey.value = '';
   try {
     await refreshConfig();
-  } finally {
     selectedKey.value = row.key;
+  } catch {
+    // Do not edit from cached data when the authoritative config could not be loaded.
+    Notify.create({
+      type: 'negative',
+      message: gettext('Unable to load the current VM configuration'),
+    });
   }
 }
 function pendingValue(key: string) {
@@ -540,6 +546,7 @@ const vmHardwareContext = useVmHardware({
   isPendingDelete,
   pendingValue,
   notifyUpdated: () => emit('updated'),
+  notifyTask: (upid, title) => emit('task', props.node, upid, title),
   nextDeviceKey,
 });
 

@@ -28,9 +28,10 @@ export function updateVmConfig(
   vmid: string | number,
   data: PveRecord,
   type = 'qemu',
+  method: 'PUT' | 'POST' = 'PUT',
 ) {
   return request(`/api2/json/nodes/${node}/${type}/${vmid}/config`, {
-    method: 'PUT',
+    method,
     data,
     notifyOnError: true,
   });

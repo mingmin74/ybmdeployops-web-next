@@ -15,8 +15,9 @@ export interface VmHardwareContext {
   hasPendingChange: (key: string) => boolean;
   isPendingDelete: (key: string) => boolean;
   pendingValue: (key: string) => string;
-  updateConfig: (data: PveRecord) => Promise<unknown>;
+  updateConfig: (data: PveRecord, method?: 'PUT' | 'POST', taskTitle?: string) => Promise<unknown>;
   notifyUpdated: () => void;
+  notifyTask: (upid: string, title: string) => void;
   nextDeviceKey: (prefix: DevicePrefix, limit?: number) => string;
 }
 

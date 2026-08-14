@@ -493,7 +493,12 @@ onUnmounted(() => {
           />
         </q-tab-panel>
         <q-tab-panel name="hardware" class="q-pa-none vm-config-tab-panel"
-          ><VmHardwareTab :node="node" :vmid="vmid" :config="config" @updated="reload"
+          ><VmHardwareTab
+            :node="node"
+            :vmid="vmid"
+            :config="config"
+            @updated="reload"
+            @task="openTask"
         /></q-tab-panel>
         <q-tab-panel name="options" class="q-pa-none vm-config-tab-panel"
           ><VmOptionsTab :node="node" :vmid="vmid" :config="config" @updated="reload"
