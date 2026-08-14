@@ -16,6 +16,7 @@ import {
 import { gettext } from '@/locale';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 
+const { embedded = false } = defineProps<{ embedded?: boolean }>();
 const loading = ref(false);
 const saving = ref(false);
 const dialog = ref(false);
@@ -40,7 +41,7 @@ const task = reactive({ visible: false, node: '', upid: '', title: '' });
 const selectedJob = computed(() => selected.value[0]);
 const canEdit = computed(() => Boolean(selectedJob.value));
 const title = computed(
-  () => `${gettext(action.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Realm Sync Job')}`,
+  () => `${gettext(action.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Realm Sync Job')}`
 );
 const scheduleOptions = [
   '*/30',
@@ -66,12 +67,12 @@ const filtered = computed(() => {
   const key = filter.value.trim().toLowerCase();
   return key
     ? jobs.value.filter((j) =>
-        [j.id, j.realm, j.schedule, j.comment].join(' ').toLowerCase().includes(key),
+        [j.id, j.realm, j.schedule, j.comment].join(' ').toLowerCase().includes(key)
       )
     : jobs.value;
 });
 const ldapAdRealms = computed(() =>
-  realms.value.filter((realm) => realm.type === 'ldap' || realm.type === 'ad'),
+  realms.value.filter((realm) => realm.type === 'ldap' || realm.type === 'ad')
 );
 function rowClick(_: Event, row: RealmSyncJob) {
   selected.value = [row];
@@ -186,7 +187,7 @@ function remove() {
       void (async () => {
         await removeRealmSyncJob(selectedJob.value!.id);
         await reload();
-      })(),
+      })()
   );
 }
 async function loadRealmDefaults(realm: string) {
@@ -217,7 +218,7 @@ async function runNow() {
   try {
     const params: Record<string, unknown> = { ...selectedJob.value };
     ['comment', 'realm', 'id', 'type', 'schedule', 'last-run', 'next-run', 'enabled'].forEach(
-      (key) => delete params[key],
+      (key) => delete params[key]
     );
     const response = await syncRealm(selectedJob.value.realm, params);
     startTask(response.data);
@@ -232,99 +233,222 @@ watch(
   () => form.realm,
   (realm) => {
     if (dialog.value) void loadRealmDefaults(realm);
-  },
+  }
 );
 onMounted(() => void reload());
 defineExpose({ reload });
 </script>
 <template>
-  <div class="q-ma-md">
-    <q-card class="no-border-radius no-shadow"
-      ><q-card-section class="q-pa-none"
-        ><q-table
-          v-model:selected="selected"
-          flat
-          selection="single"
-          hide-selected-banner
-          row-key="id"
-          table-header-class="u-table-header"
-          :rows="filtered"
-          :columns="columns"
-          :loading="loading"
-          :pagination="{ page: 1, rowsPerPage: 10 }"
-          :rows-per-page-options="[10]"
-          @row-click="rowClick"
-          @row-dblclick="
-            (_, row) => {
-              selected = [row];
-              void open('edit');
-            }
-          "
-          ><template #top
-            ><div class="q-gutter-sm">
-              <q-btn
-                no-caps
-                outline
-                size="12px"
-                color="primary"
-                class="u-button"
-                :label="gettext('Add')"
-                @click="open('add')"
-              /><q-btn
-                no-caps
-                outline
-                size="12px"
-                class="u-button"
-                :disable="!canEdit"
-                :label="gettext('Edit')"
-                @click="open('edit')"
-              /><q-btn
-                no-caps
-                outline
-                size="12px"
-                color="negative"
-                class="u-button"
-                :disable="!canEdit"
-                :label="gettext('Remove')"
-                @click="remove"
-              /><q-btn
-                no-caps
-                outline
-                size="12px"
-                class="u-button"
-                :disable="!canEdit"
-                :label="gettext('Run Now')"
-                @click="runNow"
-              />
-            </div>
-            <q-space /><q-input
-              v-model="filter"
-              borderless
-              dense
-              debounce="300"
-              :placeholder="gettext('Search')"
-              ><template #append><q-icon name="search" /></template></q-input></template
-          ><template #body-cell-enabled="props"
-            ><q-td :props="props"
-              ><q-icon
-                :name="props.value === false || props.value === 0 ? 'close' : 'check'"
-                :class="
-                  props.value === false || props.value === 0 ? 'text-negative' : 'text-positive'
-                " /></q-td></template
-          ><template #body-cell-next="props"
-            ><q-td :props="props">{{ nextRun(props.value) }}</q-td></template
-          ></q-table
-        ></q-card-section
-      ></q-card
+  <q-card
+    v-if="!embedded"
+    class="no-border-radius no-shadow q-ma-md q-mt-sm"
+  >
+    <q-card-section class="q-pa-none">
+      <q-table
+        v-model:selected="selected"
+        flat
+        selection="single"
+        hide-selected-banner
+        row-key="id"
+        table-header-class="u-table-header"
+        :rows="filtered"
+        :columns="columns"
+        :loading="loading"
+        :pagination="{ page: 1, rowsPerPage: 10 }"
+        :rows-per-page-options="[10]"
+        @row-click="rowClick"
+        @row-dblclick="
+          (_, row) => {
+            selected = [row];
+            void open('edit');
+          }
+        "
+      >
+        <template #top>
+          <div class="q-gutter-sm">
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              color="primary"
+              class="u-button"
+              :label="gettext('Add')"
+              @click="open('add')"
+            />
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              class="u-button"
+              :color="canEdit ? 'primary' : 'grey'"
+              :disable="!canEdit"
+              :label="gettext('Edit')"
+              @click="open('edit')"
+            />
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              class="u-button"
+              :color="canEdit ? 'red' : 'grey'"
+              :disable="!canEdit"
+              :label="gettext('Remove')"
+              @click="remove"
+            />
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              class="u-button"
+              :color="canEdit ? 'primary' : 'grey'"
+              :disable="!canEdit"
+              :label="gettext('Run Now')"
+              @click="runNow"
+            />
+          </div>
+          <q-space />
+          <q-input
+            v-model="filter"
+            borderless
+            dense
+            debounce="300"
+            :placeholder="gettext('Search')"
+          >
+            <template #append><q-icon name="search" /></template>
+          </q-input>
+        </template>
+        <template #body-cell-enabled="props">
+          <q-td :props="props">
+            <q-icon
+              :name="props.value === false || props.value === 0 ? 'close' : 'check'"
+              :class="
+                props.value === false || props.value === 0 ? 'text-negative' : 'text-positive'
+              "
+            />
+          </q-td>
+        </template>
+        <template #body-cell-next="props">
+          <q-td :props="props">{{ nextRun(props.value) }}</q-td>
+        </template>
+      </q-table>
+    </q-card-section>
+  </q-card>
+
+  <template v-else>
+    <q-separator class="q-my-sm" />
+    <div class="q-pa-sm row items-center q-gutter-x-sm">
+      <q-icon
+        name="sync"
+        size="18px"
+        color="primary"
+      />
+      <div class="text-h6 text-weight-medium">
+        {{ gettext('Realm Sync Job') }}
+      </div>
+    </div>
+    <q-table
+      v-model:selected="selected"
+      flat
+      selection="single"
+      hide-selected-banner
+      row-key="id"
+      table-header-class="u-table-header"
+      :rows="filtered"
+      :columns="columns"
+      :loading="loading"
+      :pagination="{ page: 1, rowsPerPage: 10 }"
+      :rows-per-page-options="[10]"
+      @row-click="rowClick"
+      @row-dblclick="
+        (_, row) => {
+          selected = [row];
+          void open('edit');
+        }
+      "
     >
-  </div>
-  <q-dialog v-model="dialog" persistent
-    ><q-card class="job-dialog"
-      ><q-card-section class="row items-center bg-blue-8 text-grey-1 q-pa-sm"
-        ><div class="text-weight-bold">{{ title }}</div>
-        <q-space /><q-btn v-close-popup icon="close" flat dense /></q-card-section
-      ><q-card-section class="q-gutter-sm"
-        ><q-select
+      <template #top>
+        <div class="q-gutter-sm">
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Add')"
+            @click="open('add')"
+          />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            class="u-button"
+            :color="canEdit ? 'primary' : 'grey'"
+            :disable="!canEdit"
+            :label="gettext('Edit')"
+            @click="open('edit')"
+          />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            class="u-button"
+            :color="canEdit ? 'red' : 'grey'"
+            :disable="!canEdit"
+            :label="gettext('Remove')"
+            @click="remove"
+          />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            class="u-button"
+            :color="canEdit ? 'primary' : 'grey'"
+            :disable="!canEdit"
+            :label="gettext('Run Now')"
+            @click="runNow"
+          />
+        </div>
+        <q-space />
+        <q-input
+          v-model="filter"
+          borderless
+          dense
+          debounce="300"
+          :placeholder="gettext('Search')"
+        >
+          <template #append><q-icon name="search" /></template>
+        </q-input>
+      </template>
+      <template #body-cell-enabled="props">
+        <q-td :props="props">
+          <q-icon
+            :name="props.value === false || props.value === 0 ? 'close' : 'check'"
+            :class="props.value === false || props.value === 0 ? 'text-negative' : 'text-positive'"
+          />
+        </q-td>
+      </template>
+      <template #body-cell-next="props">
+        <q-td :props="props">{{ nextRun(props.value) }}</q-td>
+      </template>
+    </q-table>
+  </template>
+  <q-dialog
+    v-model="dialog"
+    persistent
+  >
+    <q-card class="job-dialog">
+      <q-card-section class="row items-center bg-blue-8 text-grey-1 q-pa-sm">
+        <div class="text-weight-bold">{{ title }}</div>
+        <q-space />
+        <q-btn
+          v-close-popup
+          icon="close"
+          flat
+          dense
+        />
+      </q-card-section>
+      <q-card-section class="q-gutter-sm">
+        <q-select
           v-model="form.realm"
           dense
           emit-value
@@ -333,7 +457,9 @@ defineExpose({ reload });
           option-value="realm"
           option-label="realm"
           :options="ldapAdRealms"
-          :label="`${gettext('Realm')} *`" /><q-select
+          :label="`${gettext('Realm')} *`"
+        />
+        <q-select
           v-model="form.schedule"
           dense
           use-input
@@ -341,9 +467,13 @@ defineExpose({ reload });
           hide-selected
           :disable="action === 'add' && !form.realm"
           :options="scheduleOptions"
-          :label="`${gettext('Schedule')} *`" /><q-toggle
+          :label="`${gettext('Schedule')} *`"
+        />
+        <q-toggle
           v-model="form.enabled"
-          :label="gettext('Enable Job')" /><q-select
+          :label="gettext('Enable Job')"
+        />
+        <q-select
           v-model="form.scope"
           dense
           emit-value
@@ -354,27 +484,59 @@ defineExpose({ reload });
             { label: gettext('Groups'), value: 'groups' },
             { label: gettext('Users and Groups'), value: 'both' },
           ]"
-          :label="gettext('Scope')" /><q-toggle
+          :label="gettext('Scope')"
+        />
+        <q-toggle
           v-model="form.enableNew"
           :disable="action === 'add' && !form.realm"
-          :label="gettext('Enable New')" /><q-list bordered
-          ><q-item-label header>{{ gettext('Remove Vanished Options') }}</q-item-label
-          ><q-item><q-checkbox v-model="form.acl" :label="gettext('ACL')" /></q-item
-          ><q-item><q-checkbox v-model="form.entry" :label="gettext('Entry')" /></q-item
-          ><q-item
-            ><q-checkbox
+          :label="gettext('Enable New')"
+        />
+        <q-list bordered>
+          <q-item-label header>{{ gettext('Remove Vanished Options') }}</q-item-label>
+          <q-item>
+            <q-checkbox
+              v-model="form.acl"
+              :label="gettext('ACL')"
+            />
+          </q-item>
+          <q-item>
+            <q-checkbox
+              v-model="form.entry"
+              :label="gettext('Entry')"
+            />
+          </q-item>
+          <q-item>
+            <q-checkbox
               v-model="form.properties"
-              :label="gettext('Properties')" /></q-item></q-list
-        ><q-input v-model="form.comment" dense :label="gettext('Job Comment')" /><q-inner-loading
-          :showing="saving" /></q-card-section
-      ><q-card-actions align="right"
-        ><q-btn v-close-popup flat no-caps :label="gettext('Cancel')" /><q-btn
+              :label="gettext('Properties')"
+            />
+          </q-item>
+        </q-list>
+        <q-input
+          v-model="form.comment"
+          dense
+          :label="gettext('Job Comment')"
+        />
+        <q-inner-loading :showing="saving" />
+      </q-card-section>
+      <q-card-actions align="right">
+        <q-btn
+          v-close-popup
+          flat
+          no-caps
+          :label="gettext('Cancel')"
+        />
+        <q-btn
           flat
           no-caps
           color="primary"
           :label="gettext('OK')"
-          @click="save" /></q-card-actions></q-card></q-dialog
-  ><TaskOutputDialog
+          @click="save"
+        />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
+  <TaskOutputDialog
     v-model="task.visible"
     :node="task.node"
     :upid="task.upid"

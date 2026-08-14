@@ -2,7 +2,15 @@
 import { Notify, type QTableColumn } from 'quasar';
 import QRCode from 'qrcode';
 import { computed, onBeforeUnmount, onMounted, reactive, shallowRef, watch } from 'vue';
-import { createTfaEntry, getTfaRecovery, getTfaUsers, getUsers, removeTfaEntry, updateTfaEntry, type PveTfaUser } from '@/api/users';
+import {
+  createTfaEntry,
+  getTfaRecovery,
+  getTfaUsers,
+  getUsers,
+  removeTfaEntry,
+  updateTfaEntry,
+  type PveTfaUser,
+} from '@/api/users';
 import { getClusterConfig, getClusterNodes, type PveRecord } from '@/api/resources';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
@@ -40,8 +48,12 @@ const recoveryExists = shallowRef(false);
 const session = useSessionStore();
 const editForm = reactive({ description: '', enabled: true, password: '' });
 const totpForm = reactive({
-  userid: '', description: '', secret: '', issuer: `Proxmox VE - ${window.location.hostname}`,
-  challenge: '', password: '',
+  userid: '',
+  description: '',
+  secret: '',
+  issuer: `Proxmox VE - ${window.location.hostname}`,
+  challenge: '',
+  password: '',
 });
 const recoveryForm = reactive({ userid: '', password: '' });
 const webauthnForm = reactive({ userid: '', description: '', password: '' });
@@ -52,17 +64,32 @@ let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
 const columns: QTableColumn<TfaRow>[] = [
   { name: 'userid', label: gettext('User'), field: 'userid', align: 'left', sortable: true },
-  { name: 'enabledText', label: gettext('Enabled'), field: 'enabledText', align: 'left', sortable: true },
+  {
+    name: 'enabledText',
+    label: gettext('Enabled'),
+    field: 'enabledText',
+    align: 'left',
+    sortable: true,
+  },
   { name: 'type', label: gettext('TFA Type'), field: 'type', align: 'left', sortable: true },
   { name: 'created', label: gettext('Created'), field: 'created', align: 'left', sortable: true },
-  { name: 'description', label: gettext('Description'), field: 'description', align: 'left', sortable: true },
+  {
+    name: 'description',
+    label: gettext('Description'),
+    field: 'description',
+    align: 'left',
+    sortable: true,
+  },
 ];
 
 const filteredRows = computed(() => {
   const keyword = filter.value.trim().toLowerCase();
   if (!keyword) return rows.value;
   return rows.value.filter((row) =>
-    [row.userid, row.type, row.description, row.enabledText].join(' ').toLowerCase().includes(keyword),
+    [row.userid, row.type, row.description, row.enabledText]
+      .join(' ')
+      .toLowerCase()
+      .includes(keyword)
   );
 });
 
@@ -77,7 +104,9 @@ function formatCreated(timestamp?: number) {
 const selectedRow = computed(() => selected.value[0]);
 const canEdit = computed(() => Boolean(selectedRow.value && selectedRow.value.type !== 'recovery'));
 const editTitle = gettext("Modify a TFA entry's description");
-const recoveryKeysText = computed(() => recoveryKeys.value.map((key, index) => `${index}: ${key}`).join('\n'));
+const recoveryKeysText = computed(() =>
+  recoveryKeys.value.map((key, index) => `${index}: ${key}`).join('\n')
+);
 const totpUri = computed(() => {
   const issuer = encodeURIComponent(totpForm.issuer);
   const userid = encodeURIComponent(totpForm.userid);
@@ -113,9 +142,11 @@ async function loadUserOptions() {
 function filterUserOptions(value: string, update: (callback: () => void) => void) {
   update(() => {
     const keyword = value.trim().toLowerCase();
-    filteredUserOptions.value = !keyword ? userOptions.value : userOptions.value.filter((user) =>
-      [user.value, user.name, user.comment].join(' ').toLowerCase().includes(keyword),
-    );
+    filteredUserOptions.value = !keyword
+      ? userOptions.value
+      : userOptions.value.filter((user) =>
+          [user.value, user.name, user.comment].join(' ').toLowerCase().includes(keyword)
+        );
   });
 }
 
@@ -170,7 +201,12 @@ async function openYubico() {
 }
 
 async function saveTotp() {
-  if (!totpForm.userid || !totpForm.description || !/^[A-Z2-7=]+$/.test(totpForm.secret) || !/^\d{6,8}$/.test(totpForm.challenge)) {
+  if (
+    !totpForm.userid ||
+    !totpForm.description ||
+    !/^[A-Z2-7=]+$/.test(totpForm.secret) ||
+    !/^\d{6,8}$/.test(totpForm.challenge)
+  ) {
     Notify.create({ type: 'warning', message: gettext('Please fill in all required fields.') });
     return;
   }
@@ -181,7 +217,10 @@ async function saveTotp() {
   submitting.value = true;
   try {
     await createTfaEntry(totpForm.userid, {
-      type: 'totp', description: totpForm.description, totp: totpUri.value, value: totpForm.challenge,
+      type: 'totp',
+      description: totpForm.description,
+      totp: totpUri.value,
+      value: totpForm.challenge,
       ...(session.userid === 'root@pam' ? {} : { password: totpForm.password }),
     });
     totpVisible.value = false;
@@ -200,7 +239,8 @@ async function saveRecovery() {
   submitting.value = true;
   try {
     const response = await createTfaEntry(recoveryForm.userid, {
-      type: 'recovery', ...(session.userid === 'root@pam' ? {} : { password: recoveryForm.password }),
+      type: 'recovery',
+      ...(session.userid === 'root@pam' ? {} : { password: recoveryForm.password }),
     });
     recoveryVisible.value = false;
     recoveryKeys.value = response.data?.recovery || [];
@@ -212,53 +252,90 @@ async function saveRecovery() {
 }
 
 function base64UrlToBytes(value: string) {
-  const base64 = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+  const base64 = value
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .padEnd(Math.ceil(value.length / 4) * 4, '=');
   return Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
 }
 
 function bytesToBase64Url(value: ArrayBuffer) {
-  return btoa(String.fromCharCode(...new Uint8Array(value))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return btoa(String.fromCharCode(...new Uint8Array(value)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
 
 async function registerWebauthn() {
-  if (!webauthnForm.userid || !webauthnForm.description || (session.userid !== 'root@pam' && webauthnForm.password.length < 5)) {
+  if (
+    !webauthnForm.userid ||
+    !webauthnForm.description ||
+    (session.userid !== 'root@pam' && webauthnForm.password.length < 5)
+  ) {
     Notify.create({ type: 'warning', message: gettext('Please fill in all required fields.') });
     return;
   }
   if (!window.PublicKeyCredential || !navigator.credentials) {
-    Notify.create({ type: 'negative', message: gettext('WebAuthn requires using a trusted certificate.') });
+    Notify.create({
+      type: 'negative',
+      message: gettext('WebAuthn requires using a trusted certificate.'),
+    });
     return;
   }
   submitting.value = true;
   try {
     const initial = await createTfaEntry(webauthnForm.userid, {
-      type: 'webauthn', description: webauthnForm.description,
+      type: 'webauthn',
+      description: webauthnForm.description,
       ...(session.userid === 'root@pam' ? {} : { password: webauthnForm.password }),
     });
     if (!initial.data?.challenge) throw new Error('server did not respond with a challenge');
-    const request = JSON.parse(initial.data.challenge) as { publicKey: { challenge: string; user: { id: string; name: string; displayName: string }; excludeCredentials?: Array<{ id: string; type: PublicKeyCredentialType; transports?: AuthenticatorTransport[] }> } & Omit<PublicKeyCredentialCreationOptions, 'challenge' | 'user' | 'excludeCredentials'> };
+    const request = JSON.parse(initial.data.challenge) as {
+      publicKey: {
+        challenge: string;
+        user: { id: string; name: string; displayName: string };
+        excludeCredentials?: Array<{
+          id: string;
+          type: PublicKeyCredentialType;
+          transports?: AuthenticatorTransport[];
+        }>;
+      } & Omit<PublicKeyCredentialCreationOptions, 'challenge' | 'user' | 'excludeCredentials'>;
+    };
     const challenge = request.publicKey.challenge;
-    const { challenge: _ignoredChallenge, user: webauthnUser, excludeCredentials, ...publicKeyOptions } = request.publicKey;
+    const {
+      challenge: _ignoredChallenge,
+      user: webauthnUser,
+      excludeCredentials,
+      ...publicKeyOptions
+    } = request.publicKey;
     void _ignoredChallenge;
     const creationOptions: CredentialCreationOptions = {
       publicKey: {
         ...publicKeyOptions,
         challenge: base64UrlToBytes(challenge),
         user: { ...webauthnUser, id: base64UrlToBytes(webauthnUser.id) },
-        ...(excludeCredentials ? {
-          excludeCredentials: excludeCredentials.map((entry) => ({
-            ...entry,
-            id: base64UrlToBytes(entry.id),
-          })),
-        } : {}),
+        ...(excludeCredentials
+          ? {
+              excludeCredentials: excludeCredentials.map((entry) => ({
+                ...entry,
+                id: base64UrlToBytes(entry.id),
+              })),
+            }
+          : {}),
       },
     };
-    const credential = await navigator.credentials.create(creationOptions) as PublicKeyCredential | null;
-    if (!credential || !(credential.response instanceof AuthenticatorAttestationResponse)) throw new Error('WebAuthn registration was cancelled');
+    const credential = (await navigator.credentials.create(
+      creationOptions
+    )) as PublicKeyCredential | null;
+    if (!credential || !(credential.response instanceof AuthenticatorAttestationResponse))
+      throw new Error('WebAuthn registration was cancelled');
     await createTfaEntry(webauthnForm.userid, {
-      type: 'webauthn', challenge,
+      type: 'webauthn',
+      challenge,
       value: JSON.stringify({
-        id: credential.id, type: credential.type, rawId: bytesToBase64Url(credential.rawId),
+        id: credential.id,
+        type: credential.type,
+        rawId: bytesToBase64Url(credential.rawId),
         response: {
           attestationObject: bytesToBase64Url(credential.response.attestationObject),
           clientDataJSON: bytesToBase64Url(credential.response.clientDataJSON),
@@ -269,21 +346,31 @@ async function registerWebauthn() {
     webauthnVisible.value = false;
     await loadRows();
   } catch (error) {
-    Notify.create({ type: 'negative', message: error instanceof Error ? error.message : String(error) });
+    Notify.create({
+      type: 'negative',
+      message: error instanceof Error ? error.message : String(error),
+    });
   } finally {
     submitting.value = false;
   }
 }
 
 async function saveYubico() {
-  if (!yubicoForm.userid || !yubicoForm.description || !/^[a-zA-Z0-9]{44}$/.test(yubicoForm.otpValue) || (session.userid !== 'root@pam' && yubicoForm.password.length < 5)) {
+  if (
+    !yubicoForm.userid ||
+    !yubicoForm.description ||
+    !/^[a-zA-Z0-9]{44}$/.test(yubicoForm.otpValue) ||
+    (session.userid !== 'root@pam' && yubicoForm.password.length < 5)
+  ) {
     Notify.create({ type: 'warning', message: gettext('Please fill in all required fields.') });
     return;
   }
   submitting.value = true;
   try {
     await createTfaEntry(yubicoForm.userid, {
-      type: 'yubico', description: yubicoForm.description, value: yubicoForm.otpValue,
+      type: 'yubico',
+      description: yubicoForm.description,
+      value: yubicoForm.otpValue,
       ...(session.userid === 'root@pam' ? {} : { password: yubicoForm.password }),
     });
     yubicoVisible.value = false;
@@ -300,7 +387,14 @@ async function copyRecoveryKeys() {
 
 function printRecoveryKeys() {
   const printFrame = document.createElement('iframe');
-  Object.assign(printFrame.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0' });
+  Object.assign(printFrame.style, {
+    position: 'fixed',
+    right: '0',
+    bottom: '0',
+    width: '0',
+    height: '0',
+    border: '0',
+  });
   const title = `${gettext('Recovery Keys')} ${gettext('for')} ${recoveryForm.userid}`;
   printFrame.srcdoc = `<title>${title}</title><pre>${recoveryKeysText.value}</pre>`;
   printFrame.onload = () => printFrame.contentWindow?.print();
@@ -320,14 +414,48 @@ watch(
     const value = await QRCode.toDataURL(uri, { width: 256, margin: 1, errorCorrectionLevel: 'M' });
     if (requestId === qrRequest) qrDataUrl.value = value;
   },
-  { immediate: true },
+  { immediate: true }
 );
-watch(() => recoveryForm.userid, () => void checkRecoveryEntry());
+watch(
+  () => recoveryForm.userid,
+  () => void checkRecoveryEntry()
+);
 
-function openEdit() { const row = selectedRow.value; if (!row || row.type === 'recovery') return; editForm.description = row.description; editForm.enabled = row.enable !== false; editForm.password = ''; editVisible.value = true; }
-async function saveEdit() { const row = selectedRow.value; if (!row) return; if (!editForm.description || (session.userid !== 'root@pam' && editForm.password.length < 5)) { Notify.create({ type: 'warning', message: gettext('Please fill in all required fields.') }); return; } await updateTfaEntry(row.id, { description: editForm.description, enable: editForm.enabled ? 1 : 0, ...(session.userid === 'root@pam' ? {} : { password: editForm.password }) }); editVisible.value = false; await loadRows(); }
-function removeSelected() { if (!selectedRow.value) return; removePassword.value = ''; removeVisible.value = true; }
-async function confirmRemove() { const row = selectedRow.value; if (!row || (session.userid !== 'root@pam' && removePassword.value.length < 5)) return; await removeTfaEntry(row.id, session.userid === 'root@pam' ? undefined : removePassword.value); removeVisible.value = false; await loadRows(); }
+function openEdit() {
+  const row = selectedRow.value;
+  if (!row || row.type === 'recovery') return;
+  editForm.description = row.description;
+  editForm.enabled = row.enable !== false;
+  editForm.password = '';
+  editVisible.value = true;
+}
+async function saveEdit() {
+  const row = selectedRow.value;
+  if (!row) return;
+  if (!editForm.description || (session.userid !== 'root@pam' && editForm.password.length < 5)) {
+    Notify.create({ type: 'warning', message: gettext('Please fill in all required fields.') });
+    return;
+  }
+  await updateTfaEntry(row.id, {
+    description: editForm.description,
+    enable: editForm.enabled ? 1 : 0,
+    ...(session.userid === 'root@pam' ? {} : { password: editForm.password }),
+  });
+  editVisible.value = false;
+  await loadRows();
+}
+function removeSelected() {
+  if (!selectedRow.value) return;
+  removePassword.value = '';
+  removeVisible.value = true;
+}
+async function confirmRemove() {
+  const row = selectedRow.value;
+  if (!row || (session.userid !== 'root@pam' && removePassword.value.length < 5)) return;
+  await removeTfaEntry(row.id, session.userid === 'root@pam' ? undefined : removePassword.value);
+  removeVisible.value = false;
+  await loadRows();
+}
 
 async function loadRows() {
   loading.value = true;
@@ -348,9 +476,11 @@ async function loadRows() {
             : entry.enable === false
               ? gettext('Disabled')
               : gettext('Enabled'),
-        })),
+        }))
       )
-      .sort((left, right) => left.userid.localeCompare(right.userid) || left.id.localeCompare(right.id));
+      .sort(
+        (left, right) => left.userid.localeCompare(right.userid) || left.id.localeCompare(right.id)
+      );
   } finally {
     loading.value = false;
   }
@@ -358,11 +488,17 @@ async function loadRows() {
 
 async function loadIssuerName() {
   try {
-    const [configResponse, nodesResponse] = await Promise.all([getClusterConfig(), getClusterNodes()]);
+    const [configResponse, nodesResponse] = await Promise.all([
+      getClusterConfig(),
+      getClusterNodes(),
+    ]);
     const config = configResponse.data || {};
     const totem = (config.totem || {}) as PveRecord;
     const clusterName = typeof totem.cluster_name === 'string' ? totem.cluster_name : '';
-    const nodeName = typeof nodesResponse.data?.[0]?.node === 'string' ? nodesResponse.data[0].node : window.location.hostname;
+    const nodeName =
+      typeof nodesResponse.data?.[0]?.node === 'string'
+        ? nodesResponse.data[0].node
+        : window.location.hostname;
     totpForm.issuer = `Proxmox VE - ${clusterName || nodeName}`;
   } catch {
     // The hostname remains the standalone-node fallback.
@@ -381,71 +517,638 @@ defineExpose({ reload: loadRows });
 </script>
 
 <template>
-  <q-card flat class="no-border-radius">
-    <q-card-section>
-      <div class="row items-center q-gutter-sm q-mb-sm">
-        <q-btn-dropdown outline no-caps color="primary" :label="gettext('Add')">
-          <q-list dense>
-            <q-item v-close-popup clickable @click="openTotp"><q-item-section>{{ gettext('TOTP') }}</q-item-section></q-item>
-            <q-item v-close-popup clickable @click="openWebauthn"><q-item-section>{{ gettext('WebAuthn') }}</q-item-section></q-item>
-            <q-item v-close-popup clickable @click="openRecovery"><q-item-section>{{ gettext('Recovery Keys') }}</q-item-section></q-item>
-            <q-item v-if="yubicoEnabled" v-close-popup clickable @click="openYubico"><q-item-section>{{ gettext('Yubico OTP') }}</q-item-section></q-item>
-          </q-list>
-        </q-btn-dropdown>
-        <q-btn outline no-caps color="primary" :disable="!canEdit" :label="gettext('Edit')" @click="openEdit" />
-        <q-btn outline no-caps color="negative" :disable="!selectedRow" :label="gettext('Remove')" @click="removeSelected" />
-        <q-btn outline no-caps color="primary" :label="gettext('Reload')" :loading="loading" @click="loadRows" />
+  <q-card
+    flat
+    class="no-border-radius no-shadow"
+  >
+    <q-table
+      flat
+      v-model:selected="selected"
+      selection="single"
+      hide-selected-banner
+      :rows="filteredRows"
+      :columns="columns"
+      row-key="id"
+      table-header-class="u-table-header"
+      :loading="loading"
+      :pagination="{ page: 1, rowsPerPage: 10 }"
+      :rows-per-page-options="[10]"
+      :no-data-label="gettext('no record can be found')"
+      @row-dblclick="openEdit"
+    >
+      <template #top>
+        <div class="q-gutter-sm">
+          <q-btn-dropdown
+            outline
+            no-caps
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Add')"
+          >
+            <q-list dense>
+              <q-item
+                v-close-popup
+                clickable
+                @click="openTotp"
+              >
+                <q-item-section>{{ gettext('TOTP') }}</q-item-section>
+              </q-item>
+              <q-item
+                v-close-popup
+                clickable
+                @click="openWebauthn"
+              >
+                <q-item-section>{{ gettext('WebAuthn') }}</q-item-section>
+              </q-item>
+              <q-item
+                v-close-popup
+                clickable
+                @click="openRecovery"
+              >
+                <q-item-section>{{ gettext('Recovery Keys') }}</q-item-section>
+              </q-item>
+              <q-item
+                v-if="yubicoEnabled"
+                v-close-popup
+                clickable
+                @click="openYubico"
+              >
+                <q-item-section>{{ gettext('Yubico OTP') }}</q-item-section>
+              </q-item>
+            </q-list>
+          </q-btn-dropdown>
+          <q-btn
+            outline
+            no-caps
+            size="12px"
+            class="u-button"
+            :color="canEdit ? 'primary' : 'grey'"
+            :disable="!canEdit"
+            :label="gettext('Edit')"
+            @click="openEdit"
+          />
+          <q-btn
+            outline
+            no-caps
+            size="12px"
+            class="u-button"
+            :color="selectedRow ? 'red' : 'grey'"
+            :disable="!selectedRow"
+            :label="gettext('Remove')"
+            @click="removeSelected"
+          />
+          <q-btn
+            outline
+            no-caps
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Reload')"
+            :loading="loading"
+            @click="loadRows"
+          />
+        </div>
         <q-space />
-        <q-input v-model="filter" dense outlined clearable :placeholder="gettext('Search')" />
-      </div>
-      <q-table
-        flat
-        v-model:selected="selected"
-        selection="single"
-        :rows="filteredRows"
-        :columns="columns"
-        row-key="id"
-        :loading="loading"
-        :rows-per-page-options="[10, 20, 50]"
-        @row-dblclick="openEdit"
+        <q-input
+          v-model="filter"
+          borderless
+          dense
+          debounce="300"
+          :placeholder="gettext('Search')"
+        >
+          <template #append><q-icon name="search" /></template>
+        </q-input>
+      </template>
+      <template #body-cell-created="props">
+        <q-td :props="props">{{ formatCreated(props.row.created) }}</q-td>
+      </template>
+    </q-table>
+
+    <q-dialog
+      v-model="editVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <UWindow
+        width="400px"
+        :title="editTitle"
       >
-        <template #body-cell-created="props">
-          <q-td :props="props">{{ formatCreated(props.row.created) }}</q-td>
+        <div class="u-border q-ma-sm q-pa-md u-dense">
+          <q-input
+            v-model="editForm.description"
+            dense
+            :label="`${gettext('Description')} *`"
+            class="q-field--with-bottom"
+          />
+          <q-checkbox
+            v-model="editForm.enabled"
+            dense
+            right-label
+            color="primary"
+            :label="gettext('Enabled')"
+          />
+          <q-input
+            v-if="session.userid !== 'root@pam'"
+            v-model="editForm.password"
+            dense
+            type="password"
+            :label="`${gettext('Password')} *`"
+            class="q-field--with-bottom"
+            hint="verify current password"
+          />
+        </div>
+        <template #foot>
+          <q-btn
+            v-close-popup
+            flat
+            no-caps
+            size="12px"
+            :label="gettext('Cancel')"
+          />
+          <q-btn
+            no-caps
+            flat
+            size="12px"
+            :label="gettext('OK')"
+            class="bg-primary text-grey-1 u-button"
+            @click="saveEdit"
+          />
         </template>
-      </q-table>
-    </q-card-section>
-    <q-dialog v-model="editVisible" persistent><UWindow width="400px" :title="editTitle"><div class="q-pa-md u-dense q-gutter-sm"><q-input v-model="editForm.description" dense outlined :label="`${gettext('Description')} *`"/><q-checkbox v-model="editForm.enabled" :label="gettext('Enabled')"/><q-input v-if="session.userid !== 'root@pam'" v-model="editForm.password" dense outlined type="password" :label="`${gettext('Password')} *`" hint="verify current password"/></div><template #foot><q-btn v-close-popup flat no-caps :label="gettext('Cancel')"/><q-btn no-caps color="primary" :label="gettext('OK')" @click="saveEdit"/></template></UWindow></q-dialog>
-    <q-dialog v-model="removeVisible" persistent><UWindow width="600px" :title="gettext('Confirm TFA Removal')"><div v-if="selectedRow" class="q-pa-md u-dense q-gutter-sm"><div>{{ gettext('Are you sure you want to remove this TFA entry?') }}</div><div class="row q-col-gutter-lg q-mt-xs"><div class="col"><div><span class="text-grey-7">{{ gettext('User') }}:</span> {{ selectedRow.userid }}</div><div><span class="text-grey-7">{{ gettext('Type') }}:</span> {{ selectedRow.type }}</div></div><div class="col"><div><span class="text-grey-7">{{ gettext('Created') }}:</span> {{ formatCreated(selectedRow.created) }}</div><div><span class="text-grey-7">{{ gettext('Description') }}:</span> {{ selectedRow.description || gettext('None') }}</div></div></div><q-input v-if="session.userid !== 'root@pam'" v-model="removePassword" dense outlined type="password" :label="`${gettext('Password')} *`" :hint="`${gettext('Confirm your')} (${session.userid}) ${gettext('password')}`"/></div><template #foot><q-btn v-close-popup flat no-caps :label="gettext('Cancel')"/><q-btn no-caps color="negative" :label="gettext('Remove')" @click="confirmRemove"/></template></UWindow></q-dialog>
-    <q-dialog v-model="totpVisible" persistent>
-      <UWindow width="520px" :title="gettext('Add a TOTP login factor')">
-        <div class="q-pa-md u-dense q-gutter-sm">
-          <q-select v-model="totpForm.userid" dense outlined use-input fill-input hide-selected emit-value map-options :options="filteredUserOptions" :label="`${gettext('User')} *`" @filter="filterUserOptions"><template #option="scope"><q-item v-bind="scope.itemProps"><q-item-section><q-item-label>{{ scope.opt.value }}</q-item-label><q-item-label caption>{{ scope.opt.name || gettext('None') }} · {{ scope.opt.comment || gettext('None') }}</q-item-label></q-item-section></q-item></template></q-select>
-          <q-input v-model="totpForm.description" dense outlined maxlength="256" :label="`${gettext('Description')} *`" :hint="gettext('For example: TFA device ID, required to identify multiple factors.')" />
-          <div class="row q-gutter-sm"><q-input v-model="totpForm.secret" class="col" dense outlined :label="gettext('Secret')"/><q-btn no-caps outline color="primary" :label="gettext('Randomize')" @click="totpForm.secret = randomBase32Secret()"/></div>
-          <q-input v-model="totpForm.issuer" dense outlined :label="gettext('Issuer Name')" />
-          <div class="row justify-center q-my-md"><q-img v-if="qrDataUrl" :src="qrDataUrl" width="256px" height="256px" fit="contain" class="bg-white q-pa-sm" /></div>
-          <q-input v-model="totpForm.challenge" dense outlined inputmode="numeric" maxlength="8" :label="`${gettext('Verify Code')} *`" :hint="gettext('Scan QR code in a TOTP app and enter an auth. code here')" />
-          <q-input v-if="session.userid !== 'root@pam'" v-model="totpForm.password" dense outlined type="password" minlength="5" :label="`${gettext('Verify Password')} *`" />
-        </div>
-        <template #foot><q-btn v-close-popup flat no-caps :label="gettext('Cancel')"/><q-btn no-caps color="primary" :loading="submitting" :label="gettext('OK')" @click="saveTotp"/></template>
       </UWindow>
     </q-dialog>
-    <q-dialog v-model="recoveryVisible" persistent>
-      <UWindow width="440px" :title="gettext('Add: TFA recovery keys')">
-        <div class="q-pa-md u-dense q-gutter-sm">
-          <q-select v-model="recoveryForm.userid" dense outlined use-input fill-input hide-selected emit-value map-options :options="filteredUserOptions" :label="`${gettext('User')} *`" @filter="filterUserOptions"><template #option="scope"><q-item v-bind="scope.itemProps"><q-item-section><q-item-label>{{ scope.opt.value }}</q-item-label><q-item-label caption>{{ scope.opt.name || gettext('None') }} · {{ scope.opt.comment || gettext('None') }}</q-item-label></q-item-section></q-item></template></q-select>
-          <div v-if="recoveryExists" class="text-negative">{{ gettext('User already has recovery keys.') }}</div>
-          <q-input v-if="session.userid !== 'root@pam'" v-model="recoveryForm.password" dense outlined type="password" minlength="5" :label="`${gettext('Verify Password')} *`" />
+    <q-dialog
+      v-model="removeVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <UWindow
+        width="600px"
+        :title="gettext('Confirm TFA Removal')"
+      >
+        <div
+          v-if="selectedRow"
+          class="u-border q-ma-sm q-pa-md u-dense"
+        >
+          <div class="q-mb-sm">
+            {{ gettext('Are you sure you want to remove this TFA entry?') }}
+          </div>
+          <div class="row q-col-gutter-lg q-mb-sm">
+            <div class="col">
+              <div>
+                <span class="text-grey-7">{{ gettext('User') }}:</span>
+                {{ selectedRow.userid }}
+              </div>
+              <div>
+                <span class="text-grey-7">{{ gettext('Type') }}:</span>
+                {{ selectedRow.type }}
+              </div>
+            </div>
+            <div class="col">
+              <div>
+                <span class="text-grey-7">{{ gettext('Created') }}:</span>
+                {{ formatCreated(selectedRow.created) }}
+              </div>
+              <div>
+                <span class="text-grey-7">{{ gettext('Description') }}:</span>
+                {{ selectedRow.description || gettext('None') }}
+              </div>
+            </div>
+          </div>
+          <q-input
+            v-if="session.userid !== 'root@pam'"
+            v-model="removePassword"
+            dense
+            type="password"
+            :label="`${gettext('Password')} *`"
+            class="q-field--with-bottom"
+            :hint="`${gettext('Confirm your')} (${session.userid}) ${gettext('password')}`"
+          />
         </div>
-        <template #foot><q-btn v-close-popup flat no-caps :label="gettext('Cancel')"/><q-btn no-caps color="primary" :disable="recoveryExists" :loading="submitting" :label="gettext('OK')" @click="saveRecovery"/></template>
+        <template #foot>
+          <q-btn
+            v-close-popup
+            flat
+            no-caps
+            size="12px"
+            :label="gettext('Cancel')"
+          />
+          <q-btn
+            no-caps
+            flat
+            size="12px"
+            :label="gettext('Remove')"
+            class="bg-negative text-grey-1 u-button"
+            @click="confirmRemove"
+          />
+        </template>
       </UWindow>
     </q-dialog>
-    <q-dialog v-model="webauthnVisible" persistent><UWindow width="512px" :title="gettext('Add a Webauthn login token')"><div class="q-pa-md u-dense q-gutter-sm"><q-select v-model="webauthnForm.userid" dense outlined use-input fill-input hide-selected emit-value map-options :options="filteredUserOptions" :label="`${gettext('User')} *`" @filter="filterUserOptions"><template #option="scope"><q-item v-bind="scope.itemProps"><q-item-section><q-item-label>{{ scope.opt.value }}</q-item-label><q-item-label caption>{{ scope.opt.name || gettext('None') }} · {{ scope.opt.comment || gettext('None') }}</q-item-label></q-item-section></q-item></template></q-select><q-input v-model="webauthnForm.description" dense outlined maxlength="256" :label="`${gettext('Description')} *`" :hint="gettext('For example: TFA device ID, required to identify multiple factors.')"/><q-input v-if="session.userid !== 'root@pam'" v-model="webauthnForm.password" dense outlined type="password" :label="`${gettext('Verify Password')} *`"/></div><template #foot><q-btn v-close-popup flat no-caps :label="gettext('Cancel')"/><q-btn no-caps color="primary" :loading="submitting" :label="gettext('Register Webauthn Device')" @click="registerWebauthn"/></template></UWindow></q-dialog>
-    <q-dialog v-model="yubicoVisible" persistent><UWindow width="512px" :title="gettext('Add a Yubico OTP key')"><div class="q-pa-md u-dense q-gutter-sm"><q-select v-model="yubicoForm.userid" dense outlined use-input fill-input hide-selected emit-value map-options :options="filteredUserOptions" :label="`${gettext('User')} *`" @filter="filterUserOptions"><template #option="scope"><q-item v-bind="scope.itemProps"><q-item-section><q-item-label>{{ scope.opt.value }}</q-item-label><q-item-label caption>{{ scope.opt.name || gettext('None') }} · {{ scope.opt.comment || gettext('None') }}</q-item-label></q-item-section></q-item></template></q-select><q-input v-model="yubicoForm.description" dense outlined maxlength="256" :label="`${gettext('Description')} *`" :hint="gettext('For example: TFA device ID, required to identify multiple factors.')"/><q-input v-model="yubicoForm.otpValue" dense outlined maxlength="44" :label="`${gettext('Yubico OTP Key')} *`" :hint="gettext('A currently valid Yubico OTP value')"/><q-input v-if="session.userid !== 'root@pam'" v-model="yubicoForm.password" dense outlined type="password" :label="`${gettext('Verify Password')} *`"/><div class="text-caption text-warning"><span class="text-weight-medium">{{ gettext('Tip:') }}</span> {{ gettext('YubiKeys also support WebAuthn, which is often a better alternative.') }}</div></div><template #foot><q-btn v-close-popup flat no-caps :label="gettext('Cancel')"/><q-btn no-caps color="primary" :loading="submitting" :label="gettext('OK')" @click="saveYubico"/></template></UWindow></q-dialog>
-    <q-dialog v-model="recoveryKeysVisible" persistent @hide="recoveryKeys = []">
-      <UWindow width="520px" :title="gettext('Recovery Keys')">
-        <div class="q-pa-md"><q-input :model-value="recoveryKeysText" type="textarea" readonly autogrow input-class="text-mono"/><div class="q-mt-sm text-warning">{{ gettext('Please record recovery keys - they will only be displayed now') }}</div></div>
-        <template #foot><q-btn no-caps color="primary" :label="gettext('Copy Recovery Keys')" @click="copyRecoveryKeys"/><q-btn no-caps outline color="primary" :label="gettext('Print Recovery Keys')" @click="printRecoveryKeys"/><q-btn v-close-popup flat no-caps :label="gettext('Close')"/></template>
+    <q-dialog
+      v-model="totpVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <UWindow
+        width="520px"
+        :title="gettext('Add a TOTP login factor')"
+      >
+        <div class="u-border q-ma-sm q-pa-md u-dense">
+          <q-select
+            v-model="totpForm.userid"
+            dense
+            options-dense
+            use-input
+            fill-input
+            hide-selected
+            emit-value
+            map-options
+            :options="filteredUserOptions"
+            :label="`${gettext('User')} *`"
+            class="q-field--with-bottom"
+            @filter="filterUserOptions"
+          >
+            <template #option="scope">
+              <q-item v-bind="scope.itemProps">
+                <q-item-section>
+                  <q-item-label>{{ scope.opt.value }}</q-item-label>
+                  <q-item-label caption>
+                    {{ scope.opt.name || gettext('None') }} ·
+                    {{ scope.opt.comment || gettext('None') }}
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </template>
+          </q-select>
+          <q-input
+            v-model="totpForm.description"
+            dense
+            maxlength="256"
+            :label="`${gettext('Description')} *`"
+            class="q-field--with-bottom"
+            :hint="gettext('For example: TFA device ID, required to identify multiple factors.')"
+          />
+          <div class="row q-gutter-sm q-mb-sm">
+            <q-input
+              v-model="totpForm.secret"
+              class="col q-field--with-bottom"
+              dense
+              :label="gettext('Secret')"
+            />
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              color="primary"
+              class="u-button self-end"
+              :label="gettext('Randomize')"
+              @click="totpForm.secret = randomBase32Secret()"
+            />
+          </div>
+          <q-input
+            v-model="totpForm.issuer"
+            dense
+            :label="gettext('Issuer Name')"
+            class="q-field--with-bottom"
+          />
+          <div class="row justify-center q-my-md">
+            <q-img
+              v-if="qrDataUrl"
+              :src="qrDataUrl"
+              width="256px"
+              height="256px"
+              fit="contain"
+              class="bg-white q-pa-sm"
+            />
+          </div>
+          <q-input
+            v-model="totpForm.challenge"
+            dense
+            inputmode="numeric"
+            maxlength="8"
+            :label="`${gettext('Verify Code')} *`"
+            class="q-field--with-bottom"
+            :hint="gettext('Scan QR code in a TOTP app and enter an auth. code here')"
+          />
+          <q-input
+            v-if="session.userid !== 'root@pam'"
+            v-model="totpForm.password"
+            dense
+            type="password"
+            minlength="5"
+            :label="`${gettext('Verify Password')} *`"
+            class="q-field--with-bottom"
+          />
+        </div>
+        <template #foot>
+          <q-btn
+            v-close-popup
+            flat
+            no-caps
+            size="12px"
+            :label="gettext('Cancel')"
+          />
+          <q-btn
+            no-caps
+            flat
+            size="12px"
+            :loading="submitting"
+            :label="gettext('OK')"
+            class="bg-primary text-grey-1 u-button"
+            @click="saveTotp"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
+    <q-dialog
+      v-model="recoveryVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <UWindow
+        width="440px"
+        :title="gettext('Add: TFA recovery keys')"
+      >
+        <div class="u-border q-ma-sm q-pa-md u-dense">
+          <q-select
+            v-model="recoveryForm.userid"
+            dense
+            options-dense
+            use-input
+            fill-input
+            hide-selected
+            emit-value
+            map-options
+            :options="filteredUserOptions"
+            :label="`${gettext('User')} *`"
+            class="q-field--with-bottom"
+            @filter="filterUserOptions"
+          >
+            <template #option="scope">
+              <q-item v-bind="scope.itemProps">
+                <q-item-section>
+                  <q-item-label>{{ scope.opt.value }}</q-item-label>
+                  <q-item-label caption>
+                    {{ scope.opt.name || gettext('None') }} ·
+                    {{ scope.opt.comment || gettext('None') }}
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </template>
+          </q-select>
+          <div
+            v-if="recoveryExists"
+            class="text-negative q-mb-sm"
+          >
+            {{ gettext('User already has recovery keys.') }}
+          </div>
+          <q-input
+            v-if="session.userid !== 'root@pam'"
+            v-model="recoveryForm.password"
+            dense
+            type="password"
+            minlength="5"
+            :label="`${gettext('Verify Password')} *`"
+            class="q-field--with-bottom"
+          />
+        </div>
+        <template #foot>
+          <q-btn
+            v-close-popup
+            flat
+            no-caps
+            size="12px"
+            :label="gettext('Cancel')"
+          />
+          <q-btn
+            no-caps
+            flat
+            size="12px"
+            :disable="recoveryExists"
+            :loading="submitting"
+            :label="gettext('OK')"
+            class="bg-primary text-grey-1 u-button"
+            @click="saveRecovery"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
+    <q-dialog
+      v-model="webauthnVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <UWindow
+        width="512px"
+        :title="gettext('Add a Webauthn login token')"
+      >
+        <div class="u-border q-ma-sm q-pa-md u-dense">
+          <q-select
+            v-model="webauthnForm.userid"
+            dense
+            options-dense
+            use-input
+            fill-input
+            hide-selected
+            emit-value
+            map-options
+            :options="filteredUserOptions"
+            :label="`${gettext('User')} *`"
+            class="q-field--with-bottom"
+            @filter="filterUserOptions"
+          >
+            <template #option="scope">
+              <q-item v-bind="scope.itemProps">
+                <q-item-section>
+                  <q-item-label>{{ scope.opt.value }}</q-item-label>
+                  <q-item-label caption>
+                    {{ scope.opt.name || gettext('None') }} ·
+                    {{ scope.opt.comment || gettext('None') }}
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </template>
+          </q-select>
+          <q-input
+            v-model="webauthnForm.description"
+            dense
+            maxlength="256"
+            :label="`${gettext('Description')} *`"
+            class="q-field--with-bottom"
+            :hint="gettext('For example: TFA device ID, required to identify multiple factors.')"
+          />
+          <q-input
+            v-if="session.userid !== 'root@pam'"
+            v-model="webauthnForm.password"
+            dense
+            type="password"
+            :label="`${gettext('Verify Password')} *`"
+            class="q-field--with-bottom"
+          />
+        </div>
+        <template #foot>
+          <q-btn
+            v-close-popup
+            flat
+            no-caps
+            size="12px"
+            :label="gettext('Cancel')"
+          />
+          <q-btn
+            no-caps
+            flat
+            size="12px"
+            :loading="submitting"
+            :label="gettext('Register Webauthn Device')"
+            class="bg-primary text-grey-1 u-button"
+            @click="registerWebauthn"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
+    <q-dialog
+      v-model="yubicoVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <UWindow
+        width="512px"
+        :title="gettext('Add a Yubico OTP key')"
+      >
+        <div class="u-border q-ma-sm q-pa-md u-dense">
+          <q-select
+            v-model="yubicoForm.userid"
+            dense
+            options-dense
+            use-input
+            fill-input
+            hide-selected
+            emit-value
+            map-options
+            :options="filteredUserOptions"
+            :label="`${gettext('User')} *`"
+            class="q-field--with-bottom"
+            @filter="filterUserOptions"
+          >
+            <template #option="scope">
+              <q-item v-bind="scope.itemProps">
+                <q-item-section>
+                  <q-item-label>{{ scope.opt.value }}</q-item-label>
+                  <q-item-label caption>
+                    {{ scope.opt.name || gettext('None') }} ·
+                    {{ scope.opt.comment || gettext('None') }}
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </template>
+          </q-select>
+          <q-input
+            v-model="yubicoForm.description"
+            dense
+            maxlength="256"
+            :label="`${gettext('Description')} *`"
+            class="q-field--with-bottom"
+            :hint="gettext('For example: TFA device ID, required to identify multiple factors.')"
+          />
+          <q-input
+            v-model="yubicoForm.otpValue"
+            dense
+            maxlength="44"
+            :label="`${gettext('Yubico OTP Key')} *`"
+            class="q-field--with-bottom"
+            :hint="gettext('A currently valid Yubico OTP value')"
+          />
+          <q-input
+            v-if="session.userid !== 'root@pam'"
+            v-model="yubicoForm.password"
+            dense
+            type="password"
+            :label="`${gettext('Verify Password')} *`"
+            class="q-field--with-bottom"
+          />
+          <div class="text-sm text-warning q-mt-xs">
+            <span class="text-weight-medium">{{ gettext('Tip:') }}</span>
+            {{ gettext('YubiKeys also support WebAuthn, which is often a better alternative.') }}
+          </div>
+        </div>
+        <template #foot>
+          <q-btn
+            v-close-popup
+            flat
+            no-caps
+            size="12px"
+            :label="gettext('Cancel')"
+          />
+          <q-btn
+            no-caps
+            flat
+            size="12px"
+            :loading="submitting"
+            :label="gettext('OK')"
+            class="bg-primary text-grey-1 u-button"
+            @click="saveYubico"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
+    <q-dialog
+      v-model="recoveryKeysVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+      @hide="recoveryKeys = []"
+    >
+      <UWindow
+        width="520px"
+        :title="gettext('Recovery Keys')"
+      >
+        <div class="u-border q-ma-sm q-pa-md u-dense">
+          <q-input
+            :model-value="recoveryKeysText"
+            dense
+            type="textarea"
+            readonly
+            autogrow
+            input-class="text-mono"
+            class="q-field--with-bottom"
+          />
+          <div class="q-mt-sm text-warning text-sm">
+            {{ gettext('Please record recovery keys - they will only be displayed now') }}
+          </div>
+        </div>
+        <template #foot>
+          <q-btn
+            v-close-popup
+            flat
+            no-caps
+            size="12px"
+            :label="gettext('Close')"
+          />
+          <q-btn
+            no-caps
+            flat
+            size="12px"
+            outline
+            color="primary"
+            class="u-button"
+            :label="gettext('Print Recovery Keys')"
+            @click="printRecoveryKeys"
+          />
+          <q-btn
+            no-caps
+            flat
+            size="12px"
+            :label="gettext('Copy Recovery Keys')"
+            class="bg-primary text-grey-1 u-button"
+            @click="copyRecoveryKeys"
+          />
+        </template>
       </UWindow>
     </q-dialog>
   </q-card>

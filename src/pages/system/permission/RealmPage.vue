@@ -11,6 +11,7 @@ import {
   type PveRealm,
 } from '@/api/resources';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
+import RealmSyncJobsPage from '@/pages/system/RealmSyncJobsPage.vue';
 import { gettext } from '@/locale';
 
 defineProps<{ embedded?: boolean }>();
@@ -59,7 +60,7 @@ const sync = reactive({ scope: '', enableNew: true, acl: false, entry: false, pr
 const selectedRealm = computed(() => selected.value[0]);
 const syncable = computed(() => ['ldap', 'ad'].includes(selectedRealm.value?.type || ''));
 const removable = computed(() =>
-  ['ldap', 'ad', 'openid'].includes(selectedRealm.value?.type || ''),
+  ['ldap', 'ad', 'openid'].includes(selectedRealm.value?.type || '')
 );
 const supportsTfa = computed(() => form.type !== 'openid');
 const isDirectory = computed(() => form.type === 'ldap' || form.type === 'ad');
@@ -73,7 +74,7 @@ const filtered = computed(() => {
   const key = filter.value.trim().toLowerCase();
   return key
     ? rows.value.filter((row) =>
-        [row.realm, row.type, row.tfa, row.comment].join(' ').toLowerCase().includes(key),
+        [row.realm, row.type, row.tfa, row.comment].join(' ').toLowerCase().includes(key)
       )
     : rows.value;
 });
@@ -307,7 +308,7 @@ function payload() {
     delete data.realm;
     delete data.type;
     const deleted = deletableKeys.filter(
-      (key) => original.value[key] !== undefined && data[key] === undefined,
+      (key) => original.value[key] !== undefined && data[key] === undefined
     );
     if (original.value.secure !== undefined && !deleted.includes('secure')) deleted.push('secure');
     if (deleted.length) data.delete = deleted.join(',');
@@ -338,7 +339,7 @@ function remove() {
       void (async () => {
         await removeRealm(selectedRealm.value!.realm);
         await reload();
-      })(),
+      })()
   );
 }
 async function openSync() {
@@ -389,9 +390,12 @@ onMounted(() => void reload());
 defineExpose({ reload });
 </script>
 <template>
-  <q-card class="no-border-radius no-shadow" :class="embedded ? 'q-ma-none' : 'q-ma-md q-mt-sm'"
-    ><q-card-section :class="embedded ? 'q-pa-none' : undefined"
-      ><q-table
+  <q-card
+    class="no-border-radius no-shadow"
+    :class="embedded ? 'q-ma-none' : 'q-ma-md q-mt-sm'"
+  >
+    <q-card-section :class="embedded ? 'q-pa-none' : undefined">
+      <q-table
         v-model:selected="selected"
         flat
         selection="single"
@@ -410,8 +414,9 @@ defineExpose({ reload });
             void open('edit');
           }
         "
-        ><template #top
-          ><div class="q-gutter-sm">
+      >
+        <template #top>
+          <div class="q-gutter-sm">
             <q-btn-dropdown
               no-caps
               outline
@@ -419,17 +424,20 @@ defineExpose({ reload });
               color="primary"
               class="u-button"
               :label="gettext('Add')"
-              ><q-list
-                ><q-item
+            >
+              <q-list>
+                <q-item
                   v-for="type in addTypes"
                   :key="type.value"
                   clickable
                   v-close-popup
                   @click="open('add', type.value)"
-                  ><q-item-section>{{ type.label }}</q-item-section></q-item
-                ></q-list
-              ></q-btn-dropdown
-            ><q-btn
+                >
+                  <q-item-section>{{ type.label }}</q-item-section>
+                </q-item>
+              </q-list>
+            </q-btn-dropdown>
+            <q-btn
               no-caps
               outline
               size="12px"
@@ -437,7 +445,8 @@ defineExpose({ reload });
               :disable="!selectedRealm"
               :label="gettext('Edit')"
               @click="open('edit')"
-            /><q-btn
+            />
+            <q-btn
               no-caps
               outline
               size="12px"
@@ -446,7 +455,8 @@ defineExpose({ reload });
               :disable="!removable"
               :label="gettext('Remove')"
               @click="remove"
-            /><q-btn
+            />
+            <q-btn
               no-caps
               outline
               size="12px"
@@ -456,33 +466,67 @@ defineExpose({ reload });
               @click="openSync"
             />
           </div>
-          <q-space /><q-input
+          <q-space />
+          <q-input
             v-model="filter"
             borderless
             dense
             debounce="300"
             :placeholder="gettext('Search')"
-            ><template #append><q-icon name="search" /></template></q-input></template></q-table
-    ></q-card-section>
-    <q-dialog v-model="dialog" persistent
-      ><q-card class="realm-dialog"
-        ><q-card-section class="row items-center bg-blue-8 text-grey-1 q-pa-sm"
-          ><div class="text-weight-bold">
+          >
+            <template #append><q-icon name="search" /></template>
+          </q-input>
+        </template>
+      </q-table>
+    </q-card-section>
+    <RealmSyncJobsPage embedded />
+    <q-dialog
+      v-model="dialog"
+      persistent
+    >
+      <q-card class="realm-dialog">
+        <q-card-section class="row items-center bg-blue-8 text-grey-1 q-pa-sm">
+          <div class="text-weight-bold">
             {{ gettext(action === 'add' ? 'Add' : 'Edit') }}: {{ form.type }}
           </div>
-          <q-space /><q-btn v-close-popup icon="close" flat dense /></q-card-section
-        ><q-tabs v-if="isDirectory" v-model="formTab" dense align="left"
-          ><q-tab name="general" :label="gettext('General')" /><q-tab
+          <q-space />
+          <q-btn
+            v-close-popup
+            icon="close"
+            flat
+            dense
+          />
+        </q-card-section>
+        <q-tabs
+          v-if="isDirectory"
+          v-model="formTab"
+          dense
+          align="left"
+        >
+          <q-tab
+            name="general"
+            :label="gettext('General')"
+          />
+          <q-tab
             name="sync"
-            :label="gettext('Sync Options')" /></q-tabs
-        ><q-card-section v-show="formTab === 'general'" class="q-gutter-sm"
-          ><q-input
+            :label="gettext('Sync Options')"
+          />
+        </q-tabs>
+        <q-card-section
+          v-show="formTab === 'general'"
+          class="q-gutter-sm"
+        >
+          <q-input
             v-model="form.realm"
             dense
             :disable="action === 'edit'"
-            :label="`${gettext('Realm')} *`" /><q-toggle
+            :label="`${gettext('Realm')} *`"
+          />
+          <q-toggle
             v-model="form.default"
-            :label="gettext('Default')" /><q-select
+            :label="gettext('Default')"
+          />
+          <q-select
             v-if="supportsTfa"
             v-model="form.tfaType"
             dense
@@ -493,50 +537,85 @@ defineExpose({ reload });
               { label: 'OATH/TOTP', value: 'oath' },
               { label: 'Yubico', value: 'yubico' },
             ]"
-            :label="gettext('Require TFA')" /><template v-if="form.tfaType === 'oath'"
-            ><q-input
+            :label="gettext('Require TFA')"
+          />
+          <template v-if="form.tfaType === 'oath'">
+            <q-input
               v-model="form.tfaStep"
               dense
               type="number"
               min="10"
-              :label="gettext('Time Step')" /><q-input
+              :label="gettext('Time Step')"
+            />
+            <q-input
               v-model="form.tfaDigits"
               dense
               type="number"
               min="6"
               max="8"
-              :label="gettext('Secret Length')" /></template
-          ><template v-if="form.tfaType === 'yubico'"
-            ><q-input v-model="form.tfaId" dense label="Yubico API Id" /><q-input
+              :label="gettext('Secret Length')"
+            />
+          </template>
+          <template v-if="form.tfaType === 'yubico'">
+            <q-input
+              v-model="form.tfaId"
+              dense
+              label="Yubico API Id"
+            />
+            <q-input
               v-model="form.tfaKey"
               dense
-              label="Yubico API Key" /><q-input
+              label="Yubico API Key"
+            />
+            <q-input
               v-model="form.tfaUrl"
               dense
-              label="Yubico URL" /></template
-          ><template v-if="form.type === 'ldap'"
-            ><q-input
+              label="Yubico URL"
+            />
+          </template>
+          <template v-if="form.type === 'ldap'">
+            <q-input
               v-model="form.base_dn"
               dense
-              :label="`${gettext('Base Domain Name')} *`" /><q-input
+              :label="`${gettext('Base Domain Name')} *`"
+            />
+            <q-input
               v-model="form.user_attr"
               dense
-              :label="`${gettext('User Attribute Name')} *`" /></template
-          ><template v-if="form.type === 'ad'"
-            ><q-input v-model="form.domain" dense :label="`${gettext('Domain')} *`" /><q-toggle
+              :label="`${gettext('User Attribute Name')} *`"
+            />
+          </template>
+          <template v-if="form.type === 'ad'">
+            <q-input
+              v-model="form.domain"
+              dense
+              :label="`${gettext('Domain')} *`"
+            />
+            <q-toggle
               v-model="form['case-sensitive']"
-              :label="gettext('Case-Sensitive')" /></template
-          ><template v-if="isDirectory"
-            ><q-input v-model="form.server1" dense :label="`${gettext('Server')} *`" /><q-input
+              :label="gettext('Case-Sensitive')"
+            />
+          </template>
+          <template v-if="isDirectory">
+            <q-input
+              v-model="form.server1"
+              dense
+              :label="`${gettext('Server')} *`"
+            />
+            <q-input
               v-model="form.server2"
               dense
-              :label="gettext('Fallback Server')" /><q-input
+              :label="gettext('Fallback Server')"
+            />
+            <q-input
               v-model="form.port"
               dense
               type="number"
               min="1"
               max="65535"
-              :label="gettext('Port')" /><q-select
+              :label="gettext('Port')"
+            />
+            <q-select
               v-model="form.mode"
               dense
               emit-value
@@ -547,64 +626,115 @@ defineExpose({ reload });
                 { label: 'STARTTLS', value: 'ldap+starttls' },
                 { label: 'LDAPS', value: 'ldaps' },
               ]"
-              :label="gettext('Mode')" /><q-toggle
+              :label="gettext('Mode')"
+            />
+            <q-toggle
               v-model="form.verify"
               :disable="form.mode === 'ldap' || form.mode === '__default__'"
-              :label="gettext('Verify Certificate')" /><q-toggle
+              :label="gettext('Verify Certificate')"
+            />
+            <q-toggle
               v-model="form['check-connection']"
-              :label="gettext('Check connection')" /></template
-          ><template v-if="form.type === 'openid'"
-            ><q-input
+              :label="gettext('Check connection')"
+            />
+          </template>
+          <template v-if="form.type === 'openid'">
+            <q-input
               v-model="form['issuer-url']"
               dense
-              :label="`${gettext('Issuer URL')} *`" /><q-input
+              :label="`${gettext('Issuer URL')} *`"
+            />
+            <q-input
               v-model="form['client-id']"
               dense
-              :label="`${gettext('Client ID')} *`" /><q-input
+              :label="`${gettext('Client ID')} *`"
+            />
+            <q-input
               v-model="form['client-key']"
               dense
-              :label="gettext('Client Key')" /><q-input
+              :label="gettext('Client Key')"
+            />
+            <q-input
               v-model="form.scopes"
               dense
-              :label="gettext('Scopes')" /><q-select
+              :label="gettext('Scopes')"
+            />
+            <q-select
               v-model="form['username-claim']"
               dense
               :options="['__default__', 'subject', 'username', 'email']"
-              :label="gettext('Username Claim')" /><q-toggle
+              :label="gettext('Username Claim')"
+            />
+            <q-toggle
               v-model="form.autocreate"
-              :label="gettext('Autocreate Users')" /><q-toggle
+              :label="gettext('Autocreate Users')"
+            />
+            <q-toggle
               v-model="form['groups-autocreate']"
-              :label="gettext('Autocreate Groups')" /><q-input
+              :label="gettext('Autocreate Groups')"
+            />
+            <q-input
               v-model="form['groups-claim']"
               dense
-              :label="gettext('Groups Claim')" /><q-toggle
+              :label="gettext('Groups Claim')"
+            />
+            <q-toggle
               v-model="form['groups-overwrite']"
-              :label="gettext('Overwrite Groups')" /><q-select
+              :label="gettext('Overwrite Groups')"
+            />
+            <q-select
               v-model="form.prompt"
               dense
               :options="['__default__', 'none', 'login', 'consent', 'select_account']"
-              :label="gettext('Prompt')" /><q-input
+              :label="gettext('Prompt')"
+            />
+            <q-input
               v-model="form['acr-values']"
               dense
-              :label="gettext('ACR Values')" /><q-toggle
+              :label="gettext('ACR Values')"
+            />
+            <q-toggle
               v-model="form['query-userinfo']"
-              :label="gettext('Query userinfo endpoint')" /><q-input
+              :label="gettext('Query userinfo endpoint')"
+            />
+            <q-input
               v-model="form.audiences"
               dense
-              :label="gettext('Audiences')" /></template
-          ><q-input v-model="form.comment" dense :label="gettext('Comment')" /></q-card-section
-        ><q-card-section v-show="formTab === 'sync' && isDirectory" class="q-gutter-sm"
-          ><q-input v-model="form.bind_dn" dense :label="gettext('Bind User')" /><q-input
+              :label="gettext('Audiences')"
+            />
+          </template>
+          <q-input
+            v-model="form.comment"
+            dense
+            :label="gettext('Comment')"
+          />
+        </q-card-section>
+        <q-card-section
+          v-show="formTab === 'sync' && isDirectory"
+          class="q-gutter-sm"
+        >
+          <q-input
+            v-model="form.bind_dn"
+            dense
+            :label="gettext('Bind User')"
+          />
+          <q-input
             v-model="form.password"
             dense
             type="password"
-            :label="gettext('Bind Password')" /><q-input
+            :label="gettext('Bind Password')"
+          />
+          <q-input
             v-model="form.email"
             dense
-            :label="gettext('E-Mail attribute')" /><q-input
+            :label="gettext('E-Mail attribute')"
+          />
+          <q-input
             v-model="form.group_name_attr"
             dense
-            :label="gettext('Groupname attr.')" /><q-select
+            :label="gettext('Groupname attr.')"
+          />
+          <q-select
             v-model="form.scope"
             dense
             emit-value
@@ -615,7 +745,9 @@ defineExpose({ reload });
               { label: gettext('Groups'), value: 'groups' },
               { label: gettext('Users and Groups'), value: 'both' },
             ]"
-            :label="gettext('Scope')" /><q-select
+            :label="gettext('Scope')"
+          />
+          <q-select
             v-model="form['enable-new']"
             dense
             emit-value
@@ -625,45 +757,78 @@ defineExpose({ reload });
               { label: gettext('Yes'), value: '1' },
               { label: gettext('No'), value: '0' },
             ]"
-            :label="gettext('Enable new users')" /><q-input
+            :label="gettext('Enable new users')"
+          />
+          <q-input
             v-model="form.user_classes"
             dense
-            :label="gettext('User classes')" /><q-input
+            :label="gettext('User classes')"
+          />
+          <q-input
             v-model="form.group_classes"
             dense
-            :label="gettext('Group classes')" /><q-input
+            :label="gettext('Group classes')"
+          />
+          <q-input
             v-model="form.filter"
             dense
-            :label="gettext('User Filter')" /><q-input
+            :label="gettext('User Filter')"
+          />
+          <q-input
             v-model="form.group_filter"
             dense
-            :label="gettext('Group Filter')" /><q-list bordered
-            ><q-item-label header>{{ gettext('Remove Vanished Options') }}</q-item-label
-            ><q-item
-              ><q-checkbox v-model="form['remove-vanished-acl']" :label="gettext('ACL')" /></q-item
-            ><q-item
-              ><q-checkbox
+            :label="gettext('Group Filter')"
+          />
+          <q-list bordered>
+            <q-item-label header>{{ gettext('Remove Vanished Options') }}</q-item-label>
+            <q-item>
+              <q-checkbox
+                v-model="form['remove-vanished-acl']"
+                :label="gettext('ACL')"
+              />
+            </q-item>
+            <q-item>
+              <q-checkbox
                 v-model="form['remove-vanished-entry']"
-                :label="gettext('Entry')" /></q-item
-            ><q-item
-              ><q-checkbox
+                :label="gettext('Entry')"
+              />
+            </q-item>
+            <q-item>
+              <q-checkbox
                 v-model="form['remove-vanished-properties']"
-                :label="gettext('Properties')" /></q-item></q-list></q-card-section
-        ><q-inner-loading :showing="saving" /><q-card-actions align="right"
-          ><q-btn v-close-popup flat no-caps :label="gettext('Cancel')" /><q-btn
+                :label="gettext('Properties')"
+              />
+            </q-item>
+          </q-list>
+        </q-card-section>
+        <q-inner-loading :showing="saving" />
+        <q-card-actions align="right">
+          <q-btn
+            v-close-popup
+            flat
+            no-caps
+            :label="gettext('Cancel')"
+          />
+          <q-btn
             flat
             no-caps
             color="primary"
             :label="gettext('OK')"
-            @click="save" /></q-card-actions></q-card
-    ></q-dialog>
-    <q-dialog v-model="syncDialog" persistent
-      ><q-card class="realm-dialog"
-        ><q-card-section class="text-weight-bold bg-blue-8 text-grey-1">{{
-          gettext('Realm Sync')
-        }}</q-card-section
-        ><q-card-section class="q-gutter-sm"
-          ><q-select
+            @click="save"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+    <q-dialog
+      v-model="syncDialog"
+      persistent
+    >
+      <q-card class="realm-dialog">
+        <q-card-section class="text-weight-bold bg-blue-8 text-grey-1">
+          {{ gettext('Realm Sync') }}
+        </q-card-section>
+        <q-card-section class="q-gutter-sm">
+          <q-select
             v-model="sync.scope"
             dense
             emit-value
@@ -673,35 +838,66 @@ defineExpose({ reload });
               { label: gettext('Groups'), value: 'groups' },
               { label: gettext('Users and Groups'), value: 'both' },
             ]"
-            :label="gettext('Scope')" /><q-toggle
+            :label="gettext('Scope')"
+          />
+          <q-toggle
             v-model="sync.enableNew"
-            :label="gettext('Enable new')" /><q-list bordered
-            ><q-item-label header>{{ gettext('Remove Vanished Options') }}</q-item-label
-            ><q-item><q-checkbox v-model="sync.acl" :label="gettext('ACL')" /></q-item
-            ><q-item><q-checkbox v-model="sync.entry" :label="gettext('Entry')" /></q-item
-            ><q-item
-              ><q-checkbox
+            :label="gettext('Enable new')"
+          />
+          <q-list bordered>
+            <q-item-label header>{{ gettext('Remove Vanished Options') }}</q-item-label>
+            <q-item>
+              <q-checkbox
+                v-model="sync.acl"
+                :label="gettext('ACL')"
+              />
+            </q-item>
+            <q-item>
+              <q-checkbox
+                v-model="sync.entry"
+                :label="gettext('Entry')"
+              />
+            </q-item>
+            <q-item>
+              <q-checkbox
                 v-model="sync.properties"
-                :label="gettext('Properties')" /></q-item></q-list
-          ><q-inner-loading :showing="saving" /></q-card-section
-        ><q-card-actions align="right"
-          ><q-btn v-close-popup flat no-caps :label="gettext('Cancel')" /><q-btn
+                :label="gettext('Properties')"
+              />
+            </q-item>
+          </q-list>
+          <q-inner-loading :showing="saving" />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn
+            v-close-popup
+            flat
+            no-caps
+            :label="gettext('Cancel')"
+          />
+          <q-btn
             flat
             no-caps
             :label="gettext('Preview')"
-            @click="submitSync(true)" /><q-btn
+            @click="submitSync(true)"
+          />
+          <q-btn
             flat
             no-caps
             color="primary"
             :label="gettext('Sync')"
-            @click="submitSync(false)" /></q-card-actions></q-card></q-dialog
-    ><TaskOutputDialog
+            @click="submitSync(false)"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+    <TaskOutputDialog
       v-model="task.visible"
       :node="task.node"
       :upid="task.upid"
       :title="task.title"
       @finished="reload"
-  /></q-card>
+    />
+  </q-card>
 </template>
 <style scoped>
 .realm-dialog {

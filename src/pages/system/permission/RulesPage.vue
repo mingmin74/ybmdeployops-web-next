@@ -319,7 +319,7 @@ defineExpose({ reload });
 </script>
 
 <template>
-  <div class="row column q-px-md q-py-sm">
+  <div class="row column">
     <q-table
       flat
       :rows="filteredRules"

@@ -23,13 +23,24 @@ const poolsPage = useTemplateRef<{ reload: () => Promise<void> }>('poolsPage');
 const rolesPage = useTemplateRef<{ reload: () => Promise<void> }>('rolesPage');
 const realmsPage = useTemplateRef<{ reload: () => Promise<void> }>('realmsPage');
 const dcCaps = computed(
-  () => (session.caps as unknown as { dc?: Record<string, unknown> }).dc || {},
+  () => (session.caps as unknown as { dc?: Record<string, unknown> }).dc || {}
 );
 const hasSysAudit = computed(() => Boolean(dcCaps.value['Sys.Audit']));
-const validTabs = new Set(['permissions', 'users', 'apitokens', 'tfa', 'groups', 'pools', 'roles', 'realms']);
+const validTabs = new Set([
+  'permissions',
+  'users',
+  'apitokens',
+  'tfa',
+  'groups',
+  'pools',
+  'roles',
+  'realms',
+]);
 const sysAuditTabs = new Set(['permissions', 'groups', 'pools', 'roles', 'realms']);
 function isAllowedTab(tab: unknown): tab is string {
-  return typeof tab === 'string' && validTabs.has(tab) && (!sysAuditTabs.has(tab) || hasSysAudit.value);
+  return (
+    typeof tab === 'string' && validTabs.has(tab) && (!sysAuditTabs.has(tab) || hasSysAudit.value)
+  );
 }
 function resolveTab(tab: unknown) {
   return isAllowedTab(tab) ? tab : hasSysAudit.value ? 'permissions' : 'users';
@@ -59,7 +70,7 @@ watch(
   () => route.query.tab,
   (tab) => {
     activeTab.value = resolveTab(tab);
-  },
+  }
 );
 </script>
 
@@ -75,32 +86,108 @@ watch(
           align="left"
           narrow-indicator
         >
-          <q-tab v-if="hasSysAudit" no-caps name="permissions" :label="gettext('Permissions')" />
-          <q-tab no-caps name="users" :label="gettext('Users')" />
-          <q-tab no-caps name="apitokens" :label="gettext('API Tokens')" />
-          <q-tab no-caps name="tfa" :label="gettext('Two Factor')" />
-          <q-tab v-if="hasSysAudit" no-caps name="groups" :label="gettext('Groups')" />
-          <q-tab v-if="hasSysAudit" no-caps name="pools" :label="gettext('Pools')" />
-          <q-tab v-if="hasSysAudit" no-caps name="roles" :label="gettext('Roles')" />
-          <q-tab v-if="hasSysAudit" no-caps name="realms" :label="gettext('Realms')" />
+          <q-tab
+            v-if="hasSysAudit"
+            no-caps
+            name="permissions"
+            :label="gettext('Permissions')"
+          />
+          <q-tab
+            no-caps
+            name="users"
+            :label="gettext('Users')"
+          />
+          <q-tab
+            no-caps
+            name="apitokens"
+            :label="gettext('API Tokens')"
+          />
+          <q-tab
+            no-caps
+            name="tfa"
+            :label="gettext('Two Factor')"
+          />
+          <q-tab
+            v-if="hasSysAudit"
+            no-caps
+            name="groups"
+            :label="gettext('Groups')"
+          />
+          <q-tab
+            v-if="hasSysAudit"
+            no-caps
+            name="pools"
+            :label="gettext('Pools')"
+          />
+          <q-tab
+            v-if="hasSysAudit"
+            no-caps
+            name="roles"
+            :label="gettext('Roles')"
+          />
+          <q-tab
+            v-if="hasSysAudit"
+            no-caps
+            name="realms"
+            :label="gettext('Realms')"
+          />
         </q-tabs>
         <q-separator />
-        <q-tab-panels v-model="activeTab" animated>
-          <q-tab-panel v-if="hasSysAudit" name="permissions" class="q-pa-none"><RulesPage ref="rulesPage" /></q-tab-panel>
-          <q-tab-panel name="users" class="q-pa-none"><UsersPage ref="usersPage" embedded /></q-tab-panel>
-          <q-tab-panel name="apitokens">
-            <APITokensPage ref="apiTokensPage" embedded />
+        <q-tab-panels
+          v-model="activeTab"
+          animated
+        >
+          <q-tab-panel
+            v-if="hasSysAudit"
+            name="permissions"
+          >
+            <RulesPage ref="rulesPage" />
           </q-tab-panel>
-          <q-tab-panel name="tfa" class="q-pa-none"><TwoFactorPage /></q-tab-panel>
-          <q-tab-panel v-if="hasSysAudit" name="groups">
+          <q-tab-panel name="users">
+            <UsersPage
+              ref="usersPage"
+              embedded
+            />
+          </q-tab-panel>
+          <q-tab-panel name="apitokens">
+            <APITokensPage
+              ref="apiTokensPage"
+              embedded
+            />
+          </q-tab-panel>
+          <q-tab-panel name="tfa"><TwoFactorPage /></q-tab-panel>
+          <q-tab-panel
+            v-if="hasSysAudit"
+            name="groups"
+          >
             <PermissionGroupsPage ref="groupsPage" />
           </q-tab-panel>
-          <q-tab-panel v-if="hasSysAudit" name="pools" class="q-pa-none"><PoolsPage ref="poolsPage" embedded /></q-tab-panel>
-          <q-tab-panel v-if="hasSysAudit" name="roles">
-            <RolesPage ref="rolesPage" embedded />
+          <q-tab-panel
+            v-if="hasSysAudit"
+            name="pools"
+          >
+            <PoolsPage
+              ref="poolsPage"
+              embedded
+            />
           </q-tab-panel>
-          <q-tab-panel v-if="hasSysAudit" name="realms">
-            <RealmPage ref="realmsPage" embedded />
+          <q-tab-panel
+            v-if="hasSysAudit"
+            name="roles"
+          >
+            <RolesPage
+              ref="rolesPage"
+              embedded
+            />
+          </q-tab-panel>
+          <q-tab-panel
+            v-if="hasSysAudit"
+            name="realms"
+          >
+            <RealmPage
+              ref="realmsPage"
+              embedded
+            />
           </q-tab-panel>
         </q-tab-panels>
       </q-card>
