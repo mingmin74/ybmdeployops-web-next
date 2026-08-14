@@ -21,7 +21,8 @@ const controllerMaxIds = diskBusLimits;
 const controllerList: DiskBus[] = ['ide', 'virtio', 'scsi', 'sata'];
 
 export function guestArchitecture(config: PveRecord, hostArch = 'x86_64') {
-  return textValue(config.arch) || hostArch || 'x86_64';
+  const arch = textValue(config.arch);
+  return !arch || arch === '__default__' ? hostArch || 'x86_64' : arch;
 }
 
 function busPriority(config: PveRecord, hostArch?: string): Record<DiskBus, number> {
