@@ -21,6 +21,7 @@ const props = withDefaults(
     errorMessage?: string;
     showError?: boolean;
     fixedLayout?: boolean;
+    clearable?: boolean;
     getRowValue?: (row: PveRecord) => string;
     canSelect?: (row: PveRecord) => boolean;
   }>(),
@@ -34,6 +35,7 @@ const props = withDefaults(
     errorMessage: '',
     showError: false,
     fixedLayout: false,
+    clearable: false,
   },
 );
 
@@ -97,6 +99,8 @@ function selectRow(_: Event, row: PveRecord) {
       :disable="disable"
       :error="error"
       :error-message="errorMessage"
+      :clearable="clearable"
+      @clear="model = ''"
     >
       <template #selected>
         <slot name="selected">

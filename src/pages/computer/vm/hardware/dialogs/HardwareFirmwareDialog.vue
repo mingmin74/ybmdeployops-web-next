@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { QTableColumn } from 'quasar';
 import { computed, reactive, shallowRef, watch } from 'vue';
-import { getNodeStorage } from '@/api/storageContent';
+import { getNodeStorage, getStorageContent } from '@/api/storageContent';
 import type { PveRecord } from '@/api/resources';
 import SelectTable from '@/components/SelectTable.vue';
 import UWindow from '@/components/UWindow.vue';
@@ -10,11 +10,24 @@ import { formatBytes, textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
 
 const visible = defineModel<boolean>({ default: false });
-const { kind = 'efi' } = defineProps<{ kind?: 'efi' | 'tpm' }>();
-const form = reactive({ storage: '', format: 'raw', preEnrolledKeys: true, tpmVersion: 'v2.0' });
+const { kind = 'efi', canAddFirmware = false, usesEfiBios = false } = defineProps<{
+  kind?: 'efi' | 'tpm';
+  canAddFirmware?: boolean;
+  usesEfiBios?: boolean;
+}>();
+const form = reactive({
+  storage: '',
+  existingVolume: '',
+  format: 'raw',
+  preEnrolledKeys: true,
+  tpmVersion: 'v2.0',
+});
 const imageStorageRows = shallowRef<PveRecord[]>([]);
+const existingVolumes = shallowRef<PveRecord[]>([]);
 const storageLoading = shallowRef(false);
-const { config, hasVmCapability, loading, node, updateConfig } = useVmHardwareContext();
+const existingVolumeLoading = shallowRef(false);
+let existingVolumeRequest = 0;
+const { loading, node, updateConfig } = useVmHardwareContext();
 
 const storageColumns: QTableColumn<PveRecord>[] = [
   {
@@ -37,12 +50,26 @@ const storageColumns: QTableColumn<PveRecord>[] = [
     align: 'right',
   },
 ];
+const existingVolumeColumns: QTableColumn<PveRecord>[] = [
+  {
+    name: 'volid',
+    label: gettext('Disk image'),
+    field: (row) => textValue(row.volid || row.text),
+    align: 'left',
+  },
+  { name: 'format', label: gettext('Format'), field: (row) => textValue(row.format), align: 'left' },
+  {
+    name: 'size',
+    label: gettext('Size'),
+    field: (row) => formatBytes(textValue(row.size)),
+    align: 'right',
+  },
+];
 
-const usesEfiBios = computed(() => textValue(config.value.bios, 'seabios') === 'ovmf');
 const dialogTitle = computed(
   () => `${gettext('Add')}:${gettext(kind === 'efi' ? 'EFI Disk' : 'TPM State')}`,
 );
-const dialogLoading = computed(() => loading.value || storageLoading.value);
+const dialogLoading = computed(() => loading.value || storageLoading.value || existingVolumeLoading.value);
 const storageLabel = computed(() => gettext(kind === 'efi' ? 'EFI Storage' : 'TPM Storage'));
 const diskFormatOptions = computed(() =>
   ['raw', 'qcow2', 'vmdk']
@@ -58,10 +85,15 @@ const diskFormatOptions = computed(() =>
     })),
 );
 const storageFormats = computed(() => storageFormatInfo(form.storage));
+const selectedStorage = computed(() =>
+  imageStorageRows.value.find((row) => textValue(row.storage) === form.storage),
+);
+const selectExisting = computed(() => Boolean(selectedStorage.value?.select_existing));
 const diskFormatDisabled = computed(() => diskFormatOptions.value.length <= 1);
 const canAdd = computed(() => {
-  const key = kind === 'efi' ? 'efidisk0' : 'tpmstate0';
-  return Boolean(hasVmCapability('VM.Config.Disk') && form.storage && !config.value[key]);
+  return Boolean(
+    canAddFirmware && form.storage && selectedStorage.value && canSelectStorage(selectedStorage.value),
+  );
 });
 
 function storageFormatInfo(storageName: string) {
@@ -114,8 +146,6 @@ async function loadImageStorages() {
     imageStorageRows.value = [...(response.data || [])].sort((left, right) =>
       textValue(left.storage).localeCompare(textValue(right.storage)),
     );
-    const firstUsable = imageStorageRows.value.find(canSelectStorage);
-    form.storage = textValue(firstUsable?.storage);
     resetDiskFormat();
   } finally {
     storageLoading.value = false;
@@ -124,7 +154,14 @@ async function loadImageStorages() {
 
 watch(visible, (isVisible) => {
   if (!isVisible) return;
-  Object.assign(form, { storage: '', format: 'raw', preEnrolledKeys: true, tpmVersion: 'v2.0' });
+  Object.assign(form, {
+    storage: '',
+    existingVolume: '',
+    format: 'raw',
+    preEnrolledKeys: true,
+    tpmVersion: 'v2.0',
+  });
+  existingVolumes.value = [];
   void loadImageStorages();
 });
 
@@ -132,18 +169,41 @@ watch(
   () => form.storage,
   () => {
     resetDiskFormat();
+    void loadExistingVolumes();
   },
 );
+
+async function loadExistingVolumes() {
+  const request = ++existingVolumeRequest;
+  const storage = form.storage;
+  form.existingVolume = '';
+  existingVolumes.value = [];
+  if (!storage || !selectExisting.value) return;
+  existingVolumeLoading.value = true;
+  try {
+    const response = await getStorageContent(node.value, storage, 'images');
+    if (request === existingVolumeRequest && storage === form.storage)
+      existingVolumes.value = response.data || [];
+  } finally {
+    if (request === existingVolumeRequest) existingVolumeLoading.value = false;
+  }
+}
 
 async function addFirmware() {
   const key = kind === 'efi' ? 'efidisk0' : 'tpmstate0';
   if (!canAdd.value) return;
-  await updateConfig({
-    [key]:
-      kind === 'efi'
-        ? `${form.storage}:1,efitype=4m,format=${form.format},pre-enrolled-keys=${form.preEnrolledKeys ? 1 : 0}`
-        : `${form.storage}:1,format=${form.format},version=${form.tpmVersion}`,
-  });
+  const volume = textValue(form.existingVolume).trim() || `${form.storage}:1`;
+  await updateConfig(
+    {
+      ...(kind === 'efi' ? { background_delay: 5 } : {}),
+      [key]:
+        kind === 'efi'
+          ? `${volume},efitype=4m,format=${form.format},pre-enrolled-keys=${form.preEnrolledKeys ? 1 : 0}`
+          : `${volume},format=${form.format},version=${form.tpmVersion}`,
+    },
+    kind === 'efi' ? 'POST' : 'PUT',
+    gettext(kind === 'efi' ? 'Add EFI Disk' : 'Add TPM State'),
+  );
   visible.value = false;
 }
 </script>
@@ -169,6 +229,21 @@ async function addFirmware() {
               :error="!form.storage"
               :error-message="gettext('This field is required')"
               :label="storageLabel"
+            />
+            <SelectTable
+              v-if="selectExisting"
+              v-model="form.existingVolume"
+              row-key="volid"
+              field-style="standard"
+              width="500px"
+              class="q-field--with-bottom"
+              :rows="existingVolumes"
+              :columns="existingVolumeColumns"
+              :display-value="form.existingVolume"
+              :loading="existingVolumeLoading"
+              :get-row-value="(row) => textValue(row.volid || row.text)"
+              :label="gettext('Existing disk image (optional)')"
+              clearable
             />
             <q-select
               v-model="form.format"
@@ -210,6 +285,21 @@ async function addFirmware() {
               :error="!form.storage"
               :error-message="gettext('This field is required')"
               :label="storageLabel"
+            />
+            <SelectTable
+              v-if="selectExisting"
+              v-model="form.existingVolume"
+              row-key="volid"
+              field-style="standard"
+              width="500px"
+              class="q-field--with-bottom"
+              :rows="existingVolumes"
+              :columns="existingVolumeColumns"
+              :display-value="form.existingVolume"
+              :loading="existingVolumeLoading"
+              :get-row-value="(row) => textValue(row.volid || row.text)"
+              :label="gettext('Existing disk image (optional)')"
+              clearable
             />
             <q-select
               v-model="form.format"

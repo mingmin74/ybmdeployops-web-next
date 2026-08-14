@@ -312,6 +312,19 @@ const selectedCanSave = computed(() =>
   Boolean(selectedDevice.value?.editable && canEditRow(selectedDevice.value)),
 );
 const isDisk = computed(() => selectedDevice.value?.type === 'disk');
+function hasFirmwareDevice(key: 'efidisk0' | 'tpmstate0') {
+  return currentConfig.value[key] !== undefined || pendingByKey.value[key] !== undefined;
+}
+const canAddEfi = computed(() =>
+  hasVmCapability('VM.Config.Disk') && !hasFirmwareDevice('efidisk0'),
+);
+const canAddTpm = computed(() =>
+  hasVmCapability('VM.Config.Disk') && !hasFirmwareDevice('tpmstate0'),
+);
+const usesEfiBios = computed(() =>
+  textValue(currentConfig.value.bios, 'seabios') === 'ovmf' ||
+  textValue(pendingByKey.value.bios?.pending) === 'ovmf',
+);
 async function refreshConfig() {
   const response = await getVmConfig(props.node, props.vmid, props.guestType);
   if (!response.data) throw new Error('Unable to load the current VM configuration');
@@ -522,6 +535,7 @@ function openAddHardware(kind: 'disk' | 'cdrom' | 'net' | 'usb' | 'pci' | 'seria
 }
 
 function openFirmware(kind: 'efi' | 'tpm') {
+  if ((kind === 'efi' && !canAddEfi.value) || (kind === 'tpm' && !canAddTpm.value)) return;
   firmwareKind.value = kind;
   firmwareVisible.value = true;
 }
@@ -575,6 +589,8 @@ provide(vmHardwareKey, vmHardwareContext);
       :can-revert="canRevert"
       :can-add-cdrom="hasVmCapability('VM.Config.CDROM')"
       :can-add-network="hasVmCapability('VM.Config.Network') && networkDeviceCount < 32"
+      :can-add-efi="canAddEfi"
+      :can-add-tpm="canAddTpm"
       :guest-type="props.guestType"
       @add="openAddHardware"
       @add-firmware="openFirmware"
@@ -646,7 +662,12 @@ provide(vmHardwareKey, vmHardwareContext);
     </div>
     <HardwareAddDialog v-model="addVisible" :initial-kind="addInitialKind" />
     <HardwareImportDiskDialog v-model="importDiskVisible" />
-    <HardwareFirmwareDialog v-model="firmwareVisible" :kind="firmwareKind" />
+    <HardwareFirmwareDialog
+      v-model="firmwareVisible"
+      :kind="firmwareKind"
+      :can-add-firmware="firmwareKind === 'efi' ? canAddEfi : canAddTpm"
+      :uses-efi-bios="usesEfiBios"
+    />
     <HardwareCloudInitDriveDialog v-model="cloudInitVisible" />
     <HardwareRngDialog v-model="rngVisible" />
     <HardwareVirtiofsDialog v-model="virtiofsVisible" />
