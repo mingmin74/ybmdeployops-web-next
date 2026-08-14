@@ -14,7 +14,7 @@ import AddUsbForm from '../add/forms/AddUsbForm.vue';
 import AddPciForm from '../add/forms/AddPciForm.vue';
 import AddSerialForm from '../add/forms/AddSerialForm.vue';
 import AddAudioForm from '../add/forms/AddAudioForm.vue';
-import { allowedDiskBusses, nextFreeDiskSlot, nextFreeDiskSlotForBus, sortedDiskBusses, storageFormats, validDiskBandwidth, validDiskDeviceId, validDiskSize, type DiskBus } from '../utils/diskController';
+import { allowedDiskBusses, guestArchitecture, nextFreeDiskSlot, nextFreeDiskSlotForBus, sortedDiskBusses, storageFormats, validDiskBandwidth, validDiskDeviceId, validDiskSize, type DiskBus } from '../utils/diskController';
 
 type DeviceKind = 'disk' | 'cdrom' | 'net' | 'usb' | 'pci' | 'serial' | 'audio';
 type CdromBus = Exclude<DiskBus, 'virtio'>;
@@ -278,8 +278,9 @@ function resetDiskDefaults() {
 }
 
 function resetCdromDefaults() {
+  const arch = guestArchitecture(cdromConfig.value, hostArch.value);
   const slot = nextFreeCdromSlot(
-    hostArch.value === 'aarch64' ? ['scsi', 'sata'] : ['ide', 'scsi', 'sata'],
+    arch === 'aarch64' ? ['scsi', 'sata'] : ['ide', 'scsi', 'sata'],
   );
   Object.assign(form, {
     cdromMediaType: 'iso',
