@@ -89,6 +89,8 @@ const hostArch = shallowRef('x86_64');
 const storages = shallowRef<PveRecord[]>([]);
 const existingVolumes = shallowRef<PveRecord[]>([]);
 const storageLoaded = shallowRef(false);
+let dialogSession = 0;
+let existingVolumeRequest = 0;
 const addDiskFormKey = shallowRef(0);
 const addCdromFormKey = shallowRef(0);
 const addDiskAdvanced = shallowRef(false);
@@ -172,7 +174,7 @@ const scsiControllerOptions = [
   { label: 'VMware PVSCSI', value: 'pvscsi' },
 ];
 const scsiControllerLabel = computed(() => {
-  const value = textValue(config.value.scsihw) || '__default__';
+  const value = textValue(diskConfig.value.scsihw) || '__default__';
   return scsiControllerOptions.find((option) => option.value === value)?.label || value;
 });
 const addTitle = computed(() => {
@@ -370,18 +372,23 @@ watch(
 );
 
 watch(() => form.storage, async () => {
+  const request = ++existingVolumeRequest;
   form.existingVolume = '';
   existingVolumes.value = [];
   const storage = selectedStorage.value;
   const formats = storageFormats(storage);
   form.diskFormat = formats.selected;
   if (!selectExisting.value || !form.storage) return;
-  const response = await getStorageContent(node.value, form.storage, 'images');
-  if (form.storage === textValue(storage?.storage)) existingVolumes.value = response.data || [];
+  const storageName = form.storage;
+  const response = await getStorageContent(node.value, storageName, 'images');
+  if (request === existingVolumeRequest && storageName === form.storage)
+    existingVolumes.value = response.data || [];
 });
 
 async function initializeDisk() {
   if (initialKind !== 'disk' || !hasVmCapability('VM.Config.Disk')) return;
+  const session = ++dialogSession;
+  existingVolumeRequest += 1;
   storageLoaded.value = false;
   storages.value = [];
   existingVolumes.value = [];
@@ -392,13 +399,16 @@ async function initializeDisk() {
     const [configResponse, storageResponse, nodesResponse] = await Promise.all([
       getVmConfig(node.value, vmid.value), getNodeStorage(node.value, 'images'), getNodes(),
     ]);
+    if (session !== dialogSession || !visible.value) return;
     openedConfig.value = configResponse.data || null;
     openedDigest.value = textValue(configResponse.data?.digest);
     hostArch.value = textValue(nodesResponse.data?.find((item) => item.node === node.value)?.['host-arch']) || 'x86_64';
     storages.value = storageResponse.data || [];
     storageLoaded.value = true;
     resetDiskDefaults();
-  } finally { loading.value = false; }
+  } finally {
+    if (session === dialogSession) loading.value = false;
+  }
 }
 
 watch(

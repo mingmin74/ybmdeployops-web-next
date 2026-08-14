@@ -48,6 +48,9 @@ const openedDigest = shallowRef('');
 const hostArch = shallowRef('x86_64');
 const sourceLoaded = shallowRef(false);
 const targetLoaded = shallowRef(false);
+let dialogSession = 0;
+let sourceFileRequest = 0;
+let existingVolumeRequest = 0;
 const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
 const advanced = shallowRef(false);
 const form = reactive<ImportDiskForm>({
@@ -114,7 +117,7 @@ const scsiControllerOptions = [
   { label: 'VMware PVSCSI', value: 'pvscsi' },
 ];
 const scsiControllerLabel = computed(() => {
-  const value = textValue(config.value.scsihw) || '__default__';
+  const value = textValue(diskConfig.value.scsihw) || '__default__';
   return scsiControllerOptions.find((option) => option.value === value)?.label || value;
 });
 const canImport = computed(() =>
@@ -160,10 +163,13 @@ function resetForm() {
 }
 
 async function loadFiles() {
+  const request = ++sourceFileRequest;
   form.sourceVolume = '';
   files.value = [];
   if (!form.sourceStorage) return;
-  const response = await getStorageContent(node.value, form.sourceStorage, 'import');
+  const storageName = form.sourceStorage;
+  const response = await getStorageContent(node.value, storageName, 'import');
+  if (request !== sourceFileRequest || storageName !== form.sourceStorage) return;
   files.value = (response.data || []).filter((item) =>
     ['qcow2', 'vmdk', 'raw'].includes(textValue(item.format).toLowerCase()),
   );
@@ -171,6 +177,9 @@ async function loadFiles() {
 
 async function initialize() {
   if (!hasVmCapability('VM.Config.Disk')) return;
+  const session = ++dialogSession;
+  sourceFileRequest += 1;
+  existingVolumeRequest += 1;
   sourceStorages.value = [];
   targetStorages.value = [];
   files.value = [];
@@ -188,6 +197,7 @@ async function initialize() {
       getVmConfig(node.value, vmid.value),
       getNodes(),
     ]);
+    if (session !== dialogSession || !visible.value) return;
     sourceStorages.value = sourceResponse.data || [];
     targetStorages.value = targetResponse.data || [];
     sourceLoaded.value = true;
@@ -197,7 +207,7 @@ async function initialize() {
     hostArch.value = textValue(nodesResponse.data?.find((item) => item.node === node.value)?.['host-arch']) || 'x86_64';
     resetForm();
   } finally {
-    loading.value = false;
+    if (session === dialogSession) loading.value = false;
   }
 }
 
@@ -219,13 +229,16 @@ watch(
 );
 
 watch(() => form.targetStorage, async () => {
+  const request = ++existingVolumeRequest;
   form.existingVolume = '';
   existingVolumes.value = [];
   const storage = targetStorageRecord.value;
   form.diskFormat = storageFormats(storage).selected;
   if (!selectExisting.value || !form.targetStorage) return;
-  const response = await getStorageContent(node.value, form.targetStorage, 'images');
-  if (form.targetStorage === textValue(storage?.storage)) existingVolumes.value = response.data || [];
+  const storageName = form.targetStorage;
+  const response = await getStorageContent(node.value, storageName, 'images');
+  if (request === existingVolumeRequest && storageName === form.targetStorage)
+    existingVolumes.value = response.data || [];
 });
 
 watch(
