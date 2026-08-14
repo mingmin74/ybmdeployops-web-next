@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { computed, shallowRef } from 'vue';
+import type { QTableColumn } from 'quasar';
+import type { PveRecord } from '@/api/resources';
+import SelectTable from '@/components/SelectTable.vue';
 import { gettext } from '@/locale';
 
 export interface AddDiskFormModel {
   diskBus: 'scsi' | 'virtio' | 'sata' | 'ide';
   diskDeviceId: number;
   storage: string;
+  existingVolume: string;
   size: number;
   diskFormat: string;
   diskCache: string;
@@ -28,7 +32,22 @@ export interface AddDiskFormModel {
 
 const form = defineModel<AddDiskFormModel>('form', { required: true });
 const advanced = defineModel<boolean>('advanced', { default: false });
-const { scsiControllerLabel } = defineProps<{ scsiControllerLabel: string }>();
+const { scsiControllerLabel, storageRows, storageFormats, selectExisting, existingVolumes, busOptions } = defineProps<{
+  scsiControllerLabel: string;
+  storageRows: PveRecord[];
+  storageFormats: string[];
+  selectExisting: boolean;
+  existingVolumes: PveRecord[];
+  busOptions: { label: string; value: AddDiskFormModel['diskBus'] }[];
+}>();
+const storageColumns: QTableColumn<PveRecord>[] = [
+  { name: 'storage', label: gettext('Storage'), field: 'storage', align: 'left' },
+  { name: 'type', label: gettext('Type'), field: 'type', align: 'left' },
+];
+const imageColumns: QTableColumn<PveRecord>[] = [
+  { name: 'volid', label: gettext('Disk image'), field: 'volid', align: 'left' },
+  { name: 'format', label: gettext('Disk Format'), field: 'format', align: 'left' },
+];
 const supportsIoThread = computed(
   () => form.value.diskBus === 'scsi' || form.value.diskBus === 'virtio',
 );
@@ -60,12 +79,7 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
               emit-value
               map-options
               :label="gettext('Bus')"
-              :options="[
-                { label: 'SCSI', value: 'scsi' },
-                { label: 'VirtIO Block', value: 'virtio' },
-                { label: 'SATA', value: 'sata' },
-                { label: 'IDE', value: 'ide' },
-              ]"
+              :options="busOptions"
             />
             <q-input
               v-model.number="form.diskDeviceId"
@@ -85,14 +99,33 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
             readonly
             :label="gettext('SCSI Controller')"
           />
-          <q-input
+          <SelectTable
             v-model="form.storage"
+            row-key="storage"
+            field-style="standard"
+            width="500px"
             class="q-field--with-bottom"
-            dense
+            :rows="storageRows"
+            :columns="storageColumns"
+            :display-value="form.storage"
+            :get-row-value="(row) => String(row.storage || '')"
             :label="gettext('Storage')"
-            hint="local-lvm"
+          />
+          <SelectTable
+            v-if="selectExisting"
+            v-model="form.existingVolume"
+            row-key="volid"
+            field-style="standard"
+            width="500px"
+            class="q-field--with-bottom"
+            :rows="existingVolumes"
+            :columns="imageColumns"
+            :display-value="form.existingVolume"
+            :get-row-value="(row) => String(row.volid || row.text || '')"
+            :label="gettext('Disk image')"
           />
           <q-input
+            v-else
             v-model.number="form.size"
             class="q-field--with-bottom"
             dense
@@ -109,11 +142,8 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
             emit-value
             map-options
             :label="gettext('Disk Format')"
-            :options="[
-              { label: 'raw', value: 'raw' },
-              { label: 'qcow2', value: 'qcow2' },
-              { label: 'vmdk', value: 'vmdk' },
-            ]"
+            :disable="storageFormats.length <= 1"
+            :options="storageFormats"
           />
         </div>
         <div class="col">

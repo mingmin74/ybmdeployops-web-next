@@ -2,6 +2,9 @@
 import { computed, reactive, shallowRef, watch } from 'vue';
 import { gettext } from '@/locale';
 import UWindow from '@/components/UWindow.vue';
+import { getVmConfig, updateVmConfig } from '@/api/overview';
+import { getNodeStorage, getStorageContent } from '@/api/storageContent';
+import { getNodes, type PveRecord } from '@/api/resources';
 import { textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
 import AddCdromForm from '../add/forms/AddCdromForm.vue';
@@ -11,7 +14,7 @@ import AddUsbForm from '../add/forms/AddUsbForm.vue';
 import AddPciForm from '../add/forms/AddPciForm.vue';
 import AddSerialForm from '../add/forms/AddSerialForm.vue';
 import AddAudioForm from '../add/forms/AddAudioForm.vue';
-import { nextFreeDiskSlot, nextFreeDiskSlotForBus, type DiskBus } from '../utils/diskController';
+import { allowedDiskBusses, nextFreeDiskSlot, nextFreeDiskSlotForBus, sortedDiskBusses, storageFormats, validDiskBandwidth, validDiskDeviceId, validDiskSize, type DiskBus } from '../utils/diskController';
 
 type DeviceKind = 'disk' | 'cdrom' | 'net' | 'usb' | 'pci' | 'serial' | 'audio';
 type CdromBus = Exclude<DiskBus, 'virtio'>;
@@ -21,6 +24,7 @@ type PciMode = 'mapped' | 'raw';
 type AddHardwareForm = {
   kind: DeviceKind;
   storage: string;
+  existingVolume: string;
   size: number;
   diskBus: DiskBus;
   diskDeviceId: number;
@@ -78,7 +82,13 @@ type AddHardwareForm = {
 
 const visible = defineModel<boolean>({ default: false });
 const { initialKind = 'disk' } = defineProps<{ initialKind?: DeviceKind }>();
-const { config, hasVmCapability, loading, nextDeviceKey, updateConfig } = useVmHardwareContext();
+const { config, hasVmCapability, loading, nextDeviceKey, updateConfig, node, vmid, notifyTask, notifyUpdated } = useVmHardwareContext();
+const openedConfig = shallowRef<PveRecord | null>(null);
+const openedDigest = shallowRef('');
+const hostArch = shallowRef('x86_64');
+const storages = shallowRef<PveRecord[]>([]);
+const existingVolumes = shallowRef<PveRecord[]>([]);
+const storageLoaded = shallowRef(false);
 const addDiskFormKey = shallowRef(0);
 const addCdromFormKey = shallowRef(0);
 const addDiskAdvanced = shallowRef(false);
@@ -86,6 +96,7 @@ const addNetworkAdvanced = shallowRef(false);
 const form = reactive<AddHardwareForm>({
   kind: 'disk',
   storage: '',
+  existingVolume: '',
   size: 32,
   diskBus: 'scsi',
   diskDeviceId: 0,
@@ -141,9 +152,14 @@ const form = reactive<AddHardwareForm>({
   audioDriver: 'spice',
 });
 
+const diskConfig = computed(() => openedConfig.value || config.value);
+const selectedStorage = computed(() => storages.value.find((item) => textValue(item.storage) === form.storage));
+const diskFormatOptions = computed(() => storageFormats(selectedStorage.value).values);
+const selectExisting = computed(() => Boolean(selectedStorage.value?.select_existing));
+const diskBusOptions = computed(() => allowedDiskBusses(diskConfig.value, hostArch.value).map((value) => ({ label: value === 'virtio' ? 'VirtIO Block' : value.toUpperCase(), value })));
 const supportsDiskIoThread = computed(() => form.diskBus === 'scsi' || form.diskBus === 'virtio');
 const diskKey = computed(() => `${form.diskBus}${form.diskDeviceId}`);
-const diskKeyAvailable = computed(() => !config.value[diskKey.value]);
+const diskKeyAvailable = computed(() => validDiskDeviceId(diskConfig.value, form.diskBus, form.diskDeviceId));
 const cdromKey = computed(() => `${form.cdromBus}${form.cdromDeviceId}`);
 const cdromKeyAvailable = computed(() => !config.value[cdromKey.value]);
 const scsiControllerOptions = [
@@ -170,7 +186,7 @@ const addTitle = computed(() => {
   return gettext('Add Hardware');
 });
 const canAdd = computed(() => {
-  if (form.kind === 'disk') return Boolean(form.storage.trim() && diskKeyAvailable.value);
+  if (form.kind === 'disk') return Boolean(storageLoaded.value && selectedStorage.value && diskFormatOptions.value.includes(form.diskFormat) && diskKeyAvailable.value && validDiskBandwidth(form) && (selectExisting.value ? form.existingVolume.trim() && existingVolumes.value.some((item) => textValue(item.volid || item.text) === form.existingVolume) : validDiskSize(form.size)));
   if (form.kind === 'cdrom') {
     return Boolean(
       cdromKeyAvailable.value &&
@@ -220,9 +236,10 @@ function nextFreeCdromSlot(preferredBusses: CdromBus[] = ['ide', 'scsi', 'sata']
 }
 
 function resetDiskDefaults() {
-  const slot = nextFreeDiskSlot(config.value);
+  const slot = nextFreeDiskSlot(diskConfig.value, sortedDiskBusses(diskConfig.value, hostArch.value));
   Object.assign(form, {
     storage: '',
+    existingVolume: '',
     size: 32,
     diskBus: slot.bus,
     diskDeviceId: slot.id,
@@ -231,7 +248,7 @@ function resetDiskDefaults() {
     diskBackup: true,
     diskSkipReplication: false,
     diskDiscard: false,
-    diskIothread: false,
+    diskIothread: slot.bus === 'virtio' || (slot.bus === 'scsi' && textValue(diskConfig.value.scsihw) === 'virtio-scsi-single'),
     diskSsd: false,
     diskReadOnly: false,
     diskAio: '__default__',
@@ -323,6 +340,7 @@ function resetAudioDefaults() {
 
 watch(visible, (isVisible) => {
   if (!isVisible) return;
+  void initializeDisk();
   form.kind = initialKind;
   if (initialKind === 'disk') {
     resetDiskDefaults();
@@ -346,11 +364,42 @@ watch(visible, (isVisible) => {
 watch(
   () => form.diskBus,
   (bus) => {
-    form.diskDeviceId = nextFreeDiskSlotForBus(config.value, bus).id;
-    if (!supportsDiskIoThread.value) form.diskIothread = false;
-    if (bus === 'virtio') form.diskIothread = true;
+    form.diskDeviceId = nextFreeDiskSlotForBus(diskConfig.value, bus).id;
+    form.diskIothread = bus === 'virtio' || (bus === 'scsi' && textValue(diskConfig.value.scsihw) === 'virtio-scsi-single');
   },
 );
+
+watch(() => form.storage, async () => {
+  form.existingVolume = '';
+  existingVolumes.value = [];
+  const storage = selectedStorage.value;
+  const formats = storageFormats(storage);
+  form.diskFormat = formats.selected;
+  if (!selectExisting.value || !form.storage) return;
+  const response = await getStorageContent(node.value, form.storage, 'images');
+  if (form.storage === textValue(storage?.storage)) existingVolumes.value = response.data || [];
+});
+
+async function initializeDisk() {
+  if (initialKind !== 'disk' || !hasVmCapability('VM.Config.Disk')) return;
+  storageLoaded.value = false;
+  storages.value = [];
+  existingVolumes.value = [];
+  openedConfig.value = null;
+  openedDigest.value = '';
+  loading.value = true;
+  try {
+    const [configResponse, storageResponse, nodesResponse] = await Promise.all([
+      getVmConfig(node.value, vmid.value), getNodeStorage(node.value, 'images'), getNodes(),
+    ]);
+    openedConfig.value = configResponse.data || null;
+    openedDigest.value = textValue(configResponse.data?.digest);
+    hostArch.value = textValue(nodesResponse.data?.find((item) => item.node === node.value)?.['host-arch']) || 'x86_64';
+    storages.value = storageResponse.data || [];
+    storageLoaded.value = true;
+    resetDiskDefaults();
+  } finally { loading.value = false; }
+}
 
 watch(
   () => supportsDiskIoThread.value,
@@ -374,7 +423,7 @@ function pushOptional(parts: string[], key: string, value: string) {
 }
 
 function diskValue() {
-  const parts = [`${form.storage.trim()}:${form.size}`];
+  const parts = [selectExisting.value ? form.existingVolume.trim() : `${form.storage.trim()}:${form.size}`];
   if (form.diskFormat) parts.push(`format=${form.diskFormat}`);
   if (!form.diskBackup) parts.push('backup=0');
   if (form.diskSkipReplication) parts.push('replicate=no');
@@ -520,7 +569,15 @@ async function addDevice() {
   const key = keys[form.kind];
   const value = values[form.kind];
   if (!key || !value) return;
-  await updateConfig({ [key]: value });
+  if (form.kind === 'disk') {
+    loading.value = true;
+    try {
+      const result = await updateVmConfig(node.value, vmid.value, { digest: openedDigest.value, background_delay: 5, [key]: value }, 'qemu', 'POST');
+      notifyUpdated();
+      const upid = textValue((result as { data?: unknown }).data);
+      if (upid.startsWith('UPID:')) notifyTask(upid, gettext('Add Hard Disk'));
+    } finally { loading.value = false; }
+  } else await updateConfig({ [key]: value });
   visible.value = false;
 }
 </script>
@@ -535,6 +592,11 @@ async function addDevice() {
           v-model:form="form"
           v-model:advanced="addDiskAdvanced"
           :scsi-controller-label="scsiControllerLabel"
+          :storage-rows="storages"
+          :storage-formats="diskFormatOptions"
+          :select-existing="selectExisting"
+          :existing-volumes="existingVolumes"
+          :bus-options="diskBusOptions"
         />
         <AddNetworkForm
           v-else-if="form.kind === 'net'"

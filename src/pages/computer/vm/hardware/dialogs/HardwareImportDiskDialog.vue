@@ -2,18 +2,21 @@
 import { computed, reactive, shallowRef, watch } from 'vue';
 import type { QTableColumn } from 'quasar';
 import { getNodeStorage, getStorageContent } from '@/api/storageContent';
+import { getVmConfig, updateVmConfig } from '@/api/overview';
+import { getNodes } from '@/api/resources';
 import type { PveRecord } from '@/api/resources';
 import SelectTable from '@/components/SelectTable.vue';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
-import { nextFreeDiskSlot, nextFreeDiskSlotForBus, type DiskBus } from '../utils/diskController';
+import { allowedDiskBusses, nextFreeDiskSlot, nextFreeDiskSlotForBus, sortedDiskBusses, storageFormats, validDiskBandwidth, validDiskDeviceId, type DiskBus } from '../utils/diskController';
 
 type ImportDiskForm = {
   sourceStorage: string;
   sourceVolume: string;
   targetStorage: string;
+  existingVolume: string;
   diskBus: DiskBus;
   diskDeviceId: number;
   diskFormat: string;
@@ -39,12 +42,19 @@ const visible = defineModel<boolean>({ default: false });
 const sourceStorages = shallowRef<PveRecord[]>([]);
 const targetStorages = shallowRef<PveRecord[]>([]);
 const files = shallowRef<PveRecord[]>([]);
+const existingVolumes = shallowRef<PveRecord[]>([]);
+const openedConfig = shallowRef<PveRecord | null>(null);
+const openedDigest = shallowRef('');
+const hostArch = shallowRef('x86_64');
+const sourceLoaded = shallowRef(false);
+const targetLoaded = shallowRef(false);
 const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
 const advanced = shallowRef(false);
 const form = reactive<ImportDiskForm>({
   sourceStorage: '',
   sourceVolume: '',
   targetStorage: '',
+  existingVolume: '',
   diskBus: 'scsi',
   diskDeviceId: 0,
   diskFormat: 'raw',
@@ -65,7 +75,7 @@ const form = reactive<ImportDiskForm>({
   iops_rd_max: '',
   iops_wr_max: '',
 });
-const { config, hasVmCapability, loading, node, updateConfig } = useVmHardwareContext();
+const { config, hasVmCapability, loading, node, vmid, notifyTask, notifyUpdated } = useVmHardwareContext();
 
 const storageColumns: QTableColumn<PveRecord>[] = [
   { name: 'storage', label: gettext('Storage'), field: 'storage', align: 'left' },
@@ -85,10 +95,15 @@ const imageColumns: QTableColumn<PveRecord>[] = [
     },
   },
 ];
-const isScsiSingle = computed(() => textValue(config.value.scsihw) === 'virtio-scsi-single');
+const diskConfig = computed(() => openedConfig.value || config.value);
+const targetStorageRecord = computed(() => targetStorages.value.find((item) => textValue(item.storage) === form.targetStorage));
+const diskFormatOptions = computed(() => storageFormats(targetStorageRecord.value).values);
+const selectExisting = computed(() => Boolean(targetStorageRecord.value?.select_existing));
+const busOptions = computed(() => allowedDiskBusses(diskConfig.value, hostArch.value).map((value) => ({ label: value === 'virtio' ? 'VirtIO Block' : value.toUpperCase(), value })));
+const isScsiSingle = computed(() => textValue(diskConfig.value.scsihw) === 'virtio-scsi-single');
 const supportsDiskIoThread = computed(() => form.diskBus === 'scsi' || form.diskBus === 'virtio');
 const diskKey = computed(() => `${form.diskBus}${form.diskDeviceId}`);
-const diskKeyAvailable = computed(() => !config.value[diskKey.value]);
+const diskKeyAvailable = computed(() => validDiskDeviceId(diskConfig.value, form.diskBus, form.diskDeviceId));
 const scsiControllerOptions = [
   { label: `${gettext('Default')} (LSI 53C895A)`, value: '__default__' },
   { label: 'LSI 53C895A', value: 'lsi' },
@@ -105,18 +120,21 @@ const scsiControllerLabel = computed(() => {
 const canImport = computed(() =>
   Boolean(
     hasVmCapability('VM.Config.Disk') &&
-    form.sourceVolume &&
-    form.targetStorage &&
-    diskKeyAvailable.value,
+    sourceLoaded.value && targetLoaded.value &&
+    sourceStorages.value.some((item) => textValue(item.storage) === form.sourceStorage) &&
+    files.value.some((item) => textValue(item.volid || item.text) === form.sourceVolume) &&
+    targetStorageRecord.value && diskFormatOptions.value.includes(form.diskFormat) && diskKeyAvailable.value && validDiskBandwidth(form) &&
+    (!selectExisting.value || existingVolumes.value.some((item) => textValue(item.volid || item.text) === form.existingVolume)),
   ),
 );
 
 function resetForm() {
-  const slot = nextFreeDiskSlot(config.value);
+  const slot = nextFreeDiskSlot(diskConfig.value, sortedDiskBusses(diskConfig.value, hostArch.value));
   Object.assign(form, {
-    sourceStorage: textValue(sourceStorages.value[0]?.storage),
+    sourceStorage: '',
     sourceVolume: '',
-    targetStorage: textValue(targetStorages.value[0]?.storage),
+    targetStorage: '',
+    existingVolume: '',
     diskBus: slot.bus,
     diskDeviceId: slot.id,
     diskFormat: 'raw',
@@ -124,7 +142,7 @@ function resetForm() {
     diskBackup: true,
     diskSkipReplication: false,
     diskDiscard: false,
-    diskIothread: isScsiSingle.value,
+    diskIothread: slot.bus === 'virtio' || (slot.bus === 'scsi' && isScsiSingle.value),
     diskSsd: false,
     diskReadOnly: false,
     diskAio: '__default__',
@@ -153,16 +171,31 @@ async function loadFiles() {
 
 async function initialize() {
   if (!hasVmCapability('VM.Config.Disk')) return;
+  sourceStorages.value = [];
+  targetStorages.value = [];
+  files.value = [];
+  existingVolumes.value = [];
+  sourceLoaded.value = false;
+  targetLoaded.value = false;
+  openedConfig.value = null;
+  openedDigest.value = '';
+  resetForm();
   loading.value = true;
   try {
-    const [sourceResponse, targetResponse] = await Promise.all([
+    const [sourceResponse, targetResponse, configResponse, nodesResponse] = await Promise.all([
       getNodeStorage(node.value, 'import'),
       getNodeStorage(node.value, 'images'),
+      getVmConfig(node.value, vmid.value),
+      getNodes(),
     ]);
     sourceStorages.value = sourceResponse.data || [];
     targetStorages.value = targetResponse.data || [];
+    sourceLoaded.value = true;
+    targetLoaded.value = true;
+    openedConfig.value = configResponse.data || null;
+    openedDigest.value = textValue(configResponse.data?.digest);
+    hostArch.value = textValue(nodesResponse.data?.find((item) => item.node === node.value)?.['host-arch']) || 'x86_64';
     resetForm();
-    await loadFiles();
   } finally {
     loading.value = false;
   }
@@ -175,7 +208,7 @@ watch(visible, (isVisible) => {
 watch(
   () => form.diskBus,
   (bus) => {
-    form.diskDeviceId = nextFreeDiskSlotForBus(config.value, bus).id;
+    form.diskDeviceId = nextFreeDiskSlotForBus(diskConfig.value, bus).id;
     if (bus === 'virtio') form.diskIothread = true;
     else if (bus === 'scsi') form.diskIothread = isScsiSingle.value;
     else {
@@ -184,6 +217,16 @@ watch(
     }
   },
 );
+
+watch(() => form.targetStorage, async () => {
+  form.existingVolume = '';
+  existingVolumes.value = [];
+  const storage = targetStorageRecord.value;
+  form.diskFormat = storageFormats(storage).selected;
+  if (!selectExisting.value || !form.targetStorage) return;
+  const response = await getStorageContent(node.value, form.targetStorage, 'images');
+  if (form.targetStorage === textValue(storage?.storage)) existingVolumes.value = response.data || [];
+});
 
 watch(
   () => supportsDiskIoThread.value,
@@ -200,7 +243,7 @@ function pushOptional(parts: string[], key: string, value: string) {
 }
 
 function diskValue() {
-  const parts = [`${form.targetStorage}:0`, `import-from=${form.sourceVolume}`];
+  const parts = [selectExisting.value ? form.existingVolume : `${form.targetStorage}:0`, ...(selectExisting.value ? [] : [`import-from=${form.sourceVolume}`])];
   if (form.diskFormat) parts.push(`format=${form.diskFormat}`);
   if (!form.diskBackup) parts.push('backup=0');
   if (form.diskSkipReplication) parts.push('replicate=no');
@@ -223,7 +266,13 @@ function diskValue() {
 
 async function importDisk() {
   if (!canImport.value) return;
-  await updateConfig({ [diskKey.value]: diskValue() });
+  loading.value = true;
+  try {
+    const result = await updateVmConfig(node.value, vmid.value, { digest: openedDigest.value, background_delay: 5, [diskKey.value]: diskValue() }, 'qemu', 'POST');
+    notifyUpdated();
+    const upid = textValue((result as { data?: unknown }).data);
+    if (upid.startsWith('UPID:')) notifyTask(upid, gettext('Import Hard Disk'));
+  } finally { loading.value = false; }
   visible.value = false;
 }
 </script>
@@ -285,6 +334,20 @@ async function importDisk() {
                 :get-row-value="(row) => textValue(row.storage)"
                 :label="gettext('Target Storage')"
               />
+              <SelectTable
+                v-if="selectExisting"
+                v-model="form.existingVolume"
+                row-key="volid"
+                field-style="standard"
+                fixed-layout
+                width="500px"
+                class="q-field--with-bottom"
+                :rows="existingVolumes"
+                :columns="imageColumns"
+                :display-value="form.existingVolume"
+                :get-row-value="(row) => textValue(row.volid || row.text)"
+                :label="gettext('Disk image')"
+              />
               <div class="row q-gutter-sm">
                 <q-select
                   v-model="form.diskBus"
@@ -294,12 +357,7 @@ async function importDisk() {
                   emit-value
                   map-options
                   :label="gettext('Bus')"
-                  :options="[
-                    { label: 'SCSI', value: 'scsi' },
-                    { label: 'VirtIO Block', value: 'virtio' },
-                    { label: 'SATA', value: 'sata' },
-                    { label: 'IDE', value: 'ide' },
-                  ]"
+                  :options="busOptions"
                 />
                 <q-input
                   v-model.number="form.diskDeviceId"
@@ -329,11 +387,8 @@ async function importDisk() {
                 emit-value
                 map-options
                 :label="gettext('Disk Format')"
-                :options="[
-                  { label: 'raw', value: 'raw' },
-                  { label: 'qcow2', value: 'qcow2' },
-                  { label: 'vmdk', value: 'vmdk' },
-                ]"
+                :disable="diskFormatOptions.length <= 1"
+                :options="diskFormatOptions"
               />
               <q-select
                 v-model="form.diskCache"
