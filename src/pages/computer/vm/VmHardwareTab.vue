@@ -25,7 +25,7 @@ import HardwareVirtiofsDialog from './hardware/dialogs/HardwareVirtiofsDialog.vu
 
 const props = withDefaults(
   defineProps<{ node: string; vmid: string; config: PveRecord; guestType?: 'qemu' | 'lxc' }>(),
-  { guestType: 'qemu' },
+  { guestType: 'qemu' }
 );
 const emit = defineEmits<{ updated: []; task: [node: string, upid: string, title: string] }>();
 const session = useSessionStore();
@@ -42,7 +42,7 @@ const rngVisible = shallowRef(false);
 const virtiofsVisible = shallowRef(false);
 const selectedKey = shallowRef('');
 const addInitialKind = shallowRef<'disk' | 'cdrom' | 'net' | 'usb' | 'pci' | 'serial' | 'audio'>(
-  'disk',
+  'disk'
 );
 const firmwareKind = shallowRef<'efi' | 'tpm'>('efi');
 const form = reactive({
@@ -167,7 +167,7 @@ function deviceRow(key: string, config: PveRecord): HardwareRow | undefined {
   return undefined;
 }
 const pendingByKey = computed<Record<string, PveRecord>>(() =>
-  Object.fromEntries(pendingRows.value.map((row) => [textValue(row.key), row])),
+  Object.fromEntries(pendingRows.value.map((row) => [textValue(row.key), row]))
 );
 
 const rows = computed<HardwareRow[]>(() => {
@@ -284,7 +284,7 @@ const rows = computed<HardwareRow[]>(() => {
     .filter(
       (key) =>
         /^(ide|scsi|sata|virtio|net|usb|hostpci|serial|virtiofs|unused)\d+$/.test(key) ||
-        ['efidisk0', 'tpmstate0', 'audio0', 'rng0'].includes(key),
+        ['efidisk0', 'tpmstate0', 'audio0', 'rng0'].includes(key)
     )
     .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
     .map((key) => deviceRow(key, config))
@@ -297,34 +297,34 @@ function pendingKeysFor(row: HardwareRow) {
   return hardwareMeta[row.type]?.pendingKeys || [row.key];
 }
 const selectedPending = computed(() =>
-  Boolean(selectedDevice.value && pendingKeysFor(selectedDevice.value).some(hasPendingChange)),
+  Boolean(selectedDevice.value && pendingKeysFor(selectedDevice.value).some(hasPendingChange))
 );
 const canRemove = computed(() => {
   const device = selectedDevice.value;
   return Boolean(
-    device && device.key !== 'rootfs' && ['disk', 'cdrom', 'network', 'pci'].includes(device.type),
+    device && device.key !== 'rootfs' && ['disk', 'cdrom', 'network', 'pci'].includes(device.type)
   );
 });
 const canRevert = computed(() =>
-  Boolean(selectedDevice.value && selectedPending.value && canEditRow(selectedDevice.value)),
+  Boolean(selectedDevice.value && selectedPending.value && canEditRow(selectedDevice.value))
 );
 const selectedCanSave = computed(() =>
-  Boolean(selectedDevice.value?.editable && canEditRow(selectedDevice.value)),
+  Boolean(selectedDevice.value?.editable && canEditRow(selectedDevice.value))
 );
 const isDisk = computed(() => selectedDevice.value?.type === 'disk');
 function hasFirmwareDevice(key: 'efidisk0' | 'tpmstate0') {
   return currentConfig.value[key] !== undefined || pendingByKey.value[key] !== undefined;
 }
 const canAddEfi = computed(
-  () => hasVmCapability('VM.Config.Disk') && !hasFirmwareDevice('efidisk0'),
+  () => hasVmCapability('VM.Config.Disk') && !hasFirmwareDevice('efidisk0')
 );
 const canAddTpm = computed(
-  () => hasVmCapability('VM.Config.Disk') && !hasFirmwareDevice('tpmstate0'),
+  () => hasVmCapability('VM.Config.Disk') && !hasFirmwareDevice('tpmstate0')
 );
 const usesEfiBios = computed(
   () =>
     textValue(currentConfig.value.bios, 'seabios') === 'ovmf' ||
-    textValue(pendingByKey.value.bios?.pending) === 'ovmf',
+    textValue(pendingByKey.value.bios?.pending) === 'ovmf'
 );
 async function refreshConfig() {
   const response = await getVmConfig(props.node, props.vmid, props.guestType);
@@ -389,14 +389,14 @@ watch(
   () => {
     void loadPending();
   },
-  { immediate: true },
+  { immediate: true }
 );
 watch(
   () => props.config,
   (config) => {
     currentConfig.value = { ...config };
   },
-  { deep: true },
+  { deep: true }
 );
 
 watch(
@@ -405,7 +405,7 @@ watch(
     if (selectedKey.value && nextRows.some((row) => row.key === selectedKey.value)) return;
     selectedKey.value = nextRows[0]?.key || '';
   },
-  { immediate: true },
+  { immediate: true }
 );
 
 watch(
@@ -415,7 +415,7 @@ watch(
     form.deviceValue = device?.editable ? textValue(currentConfig.value[device.key]) : '';
     form.advanced = Boolean(device?.editable && form.deviceValue.includes(','));
   },
-  { immediate: true },
+  { immediate: true }
 );
 
 function canEditRow(row: HardwareRow) {
@@ -505,7 +505,7 @@ function removeDevice() {
       props.node,
       props.vmid,
       { digest: props.config.digest, delete: device.key },
-      props.guestType,
+      props.guestType
     )
       .then(() => emit('updated'))
       .finally(() => {
@@ -535,6 +535,7 @@ function openAddHardware(kind: 'disk' | 'cdrom' | 'net' | 'usb' | 'pci' | 'seria
   if (kind === 'usb' && !canAddUsb.value) return;
   if (kind === 'pci' && !canAddPci.value) return;
   if (kind === 'serial' && !canAddSerial.value) return;
+  if (kind === 'audio' && !canAddAudio.value) return;
   addInitialKind.value = kind;
   addVisible.value = true;
 }
@@ -548,11 +549,11 @@ function openFirmware(kind: 'efi' | 'tpm') {
 function nextDeviceKey(
   prefix: 'scsi' | 'virtio' | 'sata' | 'net' | 'ide' | 'usb' | 'hostpci' | 'serial' | 'virtiofs',
   limit = 32,
-  emptyWhenFull = true,
+  emptyWhenFull = true
 ) {
   for (let index = 0; index < limit; index += 1) {
     const key = `${prefix}${index}`;
-    if (!props.config[key]) return key;
+    if (currentConfig.value[key] === undefined && !pendingHardwareKeys.value.has(key)) return key;
   }
   return emptyWhenFull ? undefined : `${prefix}${limit - 1}`;
 }
@@ -562,19 +563,25 @@ const networkDeviceCount = computed(() => {
     [
       ...Object.keys(currentConfig.value),
       ...pendingRows.value.map((row) => textValue(row.key)),
-    ].filter((key) => networkKey.test(key)),
+    ].filter((key) => networkKey.test(key))
   ).size;
 });
 const pendingHardwareKeys = computed(
-  () => new Set(pendingRows.value.map((row) => textValue(row.key))),
+  () => new Set(pendingRows.value.map((row) => textValue(row.key)))
 );
-function hardwareDeviceCount(prefix: 'usb' | 'hostpci' | 'serial') {
+function hardwareDeviceCount(prefix: 'usb' | 'hostpci' | 'serial' | 'virtiofs') {
   const pattern =
-    prefix === 'usb' ? /^usb\d+$/ : prefix === 'hostpci' ? /^hostpci\d+$/ : /^serial\d+$/;
+    prefix === 'usb'
+      ? /^usb\d+$/
+      : prefix === 'hostpci'
+        ? /^hostpci\d+$/
+        : prefix === 'serial'
+          ? /^serial\d+$/
+          : /^virtiofs\d+$/;
   return new Set(
     [...Object.keys(currentConfig.value), ...pendingHardwareKeys.value].filter((key) =>
-      pattern.test(key),
-    ),
+      pattern.test(key)
+    )
   ).size;
 }
 function maxUsbCount() {
@@ -586,13 +593,25 @@ function maxUsbCount() {
     : 5;
 }
 const canAddUsb = computed(
-  () => hasVmCapability('VM.Config.HWType') && hardwareDeviceCount('usb') < maxUsbCount(),
+  () => hasVmCapability('VM.Config.HWType') && hardwareDeviceCount('usb') < maxUsbCount()
 );
 const canAddPci = computed(
-  () => hasVmCapability('VM.Config.HWType') && hardwareDeviceCount('hostpci') < 16,
+  () => hasVmCapability('VM.Config.HWType') && hardwareDeviceCount('hostpci') < 16
 );
 const canAddSerial = computed(
-  () => hasVmCapability('VM.Config.HWType') && hardwareDeviceCount('serial') < 4,
+  () => hasVmCapability('VM.Config.HWType') && hardwareDeviceCount('serial') < 4
+);
+function hasCurrentOrPendingDevice(key: string) {
+  return currentConfig.value[key] !== undefined || pendingHardwareKeys.value.has(key);
+}
+const canAddAudio = computed(
+  () => hasVmCapability('VM.Config.HWType') && !hasCurrentOrPendingDevice('audio0')
+);
+const canAddRng = computed(
+  () => hasVmCapability('VM.Config.HWType') && !hasCurrentOrPendingDevice('rng0')
+);
+const canAddVirtiofs = computed(
+  () => hasVmCapability('VM.Config.Options') && hardwareDeviceCount('virtiofs') < 10
 );
 function isCloudInitDriveValue(value: unknown) {
   return /vm-.*-cloudinit/.test(textValue(value));
@@ -605,14 +624,14 @@ const hasCloudInitDrive = computed(() =>
         (typeof value === 'object' &&
           value !== null &&
           (isCloudInitDriveValue((value as PveRecord).value) ||
-            isCloudInitDriveValue((value as PveRecord).pending)))),
-  ),
+            isCloudInitDriveValue((value as PveRecord).pending))))
+  )
 );
 const canAddCloudInit = computed(
   () =>
     hasVmCapability('VM.Config.CDROM') &&
     hasVmCapability('VM.Config.Cloudinit') &&
-    !hasCloudInitDrive.value,
+    !hasCloudInitDrive.value
 );
 const vmHardwareContext = useVmHardware({
   node: computed(() => props.node),
@@ -648,6 +667,9 @@ provide(vmHardwareKey, vmHardwareContext);
       :can-add-usb="canAddUsb"
       :can-add-pci="canAddPci"
       :can-add-serial="canAddSerial"
+      :can-add-audio="canAddAudio"
+      :can-add-rng="canAddRng"
+      :can-add-virtiofs="canAddVirtiofs"
       :can-add-cloud-init="canAddCloudInit"
       :can-add-efi="canAddEfi"
       :can-add-tpm="canAddTpm"
@@ -655,8 +677,8 @@ provide(vmHardwareKey, vmHardwareContext);
       @add="openAddHardware"
       @add-firmware="openFirmware"
       @add-cloud-init="canAddCloudInit && (cloudInitVisible = true)"
-      @add-rng="rngVisible = true"
-      @add-virtiofs="virtiofsVisible = true"
+      @add-rng="canAddRng && (rngVisible = true)"
+      @add-virtiofs="canAddVirtiofs && (virtiofsVisible = true)"
       @import-disk="openImportDisk"
       @remove="removeDevice"
       @resize="openResize"
@@ -665,11 +687,17 @@ provide(vmHardwareKey, vmHardwareContext);
     />
     <div class="row items-stretch">
       <div class="col-7 hardware-list-column">
-        <HardwareList :rows="rows" @select="selectHardware" />
+        <HardwareList
+          :rows="rows"
+          @select="selectHardware"
+        />
       </div>
       <div class="col-5 hardware-edit-column">
         <div class="u-border hardware-editor">
-          <div v-if="selectedDevice" class="q-pa-sm hardware-editor__content">
+          <div
+            v-if="selectedDevice"
+            class="q-pa-sm hardware-editor__content"
+          >
             <div class="row items-center no-wrap editor-titlebar">
               <div class="editor-title text-grey-10">{{ selectedDevice.name }}</div>
             </div>
@@ -680,7 +708,12 @@ provide(vmHardwareKey, vmHardwareContext);
                 dense
                 :label="selectedDevice.name"
               />
-              <div v-else class="text-grey-8 wrap">{{ selectedDevice.value }}</div>
+              <div
+                v-else
+                class="text-grey-8 wrap"
+              >
+                {{ selectedDevice.value }}
+              </div>
             </HardwareEditorHost>
           </div>
           <div
@@ -720,7 +753,10 @@ provide(vmHardwareKey, vmHardwareContext);
         </div>
       </div>
     </div>
-    <HardwareAddDialog v-model="addVisible" :initial-kind="addInitialKind" />
+    <HardwareAddDialog
+      v-model="addVisible"
+      :initial-kind="addInitialKind"
+    />
     <HardwareImportDiskDialog v-model="importDiskVisible" />
     <HardwareFirmwareDialog
       v-model="firmwareVisible"
@@ -728,7 +764,10 @@ provide(vmHardwareKey, vmHardwareContext);
       :can-add-firmware="firmwareKind === 'efi' ? canAddEfi : canAddTpm"
       :uses-efi-bios="usesEfiBios"
     />
-    <HardwareCloudInitDriveDialog v-model="cloudInitVisible" :can-add-cloud-init="canAddCloudInit" />
+    <HardwareCloudInitDriveDialog
+      v-model="cloudInitVisible"
+      :can-add-cloud-init="canAddCloudInit"
+    />
     <HardwareRngDialog v-model="rngVisible" />
     <HardwareVirtiofsDialog v-model="virtiofsVisible" />
     <HardwareResizeDiskDialog v-model="resizeVisible" />

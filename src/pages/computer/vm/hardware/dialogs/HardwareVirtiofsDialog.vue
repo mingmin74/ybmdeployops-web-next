@@ -2,6 +2,7 @@
 import type { QTableColumn } from 'quasar';
 import { computed, reactive, shallowRef, watch } from 'vue';
 import { getDirectoryMappings } from '@/api/deviceMapping';
+import { getVmConfig, updateVmConfig } from '@/api/overview';
 import type { PveRecord } from '@/api/resources';
 import SelectTable from '@/components/SelectTable.vue';
 import UWindow from '@/components/UWindow.vue';
@@ -20,7 +21,11 @@ const form = reactive({
 const advanced = shallowRef(false);
 const dirMappingRows = shallowRef<PveRecord[]>([]);
 const mappingLoading = shallowRef(false);
-const { config, hasVmCapability, loading, nextDeviceKey, node, updateConfig } =
+const virtiofsConfig = shallowRef<PveRecord | null>(null);
+const virtiofsDigest = shallowRef('');
+const virtiofsConfigLoaded = shallowRef(false);
+let virtiofsConfigSession = 0;
+const { config, hasVmCapability, loading, node, vmid, notifyUpdated, pendingByKey } =
   useVmHardwareContext();
 
 const cacheOptions = [
@@ -46,15 +51,21 @@ const dirMappingColumns: QTableColumn<PveRecord>[] = [
   },
 ];
 
-const virtiofsKey = computed(() => nextDeviceKey('virtiofs', 10));
-const virtiofsKeyAvailable = computed(
-  () => Boolean(virtiofsKey.value && !config.value[virtiofsKey.value]),
-);
+const activeVirtiofsConfig = computed(() => virtiofsConfig.value || config.value);
+const virtiofsKey = computed(() => {
+  for (let index = 0; index < 10; index += 1) {
+    const key = `virtiofs${index}`;
+    if (activeVirtiofsConfig.value[key] === undefined && !pendingByKey.value[key]) return key;
+  }
+  return '';
+});
+const virtiofsKeyAvailable = computed(() => Boolean(virtiofsKey.value));
 const canAdd = computed(
   () =>
     hasVmCapability('VM.Config.Options') &&
+    virtiofsConfigLoaded.value &&
     virtiofsKeyAvailable.value &&
-    Boolean(form.directoryId.trim()),
+    Boolean(form.directoryId.trim())
 );
 
 function resetForm() {
@@ -71,6 +82,7 @@ function resetForm() {
 watch(visible, (isVisible) => {
   if (!isVisible) return;
   resetForm();
+  void initializeVirtiofs();
   void loadDirectoryMappings();
 });
 
@@ -78,7 +90,7 @@ watch(
   () => form.acl,
   (enabled) => {
     if (enabled) form.xattr = true;
-  },
+  }
 );
 
 async function loadDirectoryMappings() {
@@ -88,14 +100,28 @@ async function loadDirectoryMappings() {
     const response = await getDirectoryMappings(node.value);
     const rows = response.data || [];
     dirMappingRows.value = [...rows].sort((left, right) =>
-      textValue(left.id).localeCompare(textValue(right.id)),
+      textValue(left.id).localeCompare(textValue(right.id))
     );
-    const firstRow = dirMappingRows.value[0];
-    if (!form.directoryId && firstRow) {
-      form.directoryId = textValue(firstRow.id);
-    }
   } finally {
     mappingLoading.value = false;
+  }
+}
+
+async function initializeVirtiofs() {
+  const session = ++virtiofsConfigSession;
+  virtiofsConfigLoaded.value = false;
+  virtiofsConfig.value = null;
+  virtiofsDigest.value = '';
+  if (!hasVmCapability('VM.Config.Options')) return;
+  loading.value = true;
+  try {
+    const response = await getVmConfig(node.value, vmid.value);
+    if (session !== virtiofsConfigSession || !visible.value || !response.data) return;
+    virtiofsConfig.value = response.data;
+    virtiofsDigest.value = textValue(response.data.digest);
+    virtiofsConfigLoaded.value = true;
+  } finally {
+    if (session === virtiofsConfigSession) loading.value = false;
   }
 }
 
@@ -115,13 +141,25 @@ function virtiofsValue() {
 async function addVirtiofs() {
   const key = virtiofsKey.value;
   if (!canAdd.value || !key) return;
-  await updateConfig({ [key]: virtiofsValue() });
+  loading.value = true;
+  try {
+    await updateVmConfig(node.value, vmid.value, {
+      digest: virtiofsDigest.value,
+      [key]: virtiofsValue(),
+    });
+    notifyUpdated();
+  } finally {
+    loading.value = false;
+  }
   visible.value = false;
 }
 </script>
 
 <template>
-  <q-dialog v-model="visible" persistent>
+  <q-dialog
+    v-model="visible"
+    persistent
+  >
     <UWindow
       :title="`${gettext('Add')}:${gettext('Virtiofs Filesystem Passthrough')}`"
       width="450px"
@@ -149,12 +187,18 @@ async function addVirtiofs() {
               gettext('Directory Mappings can be managed under Datacenter -> Directory Mappings')
             }}
           </div>
-          <div v-if="!virtiofsKeyAvailable" class="virtiofs-warning q-mt-sm">
+          <div
+            v-if="!virtiofsKeyAvailable"
+            class="virtiofs-warning q-mt-sm"
+          >
             {{ gettext('No free Virtiofs device slots are available') }}
           </div>
         </div>
 
-        <div v-if="advanced" class="u-border q-pa-md q-mt-sm">
+        <div
+          v-if="advanced"
+          class="u-border q-pa-md q-mt-sm"
+        >
           <q-select
             v-model="form.cache"
             dense
@@ -187,7 +231,12 @@ async function addVirtiofs() {
           />
         </div>
 
-        <q-checkbox v-model="advanced" class="q-mt-sm" dense :label="gettext('Advanced')" />
+        <q-checkbox
+          v-model="advanced"
+          class="q-mt-sm"
+          dense
+          :label="gettext('Advanced')"
+        />
       </div>
       <template #foot>
         <q-btn

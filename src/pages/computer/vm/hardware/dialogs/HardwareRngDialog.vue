@@ -10,10 +10,12 @@ const form = reactive({
   maxBytes: '1024',
   period: '',
 });
-const { config, hasVmCapability, loading, updateConfig } = useVmHardwareContext();
+const { config, hasVmCapability, loading, pendingByKey, updateConfig } = useVmHardwareContext();
 
 const entropySourceOptions = ['/dev/urandom', '/dev/random', '/dev/hwrng'];
-const hasRngDevice = computed(() => config.value.rng0 !== undefined);
+const hasRngDevice = computed(
+  () => config.value.rng0 !== undefined || pendingByKey.value.rng0 !== undefined
+);
 const maxBytesValid = computed(() => {
   if (form.maxBytes.trim() === '') return true;
   const value = Number(form.maxBytes);
@@ -30,7 +32,7 @@ const canAdd = computed(
     !hasRngDevice.value &&
     Boolean(form.source.trim()) &&
     maxBytesValid.value &&
-    periodValid.value,
+    periodValid.value
 );
 const showLimiterWarning = computed(() => form.maxBytes.trim() === '');
 
@@ -59,14 +61,21 @@ function rngValue() {
 
 async function save() {
   if (!canAdd.value) return;
-  await updateConfig({ rng0: rngValue() });
+  await updateConfig({ rng0: rngValue() }, 'PUT', '', false);
   visible.value = false;
 }
 </script>
 
 <template>
-  <q-dialog v-model="visible" persistent>
-    <UWindow :title="`${gettext('Add')}:${gettext('VirtIO RNG')}`" width="440px" :loading="loading">
+  <q-dialog
+    v-model="visible"
+    persistent
+  >
+    <UWindow
+      :title="`${gettext('Add')}:${gettext('VirtIO RNG')}`"
+      width="440px"
+      :loading="loading"
+    >
       <div class="q-pa-md u-dense">
         <div class="u-border q-pa-md">
           <q-select
@@ -104,14 +113,20 @@ async function save() {
             error-message="[1-]"
           />
         </div>
-        <div v-if="showLimiterWarning" class="rng-warning q-mt-sm">
+        <div
+          v-if="showLimiterWarning"
+          class="rng-warning q-mt-sm"
+        >
           {{
             gettext(
-              'Disabling the limiter can potentially allow a guest to overload the host. Proceed with caution.',
+              'Disabling the limiter can potentially allow a guest to overload the host. Proceed with caution.'
             )
           }}
         </div>
-        <div v-if="hasRngDevice" class="rng-warning q-mt-sm">
+        <div
+          v-if="hasRngDevice"
+          class="rng-warning q-mt-sm"
+        >
           {{ gettext('VirtIO RNG') }} {{ gettext('This device is already in use') }}
         </div>
       </div>

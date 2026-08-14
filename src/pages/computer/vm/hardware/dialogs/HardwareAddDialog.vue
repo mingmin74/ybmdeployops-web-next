@@ -105,6 +105,9 @@ const {
   notifyTask,
   notifyUpdated,
 } = useVmHardwareContext();
+const audioConfig = shallowRef<PveRecord | null>(null);
+const audioDigest = shallowRef('');
+const audioConfigLoaded = shallowRef(false);
 const serialConfig = shallowRef<PveRecord | null>(null);
 const serialDigest = shallowRef('');
 const serialConfigLoaded = shallowRef(false);
@@ -128,6 +131,7 @@ let existingVolumeRequest = 0;
 let cdromConfigSession = 0;
 let networkConfigSession = 0;
 let serialConfigSession = 0;
+let audioConfigSession = 0;
 const addDiskFormKey = shallowRef(0);
 const addCdromFormKey = shallowRef(0);
 const addDiskAdvanced = shallowRef(false);
@@ -203,7 +207,7 @@ const networkKey = computed(() => {
   return '';
 });
 const selectedStorage = computed(() =>
-  storages.value.find((item) => textValue(item.storage) === form.storage),
+  storages.value.find((item) => textValue(item.storage) === form.storage)
 );
 const diskFormatOptions = computed(() => storageFormats(selectedStorage.value).values);
 const selectExisting = computed(() => Boolean(selectedStorage.value?.select_existing));
@@ -211,19 +215,19 @@ const diskBusOptions = computed(() =>
   allowedDiskBusses(diskConfig.value, hostArch.value).map((value) => ({
     label: value === 'virtio' ? 'VirtIO Block' : value.toUpperCase(),
     value,
-  })),
+  }))
 );
 const supportsDiskIoThread = computed(() => form.diskBus === 'scsi' || form.diskBus === 'virtio');
 const diskKey = computed(() => `${form.diskBus}${form.diskDeviceId}`);
 const diskKeyAvailable = computed(() =>
-  validDiskDeviceId(diskConfig.value, form.diskBus, form.diskDeviceId),
+  validDiskDeviceId(diskConfig.value, form.diskBus, form.diskDeviceId)
 );
 const cdromKey = computed(() => `${form.cdromBus}${form.cdromDeviceId}`);
 const cdromKeyAvailable = computed(() => !cdromConfig.value[cdromKey.value]);
 const cdromBusOptions = computed(() =>
   allowedDiskBusses(cdromConfig.value, hostArch.value)
     .filter((bus): bus is CdromBus => bus !== 'virtio')
-    .map((value) => ({ label: value.toUpperCase(), value })),
+    .map((value) => ({ label: value.toUpperCase(), value }))
 );
 const scsiControllerOptions = [
   { label: `${gettext('Default')} (LSI 53C895A)`, value: '__default__' },
@@ -259,9 +263,9 @@ const canAdd = computed(() => {
       (selectExisting.value
         ? form.existingVolume.trim() &&
           existingVolumes.value.some(
-            (item) => textValue(item.volid || item.text) === form.existingVolume,
+            (item) => textValue(item.volid || item.text) === form.existingVolume
           )
-        : validDiskSize(form.size)),
+        : validDiskSize(form.size))
     );
   if (form.kind === 'cdrom') {
     return Boolean(
@@ -269,7 +273,7 @@ const canAdd = computed(() => {
       cdromKeyAvailable.value &&
       form.cdromDeviceId >= 0 &&
       form.cdromDeviceId < cdromBusLimits[form.cdromBus] &&
-      (form.cdromMediaType !== 'iso' || form.cdromVolid.trim()),
+      (form.cdromMediaType !== 'iso' || form.cdromVolid.trim())
     );
   }
   if (form.kind === 'net')
@@ -278,16 +282,22 @@ const canAdd = computed(() => {
     return Boolean(passthroughConfigLoaded.value && usbKeyAvailable.value && usbValue());
   if (form.kind === 'pci')
     return Boolean(
-      passthroughConfigLoaded.value && pciKeyAvailable.value && pciValue() && pciIdsValid(),
+      passthroughConfigLoaded.value && pciKeyAvailable.value && pciValue() && pciIdsValid()
     );
   if (form.kind === 'serial')
     return Boolean(
       hasVmCapability('VM.Config.HWType') &&
-        serialConfigLoaded.value &&
-        serialIdValid.value &&
-        serialKeyAvailable.value,
+      serialConfigLoaded.value &&
+      serialIdValid.value &&
+      serialKeyAvailable.value
     );
-  if (form.kind === 'audio') return Boolean(audioKeyAvailable.value && audioValue());
+  if (form.kind === 'audio')
+    return Boolean(
+      hasVmCapability('VM.Config.HWType') &&
+      audioConfigLoaded.value &&
+      audioKeyAvailable.value &&
+      audioValue()
+    );
   return true;
 });
 
@@ -314,16 +324,19 @@ const pciKey = computed(() => nextFreePassthroughKey('hostpci', 16, activePciCon
 const pciKeyAvailable = computed(() => Boolean(pciKey.value));
 const pcieSupported = computed(() => textValue(activePciConfig.value.machine).includes('q35'));
 const serialIdValid = computed(
-  () => Number.isInteger(form.serialId) && form.serialId >= 0 && form.serialId <= 3,
+  () => Number.isInteger(form.serialId) && form.serialId >= 0 && form.serialId <= 3
 );
 const serialKey = computed(() => `serial${form.serialId}`);
 const serialKeyAvailable = computed(
   () =>
     serialIdValid.value &&
     activeSerialConfig.value[serialKey.value] === undefined &&
-    !pendingByKey.value[serialKey.value],
+    !pendingByKey.value[serialKey.value]
 );
-const audioKeyAvailable = computed(() => config.value.audio0 === undefined);
+const activeAudioConfig = computed(() => audioConfig.value || config.value);
+const audioKeyAvailable = computed(
+  () => activeAudioConfig.value.audio0 === undefined && !pendingByKey.value.audio0
+);
 
 function nextFreeCdromSlot(preferredBusses: CdromBus[] = ['ide', 'scsi', 'sata']) {
   if (preferredBusses.includes('ide') && cdromConfig.value.ide2 === undefined) {
@@ -344,7 +357,7 @@ function nextFreeCdromSlot(preferredBusses: CdromBus[] = ['ide', 'scsi', 'sata']
 function resetDiskDefaults() {
   const slot = nextFreeDiskSlot(
     diskConfig.value,
-    sortedDiskBusses(diskConfig.value, hostArch.value),
+    sortedDiskBusses(diskConfig.value, hostArch.value)
   );
   Object.assign(form, {
     storage: '',
@@ -478,8 +491,29 @@ watch(visible, (isVisible) => {
     void initializePci();
   }
   if (initialKind === 'serial') void initializeSerial();
-  if (initialKind === 'audio') resetAudioDefaults();
+  if (initialKind === 'audio') {
+    resetAudioDefaults();
+    void initializeAudio();
+  }
 });
+
+async function initializeAudio() {
+  const session = ++audioConfigSession;
+  audioConfigLoaded.value = false;
+  audioConfig.value = null;
+  audioDigest.value = '';
+  if (!hasVmCapability('VM.Config.HWType')) return;
+  loading.value = true;
+  try {
+    const response = await getVmConfig(node.value, vmid.value);
+    if (session !== audioConfigSession || !visible.value || !response.data) return;
+    audioConfig.value = response.data;
+    audioDigest.value = textValue(response.data.digest);
+    audioConfigLoaded.value = true;
+  } finally {
+    if (session === audioConfigSession) loading.value = false;
+  }
+}
 
 async function initializeNetwork() {
   if (!hasVmCapability('VM.Config.Network')) return;
@@ -587,7 +621,7 @@ watch(
     form.diskIothread =
       bus === 'virtio' ||
       (bus === 'scsi' && textValue(diskConfig.value.scsihw) === 'virtio-scsi-single');
-  },
+  }
 );
 
 watch(
@@ -604,7 +638,7 @@ watch(
     const response = await getStorageContent(node.value, storageName, 'images');
     if (request === existingVolumeRequest && storageName === form.storage)
       existingVolumes.value = response.data || [];
-  },
+  }
 );
 
 async function initializeDisk() {
@@ -644,14 +678,14 @@ watch(
       form.diskIothread = false;
       form.diskReadOnly = false;
     }
-  },
+  }
 );
 
 watch(
   () => form.cdromBus,
   (bus) => {
     if (form.kind === 'cdrom') form.cdromDeviceId = nextFreeCdromSlot([bus]).id;
-  },
+  }
 );
 
 function pushOptional(parts: string[], key: string, value: string) {
@@ -701,7 +735,7 @@ function networkFormValid() {
     (!form.queues.trim() || (Number.isInteger(queues) && queues >= 1 && queues <= 64)) &&
     (!form.mtu.trim() ||
       form.model !== 'virtio' ||
-      (Number.isInteger(mtu) && mtu >= 1 && mtu <= 65520 && (mtu === 1 || mtu >= 576))),
+      (Number.isInteger(mtu) && mtu >= 1 && mtu <= 65520 && (mtu === 1 || mtu >= 576)))
   );
 }
 
@@ -740,7 +774,7 @@ function pciIdValid(value: string) {
 
 function pciIdsValid() {
   return [form.pciVendorId, form.pciDeviceId, form.pciSubVendorId, form.pciSubDeviceId].every(
-    pciIdValid,
+    pciIdValid
   );
 }
 
@@ -829,7 +863,7 @@ async function addDevice() {
         vmid.value,
         { digest: openedDigest.value, background_delay: 5, [key]: value },
         'qemu',
-        'POST',
+        'POST'
       );
       const upid = textValue((result as { data?: unknown }).data);
       if (upid.startsWith('UPID:')) notifyTask(upid, gettext('Add Hard Disk'));
@@ -872,14 +906,29 @@ async function addDevice() {
     } finally {
       loading.value = false;
     }
+  } else if (form.kind === 'audio') {
+    loading.value = true;
+    try {
+      await updateVmConfig(node.value, vmid.value, { digest: audioDigest.value, [key]: value });
+      notifyUpdated();
+    } finally {
+      loading.value = false;
+    }
   } else await updateConfig({ [key]: value });
   visible.value = false;
 }
 </script>
 
 <template>
-  <q-dialog v-model="visible" persistent>
-    <UWindow :title="addTitle" width="600px" :loading="loading">
+  <q-dialog
+    v-model="visible"
+    persistent
+  >
+    <UWindow
+      :title="addTitle"
+      width="600px"
+      :loading="loading"
+    >
       <div class="q-pa-md q-gutter-md">
         <AddDiskForm
           v-if="form.kind === 'disk'"

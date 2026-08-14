@@ -12,6 +12,9 @@ const props = withDefaults(
     canAddUsb?: boolean;
     canAddPci?: boolean;
     canAddSerial?: boolean;
+    canAddAudio?: boolean;
+    canAddRng?: boolean;
+    canAddVirtiofs?: boolean;
     canAddCloudInit?: boolean;
     canAddEfi?: boolean;
     canAddTpm?: boolean;
@@ -24,10 +27,13 @@ const props = withDefaults(
     canAddUsb: true,
     canAddPci: true,
     canAddSerial: true,
+    canAddAudio: true,
+    canAddRng: true,
+    canAddVirtiofs: true,
     canAddCloudInit: true,
     canAddEfi: true,
     canAddTpm: true,
-  },
+  }
 );
 
 const emit = defineEmits<{
@@ -78,9 +84,13 @@ const qemuAddItems = computed<{ label: string; action: () => void; disable?: boo
     action: () => emit('addCloudInit'),
     disable: !props.canAddCloudInit,
   },
-  { label: gettext('Audio Device'), action: () => emit('add', 'audio') },
-  { label: gettext('VirtIO RNG'), action: () => emit('addRng') },
-  { label: gettext('Virtiofs'), action: () => emit('addVirtiofs') },
+  {
+    label: gettext('Audio Device'),
+    action: () => emit('add', 'audio'),
+    disable: !props.canAddAudio,
+  },
+  { label: gettext('VirtIO RNG'), action: () => emit('addRng'), disable: !props.canAddRng },
+  { label: gettext('Virtiofs'), action: () => emit('addVirtiofs'), disable: !props.canAddVirtiofs },
 ]);
 const addItems = computed(() =>
   props.guestType === 'lxc'
@@ -88,7 +98,7 @@ const addItems = computed(() =>
         { label: gettext('Mount Point'), action: () => emit('add', 'disk') },
         { label: gettext('Device Passthrough'), action: () => emit('add', 'pci') },
       ]
-    : qemuAddItems.value,
+    : qemuAddItems.value
 );
 </script>
 
