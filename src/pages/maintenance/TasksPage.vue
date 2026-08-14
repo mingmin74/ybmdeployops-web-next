@@ -9,7 +9,7 @@ const activeTab = shallowRef('backup');
 const tabs = [
   { name: 'backup', label: 'Backup Tasks' },
   { name: 'replication', label: 'Replication Tasks' },
-  { name: 'bks', label: 'Bks management' },
+  // { name: 'bks', label: 'Bks management' },
 ];
 </script>
 
@@ -33,16 +33,19 @@ const tabs = [
         />
       </q-tabs>
       <q-separator />
-      <q-tab-panels v-model="activeTab" animated>
+      <q-tab-panels
+        v-model="activeTab"
+        animated
+      >
         <q-tab-panel name="backup">
           <BackupTasksPanel />
         </q-tab-panel>
         <q-tab-panel name="replication">
           <ReplicationTasksPanel />
         </q-tab-panel>
-        <q-tab-panel name="bks">
+        <!-- <q-tab-panel name="bks">
           <BksManagementPanel />
-        </q-tab-panel>
+        </q-tab-panel> -->
         <q-tab-panel
           v-for="tab in tabs.filter((tab) => !['backup', 'replication', 'bks'].includes(tab.name))"
           :key="tab.name"

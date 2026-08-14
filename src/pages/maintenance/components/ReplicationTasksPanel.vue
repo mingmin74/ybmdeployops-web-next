@@ -22,7 +22,7 @@ const props = withDefaults(
     guestType?: 'qemu' | 'lxc';
     embedded?: boolean;
   }>(),
-  { guestType: 'qemu', embedded: false },
+  { guestType: 'qemu', embedded: false }
 );
 
 type Row = ReplicationTask & {
@@ -63,16 +63,16 @@ const guestValid = computed(() => {
   return /^\d+$/.test(value) && Number(value) >= 100 && Number(value) <= 999999999;
 });
 const targetValid = computed(() =>
-  nodes.value.some((item) => item.node === form.target && item.status === 'online'),
+  nodes.value.some((item) => item.node === form.target && item.status === 'online')
 );
 const rateValid = computed(
-  () => !form.rate || (Number.isFinite(Number(form.rate)) && Number(form.rate) >= 1),
+  () => !form.rate || (Number.isFinite(Number(form.rate)) && Number(form.rate) >= 1)
 );
 const canManageReplication = computed(() =>
-  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Backup']),
+  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Backup'])
 );
 const canOperate = computed(
-  () => canManageReplication.value && Boolean(selectedTask.value) && !standalone.value,
+  () => canManageReplication.value && Boolean(selectedTask.value) && !standalone.value
 );
 const filteredTasks = computed(() => {
   const key = filter.value.trim().toLowerCase();
@@ -82,11 +82,11 @@ const filteredTasks = computed(() => {
       [row.id, row.guest, row.jobnum, row.target, row.schedule, row.comment]
         .join(' ')
         .toLowerCase()
-        .includes(key),
+        .includes(key)
   );
 });
 const formTitle = computed(
-  () => `${gettext(action.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Replication Job')}`,
+  () => `${gettext(action.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Replication Job')}`
 );
 function requiredLabel(label: string) {
   return `${label} *`;
@@ -136,7 +136,7 @@ function rowDblClick(_: Event, value: Row) {
 }
 function addScheduleOption(
   value: string,
-  done: (value?: string, mode?: 'add' | 'add-unique' | 'toggle') => void,
+  done: (value?: string, mode?: 'add' | 'add-unique' | 'toggle') => void
 ) {
   done(value.trim(), 'add-unique');
 }
@@ -165,7 +165,7 @@ async function reload() {
       .sort(
         (a, b) =>
           Number(a.guest || 0) - Number(b.guest || 0) ||
-          Number(a.jobnum || 0) - Number(b.jobnum || 0),
+          Number(a.jobnum || 0) - Number(b.jobnum || 0)
       );
     selected.value = [];
   } finally {
@@ -288,7 +288,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="replication-tasks-panel row column q-px-md q-py-sm">
+  <div class="replication-tasks-panel row column">
     <q-table
       flat
       :rows="filteredTasks"
@@ -303,8 +303,9 @@ onBeforeUnmount(() => {
       table-header-class="u-table-header"
       @row-click="rowClick"
       @row-dblclick="rowDblClick"
-      ><template #top
-        ><div class="row items-center q-gutter-sm">
+    >
+      <template #top>
+        <div class="row items-center q-gutter-sm">
           <q-btn
             no-caps
             outline
@@ -314,7 +315,8 @@ onBeforeUnmount(() => {
             :disable="standalone || !canManageReplication"
             :label="gettext('Add')"
             @click="openForm('add')"
-          /><q-btn
+          />
+          <q-btn
             no-caps
             outline
             size="12px"
@@ -323,7 +325,8 @@ onBeforeUnmount(() => {
             :disable="!canOperate"
             :label="gettext('Edit')"
             @click="openForm('edit')"
-          /><q-btn
+          />
+          <q-btn
             no-caps
             outline
             size="12px"
@@ -334,30 +337,56 @@ onBeforeUnmount(() => {
             @click="removeSelected"
           />
         </div>
-        <q-space /><q-input
+        <q-space />
+        <q-input
           v-model="filter"
           borderless
           dense
           debounce="300"
           :placeholder="gettext('Search')"
-          ><template #append><q-icon name="search" /></template></q-input></template
-      ><template #body-cell-enabled="props"
-        ><q-td :props="props"
-          ><q-icon
+        >
+          <template #append><q-icon name="search" /></template>
+        </q-input>
+      </template>
+      <template #body-cell-enabled="props">
+        <q-td :props="props">
+          <q-icon
             :name="props.value ? 'check' : 'close'"
-            :class="props.value ? 'text-green' : 'text-red'" /></q-td></template
-    ></q-table>
-    <q-inner-loading :showing="standalone" class="replication-standalone-mask">
+            :class="props.value ? 'text-green' : 'text-red'"
+          />
+        </q-td>
+      </template>
+    </q-table>
+    <q-inner-loading
+      :showing="standalone"
+      class="replication-standalone-mask"
+    >
       <div class="replication-standalone-mask__content row items-center no-wrap">
-        <q-icon name="warning" size="22px" class="q-mr-sm" />
+        <q-icon
+          name="warning"
+          size="22px"
+          class="q-mr-sm"
+        />
         <span>{{ gettext('Replication needs at least two nodes') }}</span>
       </div>
     </q-inner-loading>
   </div>
-  <q-dialog v-model="formVisible" persistent transition-show="scale" transition-hide="scale"
-    ><UWindow :title="formTitle" width="580px" :loading="formLoading"
-      ><q-form class="replication-form u-dense q-pa-md" @submit="save"
-        ><div class="row q-col-gutter-lg">
+  <q-dialog
+    v-model="formVisible"
+    persistent
+    transition-show="scale"
+    transition-hide="scale"
+  >
+    <UWindow
+      :title="formTitle"
+      width="580px"
+      :loading="formLoading"
+    >
+      <q-form
+        class="replication-form u-dense q-pa-md"
+        @submit="save"
+      >
+        <div class="row q-col-gutter-lg">
           <div class="col-12 col-sm-6">
             <q-input
               v-if="action === 'add'"
@@ -380,14 +409,16 @@ onBeforeUnmount(() => {
                   gettext('CT/VM ID must be between 100 and 999999999'),
               ]"
               class="q-field--with-bottom"
-            /><q-input
+            />
+            <q-input
               v-else
               v-model="form.guest"
               dense
               readonly
               class="q-field--with-bottom"
               label="CT/VM ID"
-            /><q-select
+            />
+            <q-select
               v-if="action === 'add'"
               v-model="form.target"
               dense
@@ -406,14 +437,16 @@ onBeforeUnmount(() => {
                 () => targetValid || gettext('Target node seems to be offline'),
               ]"
               class="q-field--with-bottom"
-            /><q-input
+            />
+            <q-input
               v-else
               v-model="form.target"
               dense
               readonly
               class="q-field--with-bottom"
               :label="gettext('Target')"
-            /><q-select
+            />
+            <q-select
               v-model="form.schedule"
               dense
               options-dense
@@ -449,20 +482,31 @@ onBeforeUnmount(() => {
               @update:model-value="formErrors.rate = ''"
               class="q-field--with-bottom"
               :label="gettext('Rate limit (MB/s)')"
-            /><q-input
+            />
+            <q-input
               v-model="form.comment"
               dense
               class="q-field--with-bottom"
               :label="gettext('Comment')"
-            /><q-checkbox
+            />
+            <q-checkbox
               v-model="form.enabled"
               dense
               color="primary"
               :label="gettext('Enabled')"
             />
-          </div></div></q-form
-      ><template #foot
-        ><q-btn v-close-popup no-caps flat size="12px" :label="gettext('Cancel')" /><q-btn
+          </div>
+        </div>
+      </q-form>
+      <template #foot>
+        <q-btn
+          v-close-popup
+          no-caps
+          flat
+          size="12px"
+          :label="gettext('Cancel')"
+        />
+        <q-btn
           no-caps
           flat
           size="12px"
@@ -470,18 +514,23 @@ onBeforeUnmount(() => {
           :disable="formSaving"
           :loading="formSaving"
           :label="gettext(action === 'add' ? 'Add' : 'Save')"
-          @click="save" /></template></UWindow
-  ></q-dialog>
+          @click="save"
+        />
+      </template>
+    </UWindow>
+  </q-dialog>
 </template>
 <style scoped>
 .replication-tasks-panel {
   position: relative;
   min-height: 160px;
 }
+
 .replication-standalone-mask {
   background: rgba(241, 245, 249, 0.8);
   backdrop-filter: blur(1px);
 }
+
 .replication-standalone-mask__content {
   padding: 12px 18px;
   color: #52606d;

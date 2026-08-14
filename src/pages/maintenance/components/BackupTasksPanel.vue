@@ -98,7 +98,7 @@ const simulatorForm = reactive({ schedule: '', iterations: 10 });
 const selectedTask = computed(() => selectedTasks.value[0]);
 const canOperate = computed(() => selectedTasks.value.length === 1);
 const formTitle = computed(
-  () => `${gettext(formAction.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Backup Task')}`,
+  () => `${gettext(formAction.value === 'add' ? 'Add' : 'Edit')}: ${gettext('Backup Task')}`
 );
 const filteredTasks = computed(() => {
   const keyword = filter.value.trim().toLowerCase();
@@ -108,18 +108,18 @@ const filteredTasks = computed(() => {
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
-      .includes(keyword),
+      .includes(keyword)
   );
 });
 const filteredVmOptions = computed(() => {
   const keyword = vmFilter.value.trim().toLowerCase();
   if (!keyword) return vmOptions.value;
   return vmOptions.value.filter((item) =>
-    [item.vmid, item.name, item.node, item.type].join(' ').toLowerCase().includes(keyword),
+    [item.vmid, item.name, item.node, item.type].join(' ').toLowerCase().includes(keyword)
   );
 });
 const selectedVmRows = computed(() =>
-  vmOptions.value.filter((item) => taskForm.selectedVmids.includes(textValue(item.vmid))),
+  vmOptions.value.filter((item) => taskForm.selectedVmids.includes(textValue(item.vmid)))
 );
 const selectedVmSummary = computed(() => {
   return taskForm.selectedVmids.join(', ') || gettext('No VMs selected');
@@ -472,7 +472,7 @@ async function openTaskForm(action: 'add' | 'edit') {
         mailto: textValue(data.mailto),
         mailnotification: textValue(
           data.mailnotification,
-          textValue(data['notification-policy'], 'always'),
+          textValue(data['notification-policy'], 'always')
         ),
         notesTemplate: textValue(data['notes-template'], '{{guestname}}'),
         bwlimit: textValue(data.bwlimit),
@@ -614,7 +614,7 @@ function createRunPayload(task: BackupTaskRow) {
               Array.isArray(item)
                 ? item.map((entry) => textValue(entry)).join(';')
                 : textValue(item)
-            }`,
+            }`
         )
         .sort()
         .join(',');
@@ -649,10 +649,10 @@ function runSelected() {
           return;
         }
         const results = await Promise.allSettled(
-          targetNodes.map((node) => runBackupTask(node, createRunPayload(task))),
+          targetNodes.map((node) => runBackupTask(node, createRunPayload(task)))
         );
         const failedNodes = results.flatMap((result, index) =>
-          result.status === 'rejected' ? [targetNodes[index]] : [],
+          result.status === 'rejected' ? [targetNodes[index]] : []
         );
         if (failedNodes.length) {
           Notify.create({
@@ -702,7 +702,7 @@ onMounted(() => void reload());
 </script>
 
 <template>
-  <div class="row column q-px-md q-py-sm">
+  <div class="row column">
     <q-table
       flat
       :rows="filteredTasks"
@@ -785,26 +785,52 @@ onMounted(() => void reload());
             :label="gettext('Schedule Simulator')"
             @click="openScheduleSimulator"
           />
-          <q-btn flat round dense icon="refresh" :aria-label="gettext('Refresh')" @click="reload" />
+          <q-btn
+            flat
+            round
+            dense
+            icon="refresh"
+            :aria-label="gettext('Refresh')"
+            @click="reload"
+          />
         </div>
         <q-space />
-        <q-input v-model="filter" borderless dense debounce="300" :placeholder="gettext('Search')">
+        <q-input
+          v-model="filter"
+          borderless
+          dense
+          debounce="300"
+          :placeholder="gettext('Search')"
+        >
           <template #append><q-icon name="search" /></template>
         </q-input>
       </template>
       <template #body-cell-enabled="props">
-        <q-td :props="props"
-          ><q-badge
+        <q-td :props="props">
+          <q-badge
             :color="props.row.enabledText === gettext('Enabled') ? 'green' : 'red'"
             :label="props.row.enabledText"
-        /></q-td>
+          />
+        </q-td>
       </template>
     </q-table>
   </div>
 
-  <q-dialog v-model="detailVisible" persistent transition-show="scale" transition-hide="scale">
-    <UWindow :title="gettext('Backup Details')" width="900px" :loading="detailLoading">
-      <div v-if="selectedTask" class="backup-dialog-body q-pa-md">
+  <q-dialog
+    v-model="detailVisible"
+    persistent
+    transition-show="scale"
+    transition-hide="scale"
+  >
+    <UWindow
+      :title="gettext('Backup Details')"
+      width="900px"
+      :loading="detailLoading"
+    >
+      <div
+        v-if="selectedTask"
+        class="backup-dialog-body q-pa-md"
+      >
         <section class="u-border q-mb-md backup-info-card">
           <div class="backup-info-card__header">
             <div>
@@ -821,9 +847,9 @@ onMounted(() => void reload());
               <div class="col-12 col-md-4 backup-info-column">
                 <div class="backup-info-item">
                   <span class="backup-info-label">{{ gettext('Node') }}</span>
-                  <span class="backup-info-value">{{
-                    selectedTask.node || `-- ${gettext('All')} --`
-                  }}</span>
+                  <span class="backup-info-value">
+                    {{ selectedTask.node || `-- ${gettext('All')} --` }}
+                  </span>
                 </div>
                 <div class="backup-info-item">
                   <span class="backup-info-label">{{ gettext('Comment') }}</span>
@@ -837,15 +863,15 @@ onMounted(() => void reload());
                 </div>
                 <div class="backup-info-item">
                   <span class="backup-info-label">{{ gettext('Next Run') }}</span>
-                  <span class="backup-info-value backup-info-value--numeric">{{
-                    nextRunText(selectedTask['next-run'])
-                  }}</span>
+                  <span class="backup-info-value backup-info-value--numeric">
+                    {{ nextRunText(selectedTask['next-run']) }}
+                  </span>
                 </div>
                 <div class="backup-info-item">
                   <span class="backup-info-label">{{ gettext('Mode') }}</span>
-                  <span class="backup-info-value">{{
-                    gettext(String(selectedTask.mode || '')) || '-'
-                  }}</span>
+                  <span class="backup-info-value">
+                    {{ gettext(String(selectedTask.mode || '')) || '-' }}
+                  </span>
                 </div>
               </div>
               <div class="col-12 col-md-4 backup-info-column">
@@ -874,27 +900,31 @@ onMounted(() => void reload());
             <div class="backup-task-form__section-title backup-disk-section__title">
               {{ gettext('Included disks') }}
             </div>
-            <q-space /><q-input
+            <q-space />
+            <q-input
               v-model="detailFilter"
               dense
               outlined
               class="backup-disk-section__filter"
               :placeholder="gettext('Filter')"
               style="width: 200px"
-              ><template #prepend><q-icon name="search" /></template
-              ><template #append
-                ><q-icon
+            >
+              <template #prepend><q-icon name="search" /></template>
+              <template #append>
+                <q-icon
                   v-if="detailFilter"
                   name="clear"
                   class="cursor-pointer"
-                  @click="detailFilter = ''" /></template
-            ></q-input>
+                  @click="detailFilter = ''"
+                />
+              </template>
+            </q-input>
           </div>
           <div class="backup-tree">
             <div class="backup-tree__columns">
-              <span>{{ gettext('VMID') }}</span
-              ><span>{{ gettext('Type') }}</span
-              ><span>{{ gettext('Backup Task') }}</span>
+              <span>{{ gettext('VMID') }}</span>
+              <span>{{ gettext('Type') }}</span>
+              <span>{{ gettext('Backup Task') }}</span>
             </div>
             <q-tree
               :nodes="detailTree"
@@ -903,10 +933,15 @@ onMounted(() => void reload());
               children-key="children"
               default-expand-all
               no-connectors
-              ><template #default-header="prop"
-                ><div class="row full-width items-center backup-tree__row">
+            >
+              <template #default-header="prop">
+                <div class="row full-width items-center backup-tree__row">
                   <div class="col backup-tree__label">
-                    <q-icon :name="treeIcon(prop.node)" size="16px" class="q-mr-sm text-grey-7" />
+                    <q-icon
+                      :name="treeIcon(prop.node)"
+                      size="16px"
+                      class="q-mr-sm text-grey-7"
+                    />
                     <span>{{ prop.node.label }}</span>
                   </div>
                   <div class="col-2 backup-tree__muted">{{ prop.node.type || '-' }}</div>
@@ -919,30 +954,46 @@ onMounted(() => void reload());
                     />
                     <span>{{ prop.node.includedText }}</span>
                   </div>
-                </div></template
-              ></q-tree
+                </div>
+              </template>
+            </q-tree>
+            <div
+              v-if="!detailTree.length && !detailLoading"
+              class="backup-tree__empty"
             >
-            <div v-if="!detailTree.length && !detailLoading" class="backup-tree__empty">
               {{ gettext('No data') }}
             </div>
           </div>
         </section>
       </div>
-      <template #foot
-        ><q-btn
+      <template #foot>
+        <q-btn
           v-close-popup
           no-caps
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
           :label="gettext('Close')"
-      /></template>
+        />
+      </template>
     </UWindow>
   </q-dialog>
 
-  <q-dialog v-model="formVisible" persistent transition-show="scale" transition-hide="scale">
-    <UWindow :title="formTitle" width="760px" :loading="formLoading">
-      <q-form class="backup-dialog-body backup-task-form u-dense" @submit="saveTask">
+  <q-dialog
+    v-model="formVisible"
+    persistent
+    transition-show="scale"
+    transition-hide="scale"
+  >
+    <UWindow
+      :title="formTitle"
+      width="760px"
+      :loading="formLoading"
+    >
+      <q-form
+        class="backup-dialog-body backup-task-form u-dense"
+        @submit="saveTask"
+      >
         <q-inner-loading :showing="formLoading || formOptionsLoading" />
         <q-tabs
           v-model="formTab"
@@ -952,15 +1003,41 @@ onMounted(() => void reload());
           align="justify"
           narrow-indicator
         >
-          <q-tab no-caps name="convention" :label="gettext('Convention')" />
-          <q-tab no-caps name="retention" :label="gettext('Retention')" />
-          <q-tab no-caps name="notification" :label="gettext('Notification')" />
-          <q-tab no-caps name="note" :label="gettext('Note Template')" />
-          <q-tab no-caps name="advanced" :label="gettext('Advanced')" />
+          <q-tab
+            no-caps
+            name="convention"
+            :label="gettext('Convention')"
+          />
+          <q-tab
+            no-caps
+            name="retention"
+            :label="gettext('Retention')"
+          />
+          <q-tab
+            no-caps
+            name="notification"
+            :label="gettext('Notification')"
+          />
+          <q-tab
+            no-caps
+            name="note"
+            :label="gettext('Note Template')"
+          />
+          <q-tab
+            no-caps
+            name="advanced"
+            :label="gettext('Advanced')"
+          />
         </q-tabs>
         <q-separator />
-        <q-tab-panels v-model="formTab" animated>
-          <q-tab-panel name="convention" class="q-pa-lg">
+        <q-tab-panels
+          v-model="formTab"
+          animated
+        >
+          <q-tab-panel
+            name="convention"
+            class="q-pa-lg"
+          >
             <section class="backup-task-form__section">
               <div class="backup-task-form__section-title">{{ gettext('Basic Settings') }}</div>
               <div class="backup-task-form__fields row q-col-gutter-xl">
@@ -1124,7 +1201,10 @@ onMounted(() => void reload());
                 :error-message="taskFormErrors.selectedVmids"
                 @update:model-value="taskFormErrors.selectedVmids = ''"
               >
-                <q-popup-proxy transition-show="jump-down" transition-hide="jump-up">
+                <q-popup-proxy
+                  transition-show="jump-down"
+                  transition-hide="jump-up"
+                >
                   <div class="backup-vm-picker__popup">
                     <div class="q-px-sm u-border-bottom bg-grey-2 text-grey">
                       <q-input
@@ -1160,7 +1240,10 @@ onMounted(() => void reload());
               </q-select>
             </section>
           </q-tab-panel>
-          <q-tab-panel name="retention" class="q-pa-md">
+          <q-tab-panel
+            name="retention"
+            class="q-pa-md"
+          >
             <div class="bg-white q-pa-sm">
               <q-checkbox
                 v-model="taskForm.keepAll"
@@ -1169,7 +1252,10 @@ onMounted(() => void reload());
                 :label="gettext('Keep all backups')"
                 class="q-field--with-bottom"
               />
-              <div v-if="!taskForm.keepAll" class="row q-col-gutter-lg">
+              <div
+                v-if="!taskForm.keepAll"
+                class="row q-col-gutter-lg"
+              >
                 <div class="col">
                   <q-input
                     v-model="taskForm.keepLast"
@@ -1177,13 +1263,15 @@ onMounted(() => void reload());
                     type="number"
                     class="q-field--with-bottom"
                     :label="gettext('Keep last time')"
-                  /><q-input
+                  />
+                  <q-input
                     v-model="taskForm.keepDaily"
                     dense
                     type="number"
                     class="q-field--with-bottom"
                     :label="gettext('Keep every day')"
-                  /><q-input
+                  />
+                  <q-input
                     v-model="taskForm.keepMonthly"
                     dense
                     type="number"
@@ -1198,13 +1286,15 @@ onMounted(() => void reload());
                     type="number"
                     class="q-field--with-bottom"
                     :label="gettext('Keep every hour')"
-                  /><q-input
+                  />
+                  <q-input
                     v-model="taskForm.keepWeekly"
                     dense
                     type="number"
                     class="q-field--with-bottom"
                     :label="gettext('Retain every week')"
-                  /><q-input
+                  />
+                  <q-input
                     v-model="taskForm.keepYearly"
                     dense
                     type="number"
@@ -1217,12 +1307,15 @@ onMounted(() => void reload());
             <div class="form-hint q-mt-md">
               {{
                 gettext(
-                  "Without any keep option, the storage's configuration or node's vzdump.conf is used as fallback",
+                  "Without any keep option, the storage's configuration or node's vzdump.conf is used as fallback"
                 )
               }}
             </div>
           </q-tab-panel>
-          <q-tab-panel name="notification" class="q-pa-md">
+          <q-tab-panel
+            name="notification"
+            class="q-pa-md"
+          >
             <div class="bg-white q-pa-sm notification-settings">
               <q-option-group
                 v-model="taskForm.notificationMode"
@@ -1264,7 +1357,10 @@ onMounted(() => void reload());
               />
             </div>
           </q-tab-panel>
-          <q-tab-panel name="note" class="q-pa-md">
+          <q-tab-panel
+            name="note"
+            class="q-pa-md"
+          >
             <div class="bg-white q-pa-sm">
               <q-input
                 v-model="taskForm.notesTemplate"
@@ -1276,14 +1372,18 @@ onMounted(() => void reload());
             </div>
             <div class="form-hint q-mt-md">
               {{ gettext('Notes are added to every backup created by this job.') }}
-              {{ gettext('Template variables:') }} <span v-pre>{{ cluster }}</span
-              >, <span v-pre>{{ guestname }}</span
-              >, <span v-pre>{{ node }}</span
-              >, <span v-pre>{{ vmid }}</span>
+              {{ gettext('Template variables:') }}
+              <span v-pre>{{ cluster }}</span>
+              ,
+              <span v-pre>{{ guestname }}</span>
+              ,
+              <span v-pre>{{ node }}</span>
+              ,
+              <span v-pre>{{ vmid }}</span>
             </div>
           </q-tab-panel>
-          <q-tab-panel name="advanced"
-            ><div class="advanced-settings-container bg-white q-ma-sm u-border">
+          <q-tab-panel name="advanced">
+            <div class="advanced-settings-container bg-white q-ma-sm u-border">
               <div class="advanced-row">
                 <div>
                   <q-input
@@ -1352,7 +1452,7 @@ onMounted(() => void reload());
                 <p>
                   {{
                     gettext(
-                      "Run jobs as soon as possible if they couldn't start on schedule, for example, due to the node being offline.",
+                      "Run jobs as soon as possible if they couldn't start on schedule, for example, due to the node being offline."
                     )
                   }}
                 </p>
@@ -1377,25 +1477,32 @@ onMounted(() => void reload());
                 <p>
                   {{
                     gettext(
-                      'Mode to detect file changes and switch archive encoding format for container backups.',
+                      'Mode to detect file changes and switch archive encoding format for container backups.'
                     )
                   }}
                 </p>
               </div>
             </div>
             <div class="q-mt-md bg-amber-1 q-pa-md u-border-dotted-amber">
-              <span class="text-weight-bold text-amber-9">{{ gettext('Comment') }}: </span
-              >{{
+              <span class="text-weight-bold text-amber-9">{{ gettext('Comment') }}:</span>
+              {{
                 gettext(
-                  "The node-specific 'vzdump.conf' or, if this is not set, the default from the config schema is used to determine fallback values.",
+                  "The node-specific 'vzdump.conf' or, if this is not set, the default from the config schema is used to determine fallback values."
                 )
               }}
-            </div></q-tab-panel
-          >
+            </div>
+          </q-tab-panel>
         </q-tab-panels>
       </q-form>
-      <template #foot
-        ><q-btn v-close-popup no-caps flat size="12px" :label="gettext('Cancel')" /><q-btn
+      <template #foot>
+        <q-btn
+          v-close-popup
+          no-caps
+          flat
+          size="12px"
+          :label="gettext('Cancel')"
+        />
+        <q-btn
           no-caps
           flat
           size="12px"
@@ -1405,7 +1512,8 @@ onMounted(() => void reload());
           :loading="formSaving"
           :label="gettext(formAction === 'add' ? 'Add' : 'Save')"
           @click="saveTask"
-      /></template>
+        />
+      </template>
     </UWindow>
   </q-dialog>
 
@@ -1415,9 +1523,18 @@ onMounted(() => void reload());
     @apply="taskForm.schedule = $event"
   />
 
-  <q-dialog v-model="guestsVisible" persistent transition-show="scale" transition-hide="scale">
-    <UWindow :title="gettext('Guests Without Backup Job')" width="900px" :loading="guestsLoading"
-      ><div class="backup-dialog-body q-pa-md">
+  <q-dialog
+    v-model="guestsVisible"
+    persistent
+    transition-show="scale"
+    transition-hide="scale"
+  >
+    <UWindow
+      :title="gettext('Guests Without Backup Job')"
+      width="900px"
+      :loading="guestsLoading"
+    >
+      <div class="backup-dialog-body q-pa-md">
         <q-scroll-area style="height: 500px">
           <q-table
             flat
@@ -1448,23 +1565,37 @@ onMounted(() => void reload());
           </q-table>
         </q-scroll-area>
       </div>
-      <template #foot
-        ><q-btn
+      <template #foot>
+        <q-btn
           v-close-popup
           no-caps
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :label="gettext('Close')" /></template
-    ></UWindow>
+          :label="gettext('Close')"
+        />
+      </template>
+    </UWindow>
   </q-dialog>
 
-  <q-dialog v-model="simulatorVisible" persistent transition-show="scale" transition-hide="scale">
-    <UWindow :title="gettext('Schedule Simulator')" width="800px" :loading="simulatorLoading"
-      ><div class="backup-dialog-body q-ma-sm u-border">
-        <q-splitter v-model="simulatorSplitter" style="height: 400px"
-          ><template #before
-            ><div class="q-pa-md">
+  <q-dialog
+    v-model="simulatorVisible"
+    persistent
+    transition-show="scale"
+    transition-hide="scale"
+  >
+    <UWindow
+      :title="gettext('Schedule Simulator')"
+      width="800px"
+      :loading="simulatorLoading"
+    >
+      <div class="backup-dialog-body q-ma-sm u-border">
+        <q-splitter
+          v-model="simulatorSplitter"
+          style="height: 400px"
+        >
+          <template #before>
+            <div class="q-pa-md">
               <q-select
                 v-model="simulatorForm.schedule"
                 dense
@@ -1477,7 +1608,8 @@ onMounted(() => void reload());
                 use-input
                 fill-input
                 input-debounce="0"
-              /><q-input
+              />
+              <q-input
                 v-model.number="simulatorForm.iterations"
                 dense
                 type="number"
@@ -1495,35 +1627,47 @@ onMounted(() => void reload());
                   :label="gettext('Simulate')"
                   @click="runScheduleSimulator"
                 />
-              </div></div></template
-          ><template #after
-            ><div class="q-pa-md">
-              <q-list v-if="simulationRows.length" bordered separator
-                ><q-item
+              </div>
+            </div>
+          </template>
+          <template #after>
+            <div class="q-pa-md">
+              <q-list
+                v-if="simulationRows.length"
+                bordered
+                separator
+              >
+                <q-item
                   v-for="(item, index) in simulationRows"
                   :key="String(item.timestamp || item.utc || index)"
-                  ><q-item-section
-                    ><q-item-label>{{ scheduleDate(item.utc) }}</q-item-label
-                    ><q-item-label caption>{{
-                      scheduleTime(item.timestamp)
-                    }}</q-item-label></q-item-section
-                  ></q-item
-                ></q-list
+                >
+                  <q-item-section>
+                    <q-item-label>{{ scheduleDate(item.utc) }}</q-item-label>
+                    <q-item-label caption>{{ scheduleTime(item.timestamp) }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+              <div
+                v-else
+                class="text-center text-grey"
               >
-              <div v-else class="text-center text-grey">{{ gettext('No data available') }}</div>
-            </div></template
-          ></q-splitter
-        >
+                {{ gettext('No data available') }}
+              </div>
+            </div>
+          </template>
+        </q-splitter>
       </div>
-      <template #foot
-        ><q-btn
+      <template #foot>
+        <q-btn
           v-close-popup
           no-caps
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :label="gettext('Finish')" /></template
-    ></UWindow>
+          :label="gettext('Finish')"
+        />
+      </template>
+    </UWindow>
   </q-dialog>
 </template>
 
@@ -1532,11 +1676,13 @@ onMounted(() => void reload());
   max-height: 70vh;
   overflow: auto;
 }
+
 .backup-info-card {
   overflow: hidden;
   border-radius: 8px;
   background: #fff;
 }
+
 .backup-info-card__header {
   display: flex;
   align-items: center;
@@ -1546,6 +1692,7 @@ onMounted(() => void reload());
   border-bottom: 1px solid #e7ebf1;
   background: #f7f9fc;
 }
+
 .backup-info-card__eyebrow,
 .backup-info-label,
 .backup-disk-section__hint,
@@ -1554,18 +1701,22 @@ onMounted(() => void reload());
   color: #778196;
   font-size: 12px;
 }
+
 .backup-info-card__title {
   margin-top: 2px;
   color: #202939;
   font-size: 14px;
   font-weight: 600;
 }
+
 .backup-info-card__content {
   padding: 12px 16px;
 }
+
 .backup-info-column + .backup-info-column {
   border-left: 1px solid #eef1f5;
 }
+
 .backup-info-item {
   display: flex;
   gap: 12px;
@@ -1573,94 +1724,116 @@ onMounted(() => void reload());
   padding: 3px 0;
   line-height: 20px;
 }
+
 .backup-info-label {
   flex: 0 0 92px;
 }
+
 .backup-info-value {
   min-width: 0;
   color: #313b4c;
   overflow-wrap: anywhere;
 }
+
 .backup-info-value--numeric {
   font-variant-numeric: tabular-nums;
 }
+
 .backup-disk-section__header {
   min-height: 34px;
 }
+
 .backup-disk-section__title {
   margin-bottom: 0;
 }
+
 .backup-disk-section__filter :deep(.q-field__control),
 .backup-disk-section__filter :deep(.q-field__marginal) {
   align-items: center;
 }
+
 .backup-disk-section__filter :deep(.q-field__prepend) {
   height: 100%;
 }
+
 .backup-disk-section__hint {
   margin-top: 2px;
 }
+
 .backup-tree {
   overflow: hidden;
   border: 1px solid #e3e8f0;
   border-radius: 6px;
 }
+
 .backup-tree__columns,
 .backup-tree__row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 16.667% 25%;
   align-items: center;
 }
+
 .backup-tree__columns {
   padding: 8px 16px;
   border-bottom: 1px solid #e3e8f0;
   background: #f7f9fc;
   font-weight: 600;
 }
+
 .backup-tree :deep(.q-tree__node-header) {
   min-height: 32px;
   padding-right: 16px;
 }
+
 .backup-tree :deep(.q-tree__node-header:hover) {
   background: #f5f8fc;
 }
+
 .backup-tree__row {
   width: 100%;
 }
+
 .backup-tree__label {
   display: flex;
   align-items: center;
   min-width: 0;
 }
+
 .backup-tree__label span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .backup-tree__included {
   display: flex;
   align-items: center;
   color: #4d5b70;
 }
+
 .backup-tree__empty {
   padding: 32px 16px;
   color: #8993a5;
   text-align: center;
 }
+
 @media (max-width: 720px) {
   .backup-info-column + .backup-info-column {
     border-top: 1px solid #eef1f5;
     border-left: 0;
   }
+
   .backup-tree__columns,
   .backup-tree__row {
     grid-template-columns: minmax(0, 1fr) 80px 90px;
   }
 }
+
 .backup-task-form__section {
   padding: 4px 8px 12px;
 }
+
 .backup-task-form__section-title {
   display: flex;
   align-items: center;
@@ -1671,6 +1844,7 @@ onMounted(() => void reload());
   font-weight: 600;
   line-height: 24px;
 }
+
 .backup-task-form__section-title::before {
   width: 4px;
   height: 14px;
@@ -1678,9 +1852,11 @@ onMounted(() => void reload());
   background: var(--q-primary);
   content: '';
 }
+
 .backup-task-form__fields {
   margin-bottom: 4px;
 }
+
 .backup-task-form__section--objects {
   margin-top: 12px;
   border: 1px solid #e3e7ee;
@@ -1688,33 +1864,41 @@ onMounted(() => void reload());
   padding: 16px 20px 12px;
   box-shadow: 0 0 1px #ccc;
 }
+
 .backup-vm-picker__popup {
   width: 720px;
   max-width: calc(100vw - 32px);
   background: #ffffff;
 }
+
 .backup-vm-picker__scroll {
   height: 250px;
 }
+
 .notification-settings__mode {
   padding-top: 4px;
 }
+
 .notification-settings__legacy {
   margin-left: 50px;
   max-width: calc(100% - 50px);
 }
+
 .advanced-settings-container {
   max-height: 56vh;
   overflow-y: auto;
 }
+
 .advanced-row {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) 2fr;
   border-bottom: 1px solid #e0e0e0;
 }
+
 .advanced-row > div {
   padding: 16px;
 }
+
 .advanced-row > p {
   margin: 0;
   padding: 16px;
@@ -1723,6 +1907,7 @@ onMounted(() => void reload());
   font-size: 12px;
   line-height: 20px;
 }
+
 .form-hint {
   padding: 16px;
   background: #f5f5f5;
@@ -1730,14 +1915,17 @@ onMounted(() => void reload());
   font-size: 12px;
   line-height: 20px;
 }
+
 .advanced-row:hover {
   background: rgba(33, 150, 243, 0.04);
 }
+
 @media (max-width: 700px) {
   .advanced-row {
     grid-template-columns: 1fr;
   }
 }
+
 .detail-value {
   max-width: 470px;
   overflow-wrap: anywhere;
