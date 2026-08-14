@@ -537,9 +537,13 @@ function nextDeviceKey(
   }
   return emptyWhenFull ? undefined : `${prefix}${limit - 1}`;
 }
-const networkDeviceCount = computed(() =>
-  Object.keys(currentConfig.value).filter((key) => /^net(?:[0-9]|[12][0-9]|3[01])$/.test(key)).length,
-);
+const networkDeviceCount = computed(() => {
+  const networkKey = /^net(?:[0-9]|[12][0-9]|3[01])$/;
+  return new Set([
+    ...Object.keys(currentConfig.value),
+    ...pendingRows.value.map((row) => textValue(row.key)),
+  ].filter((key) => networkKey.test(key))).size;
+});
 const vmHardwareContext = useVmHardware({
   node: computed(() => props.node),
   vmid: computed(() => props.vmid),
