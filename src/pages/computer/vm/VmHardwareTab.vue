@@ -24,7 +24,13 @@ import HardwareRngDialog from './hardware/dialogs/HardwareRngDialog.vue';
 import HardwareVirtiofsDialog from './hardware/dialogs/HardwareVirtiofsDialog.vue';
 
 const props = withDefaults(
-  defineProps<{ node: string; vmid: string; config: PveRecord; guestType?: 'qemu' | 'lxc' }>(),
+  defineProps<{
+    node: string;
+    vmid: string;
+    config: PveRecord;
+    running?: boolean;
+    guestType?: 'qemu' | 'lxc';
+  }>(),
   { guestType: 'qemu' }
 );
 const emit = defineEmits<{ updated: []; task: [node: string, upid: string, title: string] }>();
@@ -86,9 +92,10 @@ function renderMachine(value: unknown) {
     type === 'pc' || type === '__default__' ? `${gettext('Default')} (i440fx)` : type;
   return machine.viommu ? `${displayType}, vIOMMU: ${machine.viommu}` : displayType;
 }
-function deviceRow(key: string, config: PveRecord): HardwareRow | undefined {
-  if (config[key] === undefined) return undefined;
-  const value = textValue(config[key]) || '-';
+function deviceRow(key: string, config: PveRecord, pending?: PveRecord): HardwareRow | undefined {
+  const rawValue = config[key] ?? pending?.pending ?? pending?.value;
+  if (rawValue === undefined) return undefined;
+  const value = textValue(rawValue) || '-';
   if (/^unused\d+$/.test(key)) {
     return {
       key,
@@ -280,14 +287,15 @@ const rows = computed<HardwareRow[]>(() => {
       editable: true,
     },
   ];
-  const devices = Object.keys(config)
+  const deviceKeys = new Set([...Object.keys(config), ...pendingRows.value.map((row) => textValue(row.key))]);
+  const devices = [...deviceKeys]
     .filter(
       (key) =>
         /^(ide|scsi|sata|virtio|net|usb|hostpci|serial|virtiofs|unused)\d+$/.test(key) ||
         ['efidisk0', 'tpmstate0', 'audio0', 'rng0'].includes(key)
     )
     .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
-    .map((key) => deviceRow(key, config))
+    .map((key) => deviceRow(key, config, pendingByKey.value[key]))
     .filter((row): row is HardwareRow => Boolean(row));
   return [...base, ...devices];
 });
@@ -299,19 +307,62 @@ function pendingKeysFor(row: HardwareRow) {
 const selectedPending = computed(() =>
   Boolean(selectedDevice.value && pendingKeysFor(selectedDevice.value).some(hasPendingChange))
 );
+function canRemoveRow(device: HardwareRow) {
+  if (isPendingDelete(device.key) || device.key === 'rootfs') return false;
+  switch (device.type) {
+    case 'disk':
+    case 'unused-disk':
+    case 'efi':
+    case 'tpm':
+      return hasVmCapability('VM.Config.Disk');
+    case 'cdrom':
+      return hasVmCapability('VM.Config.CDROM');
+    case 'network':
+      return hasVmCapability('VM.Config.Network');
+    case 'cloudinit':
+      return hasVmCapability('VM.Config.Disk') && hasVmCapability('VM.Config.Cloudinit');
+    case 'usb':
+    case 'pci':
+      return hasNodeOrMappingCapability();
+    case 'serial':
+      return hasNodeCapability('Sys.Console');
+    case 'audio':
+      return hasVmCapability('VM.Config.HWType');
+    case 'rng':
+      return hasVmCapability('VM.Config.HWType') || hasMappingCapability('Mapping.Use');
+    case 'virtiofs':
+      return true;
+    default:
+      return false;
+  }
+}
 const canRemove = computed(() => {
   const device = selectedDevice.value;
-  return Boolean(
-    device && device.key !== 'rootfs' && ['disk', 'cdrom', 'network', 'pci'].includes(device.type)
-  );
+  return Boolean(device && canRemoveRow(device));
 });
-const canRevert = computed(() =>
-  Boolean(selectedDevice.value && selectedPending.value && canEditRow(selectedDevice.value))
+const removeLabel = computed(() =>
+  selectedDevice.value?.type === 'disk' ? gettext('Detach') : gettext('Remove')
 );
+const canRevert = computed(() => Boolean(selectedDevice.value && selectedPending.value));
 const selectedCanSave = computed(() =>
   Boolean(selectedDevice.value?.editable && canEditRow(selectedDevice.value))
 );
 const isDisk = computed(() => selectedDevice.value?.type === 'disk');
+const canResizeDisk = computed(
+  () =>
+    Boolean(
+      selectedDevice.value?.type === 'disk' &&
+        hasVmCapability('VM.Config.Disk') &&
+        !selectedPending.value &&
+        !isPendingDelete(selectedDevice.value.key)
+    )
+);
+const canMoveDisk = computed(() => {
+  const device = selectedDevice.value;
+  if (!device || !hasVmCapability('VM.Config.Disk') || selectedPending.value) return false;
+  if (device.type === 'disk' || device.type === 'unused-disk' || device.type === 'efi') return true;
+  return device.type === 'tpm' && !props.running;
+});
 function hasFirmwareDevice(key: 'efidisk0' | 'tpmstate0') {
   return currentConfig.value[key] !== undefined || pendingByKey.value[key] !== undefined;
 }
@@ -362,6 +413,15 @@ function isPendingDelete(key: string) {
 }
 function hasVmCapability(capability: string) {
   return Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.[capability]);
+}
+function hasNodeCapability(capability: string) {
+  return Boolean((session.caps as unknown as { nodes?: Record<string, unknown> }).nodes?.[capability]);
+}
+function hasMappingCapability(capability: string) {
+  return Boolean((session.caps as unknown as { mapping?: Record<string, unknown> }).mapping?.[capability]);
+}
+function hasNodeOrMappingCapability() {
+  return hasNodeCapability('Sys.Console') || hasMappingCapability('Mapping.Use');
 }
 
 async function loadPending() {
@@ -492,35 +552,34 @@ async function save() {
 
 function removeDevice() {
   const device = selectedDevice.value;
-  if (!device || !canEditRow(device)) return;
-  if (!device || !['disk', 'cdrom', 'network'].includes(device.type)) return;
+  if (!device || !canRemoveRow(device)) return;
+  const isUnusedDisk = device.type === 'unused-disk';
+  const useTask = isUnusedDisk || ((device.type === 'disk' || device.type === 'cloudinit') && props.running);
   Dialog.create({
-    title: gettext('Remove'),
-    message: gettext('Are you sure to delete [%s]?').replace('%s', device.name),
+    title: removeLabel.value,
+    message: [
+      gettext(device.type === 'disk' ? 'Are you sure you want to detach entry %s?' : 'Are you sure you want to remove entry %s?').replace('%s', device.name),
+      ...(isUnusedDisk ? [gettext('This will permanently erase all data.')] : []),
+    ].join('<br>'),
     cancel: true,
     persistent: true,
   }).onOk(() => {
-    loading.value = true;
-    void updateVmConfig(
-      props.node,
-      props.vmid,
-      { digest: props.config.digest, delete: device.key },
-      props.guestType
-    )
-      .then(() => emit('updated'))
-      .finally(() => {
-        loading.value = false;
-      });
+    void vmHardwareContext.updateConfig(
+      { delete: device.key, ...(useTask ? { background_delay: 5 } : {}) },
+      useTask ? 'POST' : 'PUT',
+      removeLabel.value,
+      false
+    );
   });
 }
 
 function openResize() {
-  if (!isDisk.value || !hasVmCapability('VM.Config.Disk')) return;
+  if (!canResizeDisk.value) return;
   resizeVisible.value = true;
 }
 function openMove() {
-  if (isDisk.value && hasVmCapability('VM.Config.Disk') && selectedDevice.value?.key)
-    moveVisible.value = true;
+  if (!canMoveDisk.value) return;
+  moveVisible.value = true;
 }
 
 function openImportDisk() {
@@ -647,6 +706,8 @@ const vmHardwareContext = useVmHardware({
   hasPendingChange,
   isPendingDelete,
   pendingValue,
+  canResizeDisk,
+  canMoveDisk,
   notifyUpdated: () => emit('updated'),
   notifyTask: (upid, title) => emit('task', props.node, upid, title),
   nextDeviceKey,
@@ -661,7 +722,10 @@ provide(vmHardwareKey, vmHardwareContext);
     <HardwareToolbar
       :is-disk="isDisk"
       :can-remove="canRemove"
+      :remove-label="removeLabel"
       :can-revert="canRevert"
+      :can-resize-disk="canResizeDisk"
+      :can-move-disk="canMoveDisk"
       :can-add-cdrom="hasVmCapability('VM.Config.CDROM')"
       :can-add-network="hasVmCapability('VM.Config.Network') && networkDeviceCount < 32"
       :can-add-usb="canAddUsb"

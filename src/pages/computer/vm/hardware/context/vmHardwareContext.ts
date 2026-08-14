@@ -15,6 +15,8 @@ export interface VmHardwareContext {
   hasPendingChange: (key: string) => boolean;
   isPendingDelete: (key: string) => boolean;
   pendingValue: (key: string) => string;
+  canResizeDisk: Readonly<Ref<boolean>>;
+  canMoveDisk: Readonly<Ref<boolean>>;
   updateConfig: (
     data: PveRecord,
     method?: 'PUT' | 'POST',

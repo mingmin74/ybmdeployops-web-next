@@ -19,6 +19,8 @@ interface UseVmHardwareOptions {
   hasPendingChange: (key: string) => boolean;
   isPendingDelete: (key: string) => boolean;
   pendingValue: (key: string) => string;
+  canResizeDisk: Readonly<Ref<boolean>>;
+  canMoveDisk: Readonly<Ref<boolean>>;
   notifyUpdated: () => void;
   notifyTask: (upid: string, title: string) => void;
   nextDeviceKey: (prefix: DevicePrefix, limit?: number, emptyWhenFull?: boolean) => string | undefined;

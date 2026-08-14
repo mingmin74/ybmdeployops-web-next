@@ -497,6 +497,7 @@ onUnmounted(() => {
             :node="node"
             :vmid="vmid"
             :config="config"
+            :running="status === 'running'"
             @updated="reload"
             @task="openTask"
         /></q-tab-panel>

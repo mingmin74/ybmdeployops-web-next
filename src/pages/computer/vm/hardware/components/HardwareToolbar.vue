@@ -4,9 +4,11 @@ import { gettext } from '@/locale';
 
 const props = withDefaults(
   defineProps<{
-    isDisk: boolean;
     canRemove: boolean;
+    removeLabel: string;
     canRevert: boolean;
+    canResizeDisk: boolean;
+    canMoveDisk: boolean;
     canAddCdrom?: boolean;
     canAddNetwork?: boolean;
     canAddUsb?: boolean;
@@ -133,7 +135,7 @@ const addItems = computed(() =>
       color="negative"
       class="u-button"
       :disable="!canRemove"
-      :label="gettext('Remove')"
+      :label="removeLabel"
       @click="emit('remove')"
     />
     <q-btn
@@ -142,7 +144,7 @@ const addItems = computed(() =>
       size="12px"
       color="primary"
       class="u-button"
-      :disable="!isDisk"
+      :disable="!canResizeDisk"
       :label="gettext('Resize disk')"
       @click="emit('resize')"
     />
@@ -152,7 +154,7 @@ const addItems = computed(() =>
       size="12px"
       color="primary"
       class="u-button"
-      :disable="!isDisk"
+      :disable="!canMoveDisk"
       :label="gettext('Move disk')"
       @click="emit('move')"
     />
