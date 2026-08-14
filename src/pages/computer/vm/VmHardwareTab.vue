@@ -315,15 +315,16 @@ const isDisk = computed(() => selectedDevice.value?.type === 'disk');
 function hasFirmwareDevice(key: 'efidisk0' | 'tpmstate0') {
   return currentConfig.value[key] !== undefined || pendingByKey.value[key] !== undefined;
 }
-const canAddEfi = computed(() =>
-  hasVmCapability('VM.Config.Disk') && !hasFirmwareDevice('efidisk0'),
+const canAddEfi = computed(
+  () => hasVmCapability('VM.Config.Disk') && !hasFirmwareDevice('efidisk0'),
 );
-const canAddTpm = computed(() =>
-  hasVmCapability('VM.Config.Disk') && !hasFirmwareDevice('tpmstate0'),
+const canAddTpm = computed(
+  () => hasVmCapability('VM.Config.Disk') && !hasFirmwareDevice('tpmstate0'),
 );
-const usesEfiBios = computed(() =>
-  textValue(currentConfig.value.bios, 'seabios') === 'ovmf' ||
-  textValue(pendingByKey.value.bios?.pending) === 'ovmf',
+const usesEfiBios = computed(
+  () =>
+    textValue(currentConfig.value.bios, 'seabios') === 'ovmf' ||
+    textValue(pendingByKey.value.bios?.pending) === 'ovmf',
 );
 async function refreshConfig() {
   const response = await getVmConfig(props.node, props.vmid, props.guestType);
@@ -529,7 +530,10 @@ function openImportDisk() {
 
 function openAddHardware(kind: 'disk' | 'cdrom' | 'net' | 'usb' | 'pci' | 'serial' | 'audio') {
   if (kind === 'cdrom' && !hasVmCapability('VM.Config.CDROM')) return;
-  if (kind === 'net' && (!hasVmCapability('VM.Config.Network') || networkDeviceCount.value >= 32)) return;
+  if (kind === 'net' && (!hasVmCapability('VM.Config.Network') || networkDeviceCount.value >= 32))
+    return;
+  if (kind === 'usb' && !canAddUsb.value) return;
+  if (kind === 'pci' && !canAddPci.value) return;
   addInitialKind.value = kind;
   addVisible.value = true;
 }
@@ -553,11 +557,38 @@ function nextDeviceKey(
 }
 const networkDeviceCount = computed(() => {
   const networkKey = /^net(?:[0-9]|[12][0-9]|3[01])$/;
-  return new Set([
-    ...Object.keys(currentConfig.value),
-    ...pendingRows.value.map((row) => textValue(row.key)),
-  ].filter((key) => networkKey.test(key))).size;
+  return new Set(
+    [
+      ...Object.keys(currentConfig.value),
+      ...pendingRows.value.map((row) => textValue(row.key)),
+    ].filter((key) => networkKey.test(key)),
+  ).size;
 });
+const pendingHardwareKeys = computed(
+  () => new Set(pendingRows.value.map((row) => textValue(row.key))),
+);
+function hardwareDeviceCount(prefix: 'usb' | 'hostpci') {
+  const pattern = prefix === 'usb' ? /^usb\d+$/ : /^hostpci\d+$/;
+  return new Set(
+    [...Object.keys(currentConfig.value), ...pendingHardwareKeys.value].filter((key) =>
+      pattern.test(key),
+    ),
+  ).size;
+}
+function maxUsbCount() {
+  const ostype = textValue(currentConfig.value.ostype);
+  const match = /-(\d+)\.(\d+)/.exec(textValue(currentConfig.value.machine));
+  const supportsModernUsb = !match || Number(`${match[1]}.${match[2]}`) >= 7.1;
+  return supportsModernUsb && (ostype === 'l26' || Number(/^win(\d+)$/.exec(ostype)?.[1]) > 7)
+    ? 14
+    : 5;
+}
+const canAddUsb = computed(
+  () => hasVmCapability('VM.Config.HWType') && hardwareDeviceCount('usb') < maxUsbCount(),
+);
+const canAddPci = computed(
+  () => hasVmCapability('VM.Config.HWType') && hardwareDeviceCount('hostpci') < 16,
+);
 const vmHardwareContext = useVmHardware({
   node: computed(() => props.node),
   vmid: computed(() => props.vmid),
@@ -589,6 +620,8 @@ provide(vmHardwareKey, vmHardwareContext);
       :can-revert="canRevert"
       :can-add-cdrom="hasVmCapability('VM.Config.CDROM')"
       :can-add-network="hasVmCapability('VM.Config.Network') && networkDeviceCount < 32"
+      :can-add-usb="canAddUsb"
+      :can-add-pci="canAddPci"
       :can-add-efi="canAddEfi"
       :can-add-tpm="canAddTpm"
       :guest-type="props.guestType"

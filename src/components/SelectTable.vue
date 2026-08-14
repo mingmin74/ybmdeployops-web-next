@@ -22,6 +22,7 @@ const props = withDefaults(
     showError?: boolean;
     fixedLayout?: boolean;
     clearable?: boolean;
+    editable?: boolean;
     getRowValue?: (row: PveRecord) => string;
     canSelect?: (row: PveRecord) => boolean;
   }>(),
@@ -36,6 +37,7 @@ const props = withDefaults(
     showError: false,
     fixedLayout: false,
     clearable: false,
+    editable: false,
   },
 );
 
@@ -100,7 +102,10 @@ function selectRow(_: Event, row: PveRecord) {
       :error="error"
       :error-message="errorMessage"
       :clearable="clearable"
+      :use-input="editable"
+      :input-debounce="0"
       @clear="model = ''"
+      @input-value="editable && (model = $event)"
     >
       <template #selected>
         <slot name="selected">

@@ -9,11 +9,21 @@ const props = withDefaults(
     canRevert: boolean;
     canAddCdrom?: boolean;
     canAddNetwork?: boolean;
+    canAddUsb?: boolean;
+    canAddPci?: boolean;
     canAddEfi?: boolean;
     canAddTpm?: boolean;
     guestType?: 'qemu' | 'lxc';
   }>(),
-  { guestType: 'qemu', canAddCdrom: true, canAddNetwork: true, canAddEfi: true, canAddTpm: true },
+  {
+    guestType: 'qemu',
+    canAddCdrom: true,
+    canAddNetwork: true,
+    canAddUsb: true,
+    canAddPci: true,
+    canAddEfi: true,
+    canAddTpm: true,
+  },
 );
 
 const emit = defineEmits<{
@@ -32,12 +42,28 @@ const emit = defineEmits<{
 const qemuAddItems = computed<{ label: string; action: () => void; disable?: boolean }[]>(() => [
   { label: gettext('Hard Disk'), action: () => emit('add', 'disk') },
   { label: gettext('Import Hard Disk'), action: () => emit('importDisk') },
-  { label: gettext('CD/DVD Drive'), action: () => emit('add', 'cdrom'), disable: !props.canAddCdrom },
-  { label: gettext('Network Device'), action: () => emit('add', 'net'), disable: !props.canAddNetwork },
-  { label: gettext('EFI Disk'), action: () => emit('addFirmware', 'efi'), disable: !props.canAddEfi },
-  { label: gettext('TPM State'), action: () => emit('addFirmware', 'tpm'), disable: !props.canAddTpm },
-  { label: gettext('USB Device'), action: () => emit('add', 'usb') },
-  { label: gettext('PCI Device'), action: () => emit('add', 'pci') },
+  {
+    label: gettext('CD/DVD Drive'),
+    action: () => emit('add', 'cdrom'),
+    disable: !props.canAddCdrom,
+  },
+  {
+    label: gettext('Network Device'),
+    action: () => emit('add', 'net'),
+    disable: !props.canAddNetwork,
+  },
+  {
+    label: gettext('EFI Disk'),
+    action: () => emit('addFirmware', 'efi'),
+    disable: !props.canAddEfi,
+  },
+  {
+    label: gettext('TPM State'),
+    action: () => emit('addFirmware', 'tpm'),
+    disable: !props.canAddTpm,
+  },
+  { label: gettext('USB Device'), action: () => emit('add', 'usb'), disable: !props.canAddUsb },
+  { label: gettext('PCI Device'), action: () => emit('add', 'pci'), disable: !props.canAddPci },
   { label: gettext('Serial Port'), action: () => emit('add', 'serial') },
   { label: gettext('CloudInit Drive'), action: () => emit('addCloudInit') },
   { label: gettext('Audio Device'), action: () => emit('add', 'audio') },

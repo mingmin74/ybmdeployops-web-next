@@ -13,7 +13,8 @@ type UsbMode = 'spice' | 'mapped' | 'hostdevice' | 'port';
 
 export interface AddUsbFormModel {
   usbMode: UsbMode;
-  usbValue: string;
+  usbHostDevice: string;
+  usbPort: string;
   usbMapping: string;
   usb3: boolean;
 }
@@ -92,10 +93,18 @@ const usbPortColumns: QTableColumn<PveRecord>[] = [
 
 const selectedRequired = computed(() => {
   if (form.value.usbMode === 'mapped') return !form.value.usbMapping.trim();
-  if (form.value.usbMode === 'hostdevice' || form.value.usbMode === 'port')
-    return !form.value.usbValue.trim();
+  if (form.value.usbMode === 'hostdevice') return !form.value.usbHostDevice.trim();
+  if (form.value.usbMode === 'port') return !form.value.usbPort.trim();
   return false;
 });
+const hostDeviceValid = computed(
+  () =>
+    !form.value.usbHostDevice.trim() ||
+    /^[a-f0-9]{4}:[a-f0-9]{4}$/i.test(form.value.usbHostDevice.trim()),
+);
+const portValid = computed(
+  () => !form.value.usbPort.trim() || /^[0-9]+-[0-9]+(\.[0-9]+)*$/.test(form.value.usbPort.trim()),
+);
 
 async function loadUsbOptions() {
   loading.value = true;
@@ -148,38 +157,46 @@ onMounted(() => {
         />
         <div class="add-usb-form__nested">
           <SelectTable
-            v-model="form.usbValue"
+            v-model="form.usbHostDevice"
             row-key="deviceKey"
             field-style="standard"
             width="500px"
             class="q-field--with-bottom"
             :rows="usbDeviceRows"
             :columns="usbDeviceColumns"
-            :display-value="form.usbValue"
+            :display-value="form.usbHostDevice"
+            editable
             :loading="loading"
             :get-row-value="(row) => textValue(row.deviceKey)"
             :disable="form.usbMode !== 'hostdevice'"
-            :error="form.usbMode === 'hostdevice' && selectedRequired"
-            :error-message="gettext('This field is required')"
+            :error="form.usbMode === 'hostdevice' && (selectedRequired || !hostDeviceValid)"
+            :error-message="
+              selectedRequired
+                ? gettext('This field is required')
+                : gettext('Use the format 1234:5678')
+            "
             :label="gettext('Choose Device')"
           />
         </div>
         <q-radio v-model="form.usbMode" dense val="port" :label="gettext('Use USB Port')" />
         <div class="add-usb-form__nested">
           <SelectTable
-            v-model="form.usbValue"
+            v-model="form.usbPort"
             row-key="portKey"
             field-style="standard"
             width="500px"
             class="q-field--with-bottom"
             :rows="usbDeviceRows"
             :columns="usbPortColumns"
-            :display-value="form.usbValue"
+            :display-value="form.usbPort"
+            editable
             :loading="loading"
             :get-row-value="(row) => textValue(row.portKey)"
             :disable="form.usbMode !== 'port'"
-            :error="form.usbMode === 'port' && selectedRequired"
-            :error-message="gettext('This field is required')"
+            :error="form.usbMode === 'port' && (selectedRequired || !portValid)"
+            :error-message="
+              selectedRequired ? gettext('This field is required') : gettext('Use the format 1-2.3')
+            "
             :label="gettext('Choose Port')"
           />
         </div>
@@ -187,8 +204,8 @@ onMounted(() => {
           v-model="form.usb3"
           dense
           right-label
-          :color="form.usbMode === 'spice' || disableUsb3 ? 'grey' : 'primary'"
-          :disable="form.usbMode === 'spice' || disableUsb3"
+          :color="disableUsb3 ? 'grey' : 'primary'"
+          :disable="disableUsb3"
           :label="gettext('Use USB3')"
         />
       </div>

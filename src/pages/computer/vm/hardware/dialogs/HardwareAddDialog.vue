@@ -14,7 +14,18 @@ import AddUsbForm from '../add/forms/AddUsbForm.vue';
 import AddPciForm from '../add/forms/AddPciForm.vue';
 import AddSerialForm from '../add/forms/AddSerialForm.vue';
 import AddAudioForm from '../add/forms/AddAudioForm.vue';
-import { allowedDiskBusses, guestArchitecture, nextFreeDiskSlot, nextFreeDiskSlotForBus, sortedDiskBusses, storageFormats, validDiskBandwidth, validDiskDeviceId, validDiskSize, type DiskBus } from '../utils/diskController';
+import {
+  allowedDiskBusses,
+  guestArchitecture,
+  nextFreeDiskSlot,
+  nextFreeDiskSlotForBus,
+  sortedDiskBusses,
+  storageFormats,
+  validDiskBandwidth,
+  validDiskDeviceId,
+  validDiskSize,
+  type DiskBus,
+} from '../utils/diskController';
 
 type DeviceKind = 'disk' | 'cdrom' | 'net' | 'usb' | 'pci' | 'serial' | 'audio';
 type CdromBus = Exclude<DiskBus, 'virtio'>;
@@ -60,7 +71,8 @@ type AddHardwareForm = {
   cdromBus: CdromBus;
   cdromDeviceId: number;
   usbMode: UsbMode;
-  usbValue: string;
+  usbHostDevice: string;
+  usbPort: string;
   usbMapping: string;
   usb3: boolean;
   pciMode: PciMode;
@@ -82,9 +94,24 @@ type AddHardwareForm = {
 
 const visible = defineModel<boolean>({ default: false });
 const { initialKind = 'disk' } = defineProps<{ initialKind?: DeviceKind }>();
-const { config, hasVmCapability, loading, nextDeviceKey, updateConfig, node, vmid, notifyTask, notifyUpdated } = useVmHardwareContext();
+const {
+  config,
+  hasVmCapability,
+  loading,
+  pendingByKey,
+  updateConfig,
+  node,
+  vmid,
+  notifyTask,
+  notifyUpdated,
+} = useVmHardwareContext();
 const openedConfig = shallowRef<PveRecord | null>(null);
 const openedDigest = shallowRef('');
+const usbConfig = shallowRef<PveRecord | null>(null);
+const usbDigest = shallowRef('');
+const pciConfig = shallowRef<PveRecord | null>(null);
+const pciDigest = shallowRef('');
+const passthroughConfigLoaded = shallowRef(false);
 const hostArch = shallowRef('x86_64');
 const storages = shallowRef<PveRecord[]>([]);
 const existingVolumes = shallowRef<PveRecord[]>([]);
@@ -140,9 +167,10 @@ const form = reactive<AddHardwareForm>({
   cdromBus: 'ide',
   cdromDeviceId: 2,
   usbMode: 'spice',
-  usbValue: '',
+  usbHostDevice: '',
+  usbPort: '',
   usbMapping: '',
-  usb3: false,
+  usb3: true,
   pciMode: 'raw',
   pciAddress: '',
   pciMapping: '',
@@ -170,13 +198,22 @@ const networkKey = computed(() => {
   }
   return '';
 });
-const selectedStorage = computed(() => storages.value.find((item) => textValue(item.storage) === form.storage));
+const selectedStorage = computed(() =>
+  storages.value.find((item) => textValue(item.storage) === form.storage),
+);
 const diskFormatOptions = computed(() => storageFormats(selectedStorage.value).values);
 const selectExisting = computed(() => Boolean(selectedStorage.value?.select_existing));
-const diskBusOptions = computed(() => allowedDiskBusses(diskConfig.value, hostArch.value).map((value) => ({ label: value === 'virtio' ? 'VirtIO Block' : value.toUpperCase(), value })));
+const diskBusOptions = computed(() =>
+  allowedDiskBusses(diskConfig.value, hostArch.value).map((value) => ({
+    label: value === 'virtio' ? 'VirtIO Block' : value.toUpperCase(),
+    value,
+  })),
+);
 const supportsDiskIoThread = computed(() => form.diskBus === 'scsi' || form.diskBus === 'virtio');
 const diskKey = computed(() => `${form.diskBus}${form.diskDeviceId}`);
-const diskKeyAvailable = computed(() => validDiskDeviceId(diskConfig.value, form.diskBus, form.diskDeviceId));
+const diskKeyAvailable = computed(() =>
+  validDiskDeviceId(diskConfig.value, form.diskBus, form.diskDeviceId),
+);
 const cdromKey = computed(() => `${form.cdromBus}${form.cdromDeviceId}`);
 const cdromKeyAvailable = computed(() => !cdromConfig.value[cdromKey.value]);
 const cdromBusOptions = computed(() =>
@@ -208,7 +245,20 @@ const addTitle = computed(() => {
   return gettext('Add Hardware');
 });
 const canAdd = computed(() => {
-  if (form.kind === 'disk') return Boolean(storageLoaded.value && selectedStorage.value && diskFormatOptions.value.includes(form.diskFormat) && diskKeyAvailable.value && validDiskBandwidth(form) && (selectExisting.value ? form.existingVolume.trim() && existingVolumes.value.some((item) => textValue(item.volid || item.text) === form.existingVolume) : validDiskSize(form.size)));
+  if (form.kind === 'disk')
+    return Boolean(
+      storageLoaded.value &&
+      selectedStorage.value &&
+      diskFormatOptions.value.includes(form.diskFormat) &&
+      diskKeyAvailable.value &&
+      validDiskBandwidth(form) &&
+      (selectExisting.value
+        ? form.existingVolume.trim() &&
+          existingVolumes.value.some(
+            (item) => textValue(item.volid || item.text) === form.existingVolume,
+          )
+        : validDiskSize(form.size)),
+    );
   if (form.kind === 'cdrom') {
     return Boolean(
       cdromConfigLoaded.value &&
@@ -218,9 +268,14 @@ const canAdd = computed(() => {
       (form.cdromMediaType !== 'iso' || form.cdromVolid.trim()),
     );
   }
-  if (form.kind === 'net') return Boolean(networkConfigLoaded.value && networkKey.value && networkFormValid());
-  if (form.kind === 'usb') return Boolean(usbKeyAvailable.value && usbValue());
-  if (form.kind === 'pci') return Boolean(pciKeyAvailable.value && pciValue());
+  if (form.kind === 'net')
+    return Boolean(networkConfigLoaded.value && networkKey.value && networkFormValid());
+  if (form.kind === 'usb')
+    return Boolean(passthroughConfigLoaded.value && usbKeyAvailable.value && usbValue());
+  if (form.kind === 'pci')
+    return Boolean(
+      passthroughConfigLoaded.value && pciKeyAvailable.value && pciValue() && pciIdsValid(),
+    );
   if (form.kind === 'serial') return Boolean(serialIdValid.value && serialKeyAvailable.value);
   if (form.kind === 'audio') return Boolean(audioKeyAvailable.value && audioValue());
   return true;
@@ -232,12 +287,21 @@ const cdromBusLimits: Record<CdromBus, number> = {
   scsi: 31,
 };
 
-const usbKey = computed(() => nextDeviceKey('usb', maxUsbCount()));
-const usbKeyAvailable = computed(() => Boolean(usbKey.value && !config.value[usbKey.value]));
+const activeUsbConfig = computed(() => usbConfig.value || config.value);
+const activePciConfig = computed(() => pciConfig.value || config.value);
+function nextFreePassthroughKey(prefix: 'usb' | 'hostpci', limit: number, source: PveRecord) {
+  for (let index = 0; index < limit; index += 1) {
+    const key = `${prefix}${index}`;
+    if (source[key] === undefined && !pendingByKey.value[key]) return key;
+  }
+  return '';
+}
+const usbKey = computed(() => nextFreePassthroughKey('usb', maxUsbCount(), activeUsbConfig.value));
+const usbKeyAvailable = computed(() => Boolean(usbKey.value));
 const usb3Disabled = computed(() => maxUsbCount() > 5);
-const pciKey = computed(() => nextDeviceKey('hostpci', 16));
-const pciKeyAvailable = computed(() => Boolean(pciKey.value && !config.value[pciKey.value]));
-const pcieSupported = computed(() => textValue(config.value.machine).includes('q35'));
+const pciKey = computed(() => nextFreePassthroughKey('hostpci', 16, activePciConfig.value));
+const pciKeyAvailable = computed(() => Boolean(pciKey.value));
+const pcieSupported = computed(() => textValue(activePciConfig.value.machine).includes('q35'));
 const serialIdValid = computed(
   () => Number.isInteger(form.serialId) && form.serialId >= 0 && form.serialId <= 3,
 );
@@ -262,7 +326,10 @@ function nextFreeCdromSlot(preferredBusses: CdromBus[] = ['ide', 'scsi', 'sata']
 }
 
 function resetDiskDefaults() {
-  const slot = nextFreeDiskSlot(diskConfig.value, sortedDiskBusses(diskConfig.value, hostArch.value));
+  const slot = nextFreeDiskSlot(
+    diskConfig.value,
+    sortedDiskBusses(diskConfig.value, hostArch.value),
+  );
   Object.assign(form, {
     storage: '',
     existingVolume: '',
@@ -274,7 +341,9 @@ function resetDiskDefaults() {
     diskBackup: true,
     diskSkipReplication: false,
     diskDiscard: false,
-    diskIothread: slot.bus === 'virtio' || (slot.bus === 'scsi' && textValue(diskConfig.value.scsihw) === 'virtio-scsi-single'),
+    diskIothread:
+      slot.bus === 'virtio' ||
+      (slot.bus === 'scsi' && textValue(diskConfig.value.scsihw) === 'virtio-scsi-single'),
     diskSsd: false,
     diskReadOnly: false,
     diskAio: '__default__',
@@ -291,9 +360,7 @@ function resetDiskDefaults() {
 
 function resetCdromDefaults() {
   const arch = guestArchitecture(cdromConfig.value, hostArch.value);
-  const slot = nextFreeCdromSlot(
-    arch === 'aarch64' ? ['scsi', 'sata'] : ['ide', 'scsi', 'sata'],
-  );
+  const slot = nextFreeCdromSlot(arch === 'aarch64' ? ['scsi', 'sata'] : ['ide', 'scsi', 'sata']);
   Object.assign(form, {
     cdromMediaType: 'iso',
     cdromStorage: '',
@@ -324,9 +391,10 @@ function resetNetworkDefaults() {
 function resetUsbDefaults() {
   Object.assign(form, {
     usbMode: 'spice',
-    usbValue: '',
+    usbHostDevice: '',
+    usbPort: '',
     usbMapping: '',
-    usb3: false,
+    usb3: true,
   });
 }
 
@@ -384,8 +452,14 @@ watch(visible, (isVisible) => {
     void initializeCdrom();
     addCdromFormKey.value += 1;
   }
-  if (initialKind === 'usb') resetUsbDefaults();
-  if (initialKind === 'pci') resetPciDefaults();
+  if (initialKind === 'usb') {
+    resetUsbDefaults();
+    void initializeUsb();
+  }
+  if (initialKind === 'pci') {
+    resetPciDefaults();
+    void initializePci();
+  }
   if (initialKind === 'serial') resetSerialDefaults();
   if (initialKind === 'audio') resetAudioDefaults();
 });
@@ -410,6 +484,38 @@ async function initializeNetwork() {
   }
 }
 
+async function initializePassthrough(kind: 'usb' | 'pci') {
+  passthroughConfigLoaded.value = false;
+  if (!hasVmCapability('VM.Config.HWType')) return;
+  loading.value = true;
+  try {
+    const response = await getVmConfig(node.value, vmid.value);
+    if (!visible.value || !response.data) return;
+    if (kind === 'usb') {
+      usbConfig.value = response.data;
+      usbDigest.value = textValue(response.data.digest);
+    } else {
+      pciConfig.value = response.data;
+      pciDigest.value = textValue(response.data.digest);
+    }
+    passthroughConfigLoaded.value = true;
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function initializeUsb() {
+  usbConfig.value = null;
+  usbDigest.value = '';
+  await initializePassthrough('usb');
+}
+
+async function initializePci() {
+  pciConfig.value = null;
+  pciDigest.value = '';
+  await initializePassthrough('pci');
+}
+
 async function initializeCdrom() {
   if (!hasVmCapability('VM.Config.CDROM')) return;
   const session = ++cdromConfigSession;
@@ -420,14 +526,14 @@ async function initializeCdrom() {
   loading.value = true;
   try {
     const [configResponse, nodesResponse] = await Promise.all([
-      getVmConfig(node.value, vmid.value), getNodes(),
+      getVmConfig(node.value, vmid.value),
+      getNodes(),
     ]);
     if (session !== cdromConfigSession || !visible.value) return;
     openedConfig.value = configResponse.data || null;
     openedDigest.value = textValue(configResponse.data?.digest);
     const selectedNode = nodesResponse.data?.find((item) => item.node === node.value) as
-      | PveRecord
-      | undefined;
+      PveRecord | undefined;
     hostArch.value = textValue(selectedNode?.['host-arch']) || 'x86_64';
     resetCdromDefaults();
     cdromConfigLoaded.value = true;
@@ -441,23 +547,28 @@ watch(
   () => form.diskBus,
   (bus) => {
     form.diskDeviceId = nextFreeDiskSlotForBus(diskConfig.value, bus).id;
-    form.diskIothread = bus === 'virtio' || (bus === 'scsi' && textValue(diskConfig.value.scsihw) === 'virtio-scsi-single');
+    form.diskIothread =
+      bus === 'virtio' ||
+      (bus === 'scsi' && textValue(diskConfig.value.scsihw) === 'virtio-scsi-single');
   },
 );
 
-watch(() => form.storage, async () => {
-  const request = ++existingVolumeRequest;
-  form.existingVolume = '';
-  existingVolumes.value = [];
-  const storage = selectedStorage.value;
-  const formats = storageFormats(storage);
-  form.diskFormat = formats.selected;
-  if (!selectExisting.value || !form.storage) return;
-  const storageName = form.storage;
-  const response = await getStorageContent(node.value, storageName, 'images');
-  if (request === existingVolumeRequest && storageName === form.storage)
-    existingVolumes.value = response.data || [];
-});
+watch(
+  () => form.storage,
+  async () => {
+    const request = ++existingVolumeRequest;
+    form.existingVolume = '';
+    existingVolumes.value = [];
+    const storage = selectedStorage.value;
+    const formats = storageFormats(storage);
+    form.diskFormat = formats.selected;
+    if (!selectExisting.value || !form.storage) return;
+    const storageName = form.storage;
+    const response = await getStorageContent(node.value, storageName, 'images');
+    if (request === existingVolumeRequest && storageName === form.storage)
+      existingVolumes.value = response.data || [];
+  },
+);
 
 async function initializeDisk() {
   if (initialKind !== 'disk' || !hasVmCapability('VM.Config.Disk')) return;
@@ -471,14 +582,15 @@ async function initializeDisk() {
   loading.value = true;
   try {
     const [configResponse, storageResponse, nodesResponse] = await Promise.all([
-      getVmConfig(node.value, vmid.value), getNodeStorage(node.value, 'images'), getNodes(),
+      getVmConfig(node.value, vmid.value),
+      getNodeStorage(node.value, 'images'),
+      getNodes(),
     ]);
     if (session !== dialogSession || !visible.value) return;
     openedConfig.value = configResponse.data || null;
     openedDigest.value = textValue(configResponse.data?.digest);
     const selectedNode = nodesResponse.data?.find((item) => item.node === node.value) as
-      | PveRecord
-      | undefined;
+      PveRecord | undefined;
     hostArch.value = textValue(selectedNode?.['host-arch']) || 'x86_64';
     storages.value = storageResponse.data || [];
     storageLoaded.value = true;
@@ -510,7 +622,9 @@ function pushOptional(parts: string[], key: string, value: string) {
 }
 
 function diskValue() {
-  const parts = [selectExisting.value ? form.existingVolume.trim() : `${form.storage.trim()}:${form.size}`];
+  const parts = [
+    selectExisting.value ? form.existingVolume.trim() : `${form.storage.trim()}:${form.size}`,
+  ];
   if (form.diskFormat) parts.push(`format=${form.diskFormat}`);
   if (!form.diskBackup) parts.push('backup=0');
   if (form.diskSkipReplication) parts.push('replicate=no');
@@ -555,8 +669,8 @@ function networkFormValid() {
 }
 
 function maxUsbCount() {
-  const ostype = textValue(config.value.ostype);
-  const machine = textValue(config.value.machine);
+  const ostype = textValue(activeUsbConfig.value.ostype);
+  const machine = textValue(activeUsbConfig.value.machine);
   const match = /-(\d+)\.(\d+)/.exec(machine);
   const machineSupportsNewUsb = !match || Number(`${match[1]}.${match[2]}`) >= 7.1;
   if (
@@ -569,15 +683,28 @@ function maxUsbCount() {
 }
 
 function usbValue() {
-  if (form.usbMode === 'spice') return 'spice';
-  if (form.usbMode === 'mapped' && form.usbMapping.trim())
-    return `mapping=${form.usbMapping.trim()}`;
-  if ((form.usbMode === 'hostdevice' || form.usbMode === 'port') && form.usbValue.trim()) {
-    const parts = [`host=${form.usbValue.trim()}`];
-    if (form.usb3 && !usb3Disabled.value) parts.push('usb3=1');
-    return parts.join(',');
-  }
-  return '';
+  let value = '';
+  if (form.usbMode === 'spice') value = 'spice';
+  else if (form.usbMode === 'mapped' && form.usbMapping.trim())
+    value = `mapping=${form.usbMapping.trim()}`;
+  else if (
+    form.usbMode === 'hostdevice' &&
+    /^[a-f0-9]{4}:[a-f0-9]{4}$/i.test(form.usbHostDevice.trim())
+  )
+    value = `host=${form.usbHostDevice.trim()}`;
+  else if (form.usbMode === 'port' && /^[0-9]+-[0-9]+(\.[0-9]+)*$/.test(form.usbPort.trim()))
+    value = `host=${form.usbPort.trim()}`;
+  return value && form.usb3 && !usb3Disabled.value ? `${value},usb3=1` : value;
+}
+
+function pciIdValid(value: string) {
+  return !value.trim() || /^0x[0-9a-f]{4}$/i.test(value.trim());
+}
+
+function pciIdsValid() {
+  return [form.pciVendorId, form.pciDeviceId, form.pciSubVendorId, form.pciSubDeviceId].every(
+    pciIdValid,
+  );
 }
 
 function normalizePciHost(host: string) {
@@ -624,7 +751,7 @@ async function addDevice() {
   };
   const capability = requiredCapability[form.kind];
   if (!hasVmCapability(capability)) return;
-  if (form.kind === 'net' && !canAdd.value) return;
+  if (!canAdd.value) return;
 
   const networkOptions = [
     form.macaddr.trim() ? `${form.model}=${form.macaddr.trim()}` : form.model,
@@ -660,23 +787,46 @@ async function addDevice() {
   if (form.kind === 'disk') {
     loading.value = true;
     try {
-      const result = await updateVmConfig(node.value, vmid.value, { digest: openedDigest.value, background_delay: 5, [key]: value }, 'qemu', 'POST');
+      const result = await updateVmConfig(
+        node.value,
+        vmid.value,
+        { digest: openedDigest.value, background_delay: 5, [key]: value },
+        'qemu',
+        'POST',
+      );
       const upid = textValue((result as { data?: unknown }).data);
       if (upid.startsWith('UPID:')) notifyTask(upid, gettext('Add Hard Disk'));
       else notifyUpdated();
-    } finally { loading.value = false; }
+    } finally {
+      loading.value = false;
+    }
   } else if (form.kind === 'cdrom') {
     loading.value = true;
     try {
       await updateVmConfig(node.value, vmid.value, { digest: openedDigest.value, [key]: value });
       notifyUpdated();
-    } finally { loading.value = false; }
+    } finally {
+      loading.value = false;
+    }
   } else if (form.kind === 'net') {
     loading.value = true;
     try {
       await updateVmConfig(node.value, vmid.value, { digest: networkDigest.value, [key]: value });
       notifyUpdated();
-    } finally { loading.value = false; }
+    } finally {
+      loading.value = false;
+    }
+  } else if (form.kind === 'usb' || form.kind === 'pci') {
+    loading.value = true;
+    try {
+      await updateVmConfig(node.value, vmid.value, {
+        digest: form.kind === 'usb' ? usbDigest.value : pciDigest.value,
+        [key]: value,
+      });
+      notifyUpdated();
+    } finally {
+      loading.value = false;
+    }
   } else await updateConfig({ [key]: value });
   visible.value = false;
 }
