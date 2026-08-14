@@ -8,9 +8,10 @@ const props = withDefaults(
     canRemove: boolean;
     canRevert: boolean;
     canAddCdrom?: boolean;
+    canAddNetwork?: boolean;
     guestType?: 'qemu' | 'lxc';
   }>(),
-  { guestType: 'qemu', canAddCdrom: true },
+  { guestType: 'qemu', canAddCdrom: true, canAddNetwork: true },
 );
 
 const emit = defineEmits<{
@@ -30,7 +31,7 @@ const qemuAddItems = computed<{ label: string; action: () => void; disable?: boo
   { label: gettext('Hard Disk'), action: () => emit('add', 'disk') },
   { label: gettext('Import Hard Disk'), action: () => emit('importDisk') },
   { label: gettext('CD/DVD Drive'), action: () => emit('add', 'cdrom'), disable: !props.canAddCdrom },
-  { label: gettext('Network Device'), action: () => emit('add', 'net') },
+  { label: gettext('Network Device'), action: () => emit('add', 'net'), disable: !props.canAddNetwork },
   { label: gettext('EFI Disk'), action: () => emit('addFirmware', 'efi') },
   { label: gettext('TPM State'), action: () => emit('addFirmware', 'tpm') },
   { label: gettext('USB Device'), action: () => emit('add', 'usb') },

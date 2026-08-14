@@ -29,6 +29,7 @@ const advanced = defineModel<boolean>('advanced', { default: false });
 
 const modelOptions = [
   { label: gettext('Intel E1000'), value: 'e1000' },
+  { label: 'Intel E1000E', value: 'e1000e' },
   { label: `${gettext('VirtIO')} (${gettext('paravirtualized')})`, value: 'virtio' },
   { label: 'Realtek RTL8139', value: 'rtl8139' },
   { label: 'VMware vmxnet3', value: 'vmxnet3' },
@@ -80,9 +81,8 @@ const showMtuHint = computed(() => form.value.model === 'virtio' && form.value.m
 async function loadBridges() {
   loading.value = true;
   try {
-    const response = await getNodeNetwork(node.value);
+    const response = await getNodeNetwork(node.value, { type: 'any_bridge' });
     bridgeRows.value = (response.data || [])
-      .filter((item) => textValue(item.type) === 'bridge')
       .filter((item) => Boolean(textValue(item.iface)))
       .sort((left, right) => textValue(left.iface).localeCompare(textValue(right.iface)));
     if (!bridgeRows.value.some((bridge) => textValue(bridge.iface) === form.value.bridge)) {

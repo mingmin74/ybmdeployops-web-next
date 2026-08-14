@@ -21,7 +21,7 @@ interface UseVmHardwareOptions {
   pendingValue: (key: string) => string;
   notifyUpdated: () => void;
   notifyTask: (upid: string, title: string) => void;
-  nextDeviceKey: (prefix: DevicePrefix, limit?: number) => string;
+  nextDeviceKey: (prefix: DevicePrefix, limit?: number, emptyWhenFull?: boolean) => string | undefined;
 }
 
 export function useVmHardware(options: UseVmHardwareOptions): VmHardwareContext {

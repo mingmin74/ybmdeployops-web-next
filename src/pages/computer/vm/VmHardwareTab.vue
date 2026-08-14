@@ -516,6 +516,7 @@ function openImportDisk() {
 
 function openAddHardware(kind: 'disk' | 'cdrom' | 'net' | 'usb' | 'pci' | 'serial' | 'audio') {
   if (kind === 'cdrom' && !hasVmCapability('VM.Config.CDROM')) return;
+  if (kind === 'net' && (!hasVmCapability('VM.Config.Network') || networkDeviceCount.value >= 32)) return;
   addInitialKind.value = kind;
   addVisible.value = true;
 }
@@ -528,13 +529,17 @@ function openFirmware(kind: 'efi' | 'tpm') {
 function nextDeviceKey(
   prefix: 'scsi' | 'virtio' | 'sata' | 'net' | 'ide' | 'usb' | 'hostpci' | 'serial' | 'virtiofs',
   limit = 32,
+  emptyWhenFull = true,
 ) {
   for (let index = 0; index < limit; index += 1) {
     const key = `${prefix}${index}`;
     if (!props.config[key]) return key;
   }
-  return `${prefix}${limit - 1}`;
+  return emptyWhenFull ? undefined : `${prefix}${limit - 1}`;
 }
+const networkDeviceCount = computed(() =>
+  Object.keys(currentConfig.value).filter((key) => /^net(?:[0-9]|[12][0-9]|3[01])$/.test(key)).length,
+);
 const vmHardwareContext = useVmHardware({
   node: computed(() => props.node),
   vmid: computed(() => props.vmid),
@@ -565,6 +570,7 @@ provide(vmHardwareKey, vmHardwareContext);
       :can-remove="canRemove"
       :can-revert="canRevert"
       :can-add-cdrom="hasVmCapability('VM.Config.CDROM')"
+      :can-add-network="hasVmCapability('VM.Config.Network') && networkDeviceCount < 32"
       :guest-type="props.guestType"
       @add="openAddHardware"
       @add-firmware="openFirmware"

@@ -18,7 +18,7 @@ export interface VmHardwareContext {
   updateConfig: (data: PveRecord, method?: 'PUT' | 'POST', taskTitle?: string) => Promise<unknown>;
   notifyUpdated: () => void;
   notifyTask: (upid: string, title: string) => void;
-  nextDeviceKey: (prefix: DevicePrefix, limit?: number) => string;
+  nextDeviceKey: (prefix: DevicePrefix, limit?: number, emptyWhenFull?: boolean) => string | undefined;
 }
 
 export const vmHardwareKey: InjectionKey<VmHardwareContext> = Symbol('vmHardware');

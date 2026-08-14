@@ -47,7 +47,9 @@ const dirMappingColumns: QTableColumn<PveRecord>[] = [
 ];
 
 const virtiofsKey = computed(() => nextDeviceKey('virtiofs', 10));
-const virtiofsKeyAvailable = computed(() => !config.value[virtiofsKey.value]);
+const virtiofsKeyAvailable = computed(
+  () => Boolean(virtiofsKey.value && !config.value[virtiofsKey.value]),
+);
 const canAdd = computed(
   () =>
     hasVmCapability('VM.Config.Options') &&
@@ -111,8 +113,9 @@ function virtiofsValue() {
 }
 
 async function addVirtiofs() {
-  if (!canAdd.value) return;
-  await updateConfig({ [virtiofsKey.value]: virtiofsValue() });
+  const key = virtiofsKey.value;
+  if (!canAdd.value || !key) return;
+  await updateConfig({ [key]: virtiofsValue() });
   visible.value = false;
 }
 </script>

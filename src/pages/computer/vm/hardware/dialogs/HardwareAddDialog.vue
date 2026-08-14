@@ -90,9 +90,13 @@ const storages = shallowRef<PveRecord[]>([]);
 const existingVolumes = shallowRef<PveRecord[]>([]);
 const storageLoaded = shallowRef(false);
 const cdromConfigLoaded = shallowRef(false);
+const networkConfig = shallowRef<PveRecord | null>(null);
+const networkDigest = shallowRef('');
+const networkConfigLoaded = shallowRef(false);
 let dialogSession = 0;
 let existingVolumeRequest = 0;
 let cdromConfigSession = 0;
+let networkConfigSession = 0;
 const addDiskFormKey = shallowRef(0);
 const addCdromFormKey = shallowRef(0);
 const addDiskAdvanced = shallowRef(false);
@@ -158,6 +162,14 @@ const form = reactive<AddHardwareForm>({
 
 const diskConfig = computed(() => openedConfig.value || config.value);
 const cdromConfig = computed(() => openedConfig.value || config.value);
+const activeNetworkConfig = computed(() => networkConfig.value || config.value);
+const networkKey = computed(() => {
+  for (let id = 0; id < 32; id += 1) {
+    const key = `net${id}`;
+    if (activeNetworkConfig.value[key] === undefined) return key;
+  }
+  return '';
+});
 const selectedStorage = computed(() => storages.value.find((item) => textValue(item.storage) === form.storage));
 const diskFormatOptions = computed(() => storageFormats(selectedStorage.value).values);
 const selectExisting = computed(() => Boolean(selectedStorage.value?.select_existing));
@@ -206,7 +218,7 @@ const canAdd = computed(() => {
       (form.cdromMediaType !== 'iso' || form.cdromVolid.trim()),
     );
   }
-  if (form.kind === 'net') return networkFormValid();
+  if (form.kind === 'net') return Boolean(networkConfigLoaded.value && networkKey.value && networkFormValid());
   if (form.kind === 'usb') return Boolean(usbKeyAvailable.value && usbValue());
   if (form.kind === 'pci') return Boolean(pciKeyAvailable.value && pciValue());
   if (form.kind === 'serial') return Boolean(serialIdValid.value && serialKeyAvailable.value);
@@ -221,10 +233,10 @@ const cdromBusLimits: Record<CdromBus, number> = {
 };
 
 const usbKey = computed(() => nextDeviceKey('usb', maxUsbCount()));
-const usbKeyAvailable = computed(() => !config.value[usbKey.value]);
+const usbKeyAvailable = computed(() => Boolean(usbKey.value && !config.value[usbKey.value]));
 const usb3Disabled = computed(() => maxUsbCount() > 5);
 const pciKey = computed(() => nextDeviceKey('hostpci', 16));
-const pciKeyAvailable = computed(() => !config.value[pciKey.value]);
+const pciKeyAvailable = computed(() => Boolean(pciKey.value && !config.value[pciKey.value]));
 const pcieSupported = computed(() => textValue(config.value.machine).includes('q35'));
 const serialIdValid = computed(
   () => Number.isInteger(form.serialId) && form.serialId >= 0 && form.serialId <= 3,
@@ -294,9 +306,9 @@ function resetCdromDefaults() {
 function resetNetworkDefaults() {
   Object.assign(form, {
     bridge: '',
-    model: ['wxp', 'w2k'].includes(textValue(config.value.ostype))
+    model: ['wxp', 'w2k'].includes(textValue(activeNetworkConfig.value.ostype))
       ? 'rtl8139'
-      : textValue(config.value.ostype) === 'l26'
+      : textValue(activeNetworkConfig.value.ostype) === 'l26'
         ? 'virtio'
         : 'e1000',
     vlanTag: '',
@@ -366,17 +378,37 @@ watch(visible, (isVisible) => {
   }
   if (initialKind === 'net') {
     addNetworkAdvanced.value = false;
+    void initializeNetwork();
   }
   if (initialKind === 'cdrom') {
     void initializeCdrom();
     addCdromFormKey.value += 1;
   }
-  if (initialKind === 'net') resetNetworkDefaults();
   if (initialKind === 'usb') resetUsbDefaults();
   if (initialKind === 'pci') resetPciDefaults();
   if (initialKind === 'serial') resetSerialDefaults();
   if (initialKind === 'audio') resetAudioDefaults();
 });
+
+async function initializeNetwork() {
+  if (!hasVmCapability('VM.Config.Network')) return;
+  const session = ++networkConfigSession;
+  networkConfigLoaded.value = false;
+  networkConfig.value = null;
+  networkDigest.value = '';
+  resetNetworkDefaults();
+  loading.value = true;
+  try {
+    const response = await getVmConfig(node.value, vmid.value);
+    if (session !== networkConfigSession || !visible.value) return;
+    networkConfig.value = response.data || null;
+    networkDigest.value = textValue(response.data?.digest);
+    resetNetworkDefaults();
+    networkConfigLoaded.value = true;
+  } finally {
+    if (session === networkConfigSession) loading.value = false;
+  }
+}
 
 async function initializeCdrom() {
   if (!hasVmCapability('VM.Config.CDROM')) return;
@@ -393,7 +425,10 @@ async function initializeCdrom() {
     if (session !== cdromConfigSession || !visible.value) return;
     openedConfig.value = configResponse.data || null;
     openedDigest.value = textValue(configResponse.data?.digest);
-    hostArch.value = textValue(nodesResponse.data?.find((item) => item.node === node.value)?.['host-arch']) || 'x86_64';
+    const selectedNode = nodesResponse.data?.find((item) => item.node === node.value) as
+      | PveRecord
+      | undefined;
+    hostArch.value = textValue(selectedNode?.['host-arch']) || 'x86_64';
     resetCdromDefaults();
     cdromConfigLoaded.value = true;
     addCdromFormKey.value += 1;
@@ -441,7 +476,10 @@ async function initializeDisk() {
     if (session !== dialogSession || !visible.value) return;
     openedConfig.value = configResponse.data || null;
     openedDigest.value = textValue(configResponse.data?.digest);
-    hostArch.value = textValue(nodesResponse.data?.find((item) => item.node === node.value)?.['host-arch']) || 'x86_64';
+    const selectedNode = nodesResponse.data?.find((item) => item.node === node.value) as
+      | PveRecord
+      | undefined;
+    hostArch.value = textValue(selectedNode?.['host-arch']) || 'x86_64';
     storages.value = storageResponse.data || [];
     storageLoaded.value = true;
     resetDiskDefaults();
@@ -586,6 +624,7 @@ async function addDevice() {
   };
   const capability = requiredCapability[form.kind];
   if (!hasVmCapability(capability)) return;
+  if (form.kind === 'net' && !canAdd.value) return;
 
   const networkOptions = [
     form.macaddr.trim() ? `${form.model}=${form.macaddr.trim()}` : form.model,
@@ -597,9 +636,9 @@ async function addDevice() {
   if (form.queues.trim()) networkOptions.push(`queues=${form.queues.trim()}`);
   if (form.model === 'virtio' && form.mtu.trim()) networkOptions.push(`mtu=${form.mtu.trim()}`);
   if (form.linkDown) networkOptions.push('link_down=1');
-  const keys: Record<DeviceKind, string> = {
+  const keys: Record<DeviceKind, string | undefined> = {
     disk: diskKey.value,
-    net: nextDeviceKey('net'),
+    net: networkKey.value,
     cdrom: cdromKey.value,
     usb: usbKey.value,
     pci: pciKey.value,
@@ -630,6 +669,12 @@ async function addDevice() {
     loading.value = true;
     try {
       await updateVmConfig(node.value, vmid.value, { digest: openedDigest.value, [key]: value });
+      notifyUpdated();
+    } finally { loading.value = false; }
+  } else if (form.kind === 'net') {
+    loading.value = true;
+    try {
+      await updateVmConfig(node.value, vmid.value, { digest: networkDigest.value, [key]: value });
       notifyUpdated();
     } finally { loading.value = false; }
   } else await updateConfig({ [key]: value });

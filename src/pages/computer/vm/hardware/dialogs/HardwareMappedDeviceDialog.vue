@@ -40,6 +40,7 @@ watch(visible, async (isVisible) => {
 async function addMappedDevice() {
   if (!canUseDeviceMapping || !device.value) return;
   const key = kind === 'usb' ? nextDeviceKey('usb') : nextDeviceKey('hostpci');
+  if (!key) return;
   const value = `mapping=${device.value}${kind === 'pci' && pcie.value ? ',pcie=1' : ''}`;
   await updateConfig({ [key]: value });
   visible.value = false;
