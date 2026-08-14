@@ -27,7 +27,8 @@ export interface AddPciFormModel {
 }
 
 const form = defineModel<AddPciFormModel>('form', { required: true });
-const { node, config } = useVmHardwareContext();
+const { pcieSupported } = defineProps<{ pcieSupported: boolean }>();
+const { node } = useVmHardwareContext();
 
 const pciRows = shallowRef<PveRecord[]>([]);
 const mappingRows = shallowRef<PveRecord[]>([]);
@@ -46,7 +47,6 @@ const selectedDevice = computed(() =>
   form.value.pciMode === 'mapped' ? selectedMapping.value : selectedPci.value,
 );
 const hasMdev = computed(() => Boolean(selectedDevice.value?.mdev));
-const isQ35 = computed(() => textValue(config.value.machine).includes('q35'));
 const noIommu = computed(
   () => pciRows.value.length > 0 && pciRows.value.every((row) => Number(row.iommugroup) === -1),
 );
@@ -192,9 +192,12 @@ watch(
   },
 );
 
-watch(isQ35, (supported) => {
-  if (!supported) form.value.pcie = false;
-});
+watch(
+  () => pcieSupported,
+  (supported) => {
+    if (!supported) form.value.pcie = false;
+  },
+);
 
 onMounted(() => {
   void loadPciOptions();
@@ -335,8 +338,8 @@ onMounted(() => {
               v-model="form.pcie"
               dense
               right-label
-              :color="isQ35 ? 'primary' : 'grey'"
-              :disable="!isQ35"
+              :color="pcieSupported ? 'primary' : 'grey'"
+              :disable="!pcieSupported"
               label="PCI-Express"
             />
           </div>

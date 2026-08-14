@@ -865,7 +865,11 @@ async function addDevice() {
           v-model:form="form"
           :disable-usb3="usb3Disabled"
         />
-        <AddPciForm v-else-if="form.kind === 'pci'" v-model:form="form" />
+        <AddPciForm
+          v-else-if="form.kind === 'pci'"
+          v-model:form="form"
+          :pcie-supported="pcieSupported"
+        />
         <AddSerialForm
           v-else-if="form.kind === 'serial'"
           v-model:form="form"
