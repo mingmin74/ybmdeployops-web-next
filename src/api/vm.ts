@@ -134,6 +134,46 @@ export function migrateVm(
   );
 }
 
+export type VmMigrationPreconditions = Record<string, unknown>;
+
+/** PVE's migration dialog obtains the guest-specific constraints before enabling submit. */
+export function getVmMigrationPreconditions(node: string, vmid: number | string) {
+  return request<VmMigrationPreconditions>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/migrate`,
+    { method: 'GET', notifyOnError: true },
+  );
+}
+
+export function getVmMigrationCapabilities(node: string) {
+  return request<Record<string, unknown>>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/capabilities/qemu/migration`,
+    { method: 'GET', notifyOnError: true },
+  );
+}
+
+export function getVmCloneFeature(
+  node: string,
+  vmid: number | string,
+  params: { feature: 'copy' | 'clone'; snapname?: string },
+) {
+  return request<{ nodes?: string[] }>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}/feature`,
+    { method: 'GET', params, notifyOnError: true },
+  );
+}
+
+/** A cluster bulk action is one server-side task, rather than browser-managed per-VM requests. */
+export function runVmBulkAction(
+  action: 'start' | 'shutdown' | 'stop' | 'suspend' | 'migrate',
+  data: Record<string, unknown>,
+) {
+  return request<string>(`/api2/extjs/cluster/bulk-action/guest/${action}`, {
+    method: 'POST',
+    data,
+    notifyOnError: true,
+  });
+}
+
 export function cloneVm(
   node: string,
   vmid: number | string,
@@ -255,6 +295,7 @@ export function runVmBackup(
     mailto?: string;
     'notification-mode'?: string;
     'notes-template'?: string;
+    'prune-backups'?: string;
   },
 ) {
   return request<string>(`/api2/json/nodes/${encodeURIComponent(node)}/vzdump`, {

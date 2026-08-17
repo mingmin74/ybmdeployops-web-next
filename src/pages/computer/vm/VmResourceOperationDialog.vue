@@ -5,6 +5,9 @@ import {
   convertVmToTemplate,
   deleteVm,
   getNextVmId,
+  getVmCloneFeature,
+  getVmMigrationCapabilities,
+  getVmMigrationPreconditions,
   migrateVm,
   type VmResource,
 } from '@/api/vm';
@@ -13,6 +16,7 @@ import { getNodeStorage } from '@/api/storageContent';
 import { getVmSnapshots } from '@/api/overview';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
+import { useSessionStore } from '@/stores/session';
 
 type Operation = 'migrate' | 'clone' | 'delete' | 'template';
 
@@ -27,9 +31,12 @@ const emit = defineEmits<{
 }>();
 
 const loading = shallowRef(false);
+const checking = shallowRef(false);
+const session = useSessionStore();
 const nodes = shallowRef<PveNode[]>([]);
 const target = shallowRef('');
 const nextId = shallowRef<number | string>('');
+const cloneIdAvailable = shallowRef(false);
 const cloneName = shallowRef('');
 const cloneMode = shallowRef<'copy' | 'clone'>('copy');
 const migrateLocalDisks = shallowRef(false);
@@ -41,7 +48,16 @@ const cloneFormat = shallowRef('');
 const cloneSnapshot = shallowRef('current');
 const clonePool = shallowRef('');
 const storageOptions = shallowRef<string[]>([]);
+const storageFormats = shallowRef<string[]>([]);
+const storageFormatOptions = shallowRef<Record<string, string[]>>({});
 const snapshots = shallowRef<string[]>(['current']);
+const allowedCloneNodes = shallowRef<string[]>([]);
+const cloneFeatureReady = shallowRef(false);
+const migrationPossible = shallowRef(true);
+const migrationMessage = shallowRef('');
+const migrationLocalResources = shallowRef(false);
+const bothHaveDbusVmstate = shallowRef(false);
+const deleteConfirmation = shallowRef('');
 const purge = shallowRef(false);
 const destroyUnreferencedDisks = shallowRef(false);
 
@@ -59,20 +75,32 @@ const operationLabel = computed(() => {
 });
 const onlineNodes = computed(() => nodes.value.filter((node) => node.status === 'online'));
 const targetNodes = computed(() =>
-  props.operation === 'migrate'
+  (props.operation === 'migrate'
     ? onlineNodes.value.filter((node) => node.node !== props.vm?.node)
-    : onlineNodes.value,
+    : onlineNodes.value
+  ).filter((node) =>
+    props.operation !== 'clone' || (cloneFeatureReady.value && allowedCloneNodes.value.includes(node.node)),
+  ),
 );
 const canCreateLinkedClone = computed(() => Boolean(props.vm?.template));
 const canSubmit = computed(() => {
-  if (props.operation === 'delete' || props.operation === 'template')
+  if (props.operation === 'template')
     return Boolean(props.vm?.node && props.vm?.vmid);
+  if (props.operation === 'delete')
+    return Boolean(props.vm?.node && props.vm?.vmid && deleteConfirmation.value === String(props.vm.vmid));
   if (props.operation === 'migrate')
-    return Boolean(props.vm?.node && props.vm?.vmid && target.value);
-  return Boolean(
-    props.vm?.node && props.vm?.vmid && target.value && nextId.value && cloneName.value.trim(),
-  );
+    return Boolean(props.vm?.node && props.vm?.vmid && target.value && migrationPossible.value && !checking.value);
+  return Boolean(props.vm?.node && props.vm?.vmid && target.value && nextId.value && cloneIdAvailable.value && !checking.value);
 });
+const cloneSnapshotVisible = computed(
+  () => !props.vm?.template && snapshots.value.some((snapshot) => snapshot !== 'current'),
+);
+const showForceMigration = computed(
+  () => props.vm?.status !== 'running' && migrationLocalResources.value && session.userid === 'root@pam',
+);
+const showConntrackState = computed(
+  () => props.vm?.status === 'running' && bothHaveDbusVmstate.value,
+);
 const deleteMessage = computed(() =>
   props.operation === 'template'
     ? `${gettext('Are you sure you want to convert')} ${sourceName.value} ${gettext('to template')}?`
@@ -99,7 +127,10 @@ async function initialize() {
       (props.operation === 'clone' && onlineNodes.value.some((node) => node.node === props.vm?.node)
         ? props.vm.node
         : targetNodes.value[0]?.node) || '';
-    if (nextIdResponse) nextId.value = nextIdResponse.data || '';
+    if (nextIdResponse) {
+      nextId.value = nextIdResponse.data || '';
+      cloneIdAvailable.value = Boolean(nextId.value);
+    }
     cloneName.value = defaultCloneName();
     cloneMode.value = canCreateLinkedClone.value ? 'clone' : 'copy';
     migrateLocalDisks.value = false;
@@ -110,24 +141,107 @@ async function initialize() {
     cloneFormat.value = '';
     cloneSnapshot.value = 'current';
     clonePool.value = '';
+    cloneFeatureReady.value = false;
     purge.value = false;
     destroyUnreferencedDisks.value = false;
+    deleteConfirmation.value = '';
     const targetNode = target.value;
-    if (targetNode) {
-      const storageResponse = await getNodeStorage(targetNode, 'images');
-      storageOptions.value = (storageResponse.data || [])
-        .map((item) => textValue(item.storage))
-        .filter(Boolean);
-    }
+    if (targetNode) await refreshTarget(targetNode);
     if (props.operation === 'clone') {
       const snapshotsResponse = await getVmSnapshots(props.vm.node!, props.vm.vmid);
       snapshots.value = (snapshotsResponse.data || [])
         .map((item) => textValue(item.name))
         .filter(Boolean);
       if (!snapshots.value.includes('current')) snapshots.value.unshift('current');
+      await verifyCloneFeature();
     }
   } finally {
     loading.value = false;
+  }
+}
+
+async function refreshTarget(targetNode = target.value) {
+  targetStorage.value = '';
+  cloneStorage.value = '';
+  cloneFormat.value = '';
+  storageOptions.value = [];
+  storageFormats.value = [];
+  storageFormatOptions.value = {};
+  if (!targetNode) return;
+  const storageResponse = await getNodeStorage(targetNode, 'images');
+  const entries = storageResponse.data || [];
+  storageOptions.value = entries.map((item) => textValue(item.storage)).filter(Boolean);
+  storageFormatOptions.value = Object.fromEntries(entries.map((item) => {
+    const formats = (item as Record<string, unknown>).format;
+    const values = Array.isArray(formats) ? formats.map(textValue).filter(Boolean) : textValue(formats).split(',').filter(Boolean);
+    return [textValue((item as Record<string, unknown>).storage), values];
+  }));
+  storageFormats.value = storageFormatOptions.value[cloneStorage.value] || [];
+  if (props.operation === 'migrate') await checkMigratePreconditions();
+}
+
+async function verifyCloneFeature() {
+  const vm = props.vm;
+  if (props.operation !== 'clone' || !vm?.node || !vm.vmid) return;
+  checking.value = true;
+  try {
+    const response = await getVmCloneFeature(vm.node, vm.vmid, {
+      feature: cloneMode.value,
+      ...(cloneSnapshot.value !== 'current' ? { snapname: cloneSnapshot.value } : {}),
+    });
+    allowedCloneNodes.value = response.data?.nodes || [];
+    cloneFeatureReady.value = true;
+    if (!allowedCloneNodes.value.includes(target.value)) target.value = targetNodes.value[0]?.node || '';
+  } catch {
+    allowedCloneNodes.value = [];
+    cloneFeatureReady.value = false;
+    target.value = '';
+  } finally {
+    checking.value = false;
+  }
+}
+
+async function checkMigratePreconditions() {
+  const vm = props.vm;
+  if (props.operation !== 'migrate' || !vm?.node || !vm.vmid || !target.value) return;
+  checking.value = true;
+  migrationPossible.value = false;
+  migrationMessage.value = '';
+  try {
+    const [preconditions, capabilities] = await Promise.all([
+      getVmMigrationPreconditions(vm.node, vm.vmid),
+      getVmMigrationCapabilities(target.value),
+    ]);
+    const info = preconditions.data || {};
+    const allowed = (info.allowed_nodes || info['allowed-nodes'] || info.nodes) as string[] | undefined;
+    const diagnostics = (info.errors || info.preconditions || []) as Array<{ text?: string; severity?: string }>;
+    const disallowed = ((info.not_allowed_nodes || info['not-allowed-nodes'] || {}) as Record<string, Record<string, unknown>>)[target.value] || {};
+    const localResources = (info.local_resources || []) as string[];
+    const localDisks = (info.local_disks || []) as Array<{ cdrom?: number; volid?: string; size?: number }>;
+    const mappedResources = (info['mapped-resource-info'] || {}) as Record<string, Record<string, unknown>>;
+    const unavailable = (disallowed['unavailable-resources'] || []) as string[];
+    const blockingHa = (disallowed['blocking-ha-resources'] || []) as Array<{ sid?: string; cause?: string }>;
+    migrationLocalResources.value = localResources.some((resource) => !mappedResources[resource]);
+    if (unavailable.length) diagnostics.push({ severity: 'error', text: `${gettext('Mapped Resources')} (${unavailable.join(', ')}) ${gettext('not available on selected target.')}` });
+    if (migrationLocalResources.value && vm.status !== 'running') diagnostics.push({ severity: 'error', text: `${gettext('Cannot migrate VM with local resources')}: ${localResources.join(', ')}` });
+    if (vm.status === 'running') {
+      const notLive = Object.entries(mappedResources).filter(([, resource]) => !resource['live-migration']).map(([name]) => name);
+      if (notLive.length) diagnostics.push({ severity: 'error', text: `${gettext('Cannot migrate running VM with mapped resources')}: ${notLive.join(', ')}` });
+    }
+    for (const disk of localDisks) {
+      if (disk.cdrom === 1 && !String(disk.volid || '').includes(`vm-${vm.vmid}-cloudinit`)) {
+        diagnostics.push({ severity: 'error', text: gettext('Cannot migrate VM with local CD/DVD') });
+      }
+    }
+    for (const resource of blockingHa) diagnostics.push({ severity: 'error', text: `${gettext('Cannot migrate VM, because blocking HA resource')} ${resource.sid || ''} ${gettext('is on selected target node.')}` });
+    const sourceDbus = Boolean(info['has-dbus-vmstate']);
+    bothHaveDbusVmstate.value = sourceDbus && Boolean(capabilities.data?.['has-dbus-vmstate']);
+    migrationPossible.value = info.possible !== false && (!allowed || allowed.includes(target.value)) && !diagnostics.some((item) => item.severity === 'error');
+    migrationMessage.value = diagnostics.map((item) => item.text).filter(Boolean).join('\n') || '';
+  } catch {
+    migrationMessage.value = gettext('Migration precondition check failed.');
+  } finally {
+    checking.value = false;
   }
 }
 
@@ -146,19 +260,19 @@ async function submit() {
         ...(migrateLocalDisks.value && vm.status === 'running' && targetStorage.value
           ? { targetstorage: targetStorage.value }
           : {}),
-        ...(forceMigration.value ? { force: 1 } : {}),
-        ...(vm.status === 'running' && migrateConntrackState.value
+        ...(showForceMigration.value && forceMigration.value ? { force: 1 } : {}),
+        ...(showConntrackState.value && migrateConntrackState.value
           ? { 'with-conntrack-state': 1 }
           : {}),
       });
     } else if (props.operation === 'clone') {
       response = await cloneVm(vm.node, vm.vmid, {
         newid: nextId.value,
-        name: cloneName.value.trim(),
+        ...(cloneName.value.trim() ? { name: cloneName.value.trim() } : {}),
         target: target.value,
         full: cloneMode.value === 'copy' ? 1 : 0,
-        ...(cloneStorage.value ? { storage: cloneStorage.value } : {}),
-        ...(cloneFormat.value ? { format: cloneFormat.value } : {}),
+        ...(cloneMode.value === 'copy' && cloneStorage.value ? { storage: cloneStorage.value } : {}),
+        ...(cloneMode.value === 'copy' && cloneFormat.value ? { format: cloneFormat.value } : {}),
         ...(cloneSnapshot.value !== 'current' ? { snapname: cloneSnapshot.value } : {}),
         ...(clonePool.value.trim() ? { pool: clonePool.value.trim() } : {}),
       });
@@ -190,6 +304,23 @@ watch(
     void initialize();
   },
 );
+watch(target, (value) => { if (model.value) void refreshTarget(value); });
+watch([cloneMode, cloneSnapshot], () => { if (model.value && props.operation === 'clone') void verifyCloneFeature(); });
+watch(cloneStorage, (storage) => {
+  cloneFormat.value = '';
+  storageFormats.value = storageFormatOptions.value[storage] || [];
+});
+watch(nextId, async (vmid) => {
+  if (!model.value || props.operation !== 'clone' || !vmid) {
+    cloneIdAvailable.value = false;
+    return;
+  }
+  cloneIdAvailable.value = false;
+  try {
+    const response = await getNextVmId(vmid);
+    cloneIdAvailable.value = String(response.data) === String(vmid);
+  } catch { cloneIdAvailable.value = false; }
+});
 </script>
 
 <template>
@@ -199,6 +330,14 @@ watch(
         <template v-if="operation === 'delete' || operation === 'template'">
           <div class="u-size-12">{{ deleteMessage }}</div>
           <div v-if="operation === 'delete'" class="q-mt-md column q-gutter-sm">
+            <q-input
+              v-model="deleteConfirmation"
+              dense
+              outlined
+              square
+              :label="gettext('Please enter the VMID to confirm')"
+              :hint="String(vm?.vmid || '')"
+            />
             <q-checkbox
               v-model="purge"
               dense
@@ -262,7 +401,7 @@ watch(
                 ]"
               />
             </div>
-            <div class="col-12 col-sm-6">
+            <div v-if="cloneSnapshotVisible" class="col-12 col-sm-6">
               <q-select
                 v-model="cloneSnapshot"
                 dense
@@ -281,6 +420,7 @@ watch(
                 clearable
                 :options="storageOptions"
                 :label="gettext('Target Storage')"
+                :disable="cloneMode === 'clone'"
               />
             </div>
             <div class="col-12 col-sm-6">
@@ -290,8 +430,9 @@ watch(
                 outlined
                 square
                 clearable
-                :options="['raw', 'qcow2', 'vmdk']"
+                :options="storageFormats"
                 :label="gettext('Disk Format')"
+                :disable="cloneMode === 'clone' || !cloneStorage"
               />
             </div>
             <div class="col-12 col-sm-6">
@@ -305,7 +446,9 @@ watch(
             </div>
           </template>
           <template v-else-if="operation === 'migrate'"
-            ><div class="col-12">
+            ><div v-if="checking" class="col-12 text-caption text-grey-7">{{ gettext('Checking migration preconditions...') }}</div>
+            <div v-if="migrationMessage" class="col-12 text-negative text-caption" style="white-space: pre-line">{{ migrationMessage }}</div>
+            <div class="col-12">
               <q-checkbox
                 v-model="migrateLocalDisks"
                 dense
@@ -325,12 +468,13 @@ watch(
             </div>
             <div class="col-12">
               <q-checkbox
+                v-if="showForceMigration"
                 v-model="forceMigration"
                 dense
                 color="primary"
                 :label="gettext('Force')"
               /><q-checkbox
-                v-if="vm?.status === 'running'"
+                v-if="showConntrackState"
                 v-model="migrateConntrackState"
                 dense
                 color="primary"

@@ -4,8 +4,9 @@ import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   getVmResources,
+  getVmBackupDefaults,
   getVmSpiceProxy,
-  migrateVm,
+  runVmBulkAction,
   runVmPowerCommand,
   runVmBackup,
   type VmPowerCommand,
@@ -55,6 +56,7 @@ const pendingCommandTitle = shallowRef('');
 const commandLoading = shallowRef(false);
 const stopVisible = shallowRef(false);
 const stopOverruleAvailable = shallowRef(false);
+const stopOverruleDisabled = shallowRef(false);
 const stopOverruleShutdown = shallowRef(false);
 const standalone = shallowRef(true);
 const snapshotSupported = shallowRef(false);
@@ -73,21 +75,35 @@ const tagsDialogVisible = shallowRef(false);
 const tagsSaving = shallowRef(false);
 const tagValue = shallowRef('');
 const bulkMigrateVisible = shallowRef(false);
+const bulkActionVisible = shallowRef(false);
+const bulkActionLoading = shallowRef(false);
+const bulkAction = shallowRef<'start' | 'shutdown' | 'suspend' | 'stop'>('start');
+const bulkParallel = shallowRef(1);
+const bulkForce = shallowRef(true);
+const bulkTimeout = shallowRef(180);
 const bulkMigrateLoading = shallowRef(false);
 const bulkMigrateTarget = shallowRef('');
+const bulkMigrateParallel = shallowRef(1);
+const bulkMigrateLocalDisks = shallowRef(true);
 const migrationNodes = shallowRef<PveNode[]>([]);
 const snapshotVisible = shallowRef(false);
 const snapshotLoading = shallowRef(false);
 const snapshotName = shallowRef('');
 const snapshotDescription = shallowRef('');
 const snapshotIncludeRam = shallowRef(false);
+const snapshotGuestAgentEnabled = shallowRef(false);
 const backupVisible = shallowRef(false);
 const backupLoading = shallowRef(false);
 const backupStorages = shallowRef<string[]>([]);
+const backupStorageTypes = shallowRef<Record<string, string>>({});
 const backupStorage = shallowRef('');
 const backupMode = shallowRef<'snapshot' | 'suspend' | 'stop'>('snapshot');
 const backupCompression = shallowRef<'zstd' | 'lzo' | 'gzip' | '0'>('zstd');
 const backupProtected = shallowRef(false);
+const backupNotificationMode = shallowRef('auto');
+const backupMailto = shallowRef('');
+const backupNotesTemplate = shallowRef('');
+const backupPrune = shallowRef('');
 const defaultVisibleColumns = ['vmid', 'name', 'status', 'node', 'cpu', 'memory', 'disk', 'uptime'];
 const visibleColumnNames = shallowRef<string[]>(
   (() => {
@@ -407,7 +423,7 @@ function commandLabel(command?: VmPowerCommand) {
   if (command === 'stop') return gettext('Stop');
   if (command === 'reboot') return gettext('Reboot');
   if (command === 'reset') return gettext('Reset');
-  if (command === 'suspend') return gettext('Suspend');
+  if (command === 'suspend') return gettext('Pause');
   if (command === 'resume') return gettext('Resume');
   return '';
 }
@@ -485,6 +501,7 @@ async function openStop() {
   if (!canStop.value || !vm?.vmid) return;
 
   stopOverruleAvailable.value = false;
+  stopOverruleDisabled.value = false;
   stopOverruleShutdown.value = false;
   const haState = (vm as VmResource & { hastate?: string }).hastate;
   const haEnabled = Boolean(haState && haState !== 'unmanaged');
@@ -499,9 +516,9 @@ async function openStop() {
         (canManageNode || task.user === session.userid),
     ),
   );
-  const askOverrule = !haEnabled && hasActiveShutdown;
-  stopOverruleAvailable.value = askOverrule;
-  stopOverruleShutdown.value = askOverrule;
+  stopOverruleAvailable.value = canManageNode || hasActiveShutdown;
+  stopOverruleDisabled.value = haEnabled;
+  stopOverruleShutdown.value = !haEnabled && hasActiveShutdown;
   stopVisible.value = true;
 }
 
@@ -516,7 +533,16 @@ async function confirmStop() {
   if (completed) stopVisible.value = false;
 }
 
-async function bulkCommand(command: 'start' | 'shutdown' | 'suspend' | 'stop') {
+function bulkCommand(command: 'start' | 'shutdown' | 'suspend' | 'stop') {
+  bulkAction.value = command;
+  bulkParallel.value = 1;
+  bulkForce.value = true;
+  bulkTimeout.value = 180;
+  bulkActionVisible.value = true;
+}
+
+async function submitBulkCommand() {
+  const command = bulkAction.value;
   const targets = selectedRows.value.filter(
     (row) =>
       !row.template &&
@@ -531,24 +557,19 @@ async function bulkCommand(command: 'start' | 'shutdown' | 'suspend' | 'stop') {
             : ['running', 'paused', 'suspended'].includes(String(row.status || ''))),
   );
   if (!targets.length) return;
-  commandLoading.value = true;
+  bulkActionLoading.value = true;
   try {
-    const results = await Promise.allSettled(
-      targets.map((row) => runVmPowerCommand(String(row.node), row.vmid, command)),
-    );
-    const first = results.find(
-      (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof runVmPowerCommand>>> =>
-        result.status === 'fulfilled',
-    );
+    const response = await runVmBulkAction(command, {
+      vms: targets.map((row) => row.vmid).join(','),
+      parallel: bulkParallel.value,
+      ...(command === 'start' ? { force: bulkForce.value ? 1 : 0 } : {}),
+      ...(command === 'shutdown' ? { 'force-stop': bulkForce.value ? 1 : 0, timeout: bulkTimeout.value } : {}),
+    });
+    bulkActionVisible.value = false;
     await reload();
-    if (first?.value.data)
-      openTask(
-        String(targets[0]?.node || ''),
-        first.value.data,
-        `${gettext('Bulk')} ${commandLabel(command)}`,
-      );
+    if (response.data) openTask('', response.data, `${gettext('Bulk')} ${commandLabel(command)}`);
   } finally {
-    commandLoading.value = false;
+    bulkActionLoading.value = false;
   }
 }
 
@@ -588,6 +609,8 @@ async function openBulkMigrate() {
       migrationNodes.value.find(
         (node) => !selectedRows.value.every((row) => row.node === node.node),
       )?.node || '';
+    bulkMigrateParallel.value = 1;
+    bulkMigrateLocalDisks.value = true;
     bulkMigrateVisible.value = true;
   } finally {
     bulkMigrateLoading.value = false;
@@ -600,22 +623,15 @@ async function runBulkMigrate() {
   if (!bulkMigrateTarget.value || !targets.length) return;
   bulkMigrateLoading.value = true;
   try {
-    const results = await Promise.allSettled(
-      targets.map((row) =>
-        migrateVm(String(row.node), row.vmid, {
-          target: bulkMigrateTarget.value,
-          ...(row.status === 'running' ? { online: 1 } : {}),
-        }),
-      ),
-    );
-    const first = results.find(
-      (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof migrateVm>>> =>
-        result.status === 'fulfilled',
-    );
+    const response = await runVmBulkAction('migrate', {
+      vms: targets.map((row) => row.vmid).join(','),
+      target: bulkMigrateTarget.value,
+      parallel: bulkMigrateParallel.value,
+      'with-local-disks': bulkMigrateLocalDisks.value ? 1 : 0,
+    });
     bulkMigrateVisible.value = false;
     await reload();
-    if (first?.value.data)
-      openTask(String(targets[0]?.node || ''), first.value.data, gettext('Bulk Migrate'));
+    if (response.data) openTask('', response.data, gettext('Bulk Migrate'));
   } finally {
     bulkMigrateLoading.value = false;
   }
@@ -627,18 +643,24 @@ function openOperation(nextOperation: 'migrate' | 'clone' | 'delete' | 'template
   operationDialogVisible.value = true;
 }
 
-function openSnapshot() {
+async function openSnapshot() {
   if (!canSnapshot.value) return;
   snapshotName.value = `snapshot-${new Date().toISOString().slice(0, 16).replace(/[-T:]/g, '')}`;
   snapshotDescription.value = '';
-  snapshotIncludeRam.value = false;
+  const vm = selectedVm.value;
+  snapshotIncludeRam.value = vm?.status === 'running';
+  snapshotGuestAgentEnabled.value = false;
+  if (vm?.node && vm.vmid && vm.status === 'running') {
+    const config = await getVmConfig(String(vm.node), vm.vmid).catch(() => null);
+    snapshotGuestAgentEnabled.value = /(?:^|,)enabled=1(?:,|$)/.test(textValue(config?.data?.agent));
+  }
   snapshotVisible.value = true;
 }
 
 async function createSnapshot() {
   const vm = selectedVm.value;
   const snapname = snapshotName.value.trim();
-  if (!canSnapshot.value || !vm?.node || !snapname) return;
+  if (!canSnapshot.value || !vm?.node || !snapname || !/^[A-Za-z][A-Za-z0-9_.-]*$/.test(snapname)) return;
   snapshotLoading.value = true;
   try {
     const response = await createVmSnapshot(String(vm.node), vm.vmid, {
@@ -646,7 +668,7 @@ async function createSnapshot() {
       ...(snapshotDescription.value.trim()
         ? { description: snapshotDescription.value.trim() }
         : {}),
-      ...(snapshotIncludeRam.value ? { vmstate: 1 } : {}),
+      ...(vm.status === 'running' && snapshotIncludeRam.value ? { vmstate: 1 } : {}),
     });
     snapshotVisible.value = false;
     if (response.data) openTask(String(vm.node), response.data, gettext('Take Snapshot'));
@@ -664,14 +686,33 @@ async function openBackup() {
     backupStorages.value = (response.data || [])
       .map((item) => textValue(item.storage))
       .filter(Boolean);
+    backupStorageTypes.value = Object.fromEntries((response.data || []).map((item) => [textValue(item.storage), textValue(item.type)]));
     backupStorage.value = backupStorages.value[0] || '';
-    backupMode.value = 'snapshot';
-    backupCompression.value = 'zstd';
+    await applyBackupDefaults(String(vm.node), backupStorage.value);
     backupProtected.value = false;
     backupVisible.value = true;
   } finally {
     backupLoading.value = false;
   }
+}
+
+async function applyBackupDefaults(node: string, storage: string) {
+  backupMode.value = 'snapshot';
+  backupCompression.value = 'zstd';
+  backupProtected.value = false;
+  backupNotificationMode.value = 'auto';
+  backupMailto.value = '';
+  backupNotesTemplate.value = '';
+  backupPrune.value = '';
+  if (!storage) return;
+  const response = await getVmBackupDefaults(node, storage);
+  const defaults = response.data || {};
+  if (['snapshot', 'suspend', 'stop'].includes(String(defaults.mode))) backupMode.value = defaults.mode as typeof backupMode.value;
+  backupNotificationMode.value = textValue(defaults['notification-mode']) || backupNotificationMode.value;
+  backupMailto.value = textValue(defaults.mailto);
+  backupNotesTemplate.value = textValue(defaults['notes-template']);
+  backupPrune.value = textValue(defaults['prune-backups']);
+  if (backupStorageTypes.value[storage] === 'pbs') backupCompression.value = 'zstd';
 }
 
 async function backupNow() {
@@ -684,6 +725,10 @@ async function backupNow() {
       mode: backupMode.value,
       compress: backupCompression.value,
       protected: backupProtected.value ? 1 : 0,
+      ...(backupNotificationMode.value ? { 'notification-mode': backupNotificationMode.value } : {}),
+      ...(backupMailto.value.trim() ? { mailto: backupMailto.value.trim() } : {}),
+      ...(backupNotesTemplate.value.trim() ? { 'notes-template': backupNotesTemplate.value.trim() } : {}),
+      ...(backupPrune.value.trim() ? { 'prune-backups': backupPrune.value.trim() } : {}),
     });
     backupVisible.value = false;
     if (response.data) openTask(String(vm.node), response.data, gettext('Backup'));
@@ -976,7 +1021,7 @@ onBeforeUnmount(() => {
                         clickable
                         :disable="!canSuspend"
                         @click="requestCommand('suspend')"
-                        ><q-item-section>{{ gettext('Suspend') }}</q-item-section></q-item
+                        ><q-item-section>{{ gettext('Pause') }}</q-item-section></q-item
                       ><q-item
                         v-close-popup
                         clickable
@@ -1076,7 +1121,7 @@ onBeforeUnmount(() => {
                       size="12px"
                       color="primary"
                       class="u-button"
-                      :label="gettext('Suspend')"
+                      :label="gettext('Pause')"
                       :disable="!canSuspend || commandLoading"
                       @click="requestCommand('suspend')"
                     />
@@ -1357,6 +1402,7 @@ onBeforeUnmount(() => {
             v-model="stopOverruleShutdown"
             dense
             color="primary"
+            :disable="stopOverruleDisabled"
             :label="gettext('Overrule active shutdown tasks')"
           />
         </div>
@@ -1425,11 +1471,16 @@ onBeforeUnmount(() => {
             autogrow
             :label="gettext('Description')"
           /><q-checkbox
+            v-if="selectedVm?.status === 'running'"
             v-model="snapshotIncludeRam"
             dense
             color="primary"
             :label="gettext('Include RAM')"
           />
+          <div
+            v-if="selectedVm?.status === 'running' && !snapshotIncludeRam && !snapshotGuestAgentEnabled"
+            class="text-warning text-caption"
+          >{{ gettext('It is recommended to either include the RAM or use the QEMU Guest Agent when taking a snapshot of a running VM to avoid inconsistencies.') }}</div>
         </div>
         <template #foot
           ><q-btn
@@ -1444,7 +1495,7 @@ onBeforeUnmount(() => {
             flat
             size="12px"
             class="bg-primary text-grey-1 u-button"
-            :disable="!snapshotName.trim()"
+            :disable="!snapshotName.trim() || !/^[A-Za-z][A-Za-z0-9_.-]*$/.test(snapshotName.trim())"
             :loading="snapshotLoading"
             :label="gettext('Take Snapshot')"
             @click="createSnapshot" /></template></UWindow
@@ -1458,6 +1509,7 @@ onBeforeUnmount(() => {
             outlined
             square
             :options="backupStorages"
+            @update:model-value="applyBackupDefaults(String(selectedVm?.node || ''), backupStorage)"
             :label="gettext('Storage')"
           /><q-select
             v-model="backupMode"
@@ -1468,7 +1520,7 @@ onBeforeUnmount(() => {
             map-options
             :options="[
               { label: gettext('Snapshot'), value: 'snapshot' },
-              { label: gettext('Suspend'), value: 'suspend' },
+              { label: gettext('Pause'), value: 'suspend' },
               { label: gettext('Stop'), value: 'stop' },
             ]"
             :label="gettext('Mode')"
@@ -1477,6 +1529,7 @@ onBeforeUnmount(() => {
             dense
             outlined
             square
+            :disable="backupStorageTypes[backupStorage] === 'pbs'"
             emit-value
             map-options
             :options="[
@@ -1492,6 +1545,10 @@ onBeforeUnmount(() => {
             color="primary"
             :label="gettext('Protected')"
           />
+          <q-select v-model="backupNotificationMode" dense square outlined :options="['auto', 'always', 'never']" :label="gettext('Notification')" />
+          <q-input v-model="backupMailto" dense square outlined :label="gettext('Send email to')" />
+          <q-input v-if="backupPrune" v-model="backupPrune" dense square outlined :label="gettext('Prune')" />
+          <q-input v-model="backupNotesTemplate" dense square outlined type="textarea" autogrow :label="gettext('Notes')" />
         </div>
         <template #foot
           ><q-btn
@@ -1517,6 +1574,18 @@ onBeforeUnmount(() => {
       :upid="taskUpid"
       :title="taskTitle"
     />
+    <q-dialog v-model="bulkActionVisible" persistent>
+      <UWindow :title="`${gettext('Bulk')} ${commandLabel(bulkAction)}`" width="460px" :loading="bulkActionLoading">
+        <div class="q-pa-md q-gutter-md">
+          <q-checkbox v-if="bulkAction === 'start'" v-model="bulkForce" dense color="primary" :label="gettext('Force')" />
+          <q-checkbox v-if="bulkAction === 'shutdown'" v-model="bulkForce" dense color="primary" :label="gettext('Force Stop')" />
+          <q-input v-if="bulkAction === 'shutdown'" v-model.number="bulkTimeout" dense outlined square type="number" min="0" max="7200" :label="gettext('Timeout (s)')" />
+          <q-input v-model.number="bulkParallel" dense outlined square type="number" min="1" max="64" :label="gettext('Parallel jobs')" />
+        </div>
+        <template #foot><q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" />
+          <q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :loading="bulkActionLoading" :label="gettext('Start')" @click="submitBulkCommand" /></template>
+      </UWindow>
+    </q-dialog>
     <q-dialog v-model="tagsDialogVisible" persistent
       ><UWindow :title="gettext('Tags')" width="460px" :loading="tagsSaving"
         ><div class="q-pa-md">
@@ -1558,6 +1627,8 @@ onBeforeUnmount(() => {
             :label="gettext('Target Node')"
             :options="migrationNodes.map((node) => ({ label: node.node, value: node.node }))"
           />
+          <q-input v-model.number="bulkMigrateParallel" dense square outlined type="number" min="1" max="64" class="q-mt-md" :label="gettext('Parallel jobs')" />
+          <q-checkbox v-model="bulkMigrateLocalDisks" dense color="primary" class="q-mt-md" :label="gettext('Allow local disk migration')" />
         </div>
         <template #foot
           ><q-btn
