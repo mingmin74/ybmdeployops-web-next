@@ -75,6 +75,8 @@ async function executeMonitorCommand() {
     const output = String(response.data || '');
     addResponse(output.split('\n'));
     void scrollToEnd();
+  } catch {
+    // request() already reports the PVE API error; consume it to avoid an unhandled rejection.
   } finally {
     monitorLoading.value = false;
     void focusCommandInput();
@@ -94,11 +96,7 @@ function usePreviousHistoryCommand() {
 }
 
 function useNextHistoryCommand() {
-  if (historyIndex.value <= 0) {
-    historyIndex.value = -1;
-    monitorCommand.value = '';
-    return;
-  }
+  if (historyIndex.value <= 0) return;
   historyIndex.value -= 1;
   monitorCommand.value = history.value[historyIndex.value] || '';
 }
@@ -140,7 +138,10 @@ onMounted(() => {
 
 <template>
   <div class="vm-monitor-tab">
-    <div ref="output" class="vm-monitor-tab__output">
+    <div
+      ref="output"
+      class="vm-monitor-tab__output"
+    >
       <pre>{{ monitorLines.join('\n') }}</pre>
     </div>
     <q-input

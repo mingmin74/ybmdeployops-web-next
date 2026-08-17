@@ -32,6 +32,16 @@ export type VmTask = {
   status?: string;
 };
 
+export type VmTaskHistoryParams = {
+  start?: number;
+  limit?: number;
+  userfilter?: string;
+  typefilter?: string;
+  statusfilter?: string[];
+  since?: number;
+  until?: number;
+};
+
 /** Returns cluster guest resources. Callers choose the guest type they render. */
 export function getVmResources() {
   return request<VmResource[]>('/api2/json/cluster/resources', {
@@ -319,13 +329,22 @@ export function getVmBackupDefaults(node: string, storage: string) {
 export function getVmTaskHistory(
   node: string,
   vmid: number | string,
-  params: { errors?: 0 | 1; start?: number; limit?: number } = {},
+  params: VmTaskHistoryParams = {},
 ) {
   return request<VmTask[]>(`/api2/json/nodes/${encodeURIComponent(node)}/tasks`, {
     method: 'GET',
-    params: { vmid, start: 0, limit: 500, errors: 0, ...params },
+    params: { vmid, ...params },
     notifyOnError: true,
   });
+}
+
+/** Builds PVE's full task-log download URL for the task's node encoded in its UPID. */
+export function getVmTaskLogDownloadUrl(upid: string) {
+  const [, node] = upid.match(/^UPID:([^:]+):/) || [];
+  if (!node) return '';
+
+  const baseUrl = import.meta.env.VITE_PVE_BASE_URL || '';
+  return `${baseUrl}/api2/json/nodes/${encodeURIComponent(node)}/tasks/${encodeURIComponent(upid)}/log?download=1`;
 }
 
 export function restoreVmBackup(

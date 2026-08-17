@@ -3,7 +3,7 @@ import type { QTableColumn } from 'quasar';
 import { computed, shallowRef, useTemplateRef, watch } from 'vue';
 import type { QInput } from 'quasar';
 import { gettext } from '@/locale';
-import { getVmTaskHistory, type VmTask } from '@/api/vm';
+import { getVmTaskHistory, getVmTaskLogDownloadUrl, type VmTask } from '@/api/vm';
 
 const props = defineProps<{ node: string; vmid: string }>();
 const emit = defineEmits<{ task: [node: string, upid: string, title: string] }>();
@@ -14,20 +14,23 @@ const since = shallowRef('');
 const until = shallowRef('');
 const userfilter = shallowRef('');
 const statusfilter = shallowRef<string[]>([]);
-const typefilter = shallowRef<string[]>([]);
+const typefilter = shallowRef('');
 const sinceDateInput = useTemplateRef<QInput>('sinceDateInput');
 const untilDateInput = useTemplateRef<QInput>('untilDateInput');
 const selected = shallowRef<VmTask[]>([]);
 const tasks = shallowRef<VmTask[]>([]);
+const page = shallowRef(1);
+const pageSize = 500;
+const total = shallowRef(0);
 const selectedTask = computed(() => selected.value[0]);
 const filterCount = computed(
   () =>
-    [since.value, until.value, userfilter.value, ...statusfilter.value, ...typefilter.value].filter(
-      Boolean,
-    ).length,
+    [since.value, until.value, userfilter.value, ...statusfilter.value, typefilter.value].filter(
+      Boolean
+    ).length
 );
 const clearFilterText = computed(() =>
-  filterCount.value ? `${gettext('Clear Filter')} (${filterCount.value})` : gettext('Clear Filter'),
+  filterCount.value ? `${gettext('Clear Filter')} (${filterCount.value})` : gettext('Clear Filter')
 );
 const statusOptions = [
   { label: 'OK', value: 'ok' },
@@ -143,29 +146,15 @@ const taskTypes = [
 ]
   .sort()
   .map((type) => ({ label: type, value: type }));
-const filteredTasks = computed(() => {
+const visibleTasks = computed(() => {
   const keyword = filter.value.trim().toLowerCase();
-  const sinceTime = since.value ? new Date(since.value).valueOf() / 1000 : 0;
-  const untilTime = until.value ? new Date(until.value).valueOf() / 1000 + 86400 : 0;
-  return tasks.value.filter((task) => {
-    const startTime = Number(task.starttime) || 0;
-    const status = String(task.status || '').toLowerCase();
-    return (
-      (!keyword ||
-        [task.type, task.id, task.user, task.status, task.node]
-          .join(' ')
-          .toLowerCase()
-          .includes(keyword)) &&
-      (!sinceTime || startTime >= sinceTime) &&
-      (!untilTime || startTime < untilTime) &&
-      (!userfilter.value ||
-        String(task.user || '')
-          .toLowerCase()
-          .includes(userfilter.value.toLowerCase())) &&
-      (!statusfilter.value.length || statusfilter.value.some((value) => status.includes(value))) &&
-      (!typefilter.value.length || typefilter.value.includes(String(task.type || '')))
-    );
-  });
+  if (!keyword) return tasks.value;
+  return tasks.value.filter((task) =>
+    [task.type, task.id, task.user, task.status, task.node]
+      .join(' ')
+      .toLowerCase()
+      .includes(keyword)
+  );
 });
 const columns = computed<QTableColumn<VmTask>[]>(() => [
   {
@@ -173,25 +162,28 @@ const columns = computed<QTableColumn<VmTask>[]>(() => [
     label: gettext('Start Time'),
     field: (row) => formatTime(row.starttime),
     align: 'left',
-    sortable: true,
   },
   {
     name: 'endtime',
     label: gettext('End Time'),
     field: (row) => formatTime(row.endtime),
     align: 'left',
-    sortable: true,
   },
-  { name: 'node', label: gettext('Node'), field: 'node', align: 'left', sortable: true },
-  { name: 'user', label: gettext('Username'), field: 'user', align: 'left', sortable: true },
+  {
+    name: 'duration',
+    label: gettext('Duration'),
+    field: (row) => formatDuration(row.starttime, row.endtime),
+    align: 'left',
+  },
+  { name: 'node', label: gettext('Node'), field: 'node', align: 'left' },
+  { name: 'user', label: gettext('Username'), field: 'user', align: 'left' },
   {
     name: 'description',
     label: gettext('Description'),
     field: taskDescription,
     align: 'left',
-    sortable: true,
   },
-  { name: 'status', label: gettext('Status'), field: 'status', align: 'left', sortable: true },
+  { name: 'status', label: gettext('Status'), field: 'status', align: 'left' },
   { name: 'actions', label: '', field: () => '', align: 'right' },
 ]);
 
@@ -201,19 +193,102 @@ function formatTime(value: unknown) {
 }
 
 function taskDescription(row: VmTask) {
+  const taskDescriptions: Record<string, [string, string]> = {
+    qmclone: ['VM', gettext('Clone')],
+    qmconfig: ['VM', gettext('Configure')],
+    qmcreate: ['VM', gettext('Create')],
+    qmdelsnapshot: ['VM', gettext('Delete Snapshot')],
+    qmdestroy: ['VM', gettext('Destroy')],
+    qmigrate: ['VM', gettext('Migrate')],
+    qmmove: ['VM', gettext('Move disk')],
+    qmpause: ['VM', gettext('Pause')],
+    qmreboot: ['VM', gettext('Reboot')],
+    qmreset: ['VM', gettext('Reset')],
+    qmrestore: ['VM', gettext('Restore')],
+    qmresume: ['VM', gettext('Resume')],
+    qmrollback: ['VM', gettext('Rollback')],
+    qmshutdown: ['VM', gettext('Shutdown')],
+    qmsnapshot: ['VM', gettext('Snapshot')],
+    qmstart: ['VM', gettext('Start')],
+    qmstop: ['VM', gettext('Stop')],
+    qmsuspend: ['VM', gettext('Suspend')],
+    qmtemplate: ['VM', gettext('Convert to template')],
+  };
+  const description = taskDescriptions[row.type || ''];
+  if (description) return `${description[0]}${row.id ? ` ${row.id}` : ''} - ${description[1]}`;
   return [row.type, row.id].filter(Boolean).join(' ') || '-';
 }
 
-async function reload() {
+function formatDuration(starttime?: number, endtime?: number) {
+  const seconds = Number(endtime) - Number(starttime);
+  if (!Number.isFinite(seconds) || seconds < 0) return '-';
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+  return [hours && `${hours}h`, minutes && `${minutes}m`, `${remainingSeconds}s`]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function parseTaskStatus(status?: string) {
+  if (status === 'OK') return 'ok';
+  if (status === 'unknown') return 'unknown';
+  if (status?.startsWith('WARNINGS:')) return 'warning';
+  return 'error';
+}
+
+function formatTaskStatus(status?: string) {
+  const kind = parseTaskStatus(status);
+  if (kind === 'ok') return 'text-positive';
+  if (kind === 'warning') return 'text-warning';
+  if (kind === 'unknown') return 'text-grey';
+  return 'text-negative';
+}
+
+function dayStart(value: string) {
+  return value ? new Date(`${value}T00:00:00`).valueOf() / 1000 : undefined;
+}
+
+function dateRangeIsValid() {
+  return !since.value || !until.value || since.value <= until.value;
+}
+
+function buildParams() {
+  const sinceStart = dayStart(since.value);
+  const untilStart = dayStart(until.value);
+  return {
+    start: (page.value - 1) * pageSize,
+    limit: pageSize,
+    ...(sinceStart === undefined ? {} : { since: sinceStart }),
+    ...(untilStart === undefined ? {} : { until: untilStart + 86400 }),
+    ...(userfilter.value ? { userfilter: userfilter.value } : {}),
+    ...(typefilter.value ? { typefilter: typefilter.value } : {}),
+    ...(statusfilter.value.length ? { statusfilter: statusfilter.value } : {}),
+  };
+}
+
+async function reload(resetPage = false) {
   if (!props.node || !props.vmid) return;
+  if (!dateRangeIsValid()) return;
+  if (resetPage) page.value = 1;
   loading.value = true;
   try {
-    const response = await getVmTaskHistory(props.node, props.vmid);
+    const response = await getVmTaskHistory(props.node, props.vmid, buildParams());
     tasks.value = response.data || [];
+    total.value = Number(
+      (response as typeof response & { total?: number }).total ?? tasks.value.length
+    );
     selected.value = [];
+  } catch {
+    // request() already presents PVE API errors; consume them for watcher and event callers.
   } finally {
     loading.value = false;
   }
+}
+
+function downloadTask(task = selectedTask.value) {
+  const url = task?.upid ? getVmTaskLogDownloadUrl(task.upid) : '';
+  if (url) window.location.assign(url);
 }
 
 function openTask(task = selectedTask.value) {
@@ -226,7 +301,8 @@ function clearFilters() {
   until.value = '';
   userfilter.value = '';
   statusfilter.value = [];
-  typefilter.value = [];
+  typefilter.value = '';
+  void reload(true);
 }
 
 function openDatePicker(input: QInput | null) {
@@ -240,7 +316,7 @@ watch(
   () => {
     void reload();
   },
-  { immediate: true },
+  { immediate: true }
 );
 </script>
 
@@ -271,6 +347,16 @@ watch(
         no-caps
         outline
         size="12px"
+        color="primary"
+        class="u-button q-ml-sm"
+        :label="gettext('Download')"
+        :disable="!selectedTask"
+        @click="downloadTask()"
+      />
+      <q-btn
+        no-caps
+        outline
+        size="12px"
         class="u-button q-ml-sm"
         :color="filterCount ? 'primary' : 'grey'"
         :disable="!filterCount"
@@ -278,10 +364,21 @@ watch(
         @click="clearFilters"
       />
       <q-space />
-      <q-input v-model="filter" borderless dense debounce="300" :placeholder="gettext('Search')"
-        ><template #append><q-icon name="search" /></template
-      ></q-input>
-      <q-spinner v-if="loading" color="primary" size="20px" class="q-ml-sm" />
+      <q-input
+        v-model="filter"
+        borderless
+        dense
+        debounce="300"
+        :placeholder="gettext('Search')"
+      >
+        <template #append><q-icon name="search" /></template>
+      </q-input>
+      <q-spinner
+        v-if="loading"
+        color="primary"
+        size="20px"
+        class="q-ml-sm"
+      />
       <q-icon
         v-else
         name="refresh"
@@ -297,7 +394,10 @@ watch(
         <q-tooltip>{{ gettext('Refresh') }}</q-tooltip>
       </q-icon>
     </div>
-    <div v-if="showFilter" class="task-history-filter q-px-md q-py-lg">
+    <div
+      v-if="showFilter"
+      class="task-history-filter q-px-md q-py-lg"
+    >
       <div class="row q-col-gutter-md">
         <div class="col-12 col-md-4 task-filter-field">
           <span class="task-filter-label">{{ gettext('Since') }}</span>
@@ -309,7 +409,12 @@ watch(
             outlined
             dense
             type="date"
+            :max="until || undefined"
+            :rules="[
+              (value) => !until || value <= until || gettext('Since cannot be later than Until'),
+            ]"
             @click="openDatePicker(sinceDateInput)"
+            @update:model-value="reload(true)"
           />
         </div>
         <div class="col-12 col-md-4 task-filter-field">
@@ -322,7 +427,12 @@ watch(
             outlined
             dense
             type="date"
+            :min="since || undefined"
+            :rules="[
+              (value) => !since || value >= since || gettext('Until cannot be earlier than Since'),
+            ]"
             @click="openDatePicker(untilDateInput)"
+            @update:model-value="reload(true)"
           />
         </div>
         <div class="col-12 col-md-4 task-filter-field">
@@ -338,6 +448,7 @@ watch(
             map-options
             options-dense
             :options="statusOptions"
+            @update:model-value="reload(true)"
           />
         </div>
         <div class="col-12 col-md-4 task-filter-field">
@@ -348,11 +459,11 @@ watch(
             square
             outlined
             dense
-            multiple
             emit-value
             map-options
             options-dense
             :options="taskTypes"
+            @update:model-value="reload(true)"
           />
         </div>
         <div class="col-12 col-md-4 task-filter-field">
@@ -363,6 +474,7 @@ watch(
             square
             outlined
             dense
+            @update:model-value="reload(true)"
           />
         </div>
       </div>
@@ -374,22 +486,30 @@ watch(
       selection="single"
       hide-selected-banner
       table-header-class="u-table-header"
-      :rows="filteredTasks"
+      :rows="visibleTasks"
       :columns="columns"
       :loading="loading"
-      :pagination="{ rowsPerPage: 20 }"
+      :pagination="{ page, rowsPerPage: pageSize, rowsNumber: total }"
+      :rows-per-page-options="[pageSize]"
       class="u-compact-table"
       @row-dblclick="(_, row) => openTask(row)"
+      @update:pagination="
+        (value) => {
+          page = value.page;
+          void reload();
+        }
+      "
     >
-      <template #body-cell-status="scope"
-        ><q-td :props="scope"
-          ><span :class="scope.value === 'OK' ? 'text-positive' : 'text-negative'">{{
-            scope.value || '-'
-          }}</span></q-td
-        ></template
-      >
+      <template #body-cell-status="scope">
+        <q-td :props="scope">
+          <span :class="formatTaskStatus(scope.value)">{{ scope.value || '-' }}</span>
+        </q-td>
+      </template>
       <template #body-cell-actions="scope">
-        <q-td :props="scope" class="text-right">
+        <q-td
+          :props="scope"
+          class="text-right"
+        >
           <q-icon
             name="chevron_right"
             color="primary"
