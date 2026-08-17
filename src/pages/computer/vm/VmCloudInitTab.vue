@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, reactive, shallowRef, useTemplateRef, watch } from 'vue';
 import { Dialog, Notify } from 'quasar';
-import { updateVmConfig } from '@/api/overview';
+import { getVmConfig, getVmPendingConfig, updateVmConfig } from '@/api/overview';
 import { regenerateVmCloudInitImage } from '@/api/vm';
 import type { PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
+
 const props = defineProps<{ node: string; vmid: string; config: PveRecord }>();
 const emit = defineEmits<{ updated: [] }>();
 const session = useSessionStore();
+
 function optionIcon(key: string) {
   if (key === 'ciuser') return 'person';
   if (key === 'cipassword') return 'key';
@@ -19,52 +21,253 @@ function optionIcon(key: string) {
   if (key === 'ciupgrade') return 'archive';
   return 'settings';
 }
+
 const loading = shallowRef(false);
+const pendingLoading = shallowRef(false);
+const pendingRows = shallowRef<PveRecord[]>([]);
+
 const form = reactive({
   ciuser: '',
   cipassword: '',
+  cipasswordHasValue: false,
   sshkeys: '',
   nameserver: '',
   searchdomain: '',
   ciupgrade: true,
 });
-const original = shallowRef({ ...form });
+
+const original = shallowRef<{
+  ciuser: string;
+  cipassword: boolean;
+  sshkeys: string;
+  nameserver: string;
+  searchdomain: string;
+  ciupgrade: boolean;
+}>({
+  ciuser: '',
+  cipassword: false,
+  sshkeys: '',
+  nameserver: '',
+  searchdomain: '',
+  ciupgrade: true,
+});
+
 const ipconfigs = reactive<Record<string, string>>({});
 const originalIpconfigs = shallowRef<Record<string, string>>({});
+
 const sshKeyFileInput = useTemplateRef<HTMLInputElement>('sshKeyFileInput');
 const canLoadSshKeyFile = typeof FileReader !== 'undefined';
-function textValue(value: unknown) {
+
+function textValue(value: unknown): string {
   return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 }
-function isIpv4Address(value: string) {
-  const parts = value.split('.');
-  return parts.length === 4 && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
+
+const IPV4SEG = '(?:25[0-5]|(?:2[0-4]|1?[0-9])?[0-9])';
+const IPV4ADDR = `(?:${IPV4SEG}\\.){3}${IPV4SEG}`;
+const IPV6SEG = '[0-9a-fA-F]{1,4}';
+const IPV6ADDR_FULL = `(?:${IPV6SEG}:){7}${IPV6SEG}`;
+const IPV6ADDR_COMP = `(?:(?:${IPV6SEG}:){0,7}${IPV6SEG}?)?::(?:(?:${IPV6SEG}:){0,7}${IPV6SEG}?)?`;
+const IPV6ADDR_V4MAPPED = `(?:(?:${IPV6SEG}:){6}|(?:${IPV6SEG}:){0,5}::(?:${IPV6SEG}:){0,5}|::(?:${IPV6SEG}:){5})${IPV4ADDR}`;
+const IPV6ADDR = `(?:${IPV6ADDR_FULL}|${IPV6ADDR_COMP}|${IPV6ADDR_V4MAPPED})`;
+
+const IPV4_RE = new RegExp(`^${IPV4ADDR}$`);
+const IPV6_RE = new RegExp(`^${IPV6ADDR}$`);
+const IPV4CIDR_RE = new RegExp(`^${IPV4ADDR}\\/(?:3[0-2]|[12]?[0-9])$`);
+const IPV6CIDR_RE = new RegExp(`^${IPV6ADDR}\\/(?:12[0-8]|(?:1[01]|[1-9])?[0-9])$`);
+
+function isIpv4Address(value: string): boolean {
+  return IPV4_RE.test(value);
 }
-function isIpv6Address(value: string) {
-  const parts = value.split('::');
+
+function isIpv6Address(value: string): boolean {
+  return IPV6_RE.test(value);
+}
+
+function isIpv4Cidr(value: string): boolean {
+  return IPV4CIDR_RE.test(value);
+}
+
+function isIpv6Cidr(value: string): boolean {
+  return IPV6CIDR_RE.test(value);
+}
+
+function verifyIp64Address(value: string): boolean {
+  return isIpv4Address(value) || isIpv6Address(value);
+}
+
+function verifyIp64AddressWithSuffix(value: string): boolean {
+  const parts = value.split('%');
   if (parts.length > 2) return false;
-  const segments = parts.flatMap((part) => (part ? part.split(':') : []));
-  if (!segments.every((segment) => /^[0-9a-f]{1,4}$/i.test(segment))) return false;
-  return parts.length === 2 ? segments.length < 8 : segments.length === 8;
+  const address = parts[0] || '';
+  if (parts.length > 1) {
+    const suffix = parts[1] || '';
+    const addr = address.toLowerCase();
+    if (!addr.startsWith('fe80:')) return false;
+    if (!/^[A-Za-z0-9_.~-]+$/.test(suffix)) return false;
+  }
+  return verifyIp64Address(address);
 }
-function normalizeNameserverList(value: string) {
+
+function normalizeNameserverList(value: string): string {
   return value
     .trim()
     .split(/[ ,;]+/)
     .filter(Boolean)
     .join(' ');
 }
-function isValidNameserverList(value: string) {
-  return value.split(/[ ,;]+/).every((entry) => {
-    if (!entry) return true;
-    const parts = entry.split('%');
-    const address = parts[0] ?? '';
-    if (parts.length > 2 || (parts.length > 1 && !address.toLowerCase().startsWith('fe80:')))
-      return false;
-    return isIpv4Address(address) || isIpv6Address(address);
-  });
+
+function isValidNameserverList(value: string): boolean {
+  const entries = value.split(/[ ,;]+/).filter(Boolean);
+  return entries.every((entry) => verifyIp64AddressWithSuffix(entry));
 }
+
+const IPV4_MODE_OPTIONS = [
+  { value: 'none', label: gettext('No IPv4') },
+  { value: 'static', label: gettext('Static') },
+  { value: 'dhcp', label: gettext('DHCP') },
+] as const;
+
+const IPV6_MODE_OPTIONS = [
+  { value: 'none', label: gettext('No IPv6') },
+  { value: 'static', label: gettext('Static') },
+  { value: 'dhcp', label: gettext('DHCPv6') },
+  { value: 'auto', label: gettext('SLAAC') },
+] as const;
+
+type Ipv4Mode = (typeof IPV4_MODE_OPTIONS)[number]['value'];
+type Ipv6Mode = (typeof IPV6_MODE_OPTIONS)[number]['value'];
+
+type ParsedIpConfig = {
+  ipv4Mode: Ipv4Mode;
+  ipv4Cidr: string;
+  ipv4Gateway: string;
+  ipv6Mode: Ipv6Mode;
+  ipv6Cidr: string;
+  ipv6Gateway: string;
+};
+
+const DEFAULT_IPCONFIG: ParsedIpConfig = {
+  ipv4Mode: 'none',
+  ipv4Cidr: '',
+  ipv4Gateway: '',
+  ipv6Mode: 'none',
+  ipv6Cidr: '',
+  ipv6Gateway: '',
+};
+
+const ipconfigEditors = reactive<Record<string, ParsedIpConfig>>({});
+const selectedIpConfigOriginal = shallowRef<ParsedIpConfig>({ ...DEFAULT_IPCONFIG });
+
+const activeIpConfig = computed<ParsedIpConfig | undefined>(() => {
+  const key = selectedOption.value;
+  if (!key.startsWith('ipconfig')) return undefined;
+  return ipconfigEditors[key];
+});
+
+function parseIpConfig(raw: string): ParsedIpConfig {
+  const result: ParsedIpConfig = { ...DEFAULT_IPCONFIG };
+  const properties: Record<string, string> = {};
+  const parts = raw.split(',');
+  for (const part of parts) {
+    if (!part) continue;
+    const eq = part.indexOf('=');
+    const key = eq >= 0 ? part.substring(0, eq) : part;
+    const value = eq >= 0 ? part.substring(eq + 1) : '1';
+    properties[key] = value;
+  }
+
+  const ip = properties.ip || '';
+  if (ip) {
+    const lowerIp = ip.toLowerCase();
+    if (lowerIp === 'dhcp' || lowerIp === 'dhcp4') {
+      result.ipv4Mode = 'dhcp';
+    } else if (isIpv4Cidr(ip)) {
+      result.ipv4Mode = 'static';
+      result.ipv4Cidr = ip;
+    }
+  }
+  const gw = properties.gw || '';
+  if (gw && isIpv4Address(gw)) {
+    result.ipv4Gateway = gw;
+  }
+
+  const ip6 = properties.ip6 || '';
+  if (ip6) {
+    const lowerIp6 = ip6.toLowerCase();
+    if (lowerIp6 === 'dhcp' || lowerIp6 === 'dhcp6') {
+      result.ipv6Mode = 'dhcp';
+    } else if (lowerIp6 === 'auto' || lowerIp6 === 'slaac') {
+      result.ipv6Mode = 'auto';
+    } else if (isIpv6Cidr(ip6)) {
+      result.ipv6Mode = 'static';
+      result.ipv6Cidr = ip6;
+    }
+  }
+  const gw6 = properties.gw6 || '';
+  if (gw6 && isIpv6Address(gw6)) {
+    result.ipv6Gateway = gw6;
+  }
+
+  return result;
+}
+
+function printIpConfig(parsed: ParsedIpConfig): string {
+  const segments: string[] = [];
+  switch (parsed.ipv4Mode) {
+    case 'dhcp':
+      segments.push('ip=dhcp');
+      if (parsed.ipv4Gateway && isIpv4Address(parsed.ipv4Gateway)) {
+        segments.push(`gw=${parsed.ipv4Gateway}`);
+      }
+      break;
+    case 'static':
+      if (parsed.ipv4Cidr && isIpv4Cidr(parsed.ipv4Cidr)) {
+        segments.push(`ip=${parsed.ipv4Cidr}`);
+      }
+      if (parsed.ipv4Gateway && isIpv4Address(parsed.ipv4Gateway)) {
+        segments.push(`gw=${parsed.ipv4Gateway}`);
+      }
+      break;
+  }
+  switch (parsed.ipv6Mode) {
+    case 'dhcp':
+      segments.push('ip6=dhcp');
+      if (parsed.ipv6Gateway && isIpv6Address(parsed.ipv6Gateway)) {
+        segments.push(`gw6=${parsed.ipv6Gateway}`);
+      }
+      break;
+    case 'auto':
+      segments.push('ip6=auto');
+      if (parsed.ipv6Gateway && isIpv6Address(parsed.ipv6Gateway)) {
+        segments.push(`gw6=${parsed.ipv6Gateway}`);
+      }
+      break;
+    case 'static':
+      if (parsed.ipv6Cidr && isIpv6Cidr(parsed.ipv6Cidr)) {
+        segments.push(`ip6=${parsed.ipv6Cidr}`);
+      }
+      if (parsed.ipv6Gateway && isIpv6Address(parsed.ipv6Gateway)) {
+        segments.push(`gw6=${parsed.ipv6Gateway}`);
+      }
+      break;
+  }
+  return segments.join(',');
+}
+
+function selectedIpConfigPrinted(): string {
+  const editor = ipconfigEditors[selectedOption.value];
+  if (!editor) return '';
+  return printIpConfig(editor);
+}
+
+function selectedIpConfigIsDirty(): boolean {
+  const printed = selectedIpConfigPrinted();
+  const originalValue = originalIpconfigs.value[selectedOption.value] || '';
+  return printed !== originalValue;
+}
+
 type ParsedSshKey = { options?: string; type: string; key: string; comment?: string };
+
 function parseSshKey(value: string): ParsedSshKey | null {
   const keyMatch = /^(?:((?:[^\s"]|"(?:\\.|[^"\\])*")+)\s+)?(\S+)\s+(\S+)(?:\s+(.*))?$/.exec(value);
   const typePattern =
@@ -87,6 +290,7 @@ function parseSshKey(value: string): ParsedSshKey | null {
   }
   return null;
 }
+
 const sshKeyDisplayRows = computed(() =>
   form.sshkeys
     .split('\n')
@@ -98,11 +302,13 @@ const sshKeyDisplayRows = computed(() =>
         value: key ? key.comment || '' : value,
         hasOptions: Boolean(key?.options),
       };
-    }),
+    })
 );
+
 function openSshKeyFileInput() {
   sshKeyFileInput.value?.click();
 }
+
 function readSshKeyFile(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -112,6 +318,7 @@ function readSshKeyFile(file: File) {
     reader.readAsText(file);
   });
 }
+
 async function appendSshKeyFiles(event: Event) {
   const input = event.target as HTMLInputElement;
   const files = Array.from(input.files || []);
@@ -131,66 +338,208 @@ async function appendSshKeyFiles(event: Event) {
     }
   }
 }
+
+const pendingByKey = computed<Record<string, PveRecord>>(() =>
+  Object.fromEntries(pendingRows.value.map((row) => [textValue(row.key), row]))
+);
+
+function hasPendingChange(key: string): boolean {
+  const pending = pendingByKey.value[key];
+  if (!pending) return false;
+  if (pending.delete) return true;
+  const nextValue = textValue(pending.pending);
+  return nextValue !== textValue(props.config[key]);
+}
+
+function pendingDisplayValue(key: string): string {
+  const pending = pendingByKey.value[key];
+  if (!pending) return '';
+  if (pending.delete) return gettext('Deleted');
+  return textValue(pending.pending);
+}
+
+function resolvedConfig(key: string): string {
+  const pending = pendingByKey.value[key];
+  if (!pending) return textValue(props.config[key]);
+  if (pending.delete) return '';
+  return textValue(pending.pending);
+}
+
+function resolvedConfigHas(key: string): boolean {
+  const pending = pendingByKey.value[key];
+  if (pending) return !pending.delete;
+  return props.config[key] !== undefined && props.config[key] !== null && props.config[key] !== '';
+}
+
 const networkIndexes = computed(() => {
   const indexes = new Set<number>();
   Object.keys(props.config).forEach((key) => {
     const match = key.match(/^net(\d+)$/);
     if (match) indexes.add(Number(match[1]));
   });
+  pendingRows.value.forEach((row) => {
+    const key = textValue(row.key);
+    const match = key.match(/^net(\d+)$/);
+    if (match) indexes.add(Number(match[1]));
+    const ipMatch = key.match(/^ipconfig(\d+)$/);
+    if (ipMatch) indexes.add(Number(ipMatch[1]));
+  });
   return [...indexes].sort((left, right) => left - right);
 });
+
 const canConfigureCloudInit = computed(() => {
   const caps = (session.caps as unknown as { vms?: Record<string, unknown> }).vms || {};
   return Boolean(caps['VM.Config.Cloudinit'] || caps['VM.Config.Network']);
 });
-const hasCloudInitDrive = computed(() =>
-  Object.entries(props.config).some(
-    ([key, value]) => /^(ide|scsi|sata)\d+$/.test(key) && String(value).includes('cloudinit'),
-  ),
-);
+
+const cloudInitDriveRegex = computed(() => new RegExp(`vm-${props.vmid}-cloudinit`));
+
+const hasCloudInitDrive = computed(() => {
+  const checks: Array<[string, unknown]> = Object.entries(props.config);
+  pendingRows.value.forEach((row) => {
+    const key = textValue(row.key);
+    if (/^(ide|scsi|sata)\d+$/.test(key) && row.pending !== undefined && !row.delete) {
+      checks.push([key, row.pending]);
+    }
+  });
+  return checks.some(
+    ([key, value]) =>
+      /^(ide|scsi|sata)\d+$/.test(key) && cloudInitDriveRegex.value.test(String(value))
+  );
+});
+
 const canRegenerateImage = computed(
   () =>
     Boolean(
-      (session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.Cloudinit'],
-    ) && hasCloudInitDrive.value,
+      (session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.Cloudinit']
+    ) && hasCloudInitDrive.value
 );
+
+function hasFormChanges(): boolean {
+  if (form.ciuser !== original.value.ciuser) return true;
+  if (form.cipasswordHasValue !== original.value.cipassword) {
+    if (original.value.cipassword === true && form.cipasswordHasValue === false) return true;
+    if (form.cipassword) return true;
+  }
+  if (original.value.cipassword === false && form.cipassword) return true;
+  if (form.sshkeys !== original.value.sshkeys) return true;
+  if (form.nameserver !== original.value.nameserver) return true;
+  if (form.searchdomain !== original.value.searchdomain) return true;
+  if (form.ciupgrade !== original.value.ciupgrade) return true;
+  return false;
+}
+
+function hasIpconfigChanges(): boolean {
+  if (selectedOption.value.startsWith('ipconfig')) {
+    if (selectedIpConfigIsDirty()) return true;
+  }
+  for (const key of Object.keys(ipconfigs)) {
+    if (key === selectedOption.value) continue;
+    if (ipconfigs[key] !== originalIpconfigs.value[key]) return true;
+  }
+  return false;
+}
+
 const canSave = computed(
   () =>
     hasCloudInitDrive.value &&
     canConfigureCloudInit.value &&
-    (JSON.stringify(form) !== JSON.stringify(original.value) ||
-      JSON.stringify(ipconfigs) !== JSON.stringify(originalIpconfigs.value)),
+    (hasFormChanges() || hasIpconfigChanges())
 );
+
 const selectedOption = shallowRef('ciuser');
+
+function rowDisplayValue(key: string): string {
+  const resolved = resolvedConfig(key);
+  if (!resolved) return '-';
+  return resolved;
+}
+
+function rowHasPassword(): boolean {
+  const pending = pendingByKey.value.cipassword;
+  if (pending) return !pending.delete;
+  return (
+    props.config.cipassword !== undefined &&
+    props.config.cipassword !== null &&
+    props.config.cipassword !== ''
+  );
+}
+
 const cloudInitRows = computed(() => [
-  { key: 'ciuser', label: gettext('User'), value: form.ciuser || '-' },
-  { key: 'cipassword', label: gettext('Password'), value: form.cipassword ? '********' : '-' },
-  { key: 'sshkeys', label: gettext('SSH public key'), value: '' },
-  ...networkIndexes.value.map((index) => ({
-    key: `ipconfig${index}`,
-    label: `${gettext('IP Config')} (net${index})`,
-    value: ipconfigs[`ipconfig${index}`] || '-',
-  })),
-  { key: 'nameserver', label: gettext('DNS Server'), value: form.nameserver || '-' },
-  { key: 'searchdomain', label: gettext('DNS Search Domain'), value: form.searchdomain || '-' },
+  {
+    key: 'ciuser',
+    label: gettext('User'),
+    value: rowDisplayValue('ciuser'),
+    pending: hasPendingChange('ciuser'),
+    pendingValue: pendingDisplayValue('ciuser'),
+  },
+  {
+    key: 'cipassword',
+    label: gettext('Password'),
+    value: rowHasPassword() ? '********' : '-',
+    pending: hasPendingChange('cipassword'),
+    pendingValue: pendingDisplayValue('cipassword') ? '********' : gettext('Deleted'),
+  },
+  {
+    key: 'sshkeys',
+    label: gettext('SSH public key'),
+    value: '',
+    pending: hasPendingChange('sshkeys'),
+    pendingValue: pendingDisplayValue('sshkeys'),
+  },
+  ...networkIndexes.value.map((index) => {
+    const key = `ipconfig${index}`;
+    const resolved = resolvedConfig(key);
+    return {
+      key,
+      label: `${gettext('IP Config')} (net${index})`,
+      value: resolved || '-',
+      pending: hasPendingChange(key),
+      pendingValue: pendingDisplayValue(key),
+    };
+  }),
+  {
+    key: 'nameserver',
+    label: gettext('DNS Server'),
+    value: rowDisplayValue('nameserver'),
+    pending: hasPendingChange('nameserver'),
+    pendingValue: pendingDisplayValue('nameserver'),
+  },
+  {
+    key: 'searchdomain',
+    label: gettext('DNS Search Domain'),
+    value: rowDisplayValue('searchdomain'),
+    pending: hasPendingChange('searchdomain'),
+    pendingValue: pendingDisplayValue('searchdomain'),
+  },
   {
     key: 'ciupgrade',
     label: gettext('Upgrade packages'),
-    value: form.ciupgrade ? gettext('Yes') : gettext('No'),
+    value:
+      (pendingByKey.value.ciupgrade && !pendingByKey.value.ciupgrade.delete
+        ? textValue(pendingByKey.value.ciupgrade.pending)
+        : textValue(props.config.ciupgrade)) === '0'
+        ? gettext('No')
+        : gettext('Yes'),
+    pending: hasPendingChange('ciupgrade'),
+    pendingValue: pendingDisplayValue('ciupgrade') === '0' ? gettext('No') : gettext('Yes'),
   },
 ]);
+
 const selectedOptionLabel = computed(
   () =>
     cloudInitRows.value.find((row) => row.key === selectedOption.value)?.label ||
-    selectedOption.value,
+    selectedOption.value
 );
+
 const canRemoveSelected = computed(() => {
   if (!hasCloudInitDrive.value || !canConfigureCloudInit.value) return false;
   if (['ciuser', 'searchdomain', 'nameserver', 'sshkeys'].includes(selectedOption.value))
     return false;
-  if (selectedOption.value === 'cipassword') return Boolean(props.config.cipassword);
+  if (selectedOption.value === 'cipassword') return rowHasPassword();
   return selectedOption.value === 'ciupgrade' || selectedOption.value.startsWith('ipconfig');
 });
+
 function decodeSshKeys(value: unknown) {
   const text = textValue(value);
   try {
@@ -199,114 +548,239 @@ function decodeSshKeys(value: unknown) {
     return text;
   }
 }
-function sync() {
+
+function syncFromConfig() {
+  const hasPassword =
+    props.config.cipassword !== undefined &&
+    props.config.cipassword !== null &&
+    props.config.cipassword !== '';
+  const pending = pendingByKey.value.cipassword;
+  const effectiveHasPassword = pending ? !pending.delete : hasPassword;
+
   const next = {
-    ciuser: textValue(props.config.ciuser),
-    cipassword: '',
-    sshkeys: decodeSshKeys(props.config.sshkeys),
-    nameserver: textValue(props.config.nameserver),
-    searchdomain: textValue(props.config.searchdomain),
+    ciuser: resolvedConfig('ciuser'),
+    sshkeys: decodeSshKeys(
+      resolvedConfigHas('sshkeys')
+        ? pendingByKey.value.sshkeys && !pendingByKey.value.sshkeys.delete
+          ? pendingByKey.value.sshkeys.pending
+          : props.config.sshkeys
+        : ''
+    ),
+    nameserver: resolvedConfig('nameserver'),
+    searchdomain: resolvedConfig('searchdomain'),
     ciupgrade:
-      props.config.ciupgrade === undefined ||
-      props.config.ciupgrade === null ||
-      props.config.ciupgrade === ''
-        ? true
-        : Number(props.config.ciupgrade) === 1,
+      (pendingByKey.value.ciupgrade && !pendingByKey.value.ciupgrade.delete
+        ? textValue(pendingByKey.value.ciupgrade.pending)
+        : textValue(props.config.ciupgrade)) === '0'
+        ? false
+        : true,
   };
-  Object.assign(form, next);
-  original.value = { ...next };
-  const nextIpconfigs = Object.fromEntries(
-    networkIndexes.value.map((index) => [
-      `ipconfig${index}`,
-      textValue(props.config[`ipconfig${index}`]),
-    ]),
-  );
+
+  form.ciuser = next.ciuser;
+  form.cipassword = '';
+  form.cipasswordHasValue = effectiveHasPassword;
+  form.sshkeys = next.sshkeys;
+  form.nameserver = next.nameserver;
+  form.searchdomain = next.searchdomain;
+  form.ciupgrade = next.ciupgrade;
+
+  original.value = {
+    ciuser: next.ciuser,
+    cipassword: effectiveHasPassword,
+    sshkeys: next.sshkeys,
+    nameserver: next.nameserver,
+    searchdomain: next.searchdomain,
+    ciupgrade: next.ciupgrade,
+  };
+
+  const nextIpconfigs: Record<string, string> = {};
+  networkIndexes.value.forEach((index) => {
+    const key = `ipconfig${index}`;
+    nextIpconfigs[key] = resolvedConfig(key);
+  });
+
   Object.keys(ipconfigs).forEach((key) => delete ipconfigs[key]);
   Object.assign(ipconfigs, nextIpconfigs);
   originalIpconfigs.value = { ...nextIpconfigs };
+
+  Object.keys(ipconfigEditors).forEach((key) => delete ipconfigEditors[key]);
+  Object.entries(nextIpconfigs).forEach(([key, value]) => {
+    ipconfigEditors[key] = parseIpConfig(value);
+  });
 }
+
+async function loadPending() {
+  pendingLoading.value = true;
+  try {
+    const response = await getVmPendingConfig(props.node, props.vmid, 'qemu');
+    pendingRows.value = response.data || [];
+    syncFromConfig();
+  } catch (error) {
+    void error;
+  } finally {
+    pendingLoading.value = false;
+  }
+}
+
 async function removeSelected() {
   if (!canRemoveSelected.value) return;
   loading.value = true;
   try {
     await updateVmConfig(props.node, props.vmid, {
-      digest: props.config.digest,
       delete: selectedOption.value,
     });
     emit('updated');
+    await loadPending();
+  } catch (error) {
+    void error;
   } finally {
     loading.value = false;
   }
 }
+
 function confirmRemoveSelected() {
   if (!canRemoveSelected.value) return;
   Dialog.create({
     title: gettext('Remove'),
     message: gettext('Are you sure you want to remove entry {0}').replace(
       '{0}',
-      `'${selectedOptionLabel.value}'`,
+      `'${selectedOptionLabel.value}'`
     ),
     cancel: true,
     persistent: true,
   }).onOk(() => void removeSelected());
 }
+
+async function fetchLatestConfigAndDigest(): Promise<PveRecord | null> {
+  try {
+    const response = await getVmConfig(props.node, props.vmid, 'qemu');
+    return response.data || null;
+  } catch {
+    Notify.create({
+      type: 'negative',
+      message: gettext('Unable to load the current VM configuration'),
+    });
+    return null;
+  }
+}
+
+function flushSelectedIpConfigToStore() {
+  if (!selectedOption.value.startsWith('ipconfig')) return;
+  const key = selectedOption.value;
+  const printed = selectedIpConfigPrinted();
+  ipconfigs[key] = printed;
+}
+
 async function save() {
-  if (!canConfigureCloudInit.value) return;
-  const data: PveRecord = { digest: props.config.digest };
+  if (!canConfigureCloudInit.value || !canSave.value) return;
+  flushSelectedIpConfigToStore();
+
+  const latest = await fetchLatestConfigAndDigest();
+  if (!latest) return;
+
+  const data: PveRecord = { digest: latest.digest };
   const deletedKeys: string[] = [];
-  Object.entries(form).forEach(([key, value]) => {
-    if (key === 'cipassword') {
-      if (value) data[key] = value;
-      return;
+
+  const originalHasPassword = original.value.cipassword;
+
+  if (form.ciuser !== original.value.ciuser) {
+    if (form.ciuser.trim()) data.ciuser = form.ciuser.trim();
+    else deletedKeys.push('ciuser');
+  }
+
+  if (form.cipasswordHasValue !== originalHasPassword || form.cipassword !== '') {
+    if (form.cipassword) {
+      data.cipassword = form.cipassword;
+    } else if (originalHasPassword && !form.cipasswordHasValue) {
+      deletedKeys.push('cipassword');
     }
-    if (value === original.value[key as keyof typeof original.value]) return;
-    if (key === 'ciupgrade') {
-      data[key] = value ? 1 : 0;
-      return;
-    }
-    if (key === 'sshkeys') {
-      if (String(value).trim()) data.sshkeys = encodeURIComponent(String(value).trim());
-      else deletedKeys.push(key);
-      return;
-    }
-    if (key === 'nameserver') {
-      const nameservers = normalizeNameserverList(String(value));
-      if (nameservers) data.nameserver = nameservers;
-      else deletedKeys.push(key);
-      return;
-    }
-    if (String(value).trim()) data[key] = String(value).trim();
-    else deletedKeys.push(key);
-  });
+  }
+
+  if (form.sshkeys !== original.value.sshkeys) {
+    if (String(form.sshkeys).trim()) data.sshkeys = encodeURIComponent(String(form.sshkeys).trim());
+    else deletedKeys.push('sshkeys');
+  }
+
+  if (form.nameserver !== original.value.nameserver) {
+    const nameservers = normalizeNameserverList(String(form.nameserver));
+    if (nameservers) data.nameserver = nameservers;
+    else deletedKeys.push('nameserver');
+  }
+
+  if (form.searchdomain !== original.value.searchdomain) {
+    if (form.searchdomain.trim()) data.searchdomain = form.searchdomain.trim();
+    else deletedKeys.push('searchdomain');
+  }
+
+  if (form.ciupgrade !== original.value.ciupgrade) {
+    data.ciupgrade = form.ciupgrade ? 1 : 0;
+  }
+
   Object.entries(ipconfigs).forEach(([key, value]) => {
     if (value === originalIpconfigs.value[key]) return;
     if (value.trim()) data[key] = value.trim();
     else deletedKeys.push(key);
   });
+
   if (deletedKeys.length) data.delete = deletedKeys.join(',');
+
   if (Object.keys(data).length === 1) return;
+
   loading.value = true;
   try {
     await updateVmConfig(props.node, props.vmid, data);
     emit('updated');
+    await loadPending();
+  } catch (error) {
+    void error;
   } finally {
     loading.value = false;
   }
 }
+
 async function regenerateImage() {
   if (!canRegenerateImage.value) return;
   loading.value = true;
   try {
     await regenerateVmCloudInitImage(props.node, props.vmid);
     emit('updated');
+    await loadPending();
+  } catch (error) {
+    void error;
   } finally {
     loading.value = false;
   }
 }
-watch(() => props.config, sync, { immediate: true });
+
+watch(
+  () => [props.node, props.vmid, textValue(props.config.digest)],
+  () => {
+    void loadPending();
+  },
+  { immediate: true }
+);
+
+watch(
+  () => selectedOption.value,
+  (nextKey, prevKey) => {
+    if (prevKey && prevKey.startsWith('ipconfig')) {
+      ipconfigs[prevKey] = printIpConfig(ipconfigEditors[prevKey] || DEFAULT_IPCONFIG);
+    }
+    if (nextKey && nextKey.startsWith('ipconfig')) {
+      if (!ipconfigEditors[nextKey]) {
+        ipconfigEditors[nextKey] = parseIpConfig(ipconfigs[nextKey] || '');
+      }
+      selectedIpConfigOriginal.value = { ...ipconfigEditors[nextKey] };
+    }
+  },
+  { immediate: true }
+);
 </script>
 <template>
-  <q-form class="vm-config-legacy vm-cloud-init-tab u-hidden-error" @submit.prevent="save">
+  <q-form
+    class="vm-config-legacy vm-cloud-init-tab u-hidden-error"
+    @submit.prevent="save"
+  >
     <div class="row q-gutter-sm q-py-sm options-toolbar">
       <q-btn
         no-caps
@@ -342,23 +816,52 @@ watch(() => props.config, sync, { immediate: true });
             @click="selectedOption = row.key"
           >
             <div class="col-4 text-grey-10 options-list-label">
-              <q-icon :name="optionIcon(row.key)" size="16px" class="q-mr-xs options-list-icon" />{{
-                row.label
-              }}:
+              <q-icon
+                :name="optionIcon(row.key)"
+                size="16px"
+                class="q-mr-xs options-list-icon"
+              />
+              {{ row.label }}:
             </div>
             <div class="col-8 text-grey-8 options-list-value">
               <template v-if="row.key === 'sshkeys'">
                 <template v-if="sshKeyDisplayRows.length">
-                  <div v-for="entry in sshKeyDisplayRows" :key="entry.id">
-                    {{ entry.value
-                    }}<span v-if="entry.hasOptions" class="ssh-key-options">
-                      ({{ gettext('with options') }})</span
+                  <div
+                    v-for="entry in sshKeyDisplayRows"
+                    :key="entry.id"
+                  >
+                    {{ entry.value }}
+                    <span
+                      v-if="entry.hasOptions"
+                      class="ssh-key-options"
                     >
+                      ({{ gettext('with options') }})
+                    </span>
                   </div>
                 </template>
                 <template v-else>-</template>
               </template>
-              <template v-else>{{ row.value }}</template>
+              <template v-else>
+                <div class="row items-center q-gutter-xs no-wrap">
+                  <span class="col">
+                    {{ row.value }}
+                  </span>
+                  <q-badge
+                    v-if="row.pending"
+                    outline
+                    color="orange"
+                    text-color="orange"
+                    class="pending-badge"
+                    label="Pending"
+                  />
+                </div>
+                <div
+                  v-if="row.pending && row.pendingValue"
+                  class="pending-value text-orange-9 text-sm"
+                >
+                  {{ gettext('Next value') }}: {{ row.pendingValue }}
+                </div>
+              </template>
             </div>
           </div>
         </div>
@@ -383,19 +886,57 @@ watch(() => props.config, sync, { immediate: true });
               />
             </div>
             <div class="row q-col-gutter-lg">
-              <div v-show="selectedOption === 'ciuser'" class="col-12 col-md-6">
-                <q-input v-model="form.ciuser" dense :label="gettext('User')" />
-              </div>
-              <div v-show="selectedOption === 'cipassword'" class="col-12 col-md-6">
+              <div
+                v-show="selectedOption === 'ciuser'"
+                class="col-12 col-md-6"
+              >
                 <q-input
-                  v-model="form.cipassword"
+                  v-model="form.ciuser"
                   dense
-                  type="password"
-                  :label="gettext('Password')"
-                  :hint="gettext('Leave empty to keep unchanged')"
+                  :label="gettext('User')"
                 />
               </div>
-              <div v-show="selectedOption === 'sshkeys'" class="col-12">
+              <div
+                v-show="selectedOption === 'cipassword'"
+                class="col-12"
+              >
+                <div class="row q-col-gutter-lg">
+                  <div class="col-12 col-md-6">
+                    <q-input
+                      v-model="form.cipassword"
+                      dense
+                      type="password"
+                      :label="gettext('Password')"
+                      :hint="
+                        form.cipasswordHasValue
+                          ? gettext(
+                              'Leave empty and check remove below to delete existing password'
+                            )
+                          : gettext('Enter a new password or leave empty to keep unchanged')
+                      "
+                    />
+                  </div>
+                  <div
+                    v-if="form.cipasswordHasValue"
+                    class="col-12 col-md-6 row items-center"
+                  >
+                    <q-checkbox
+                      v-model="form.cipasswordHasValue"
+                      color="primary"
+                      :label="gettext('Password is set')"
+                    />
+                    <q-tooltip>
+                      {{
+                        gettext('Uncheck to delete the existing password when saving (deleteEmpty)')
+                      }}
+                    </q-tooltip>
+                  </div>
+                </div>
+              </div>
+              <div
+                v-show="selectedOption === 'sshkeys'"
+                class="col-12"
+              >
                 <q-input
                   v-model="form.sshkeys"
                   dense
@@ -423,18 +964,114 @@ watch(() => props.config, sync, { immediate: true });
                   @click="openSshKeyFileInput"
                 />
               </div>
-              <div v-show="selectedOption.startsWith('ipconfig')" class="col-12 col-md-6">
-                <q-input
-                  v-model="ipconfigs[selectedOption]"
-                  dense
-                  :label="cloudInitRows.find((row) => row.key === selectedOption)?.label"
-                />
-              </div>
-              <div v-show="selectedOption === 'nameserver'" class="col-12 col-md-6">
+              <template v-if="activeIpConfig">
+                <div
+                  class="col-12"
+                >
+                  <div class="row q-col-gutter-lg q-gutter-y-sm">
+                    <div class="col-12 col-md-6">
+                      <div class="q-mb-sm text-grey-10 text-sm font-semibold">
+                        {{ gettext('IPv4') }}
+                      </div>
+                      <q-select
+                        v-model="activeIpConfig.ipv4Mode"
+                        dense
+                        :options="IPV4_MODE_OPTIONS"
+                        emit-value
+                        map-options
+                        :label="gettext('IPv4 mode')"
+                      />
+                      <q-input
+                        v-if="activeIpConfig.ipv4Mode === 'static'"
+                        v-model="activeIpConfig.ipv4Cidr"
+                        dense
+                        class="q-mt-sm"
+                        :label="gettext('IPv4/CIDR')"
+                        :rules="[
+                          (value) =>
+                            isIpv4Cidr(value) ||
+                            gettext('Enter a valid IPv4 CIDR (e.g. 192.168.1.10/24)'),
+                        ]"
+                      />
+                      <q-input
+                        v-if="
+                          activeIpConfig.ipv4Mode === 'static' ||
+                          activeIpConfig.ipv4Mode === 'dhcp'
+                        "
+                        v-model="activeIpConfig.ipv4Gateway"
+                        dense
+                        class="q-mt-sm"
+                        :label="gettext('Gateway IPv4')"
+                        :rules="[
+                          (value) =>
+                            !value ||
+                            isIpv4Address(value) ||
+                            gettext('Enter a valid IPv4 gateway'),
+                        ]"
+                      />
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <div class="q-mb-sm text-grey-10 text-sm font-semibold">
+                        {{ gettext('IPv6') }}
+                      </div>
+                      <q-select
+                        v-model="activeIpConfig.ipv6Mode"
+                        dense
+                        :options="IPV6_MODE_OPTIONS"
+                        emit-value
+                        map-options
+                        :label="gettext('IPv6 mode')"
+                      />
+                      <q-input
+                        v-if="activeIpConfig.ipv6Mode === 'static'"
+                        v-model="activeIpConfig.ipv6Cidr"
+                        dense
+                        class="q-mt-sm"
+                        :label="gettext('IPv6/CIDR')"
+                        :rules="[
+                          (value) =>
+                            isIpv6Cidr(value) ||
+                            gettext('Enter a valid IPv6 CIDR (e.g. 2001:db8::1/64)'),
+                        ]"
+                      />
+                      <q-input
+                        v-if="
+                          activeIpConfig.ipv6Mode === 'static' ||
+                          activeIpConfig.ipv6Mode === 'dhcp' ||
+                          activeIpConfig.ipv6Mode === 'auto'
+                        "
+                        v-model="activeIpConfig.ipv6Gateway"
+                        dense
+                        class="q-mt-sm"
+                        :label="gettext('Gateway IPv6')"
+                        :rules="[
+                          (value) =>
+                            !value ||
+                            isIpv6Address(value) ||
+                            gettext('Enter a valid IPv6 gateway'),
+                        ]"
+                      />
+                    </div>
+                    <div class="col-12">
+                      <div class="q-pa-xs text-grey-8 text-sm bg-grey-1 rounded q-mt-xs">
+                        <div class="raw-ipconfig-label text-grey-10 mb-1">
+                          {{ gettext('Raw ipconfig value') }}:
+                        </div>
+                        <code class="text-sm">{{ selectedIpConfigPrinted() || '—' }}</code>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <div
+                v-show="selectedOption === 'nameserver'"
+                class="col-12 col-md-6"
+              >
                 <q-input
                   v-model="form.nameserver"
                   dense
                   :label="gettext('DNS Server')"
+                  :hint="gettext('Space/comma/semicolon separated list of IPv4 or IPv6 addresses')"
                   :rules="[
                     (value) =>
                       isValidNameserverList(value) ||
@@ -442,10 +1079,20 @@ watch(() => props.config, sync, { immediate: true });
                   ]"
                 />
               </div>
-              <div v-show="selectedOption === 'searchdomain'" class="col-12 col-md-6">
-                <q-input v-model="form.searchdomain" dense :label="gettext('DNS Search Domain')" />
+              <div
+                v-show="selectedOption === 'searchdomain'"
+                class="col-12 col-md-6"
+              >
+                <q-input
+                  v-model="form.searchdomain"
+                  dense
+                  :label="gettext('DNS Search Domain')"
+                />
               </div>
-              <div v-show="selectedOption === 'ciupgrade'" class="col-12">
+              <div
+                v-show="selectedOption === 'ciupgrade'"
+                class="col-12"
+              >
                 <q-checkbox
                   v-model="form.ciupgrade"
                   dense
@@ -458,9 +1105,16 @@ watch(() => props.config, sync, { immediate: true });
         </div>
       </div>
     </div>
-    <q-inner-loading :showing="!hasCloudInitDrive" class="cloud-init-drive-mask">
+    <q-inner-loading
+      :showing="!hasCloudInitDrive && !pendingLoading"
+      class="cloud-init-drive-mask"
+    >
       <div class="cloud-init-drive-mask__content row items-center no-wrap">
-        <q-icon name="cloud_off" size="22px" class="q-mr-sm" />
+        <q-icon
+          name="cloud_off"
+          size="22px"
+          class="q-mr-sm"
+        />
         <span>{{ gettext('No CloudInit Drive found') }}</span>
       </div>
     </q-inner-loading>
@@ -546,6 +1200,24 @@ watch(() => props.config, sync, { immediate: true });
   color: #334155;
 }
 .ssh-key-options {
+  color: #6b7280;
+}
+.pending-badge {
+  flex-shrink: 0;
+  line-height: 14px;
+  font-size: 11px;
+  padding: 1px 6px;
+}
+.pending-value {
+  margin-top: 4px;
+  line-height: 16px;
+  font-size: 12px;
+  word-break: break-all;
+  white-space: normal;
+}
+.raw-ipconfig-label {
+  font-size: 12px;
+  line-height: 16px;
   color: #6b7280;
 }
 .cloud-init-drive-mask {
