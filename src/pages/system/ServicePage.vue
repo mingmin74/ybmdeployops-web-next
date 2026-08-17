@@ -94,16 +94,29 @@
     >
       <q-card class="u-window-card task-dialog-card">
         <q-card-section class="row items-center bg-blue-8 text-grey-1 shadow-down-10 q-pa-sm">
-          <q-spinner-bars size="14px" color="white" />
+          <q-spinner-bars
+            size="14px"
+            color="white"
+          />
           <div class="text-weight-bold q-mx-sm text-overflow">{{ taskTitle }}</div>
           <q-space />
-          <q-btn v-close-popup class="bg-negative" icon="close" size="sm" flat dense />
+          <q-btn
+            v-close-popup
+            class="bg-negative"
+            icon="close"
+            size="sm"
+            flat
+            dense
+          />
         </q-card-section>
         <q-card-section class="q-pa-md u-hidden-error">
           <div class="text-grey-8 q-mb-xs">{{ gettext('Task started') }}</div>
           <div class="u-border q-pa-sm u-size-12 task-upid">{{ taskUpid || '--' }}</div>
         </q-card-section>
-        <q-card-actions align="right" class="bg-grey-2 overflow-hidden">
+        <q-card-actions
+          align="right"
+          class="bg-grey-2 overflow-hidden"
+        >
           <q-btn
             v-close-popup
             no-caps
@@ -125,35 +138,78 @@
     >
       <q-card class="u-window-card service-log-dialog">
         <q-card-section class="row items-center bg-blue-8 text-grey-1 shadow-down-10 q-pa-sm">
-          <q-spinner-bars size="14px" color="white" />
+          <q-spinner-bars
+            size="14px"
+            color="white"
+          />
           <div class="text-weight-bold q-mx-sm text-overflow">
             {{ gettext('System Logs') }}: {{ logServiceName }}
           </div>
           <q-space />
-          <q-btn v-close-popup class="bg-negative" icon="close" size="sm" flat dense />
+          <q-btn
+            v-close-popup
+            class="bg-negative"
+            icon="close"
+            size="sm"
+            flat
+            dense
+          />
         </q-card-section>
         <q-card-section class="q-pa-none u-hidden-error">
           <div class="column q-ma-sm">
             <div class="col q-mb-sm">
               <div class="row q-gutter-sm">
                 <q-input
-                  v-model="logRange"
-                  dense
+                  v-model="since"
                   square
                   outlined
-                  readonly
-                  class="u-dense service-log-range"
-                  :placeholder="gettext('Time Range')"
+                  dense
+                  class="u-dense date-input"
+                  :placeholder="gettext('Since')"
+                  @click="sinceDatePopup?.show()"
                 >
                   <template #append>
-                    <q-icon name="event" class="cursor-pointer">
-                      <q-popup-proxy transition-show="scale" transition-hide="scale">
+                    <q-icon
+                      name="event"
+                      size="16px"
+                      class="cursor-pointer"
+                    >
+                      <q-popup-proxy
+                        ref="sinceDatePopup"
+                        transition-show="scale"
+                        transition-hide="scale"
+                      >
                         <q-date
-                          v-model="logDateRange"
-                          range
-                          minimal
+                          v-model="since"
                           mask="YYYY-MM-DD"
-                          @update:model-value="selectLogDateRange"
+                        />
+                      </q-popup-proxy>
+                    </q-icon>
+                  </template>
+                </q-input>
+                <q-input
+                  v-model="until"
+                  square
+                  outlined
+                  dense
+                  class="u-dense date-input"
+                  :placeholder="gettext('Until')"
+                  @click="untilDatePopup?.show()"
+                >
+                  <template #append>
+                    <q-icon
+                      name="event"
+                      size="16px"
+                      class="cursor-pointer"
+                    >
+                      <q-popup-proxy
+                        ref="untilDatePopup"
+                        transition-show="scale"
+                        transition-hide="scale"
+                      >
+                        <q-date
+                          v-model="until"
+                          mask="YYYY-MM-DD"
                         />
                       </q-popup-proxy>
                     </q-icon>
@@ -186,7 +242,7 @@
 <script setup lang="ts">
 import { Dialog } from 'quasar';
 import type { QTableColumn } from 'quasar';
-import { computed, onBeforeUnmount, onMounted, shallowRef } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef } from 'vue';
 import NodeSelectTable from '@/components/NodeSelectTable.vue';
 import {
   getNodeJournal,
@@ -197,8 +253,6 @@ import {
   type PveService,
 } from '@/api/host';
 import { gettext } from '@/locale';
-
-type DateRangeValue = string | { from?: string; to?: string } | null;
 
 const refreshInterval = 3000;
 const logLimit = 10000;
@@ -221,14 +275,16 @@ const taskUpid = shallowRef('');
 const taskTitle = shallowRef('');
 const logsDialogVisible = shallowRef(false);
 const logServiceName = shallowRef('');
-const logRange = shallowRef('');
-const logDateRange = shallowRef<DateRangeValue>(null);
+const since = ref('');
+const until = ref('');
+const sinceDatePopup = useTemplateRef<{ show: () => void }>('sinceDatePopup');
+const untilDatePopup = useTemplateRef<{ show: () => void }>('untilDatePopup');
 const logs = shallowRef<string[]>([]);
 let refreshHandler: ReturnType<typeof setInterval> | undefined;
 
 const selectedService = computed(() => selectedServices.value[0]);
 const canStart = computed(() =>
-  Boolean(selectedService.value && selectedService.value.state !== 'running'),
+  Boolean(selectedService.value && selectedService.value.state !== 'running')
 );
 const canStop = computed(() => selectedService.value?.state === 'running');
 const canRestart = computed(() => selectedService.value?.state === 'running');
@@ -339,42 +395,23 @@ function restartService() {
 }
 
 function resetLogRange() {
-  const since = getCurrentDate(-3);
-  const until = getCurrentDate();
-  logRange.value = `${since} ${gettext('To')} ${until}`;
-  logDateRange.value = { from: since, to: until };
-}
-
-function selectLogDateRange(value: DateRangeValue) {
-  if (typeof value === 'string') {
-    logRange.value = `${value} ${gettext('To')} ${value}`;
-    return;
-  }
-
-  if (value?.from || value?.to) {
-    const from = value.from || value.to || '';
-    const to = value.to || value.from || '';
-    logRange.value = `${from} ${gettext('To')} ${to}`;
-  }
-}
-
-function parseLogRange() {
-  const [since = getCurrentDate(-3), , until = getCurrentDate()] = logRange.value.split(/\s+/);
-  return { since, until };
+  since.value = getCurrentDate(-3);
+  until.value = getCurrentDate();
 }
 
 async function loadLogs() {
   if (!selectedNode.value || !logServiceName.value) return;
 
-  const { since, until } = parseLogRange();
+  const sinceDate = since.value || getCurrentDate(-3);
+  const untilDate = until.value || getCurrentDate();
   logsLoading.value = true;
   try {
     const response = await getNodeJournal(selectedNode.value, {
       service: logServiceName.value,
       start: 0,
       limit: logLimit,
-      since,
-      until: `${until} 23:59:59`,
+      since: sinceDate,
+      until: `${untilDate} 23:59:59`,
     });
     logs.value = (response.data || []).map((record) => record.t || '').filter(Boolean);
   } finally {
@@ -430,8 +467,19 @@ onBeforeUnmount(() => {
   max-width: 780px;
 }
 
-.service-log-range {
-  width: 170px;
+.date-input {
+  width: 140px;
+}
+
+.date-input :deep(.q-field__native),
+.date-input :deep(.q-field__append) {
+  align-self: center;
+}
+
+.date-input :deep(.q-field__append) {
+  height: 100%;
+  display: flex;
+  align-items: center;
 }
 
 .service-log-output {

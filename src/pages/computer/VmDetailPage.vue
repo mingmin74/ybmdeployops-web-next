@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { getVmConfig, getVmCurrent } from '@/api/overview';
-import { getVmSpiceProxy, runVmPowerCommand, type VmPowerCommand, type VmResource } from '@/api/vm';
+import { createVmSnapshot, getVmConfig, getVmCurrent } from '@/api/overview';
+import { getVmBackupDefaults, getVmSpiceProxy, runVmBackup, runVmPowerCommand, type VmPowerCommand, type VmResource } from '@/api/vm';
 import type { PveRecord } from '@/api/resources';
+import { getTaskLogs } from '@/api/maintenance';
+import { getNodeStorage } from '@/api/storageContent';
+import UWindow from '@/components/UWindow.vue';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 import OverviewPage from '@/pages/computer/OverviewPage.vue';
 import VmHardwareTab from '@/pages/computer/vm/VmHardwareTab.vue';
@@ -50,9 +53,35 @@ const taskNode = shallowRef('');
 const taskUpid = shallowRef('');
 const taskTitle = shallowRef('');
 const powerCommandLoading = shallowRef(false);
+const confirmVisible = shallowRef(false);
+const pendingCommand = shallowRef<VmPowerCommand>();
+const stopVisible = shallowRef(false);
+const stopOverruleAvailable = shallowRef(false);
+const stopOverruleDisabled = shallowRef(false);
+const stopOverruleShutdown = shallowRef(false);
+const snapshotVisible = shallowRef(false);
+const snapshotLoading = shallowRef(false);
+const snapshotName = shallowRef('');
+const snapshotDescription = shallowRef('');
+const snapshotIncludeRam = shallowRef(false);
+const snapshotGuestAgentEnabled = shallowRef(false);
+const backupVisible = shallowRef(false);
+const backupLoading = shallowRef(false);
+const backupStorages = shallowRef<string[]>([]);
+const backupStorageTypes = shallowRef<Record<string, string>>({});
+const backupStorage = shallowRef('');
+const backupMode = shallowRef<'snapshot' | 'suspend' | 'stop'>('snapshot');
+const backupCompression = shallowRef<'zstd' | 'lzo' | 'gzip' | '0'>('zstd');
+const backupProtected = shallowRef(false);
+const backupNotificationMode = shallowRef<'notification-system' | 'legacy-sendmail'>('notification-system');
+const backupMailto = shallowRef('');
+const backupNotesTemplate = shallowRef('');
+const backupPruneEnabled = shallowRef(false);
+const backupRetention = shallowRef<Array<{ key: string; value: string }>>([]);
 const operationDialogVisible = shallowRef(false);
 const operation = shallowRef<'migrate' | 'clone' | 'delete' | 'template'>();
 const consoleKey = shallowRef(0);
+const configIdPattern = /^[a-z][a-z0-9_-]+$/i;
 
 const name = computed(() => decodeVmName(current.value.name || config.value.name) || vmid.value);
 const status = computed(() => textValue(current.value.status) || 'unknown');
@@ -83,6 +112,9 @@ const nodeCaps = computed(
 const canViewConsole = computed(() => Boolean(vmCaps.value['VM.Console']) && !isTemplate.value);
 const canViewMonitor = computed(() => Boolean(nodeCaps.value['Sys.Audit']) && !isTemplate.value);
 const canViewBackup = computed(() => Boolean(vmCaps.value['VM.Backup']));
+const canSnapshotAction = computed(() => Boolean(vmCaps.value['VM.Snapshot']) && !isTemplate.value);
+const canBackupAction = computed(() => Boolean(vmCaps.value['VM.Backup']));
+const backupPruneAvailable = computed(() => backupRetention.value.length > 0);
 const canViewSnapshots = computed(
   () =>
     !isTemplate.value &&
@@ -175,6 +207,113 @@ async function runPowerCommand(command: VmPowerCommand, data?: Record<string, un
   } finally {
     powerCommandLoading.value = false;
   }
+}
+
+function commandLabel(command?: VmPowerCommand) {
+  if (command === 'suspend') return gettext('Pause');
+  return command ? gettext(command.charAt(0).toUpperCase() + command.slice(1)) : '';
+}
+
+function guestAgentEnabled(agent: unknown) {
+  const value = textValue(agent).trim();
+  if (!value) return false;
+  const enabled = value.split(',').find((part) => part.trim().startsWith('enabled='));
+  const raw = enabled ? enabled.split('=', 2)[1] : value.split(',', 1)[0];
+  return ['1', 'yes', 'true', 'on'].includes(String(raw).trim().toLowerCase());
+}
+
+function parseBackupRetention(value: unknown) {
+  const entries = Object.fromEntries(textValue(value).split(',').map((part) => part.trim().split('=', 2)).filter(([key, item]) => Boolean(key) && item !== undefined));
+  if (entries['keep-all'] === '1') return [];
+  return ['keep-last', 'keep-hourly', 'keep-daily', 'keep-weekly', 'keep-monthly', 'keep-yearly']
+    .filter((key) => entries[key] !== undefined && entries[key] !== '' && entries[key] !== '0')
+    .map((key) => ({ key, value: entries[key] }));
+}
+
+function requestCommand(command: VmPowerCommand) {
+  pendingCommand.value = command;
+  confirmVisible.value = true;
+}
+
+async function confirmCommand() {
+  if (!pendingCommand.value) return;
+  await runPowerCommand(pendingCommand.value);
+  confirmVisible.value = false;
+}
+
+async function openStop() {
+  stopOverruleAvailable.value = false;
+  stopOverruleDisabled.value = false;
+  stopOverruleShutdown.value = false;
+  const haState = textValue(current.value.hastate);
+  const haEnabled = Boolean(haState && haState !== 'unmanaged');
+  const canManageNode = Boolean(nodeCaps.value['Sys.Modify']);
+  const tasks = await getTaskLogs().catch(() => null);
+  const activeShutdown = Boolean(tasks?.data?.some((task) => String(task.id) === vmid.value && task.status === undefined && task.type === 'qmshutdown' && (canManageNode || task.user === session.userid)));
+  stopOverruleAvailable.value = canManageNode || activeShutdown;
+  stopOverruleDisabled.value = haEnabled;
+  stopOverruleShutdown.value = !haEnabled && activeShutdown;
+  stopVisible.value = true;
+}
+
+async function confirmStop() {
+  await runPowerCommand('stop', stopOverruleAvailable.value && !stopOverruleDisabled.value && stopOverruleShutdown.value ? { 'overrule-shutdown': 1 } : undefined);
+  stopVisible.value = false;
+}
+
+function openSnapshot() {
+  snapshotName.value = `snapshot-${new Date().toISOString().slice(0, 16).replace(/[-T:]/g, '')}`;
+  snapshotDescription.value = '';
+  snapshotIncludeRam.value = status.value === 'running';
+  snapshotGuestAgentEnabled.value = status.value === 'running' && guestAgentEnabled(config.value.agent);
+  snapshotVisible.value = true;
+}
+
+async function createSnapshot() {
+  const snapname = snapshotName.value.trim();
+  if (!node.value || !vmid.value || !configIdPattern.test(snapname)) return;
+  snapshotLoading.value = true;
+  try {
+    const response = await createVmSnapshot(node.value, vmid.value, { snapname, ...(snapshotDescription.value.trim() ? { description: snapshotDescription.value.trim() } : {}), ...(status.value === 'running' && snapshotIncludeRam.value ? { vmstate: 1 } : {}) });
+    snapshotVisible.value = false;
+    if (response.data) openTask(node.value, response.data, gettext('Take Snapshot'));
+  } finally { snapshotLoading.value = false; }
+}
+
+async function applyBackupDefaults(storage: string) {
+  backupMode.value = 'snapshot'; backupCompression.value = 'zstd'; backupProtected.value = false; backupNotificationMode.value = 'notification-system'; backupMailto.value = ''; backupNotesTemplate.value = ''; backupPruneEnabled.value = false; backupRetention.value = [];
+  if (!storage || !node.value) return;
+  const response = await getVmBackupDefaults(node.value, storage);
+  const defaults = response.data || {};
+  if (['snapshot', 'suspend', 'stop'].includes(textValue(defaults.mode))) backupMode.value = defaults.mode as typeof backupMode.value;
+  backupMailto.value = textValue(defaults.mailto);
+  const notificationMode = textValue(defaults['notification-mode']);
+  backupNotificationMode.value = notificationMode === 'legacy-sendmail' || (notificationMode === 'auto' && backupMailto.value) ? 'legacy-sendmail' : 'notification-system';
+  backupNotesTemplate.value = textValue(defaults['notes-template']);
+  backupRetention.value = parseBackupRetention(defaults['prune-backups']);
+}
+
+async function openBackup() {
+  if (!node.value) return;
+  backupLoading.value = true;
+  try {
+    const response = await getNodeStorage(node.value, 'backup');
+    backupStorages.value = (response.data || []).map((item) => textValue(item.storage)).filter(Boolean);
+    backupStorageTypes.value = Object.fromEntries((response.data || []).map((item) => [textValue(item.storage), textValue(item.type)]));
+    backupStorage.value = backupStorages.value[0] || '';
+    await applyBackupDefaults(backupStorage.value);
+    backupVisible.value = true;
+  } finally { backupLoading.value = false; }
+}
+
+async function backupNow() {
+  if (!node.value || !vmid.value || !backupStorage.value) return;
+  backupLoading.value = true;
+  try {
+    const response = await runVmBackup(node.value, vmid.value, { storage: backupStorage.value, mode: backupMode.value, compress: backupCompression.value, protected: backupProtected.value ? 1 : 0, 'notification-mode': backupNotificationMode.value, ...(backupMailto.value.trim() ? { mailto: backupMailto.value.trim() } : {}), ...(backupNotesTemplate.value.trim() ? { 'notes-template': backupNotesTemplate.value.trim() } : {}), remove: backupPruneAvailable.value && backupPruneEnabled.value ? 1 : 0 });
+    backupVisible.value = false;
+    if (response.data) openTask(node.value, response.data, gettext('Backup'));
+  } finally { backupLoading.value = false; }
 }
 
 function openOperation(nextOperation: 'migrate' | 'clone' | 'delete' | 'template') {
@@ -300,32 +439,32 @@ onUnmounted(() => {
                 v-close-popup
                 clickable
                 :disable="!canStart"
-                @click="runPowerCommand('start')"
+                @click="requestCommand('start')"
                 ><q-item-section>{{ gettext('Start') }}</q-item-section></q-item
               >
               <q-item
                 v-close-popup
                 clickable
                 :disable="!canShutdown"
-                @click="runPowerCommand('shutdown')"
+                @click="requestCommand('shutdown')"
                 ><q-item-section>{{ gettext('Shutdown') }}</q-item-section></q-item
               >
-              <q-item v-close-popup clickable :disable="!canStop" @click="runPowerCommand('stop')"
+              <q-item v-close-popup clickable :disable="!canStop" @click="openStop"
                 ><q-item-section class="text-red">{{ gettext('Stop') }}</q-item-section></q-item
               >
               <q-item
                 v-close-popup
                 clickable
                 :disable="!canShutdown"
-                @click="runPowerCommand('reboot')"
+                @click="requestCommand('reboot')"
                 ><q-item-section>{{ gettext('Reboot') }}</q-item-section></q-item
               >
               <q-item
                 v-close-popup
                 clickable
                 :disable="!canSuspend"
-                @click="runPowerCommand('suspend')"
-                ><q-item-section>{{ gettext('Suspend') }}</q-item-section></q-item
+                @click="requestCommand('suspend')"
+                ><q-item-section>{{ gettext('Pause') }}</q-item-section></q-item
               >
               <q-item
                 v-close-popup
@@ -338,10 +477,10 @@ onUnmounted(() => {
                 v-close-popup
                 clickable
                 :disable="!canResume"
-                @click="runPowerCommand('resume')"
+                @click="requestCommand('resume')"
                 ><q-item-section>{{ gettext('Resume') }}</q-item-section></q-item
               >
-              <q-item v-close-popup clickable :disable="!canStop" @click="runPowerCommand('reset')"
+              <q-item v-close-popup clickable :disable="!canStop" @click="requestCommand('reset')"
                 ><q-item-section>{{ gettext('Reset') }}</q-item-section></q-item
               >
             </q-list>
@@ -391,11 +530,11 @@ onUnmounted(() => {
               <q-item
                 v-close-popup
                 clickable
-                :disable="!canViewSnapshots"
-                @click="tab = 'snapshots'"
+                :disable="!canSnapshotAction"
+                @click="openSnapshot"
                 ><q-item-section>{{ gettext('Take Snapshot') }}</q-item-section></q-item
               >
-              <q-item v-close-popup clickable :disable="!canViewBackup" @click="tab = 'backup'"
+              <q-item v-close-popup clickable :disable="!canBackupAction" @click="openBackup"
                 ><q-item-section>{{ gettext('Backup now') }}</q-item-section></q-item
               >
               <q-item
@@ -534,6 +673,30 @@ onUnmounted(() => {
         /></q-tab-panel>
       </q-tab-panels>
     </section>
+    <q-dialog v-model="confirmVisible" persistent>
+      <UWindow :title="gettext('Confirm')" width="420px" :loading="powerCommandLoading">
+        <div class="q-pa-md">{{ `${gettext('Are you sure you want to')} ${commandLabel(pendingCommand)}: ${name} ?` }}</div>
+        <template #foot><q-btn v-close-popup no-caps flat size="12px" class="u-button" :label="gettext('Cancel')" /><q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :loading="powerCommandLoading" :label="commandLabel(pendingCommand)" @click="confirmCommand" /></template>
+      </UWindow>
+    </q-dialog>
+    <q-dialog v-model="stopVisible" persistent>
+      <UWindow :title="gettext('Confirm')" width="420px" :loading="powerCommandLoading">
+        <div class="q-pa-md q-gutter-md"><div>{{ `${gettext('Are you sure you want to')} ${gettext('Stop')}: ${name} ?` }}</div><q-checkbox v-if="stopOverruleAvailable" v-model="stopOverruleShutdown" dense color="primary" :disable="stopOverruleDisabled" :label="gettext('Overrule active shutdown tasks')" /></div>
+        <template #foot><q-btn v-close-popup no-caps flat size="12px" class="u-button" :label="gettext('Cancel')" /><q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :loading="powerCommandLoading" :label="gettext('Stop')" @click="confirmStop" /></template>
+      </UWindow>
+    </q-dialog>
+    <q-dialog v-model="snapshotVisible" persistent>
+      <UWindow :title="gettext('Take Snapshot')" width="520px" :loading="snapshotLoading">
+        <div class="q-pa-md q-gutter-md"><q-input v-model="snapshotName" dense square outlined :label="gettext('Name')" /><q-input v-model="snapshotDescription" dense square outlined type="textarea" autogrow :label="gettext('Description')" /><q-checkbox v-if="status === 'running'" v-model="snapshotIncludeRam" dense color="primary" :label="gettext('Include RAM')" /><div v-if="status === 'running' && !snapshotIncludeRam && !snapshotGuestAgentEnabled" class="text-warning text-caption">{{ gettext('It is recommended to either include the RAM or use the QEMU Guest Agent when taking a snapshot of a running VM to avoid inconsistencies.') }}</div></div>
+        <template #foot><q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" /><q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :disable="!configIdPattern.test(snapshotName.trim())" :loading="snapshotLoading" :label="gettext('Take Snapshot')" @click="createSnapshot" /></template>
+      </UWindow>
+    </q-dialog>
+    <q-dialog v-model="backupVisible" persistent>
+      <UWindow :title="gettext('Backup')" width="560px" :loading="backupLoading">
+        <div class="q-pa-md q-gutter-md"><q-select v-model="backupStorage" dense square outlined :options="backupStorages" :label="gettext('Storage')" @update:model-value="applyBackupDefaults(backupStorage)" /><q-select v-model="backupMode" dense square outlined emit-value map-options :options="[{ label: gettext('Snapshot'), value: 'snapshot' }, { label: gettext('Pause'), value: 'suspend' }, { label: gettext('Stop'), value: 'stop' }]" :label="gettext('Mode')" /><q-select v-model="backupCompression" dense square outlined emit-value map-options :disable="backupStorageTypes[backupStorage] === 'pbs'" :options="[{ label: 'ZSTD', value: 'zstd' }, { label: 'LZO', value: 'lzo' }, { label: 'GZIP', value: 'gzip' }, { label: gettext('None'), value: '0' }]" :label="gettext('Compression')" /><q-checkbox v-model="backupProtected" dense color="primary" :label="gettext('Protected')" /><q-select v-model="backupNotificationMode" dense square outlined emit-value map-options :options="[{ label: gettext('Notification System'), value: 'notification-system' }, { label: gettext('Legacy sendmail'), value: 'legacy-sendmail' }]" :label="gettext('Notification')" /><q-input v-model="backupMailto" dense square outlined :label="gettext('Send email to')" /><q-checkbox v-if="backupPruneAvailable" v-model="backupPruneEnabled" dense color="primary" :label="gettext('Prune')" /><div v-if="backupPruneAvailable" class="text-caption text-grey-7"><div v-for="entry in backupRetention" :key="entry.key">{{ `${entry.key}: ${entry.value}` }}</div></div><q-input v-model="backupNotesTemplate" dense square outlined type="textarea" autogrow :label="gettext('Notes')" /></div>
+        <template #foot><q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" /><q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :disable="!backupStorage" :loading="backupLoading" :label="gettext('Backup')" @click="backupNow" /></template>
+      </UWindow>
+    </q-dialog>
     <VmResourceOperationDialog
       v-model="operationDialogVisible"
       :operation="operation"
