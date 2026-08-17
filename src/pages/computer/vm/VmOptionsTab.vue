@@ -14,7 +14,7 @@ import Sortable from 'sortablejs';
 import { getVmPendingConfig, revertVmConfig, updateVmConfig } from '@/api/overview';
 import { getNodeStorage } from '@/api/storageContent';
 import SelectTable from '@/components/SelectTable.vue';
-import type { PveRecord } from '@/api/resources';
+import { getNodes, type PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
@@ -108,7 +108,7 @@ const qemuOptionCapabilities: Record<string, string[]> = {
   tdx: ['VM.Config.HWType'],
 };
 const dnsNamePattern =
-  /^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*\.?$/;
+  /^(?:(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)\.)*(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?))$/;
 const qemuStartDatePattern = /^(now|\d{4}-\d{1,2}-\d{1,2}(T\d{1,2}:\d{1,2}:\d{1,2})?)$/;
 const uuidPattern = /^[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$/;
 
@@ -126,6 +126,7 @@ const props = withDefaults(
 const emit = defineEmits<{ updated: [] }>();
 const session = useSessionStore();
 const loading = shallowRef(false);
+const hostArchitecture = shallowRef('');
 const form = reactive({
   name: '',
   description: '',
@@ -452,7 +453,7 @@ const guestArchitecture = computed(() => {
   const configured = textValue(props.config.arch);
   return configured && configured !== '__default__'
     ? configured
-    : textValue(props.config['host-arch'], 'x86_64');
+    : hostArchitecture.value || 'x86_64';
 });
 const availableOsTypeGroups = computed(() =>
   guestArchitecture.value === 'aarch64'
@@ -727,6 +728,13 @@ async function loadVmStateStorages() {
   vmStateStorageOptions.value = (response.data || []).filter((storage) =>
     textValue(storage.storage)
   );
+}
+
+async function loadNodeArchitecture() {
+  const response = await getNodes();
+  const node = response.data?.find((item) => textValue(item.node) === props.node) as
+    PveRecord | undefined;
+  hostArchitecture.value = textValue(node?.['host-arch']);
 }
 
 async function revertSelected() {
@@ -1125,6 +1133,7 @@ watch(
   () => {
     void loadPending();
     void loadVmStateStorages();
+    void loadNodeArchitecture();
   },
   { immediate: true }
 );
@@ -1645,7 +1654,7 @@ watch(() => props.config, syncForm, { immediate: true });
                 <q-input
                   v-model="form.startupDown"
                   dense
-                  :disable="props.guestType === 'lxc' && !canModifyNode"
+                  :disable="!selectedOptionEditable"
                   class="q-mt-sm"
                   :label="gettext('Shutdown timeout')"
                   :placeholder="gettext('default')"
