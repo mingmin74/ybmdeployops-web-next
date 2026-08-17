@@ -66,16 +66,30 @@ function textValue(value: unknown): string {
 
 const IPV4SEG = '(?:25[0-5]|(?:2[0-4]|1?[0-9])?[0-9])';
 const IPV4ADDR = `(?:${IPV4SEG}\\.){3}${IPV4SEG}`;
-const IPV6SEG = '[0-9a-fA-F]{1,4}';
-const IPV6ADDR_FULL = `(?:${IPV6SEG}:){7}${IPV6SEG}`;
-const IPV6ADDR_COMP = `(?:(?:${IPV6SEG}:){0,7}${IPV6SEG}?)?::(?:(?:${IPV6SEG}:){0,7}${IPV6SEG}?)?`;
-const IPV6ADDR_V4MAPPED = `(?:(?:${IPV6SEG}:){6}|(?:${IPV6SEG}:){0,5}::(?:${IPV6SEG}:){0,5}|::(?:${IPV6SEG}:){5})${IPV4ADDR}`;
-const IPV6ADDR = `(?:${IPV6ADDR_FULL}|${IPV6ADDR_COMP}|${IPV6ADDR_V4MAPPED})`;
+const IPV6_H16 = '[0-9a-fA-F]{1,4}';
+const IPV6_LS32 = `(?:(?:${IPV6_H16}:${IPV6_H16})|${IPV4ADDR})`;
+const IPV6ADDR =
+  `(?:(?:${IPV6_H16}:){7}${IPV6_LS32})` +
+  `|(?:(?:${IPV6_H16}:){1,7}:)` +
+  `|(?:(?:${IPV6_H16}:){1,6}:${IPV6_H16})` +
+  `|(?:(?:${IPV6_H16}:){1,5}(?::${IPV6_H16}){1,2})` +
+  `|(?:(?:${IPV6_H16}:){1,4}(?::${IPV6_H16}){1,3})` +
+  `|(?:(?:${IPV6_H16}:){1,3}(?::${IPV6_H16}){1,4})` +
+  `|(?:(?:${IPV6_H16}:){1,2}(?::${IPV6_H16}){1,5})` +
+  `|(?:${IPV6_H16}:(?::${IPV6_H16}){1,6})` +
+  `|(?::(?::${IPV6_H16}){1,7}|:)` +
+  `|(?:(?:${IPV6_H16}:){6}${IPV6_LS32})` +
+  `|(?:(?:${IPV6_H16}:){1,5}:${IPV6_LS32})` +
+  `|(?:(?:${IPV6_H16}:){1,4}:(?:${IPV6_H16}:){1}${IPV6_LS32})` +
+  `|(?:(?:${IPV6_H16}:){1,3}:(?:${IPV6_H16}:){1,2}${IPV6_LS32})` +
+  `|(?:(?:${IPV6_H16}:){1,2}:(?:${IPV6_H16}:){1,3}${IPV6_LS32})` +
+  `|(?:${IPV6_H16}:(?:${IPV6_H16}:){1,4}${IPV6_LS32})` +
+  `|(?::(?:${IPV6_H16}:){1,5}${IPV6_LS32})`;
 
 const IPV4_RE = new RegExp(`^${IPV4ADDR}$`);
-const IPV6_RE = new RegExp(`^${IPV6ADDR}$`);
+const IPV6_RE = new RegExp(`^(?:${IPV6ADDR})$`);
 const IPV4CIDR_RE = new RegExp(`^${IPV4ADDR}\\/(?:3[0-2]|[12][0-9]|[89])$`);
-const IPV6CIDR_RE = new RegExp(`^${IPV6ADDR}\\/(?:12[0-8]|(?:1[01]|[2-9])[0-9]|[89])$`);
+const IPV6CIDR_RE = new RegExp(`^(?:${IPV6ADDR})\\/(?:12[0-8]|(?:1[01]|[2-9])[0-9]|[89])$`);
 
 function isIpv4Address(value: string): boolean {
   return IPV4_RE.test(value);
@@ -551,7 +565,7 @@ function decodeSshKeys(value: unknown) {
   }
 }
 
-function syncFromConfig() {
+function syncEditorFromConfig() {
   const hasPassword =
     props.config.cipassword !== undefined &&
     props.config.cipassword !== null &&
@@ -613,12 +627,11 @@ function syncFromConfig() {
   });
 }
 
-async function loadPending() {
+async function loadPendingForDisplay() {
   pendingLoading.value = true;
   try {
     const response = await getVmPendingConfig(props.node, props.vmid, 'qemu');
     pendingRows.value = response.data || [];
-    syncFromConfig();
   } catch (error) {
     void error;
   } finally {
@@ -626,10 +639,15 @@ async function loadPending() {
   }
 }
 
+async function loadPendingAndSyncEditor() {
+  await loadPendingForDisplay();
+  syncEditorFromConfig();
+}
+
 function startPendingUpdates() {
   stopPendingUpdates();
   pendingUpdateTimer = window.setInterval(() => {
-    void loadPending();
+    void loadPendingForDisplay();
   }, PENDING_UPDATE_INTERVAL);
 }
 
@@ -650,7 +668,7 @@ async function removeSelected() {
       delete: selectedOption.value,
     });
     emit('updated');
-    await loadPending();
+    await loadPendingAndSyncEditor();
   } catch (error) {
     void error;
   } finally {
@@ -750,7 +768,7 @@ async function save() {
   try {
     await updateVmConfig(props.node, props.vmid, data);
     emit('updated');
-    await loadPending();
+    await loadPendingAndSyncEditor();
   } catch (error) {
     void error;
   } finally {
@@ -764,7 +782,7 @@ async function regenerateImage() {
   try {
     await regenerateVmCloudInitImage(props.node, props.vmid);
     emit('updated');
-    await loadPending();
+    await loadPendingAndSyncEditor();
   } catch (error) {
     void error;
   } finally {
@@ -775,7 +793,7 @@ async function regenerateImage() {
 watch(
   () => [props.node, props.vmid, textValue(props.config.digest)],
   () => {
-    void loadPending();
+    void loadPendingAndSyncEditor();
     startPendingUpdates();
   },
   { immediate: true }
