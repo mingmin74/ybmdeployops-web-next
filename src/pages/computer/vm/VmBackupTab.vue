@@ -5,6 +5,8 @@ import type { PveRecord } from '@/api/resources';
 import {
   getNodeStorage,
   getStorageContent,
+  getStorageBackupFileDownloadUrl,
+  listStorageBackupFiles,
   deleteStorageContent,
   updateStorageContent,
 } from '@/api/storageContent';
@@ -23,7 +25,7 @@ import {
 
 const props = withDefaults(
   defineProps<{ node: string; vmid: string; guestType?: 'qemu' | 'lxc' }>(),
-  { guestType: 'qemu' },
+  { guestType: 'qemu' }
 );
 const emit = defineEmits<{ task: [node: string, upid: string, title: string] }>();
 const $q = useQuasar();
@@ -34,12 +36,20 @@ const removeVisible = shallowRef(false);
 const restoreVisible = shallowRef(false);
 const configurationVisible = shallowRef(false);
 const notesVisible = shallowRef(false);
+const fileRestoreVisible = shallowRef(false);
 const configuration = shallowRef('');
 const notes = shallowRef('');
 const storages = shallowRef<PveRecord[]>([]);
 const restoreStorages = shallowRef<PveRecord[]>([]);
 const rows = shallowRef<PveRecord[]>([]);
 const selected = shallowRef<PveRecord[]>([]);
+const listStorage = shallowRef('');
+const filterVmid = shallowRef(true);
+const search = shallowRef('');
+const fileRestorePath = shallowRef('');
+const fileRestoreRows = shallowRef<PveRecord[]>([]);
+const restoreTargetRequired = shallowRef(false);
+const backupDefaultsInitialized = shallowRef(false);
 const form = reactive<{
   storage: string;
   mode: 'snapshot' | 'suspend' | 'stop';
@@ -81,7 +91,7 @@ const restorePlaceholders = reactive({
   sockets: '',
 });
 const vmCaps = computed(
-  () => (session.caps as unknown as { vms?: Record<string, unknown> }).vms || {},
+  () => (session.caps as unknown as { vms?: Record<string, unknown> }).vms || {}
 );
 const canBackup = computed(() => Boolean(vmCaps.value['VM.Backup']));
 const canRestore = computed(() => Boolean(vmCaps.value['VM.Allocate']));
@@ -145,6 +155,24 @@ const columns = computed<QTableColumn<PveRecord>[]>(() => [
     align: 'left',
     sortable: true,
   },
+  ...(selectedStorageType.value === 'pbs'
+    ? [
+        {
+          name: 'encrypted',
+          label: gettext('Encrypted'),
+          field: (row: PveRecord) => formatEncryption(row.encrypted),
+          align: 'left' as const,
+          sortable: true,
+        },
+        {
+          name: 'verification',
+          label: gettext('Verify State'),
+          field: (row: PveRecord) => formatVerification(row.verification),
+          align: 'left' as const,
+          sortable: true,
+        },
+      ]
+    : []),
   { name: 'format', label: gettext('Format'), field: 'format', align: 'left', sortable: true },
   {
     name: 'size',
@@ -161,20 +189,28 @@ const columns = computed<QTableColumn<PveRecord>[]>(() => [
     sortable: true,
   },
 ]);
-const currentStorage = computed(() => form.storage);
+const currentStorage = computed(() => listStorage.value);
 const storageDisplayValue = computed(() => {
+  const selectedStorage = storages.value.find(
+    (item) => textValue(item.storage) === listStorage.value
+  );
+  return textValue(selectedStorage?.storage, listStorage.value);
+});
+const backupStorageDisplayValue = computed(() => {
   const selectedStorage = storages.value.find((item) => textValue(item.storage) === form.storage);
   return textValue(selectedStorage?.storage, form.storage);
 });
 const selectedRow = computed(() => selected.value[0]);
 const selectedStorageType = computed(() => {
-  const selectedStorage = storages.value.find((item) => textValue(item.storage) === form.storage);
+  const selectedStorage = storages.value.find(
+    (item) => textValue(item.storage) === listStorage.value
+  );
   return textValue(selectedStorage?.type);
 });
 const selectedBackupFormat = computed(() => textValue(selectedRow.value?.format));
 const selectedBackupVolid = computed(() => textValue(selectedRow.value?.volid));
 const isPbsBackup = computed(
-  () => selectedStorageType.value === 'pbs' || selectedBackupFormat.value === 'pbs-vm',
+  () => selectedStorageType.value === 'pbs' || selectedBackupFormat.value === 'pbs-vm'
 );
 const backupStorageType = computed(() => {
   const selectedStorage = storages.value.find((item) => textValue(item.storage) === form.storage);
@@ -182,14 +218,43 @@ const backupStorageType = computed(() => {
 });
 const isBackupStoragePbs = computed(() => backupStorageType.value === 'pbs');
 const backupCompressDisabled = computed(() => isBackupStoragePbs.value);
+const displayedRows = computed(() => {
+  const vmid = textValue(props.vmid);
+  const needle = search.value.trim().toLowerCase();
+  return rows.value
+    .filter(isGuestBackup)
+    .filter((row) => !filterVmid.value || backupVmid(row) === vmid)
+    .filter((row) => !needle || textValue(row.volid).toLowerCase().includes(needle))
+    .sort((a, b) => {
+      const vmidCompare = backupVmid(a).localeCompare(backupVmid(b), undefined, { numeric: true });
+      return vmidCompare || Number(b.ctime || 0) - Number(a.ctime || 0);
+    });
+});
+const restoreValid = computed(() => {
+  const name = restoreForm.name.trim();
+  const validName = !name || /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(name);
+  const validInteger = (value: string, min: number, max: number) =>
+    !value || (Number.isInteger(Number(value)) && Number(value) >= min && Number(value) <= max);
+  const validBandwidth =
+    !restoreForm.bwlimit ||
+    (Number.isInteger(Number(restoreForm.bwlimit)) && Number(restoreForm.bwlimit) >= 0);
+  return (
+    validName &&
+    validInteger(restoreForm.cores, 1, 128) &&
+    validInteger(restoreForm.sockets, 1, 4) &&
+    validInteger(restoreForm.memory, 1, 1048576) &&
+    validBandwidth &&
+    (!restoreTargetRequired.value || Boolean(restoreForm.storage))
+  );
+});
 const notesTemplateVariables = '{{cluster}}, {{guestname}}, {{node}}, {{vmid}}';
 const restoreStorageDisplayValue = computed(() => {
   const selectedStorage = restoreStorages.value.find(
-    (item) => textValue(item.storage) === restoreForm.storage,
+    (item) => textValue(item.storage) === restoreForm.storage
   );
   return textValue(
     selectedStorage?.storage,
-    restoreForm.storage || gettext('From backup configuration'),
+    restoreForm.storage || gettext('From backup configuration')
   );
 });
 const pruneKeepRows = computed(() =>
@@ -202,7 +267,7 @@ const pruneKeepRows = computed(() =>
     ['keep-yearly', gettext('Keep Yearly')],
   ]
     .map(([key, label]) => ({ key, label, value: pruneKeep[String(key)] || '' }))
-    .filter((item) => item.value),
+    .filter((item) => item.value)
 );
 
 function formatTime(value: unknown) {
@@ -210,13 +275,29 @@ function formatTime(value: unknown) {
   return Number.isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000).toLocaleString() : '-';
 }
 
+function formatEncryption(value: unknown) {
+  const encrypted = textValue(value).toLowerCase();
+  if (!encrypted || encrypted === '0' || encrypted === 'none') return gettext('No');
+  return encrypted === '1' || encrypted === 'yes' ? gettext('Yes') : encrypted;
+}
+
+function formatVerification(value: unknown) {
+  const verification = textValue(value);
+  if (!verification) return '-';
+  return verification.replace(/-/g, ' ');
+}
+
 function sortByAvailDesc(items: PveRecord[]) {
   return [...items].sort((a, b) => Number(b.avail || 0) - Number(a.avail || 0));
 }
 
-function isGuestBackupForCurrentVm(row: PveRecord) {
-  const vmid = textValue(props.vmid);
+function backupVmid(row: PveRecord) {
   const rowVmid = textValue(row.vmid);
+  const volid = textValue(row.volid);
+  return rowVmid || volid.match(/vzdump-qemu-(\d+)/)?.[1] || '';
+}
+
+function isGuestBackup(row: PveRecord) {
   const volid = textValue(row.volid);
   const format = textValue(row.format);
   const subtype = textValue(row.subtype);
@@ -224,8 +305,7 @@ function isGuestBackupForCurrentVm(row: PveRecord) {
     format === 'pbs-vm' ||
     subtype === props.guestType ||
     new RegExp(`:backup/vzdump-${props.guestType}-`).test(volid);
-
-  return isGuestBackup && (rowVmid === vmid || volid.includes(`vzdump-${props.guestType}-${vmid}`));
+  return isGuestBackup;
 }
 
 function parsePropertyString(value: unknown) {
@@ -252,7 +332,8 @@ function unescapeNotesTemplate(value: unknown) {
   return textValue(value).replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
 }
 
-async function refreshRows() {
+async function refreshRows(preserveSelection = false) {
+  const selectedVolid = preserveSelection ? selectedBackupVolid.value : '';
   if (!props.node || !currentStorage.value) {
     rows.value = [];
     return;
@@ -260,8 +341,10 @@ async function refreshRows() {
   loading.value = true;
   try {
     const response = await getStorageContent(props.node, currentStorage.value, 'backup');
-    rows.value = (response.data || []).filter(isGuestBackupForCurrentVm);
-    selected.value = [];
+    rows.value = response.data || [];
+    selected.value = selectedVolid
+      ? rows.value.filter((row) => textValue(row.volid) === selectedVolid)
+      : [];
   } finally {
     loading.value = false;
   }
@@ -273,8 +356,8 @@ async function loadStorages() {
   try {
     const response = await getNodeStorage(props.node, 'backup');
     storages.value = sortByAvailDesc(response.data || []);
-    if (!storages.value.some((item) => textValue(item.storage) === form.storage)) {
-      form.storage = textValue(storages.value[0]?.storage);
+    if (!storages.value.some((item) => textValue(item.storage) === listStorage.value)) {
+      listStorage.value = textValue(storages.value[0]?.storage);
     }
     await refreshRows();
   } finally {
@@ -286,24 +369,20 @@ async function loadBackupDefaults() {
   if (!props.node || !form.storage) return;
   const response = await getVmBackupDefaults(props.node, form.storage);
   const data = response.data || {};
-  const notificationMode = textValue(data['notification-mode'], 'auto');
-  const mailto = textValue(data.mailto);
-
-  if (notificationMode === 'auto') {
-    form.notificationMode = mailto ? 'legacy-sendmail' : 'notification-system';
-  } else if (notificationMode === 'legacy-sendmail') {
-    form.notificationMode = 'legacy-sendmail';
-  } else {
-    form.notificationMode = 'notification-system';
-  }
-
-  form.mailto = mailto;
-  const defaultMode = textValue(data.mode);
-  if (defaultMode === 'snapshot' || defaultMode === 'suspend' || defaultMode === 'stop') {
-    form.mode = defaultMode;
-  }
-  if (data['notes-template']) {
-    form.notesTemplate = unescapeNotesTemplate(data['notes-template']);
+  if (!backupDefaultsInitialized.value) {
+    const notificationMode = textValue(data['notification-mode'], 'auto');
+    const mailto = textValue(data.mailto);
+    form.notificationMode =
+      notificationMode === 'legacy-sendmail' || (notificationMode === 'auto' && mailto)
+        ? 'legacy-sendmail'
+        : 'notification-system';
+    form.mailto = mailto;
+    const defaultMode = textValue(data.mode);
+    if (defaultMode === 'snapshot' || defaultMode === 'suspend' || defaultMode === 'stop') {
+      form.mode = defaultMode;
+    }
+    if (data['notes-template']) form.notesTemplate = unescapeNotesTemplate(data['notes-template']);
+    backupDefaultsInitialized.value = true;
   }
 
   Object.keys(pruneKeep).forEach((key) => delete pruneKeep[key]);
@@ -355,7 +434,7 @@ function applyRestoreConfiguration(value: string) {
         allStoragesAvailable &&
         Boolean(
           storageHint &&
-          restoreStorages.value.some((item) => textValue(item.storage) === storageHint),
+          restoreStorages.value.some((item) => textValue(item.storage) === storageHint)
         );
       return;
     }
@@ -366,9 +445,7 @@ function applyRestoreConfiguration(value: string) {
     if (key === 'sockets') restorePlaceholders.sockets = configValue;
   });
 
-  if (!allStoragesAvailable && !restoreForm.storage) {
-    restoreForm.storage = textValue(restoreStorages.value[0]?.storage);
-  }
+  restoreTargetRequired.value = !allStoragesAvailable;
 }
 
 async function loadRestoreDefaults() {
@@ -380,9 +457,11 @@ async function loadRestoreDefaults() {
 }
 
 async function openBackup() {
-  if (!canBackup.value || !form.storage) return;
+  if (!canBackup.value || !listStorage.value) return;
   loading.value = true;
   try {
+    form.storage = listStorage.value;
+    backupDefaultsInitialized.value = false;
     await loadBackupDefaults();
     backupVisible.value = true;
   } finally {
@@ -403,6 +482,7 @@ async function openRestore() {
   restoreForm.sockets = '';
   restoreForm.start = false;
   restoreForm.liveRestore = false;
+  restoreTargetRequired.value = false;
   loading.value = true;
   try {
     await loadRestoreStorages();
@@ -421,10 +501,10 @@ function openNotes() {
 
 async function saveNotes() {
   const volid = textValue(selectedRow.value?.volid);
-  if (!canBackup.value || !volid || !form.storage) return;
+  if (!canBackup.value || !volid || !listStorage.value) return;
   loading.value = true;
   try {
-    await updateStorageContent(props.node, form.storage, volid, { notes: notes.value });
+    await updateStorageContent(props.node, listStorage.value, volid, { notes: notes.value });
     notesVisible.value = false;
     await refreshRows();
   } finally {
@@ -434,13 +514,13 @@ async function saveNotes() {
 
 async function toggleProtection() {
   const volid = textValue(selectedRow.value?.volid);
-  if (!canBackup.value || !volid || !form.storage) return;
+  if (!canBackup.value || !volid || !listStorage.value) return;
   loading.value = true;
   try {
-    await updateStorageContent(props.node, form.storage, volid, {
+    await updateStorageContent(props.node, listStorage.value, volid, {
       protected: Number(selectedRow.value?.protected) ? 0 : 1,
     });
-    await refreshRows();
+    await refreshRows(true);
   } finally {
     loading.value = false;
   }
@@ -462,7 +542,7 @@ async function showConfiguration() {
 
 async function executeRestore() {
   const archive = textValue(selectedRow.value?.volid);
-  if (!canRestore.value || !archive || !restoreForm.vmid) return;
+  if (!canRestore.value || !archive || !props.vmid || !restoreValid.value) return;
   loading.value = true;
   try {
     const data: {
@@ -480,7 +560,7 @@ async function executeRestore() {
       'live-restore'?: 0 | 1;
       'ha-managed'?: 0 | 1;
     } = {
-      vmid: restoreForm.vmid,
+      vmid: props.vmid,
       archive,
       unique: restoreForm.unique ? 1 : 0,
       force: 1,
@@ -503,10 +583,10 @@ async function executeRestore() {
 }
 
 function restore() {
-  if (!canRestore.value || !selectedBackupVolid.value || !restoreForm.vmid) return;
+  if (!canRestore.value || !selectedBackupVolid.value || !props.vmid || !restoreValid.value) return;
   $q.dialog({
     title: gettext('Confirm'),
-    message: `${gettext('Restore')} VM ${restoreForm.vmid}. ${gettext('This will permanently erase current VM data.')}`,
+    message: `${gettext('Restore')} VM ${props.vmid}. ${gettext('This will permanently erase current VM data.')}`,
     persistent: true,
     ok: { flat: true, label: gettext('Confirm'), color: 'primary' },
     cancel: { flat: true, label: gettext('Cancel') },
@@ -554,10 +634,10 @@ async function backupNow() {
 
 async function removeBackup() {
   const volid = textValue(selectedRow.value?.volid);
-  if (!canBackup.value || !volid || !form.storage) return;
+  if (!canBackup.value || !volid || !listStorage.value) return;
   loading.value = true;
   try {
-    await deleteStorageContent(props.node, form.storage, volid);
+    await deleteStorageContent(props.node, listStorage.value, volid, 5);
     removeVisible.value = false;
     await refreshRows();
   } finally {
@@ -565,13 +645,64 @@ async function removeBackup() {
   }
 }
 
+async function openFileRestore() {
+  if (!isPbsBackup.value || !selectedBackupVolid.value || !listStorage.value) return;
+  fileRestorePath.value = '';
+  fileRestoreRows.value = [];
+  fileRestoreVisible.value = true;
+  await loadFileRestorePath();
+}
+
+async function loadFileRestorePath(filepath = fileRestorePath.value) {
+  if (!listStorage.value || !selectedBackupVolid.value) return;
+  loading.value = true;
+  try {
+    const response = await listStorageBackupFiles(
+      listStorage.value,
+      selectedBackupVolid.value,
+      filepath
+    );
+    fileRestorePath.value = filepath;
+    fileRestoreRows.value = response.data || [];
+  } finally {
+    loading.value = false;
+  }
+}
+
+function fileRestoreEntryPath(entry: PveRecord) {
+  return textValue(entry.filepath || entry.path || entry.text || entry.name);
+}
+
+function isFileRestoreDirectory(entry: PveRecord) {
+  return ['d', 'directory', 'dir'].includes(textValue(entry.type).toLowerCase());
+}
+
+function openFileRestoreEntry(entry: PveRecord) {
+  const filepath = fileRestoreEntryPath(entry);
+  if (isFileRestoreDirectory(entry) && filepath) void loadFileRestorePath(filepath);
+}
+
+function downloadFileRestoreEntry(entry: PveRecord) {
+  const filepath = fileRestoreEntryPath(entry);
+  if (!filepath || isFileRestoreDirectory(entry)) return;
+  window.open(
+    getStorageBackupFileDownloadUrl(listStorage.value, selectedBackupVolid.value, filepath, 'all'),
+    '_blank',
+    'noopener'
+  );
+}
+
 watch(
   () => [props.node, props.vmid],
   () => {
     void loadStorages();
   },
-  { immediate: true },
+  { immediate: true }
 );
+
+watch(listStorage, () => {
+  void refreshRows();
+});
 </script>
 
 <template>
@@ -585,7 +716,7 @@ watch(
           color="primary"
           class="u-button"
           :label="gettext('Backup Now')"
-          :disable="!canBackup || !form.storage"
+          :disable="!canBackup || !listStorage"
           @click="openBackup"
         />
       </div>
@@ -611,6 +742,21 @@ watch(
           :label="gettext('Restore')"
           :disable="!canRestore || !selectedRow"
           @click="openRestore"
+        />
+      </div>
+      <div
+        v-if="selectedStorageType === 'pbs'"
+        class="col-auto"
+      >
+        <q-btn
+          no-caps
+          outline
+          size="12px"
+          color="primary"
+          class="u-button"
+          :label="gettext('File Restore')"
+          :disable="!selectedRow || !isPbsBackup"
+          @click="openFileRestore"
         />
       </div>
       <div class="col-auto">
@@ -654,7 +800,7 @@ watch(
         <div class="row items-center no-wrap vm-storage-selector">
           <span class="vm-storage-selector__label">{{ gettext('Storage') }}</span>
           <SelectTable
-            v-model="form.storage"
+            v-model="listStorage"
             row-key="storage"
             width="560px"
             class="vm-storage-selector__field"
@@ -663,10 +809,12 @@ watch(
             :display-value="storageDisplayValue"
             :loading="loading"
             :get-row-value="(row) => textValue(row.storage)"
-            @update:model-value="refreshRows"
           >
             <template #body-cell="scope">
-              <UsageProgress v-if="scope.col.name === 'used'" :percent="Number(scope.value)" />
+              <UsageProgress
+                v-if="scope.col.name === 'used'"
+                :percent="Number(scope.value)"
+              />
               <q-badge
                 v-else-if="scope.col.name === 'active'"
                 :color="Number(scope.row.active) ? 'green' : 'red'"
@@ -676,6 +824,22 @@ watch(
             </template>
           </SelectTable>
         </div>
+      </div>
+      <div class="col-12 col-sm-auto">
+        <q-checkbox
+          v-model="filterVmid"
+          dense
+          :label="gettext('Filter VMID')"
+        />
+      </div>
+      <div class="col-12 col-sm-auto">
+        <q-input
+          v-model="search"
+          dense
+          clearable
+          class="vm-backup-search"
+          :label="gettext('Search')"
+        />
       </div>
       <div class="col-auto">
         <q-btn
@@ -687,7 +851,7 @@ watch(
           icon="refresh"
           :label="gettext('Refresh')"
           :loading="loading"
-          @click="refreshRows"
+          @click="() => refreshRows()"
         />
       </div>
     </div>
@@ -699,7 +863,7 @@ watch(
       row-key="volid"
       selection="single"
       table-header-class="u-table-header"
-      :rows="rows"
+      :rows="displayedRows"
       :columns="columns"
       :loading="loading"
       :pagination="{ rowsPerPage: 0 }"
@@ -715,9 +879,19 @@ watch(
       </template>
     </q-table>
 
-    <q-dialog v-model="backupVisible" persistent>
-      <UWindow :title="gettext('Backup')" width="640px" :loading="loading">
-        <q-form class="u-border q-ma-sm q-pa-md u-dense" @submit.prevent="backupNow">
+    <q-dialog
+      v-model="backupVisible"
+      persistent
+    >
+      <UWindow
+        :title="gettext('Backup')"
+        width="640px"
+        :loading="loading"
+      >
+        <q-form
+          class="u-border q-ma-sm q-pa-md u-dense"
+          @submit.prevent="backupNow"
+        >
           <div class="row q-col-gutter-lg">
             <div class="col-12 col-sm-6">
               <SelectTable
@@ -728,14 +902,17 @@ watch(
                 class="q-field--with-bottom"
                 :rows="storages"
                 :columns="storageColumns"
-                :display-value="storageDisplayValue"
+                :display-value="backupStorageDisplayValue"
                 :loading="loading"
                 :get-row-value="(row) => textValue(row.storage)"
                 :label="gettext('Storage')"
                 @update:model-value="loadBackupDefaults"
               >
                 <template #body-cell="scope">
-                  <UsageProgress v-if="scope.col.name === 'used'" :percent="Number(scope.value)" />
+                  <UsageProgress
+                    v-if="scope.col.name === 'used'"
+                    :percent="Number(scope.value)"
+                  />
                   <q-badge
                     v-else-if="scope.col.name === 'active'"
                     :color="Number(scope.row.active) ? 'green' : 'red'"
@@ -794,7 +971,10 @@ watch(
                 :label="gettext('Notification')"
               />
             </div>
-            <div v-if="form.notificationMode === 'legacy-sendmail'" class="col-12 col-sm-6">
+            <div
+              v-if="form.notificationMode === 'legacy-sendmail'"
+              class="col-12 col-sm-6"
+            >
               <q-input
                 v-model="form.mailto"
                 dense
@@ -811,9 +991,20 @@ watch(
                 :label="gettext('Protected')"
               />
             </div>
-            <div v-if="pruneVisible" class="col-12">
-              <q-checkbox v-model="form.remove" dense color="primary" :label="gettext('Prune')" />
-              <div v-if="form.remove" class="backup-retention q-mt-sm">
+            <div
+              v-if="pruneVisible"
+              class="col-12"
+            >
+              <q-checkbox
+                v-model="form.remove"
+                dense
+                color="primary"
+                :label="gettext('Prune')"
+              />
+              <div
+                v-if="form.remove"
+                class="backup-retention q-mt-sm"
+              >
                 <div class="text-grey-8 q-mb-xs">
                   {{ gettext('Storage Retention Configuration') }}:
                 </div>
@@ -842,22 +1033,24 @@ watch(
                 {{
                   gettext('Possible template variables are: {0}').replace(
                     '{0}',
-                    notesTemplateVariables,
+                    notesTemplateVariables
                   )
                 }}
               </div>
             </div>
           </div>
         </q-form>
-        <template #foot
-          ><q-btn
+        <template #foot>
+          <q-btn
             v-close-popup
             no-caps
             outline
             size="12px"
             class="u-button"
             :label="gettext('Cancel')"
-            :disable="loading" /><q-btn
+            :disable="loading"
+          />
+          <q-btn
             no-caps
             flat
             size="12px"
@@ -865,26 +1058,36 @@ watch(
             :label="gettext('Backup')"
             :loading="loading"
             @click="backupNow"
-        /></template>
+          />
+        </template>
       </UWindow>
     </q-dialog>
 
-    <q-dialog v-model="removeVisible" persistent>
-      <UWindow :title="gettext('Remove')" width="460px" :loading="loading">
+    <q-dialog
+      v-model="removeVisible"
+      persistent
+    >
+      <UWindow
+        :title="gettext('Remove')"
+        width="460px"
+        :loading="loading"
+      >
         <div class="q-pa-md">
           {{ gettext('Are you sure you want to remove entry') }} “{{
             textValue(selectedRow?.volid)
-          }}”?
+          }}”? {{ gettext('This will permanently erase all data.') }}
         </div>
-        <template #foot
-          ><q-btn
+        <template #foot>
+          <q-btn
             v-close-popup
             no-caps
             outline
             size="12px"
             class="u-button"
             :label="gettext('Cancel')"
-            :disable="loading" /><q-btn
+            :disable="loading"
+          />
+          <q-btn
             no-caps
             flat
             size="12px"
@@ -892,20 +1095,31 @@ watch(
             :label="gettext('Remove')"
             :loading="loading"
             @click="removeBackup"
-        /></template>
+          />
+        </template>
       </UWindow>
     </q-dialog>
-    <q-dialog v-model="restoreVisible" persistent>
-      <UWindow :title="gettext('Restore')" width="640px" :loading="loading">
-        <q-form class="u-border q-ma-sm q-pa-md u-dense" @submit.prevent="restore">
+    <q-dialog
+      v-model="restoreVisible"
+      persistent
+    >
+      <UWindow
+        :title="gettext('Restore')"
+        width="640px"
+        :loading="loading"
+      >
+        <q-form
+          class="u-border q-ma-sm q-pa-md u-dense"
+          @submit.prevent="restore"
+        >
           <div class="row q-col-gutter-lg">
             <div class="col-12 col-sm-6">
               <q-input
-                v-model="restoreForm.vmid"
+                :model-value="props.vmid"
                 dense
+                readonly
                 class="q-field--with-bottom"
                 :label="gettext('VMID')"
-                :rules="[(value) => !!value || gettext('Required field')]"
               />
             </div>
             <div class="col-12 col-sm-6">
@@ -915,6 +1129,12 @@ watch(
                 class="q-field--with-bottom"
                 :placeholder="restorePlaceholders.name"
                 :label="gettext('Name')"
+                :rules="[
+                  (value: unknown) =>
+                    !value ||
+                    /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(String(value)) ||
+                    gettext('Invalid DNS name'),
+                ]"
               />
             </div>
             <div class="col-12">
@@ -930,9 +1150,16 @@ watch(
                 :loading="loading"
                 :get-row-value="(row) => textValue(row.storage)"
                 :label="gettext('Target Storage')"
+                :rules="[
+                  (value: unknown) =>
+                    !restoreTargetRequired || !!value || gettext('Required field'),
+                ]"
               >
                 <template #body-cell="scope">
-                  <UsageProgress v-if="scope.col.name === 'used'" :percent="Number(scope.value)" />
+                  <UsageProgress
+                    v-if="scope.col.name === 'used'"
+                    :percent="Number(scope.value)"
+                  />
                   <q-badge
                     v-else-if="scope.col.name === 'active'"
                     :color="Number(scope.row.active) ? 'green' : 'red'"
@@ -950,6 +1177,14 @@ watch(
                 class="q-field--with-bottom"
                 :placeholder="restorePlaceholders.cores"
                 :label="gettext('Cores')"
+                :rules="[
+                  (value) =>
+                    !value ||
+                    (Number.isInteger(Number(value)) &&
+                      Number(value) >= 1 &&
+                      Number(value) <= 128) ||
+                    gettext('Value must be between 1 and 128'),
+                ]"
               />
             </div>
             <div class="col-12 col-sm-4">
@@ -960,6 +1195,12 @@ watch(
                 class="q-field--with-bottom"
                 :placeholder="restorePlaceholders.sockets"
                 :label="gettext('Sockets')"
+                :rules="[
+                  (value) =>
+                    !value ||
+                    (Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 4) ||
+                    gettext('Value must be between 1 and 4'),
+                ]"
               />
             </div>
             <div class="col-12 col-sm-4">
@@ -970,6 +1211,14 @@ watch(
                 class="q-field--with-bottom"
                 :placeholder="restorePlaceholders.memory"
                 :label="gettext('Memory (MiB)')"
+                :rules="[
+                  (value) =>
+                    !value ||
+                    (Number.isInteger(Number(value)) &&
+                      Number(value) >= 1 &&
+                      Number(value) <= 1048576) ||
+                    gettext('Invalid memory value'),
+                ]"
               />
             </div>
             <div class="col-12 col-sm-6">
@@ -979,6 +1228,12 @@ watch(
                 type="number"
                 class="q-field--with-bottom"
                 :label="gettext('Bandwidth Limit (KiB/s)')"
+                :rules="[
+                  (value) =>
+                    !value ||
+                    (Number.isInteger(Number(value)) && Number(value) >= 0) ||
+                    gettext('Invalid bandwidth limit'),
+                ]"
               />
             </div>
             <div class="col-12 col-sm-6">
@@ -1006,7 +1261,10 @@ watch(
                 :label="gettext('Start after restore')"
               />
             </div>
-            <div v-if="isPbsBackup" class="col-12 col-sm-6">
+            <div
+              v-if="isPbsBackup"
+              class="col-12 col-sm-6"
+            >
               <q-checkbox
                 v-model="restoreForm.liveRestore"
                 dense
@@ -1020,54 +1278,164 @@ watch(
             >
               {{
                 gettext(
-                  'Note: If anything goes wrong during the live-restore, new data written by the VM may be lost.',
+                  'Note: If anything goes wrong during the live-restore, new data written by the VM may be lost.'
                 )
               }}
             </div>
           </div>
         </q-form>
-        <template #foot
-          ><q-btn
+        <template #foot>
+          <q-btn
             v-close-popup
             no-caps
             outline
             size="12px"
             class="u-button"
-            :label="gettext('Cancel')" /><q-btn
+            :label="gettext('Cancel')"
+          />
+          <q-btn
             no-caps
             flat
             size="12px"
             class="bg-primary text-grey-1 u-button"
             :label="gettext('Restore')"
             :loading="loading"
-            @click="restore" /></template
-      ></UWindow>
+            :disable="!restoreValid"
+            @click="restore"
+          />
+        </template>
+      </UWindow>
     </q-dialog>
-    <q-dialog v-model="configurationVisible">
-      <UWindow :title="gettext('Show Configuration')" width="640px">
-        <div class="q-pa-sm">
-          <div class="backup-configuration u-border q-pa-sm">
-            <pre v-if="configuration" class="backup-configuration__content">{{
-              configuration
-            }}</pre>
-            <div v-else class="backup-configuration__empty">
-              {{ gettext('no record can be found') }}
-            </div>
+    <q-dialog
+      v-model="fileRestoreVisible"
+      persistent
+    >
+      <UWindow
+        :title="gettext('File Restore')"
+        width="760px"
+        :loading="loading"
+      >
+        <div class="q-pa-md">
+          <div class="row items-center q-gutter-sm q-mb-sm">
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              class="u-button"
+              :label="gettext('Up')"
+              :disable="!fileRestorePath"
+              @click="loadFileRestorePath(fileRestorePath.split('/').slice(0, -1).join('/'))"
+            />
+            <span class="text-caption text-grey-7">{{ fileRestorePath || '/' }}</span>
           </div>
+          <q-table
+            flat
+            dense
+            row-key="filepath"
+            :rows="fileRestoreRows"
+            :columns="[
+              {
+                name: 'name',
+                label: gettext('Name'),
+                field: (row) => fileRestoreEntryPath(row),
+                align: 'left',
+              },
+              { name: 'type', label: gettext('Type'), field: 'type', align: 'left' },
+              {
+                name: 'size',
+                label: gettext('Size'),
+                field: (row) => formatBytes(row.size as number),
+                align: 'right',
+              },
+              { name: 'actions', label: gettext('Actions'), field: 'actions', align: 'right' },
+            ]"
+            :loading="loading"
+            :pagination="{ rowsPerPage: 0 }"
+            hide-bottom
+            class="u-compact-table"
+          >
+            <template #body-cell-name="scope">
+              <q-td :props="scope">
+                <q-btn
+                  flat
+                  dense
+                  no-caps
+                  :label="scope.value"
+                  @click="openFileRestoreEntry(scope.row)"
+                />
+              </q-td>
+            </template>
+            <template #body-cell-actions="scope">
+              <q-td :props="scope">
+                <q-btn
+                  v-if="!isFileRestoreDirectory(scope.row)"
+                  flat
+                  dense
+                  no-caps
+                  color="primary"
+                  :label="gettext('Download')"
+                  @click="downloadFileRestoreEntry(scope.row)"
+                />
+              </q-td>
+            </template>
+          </q-table>
         </div>
-        <template #foot
-          ><q-btn
+        <template #foot>
+          <q-btn
             v-close-popup
             no-caps
             outline
             size="12px"
             class="u-button"
-            :label="gettext('Close')" /></template
-      ></UWindow>
+            :label="gettext('Close')"
+          />
+        </template>
+      </UWindow>
     </q-dialog>
-    <q-dialog v-model="notesVisible" persistent
-      ><UWindow :title="gettext('Notes')" width="600px" :loading="loading"
-        ><q-form class="u-border q-ma-sm q-pa-md u-dense" @submit.prevent="saveNotes">
+    <q-dialog v-model="configurationVisible">
+      <UWindow
+        :title="gettext('Show Configuration')"
+        width="640px"
+      >
+        <div class="q-pa-sm">
+          <div class="backup-configuration u-border q-pa-sm">
+            <pre
+              v-if="configuration"
+              class="backup-configuration__content"
+              >{{ configuration }}</pre>
+            <div
+              v-else
+              class="backup-configuration__empty"
+            >
+              {{ gettext('no record can be found') }}
+            </div>
+          </div>
+        </div>
+        <template #foot>
+          <q-btn
+            v-close-popup
+            no-caps
+            outline
+            size="12px"
+            class="u-button"
+            :label="gettext('Close')"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
+    <q-dialog
+      v-model="notesVisible"
+      persistent
+    >
+      <UWindow
+        :title="gettext('Notes')"
+        width="600px"
+        :loading="loading"
+      >
+        <q-form
+          class="u-border q-ma-sm q-pa-md u-dense"
+          @submit.prevent="saveNotes"
+        >
           <q-input
             v-model="notes"
             dense
@@ -1077,22 +1445,27 @@ watch(
             :label="gettext('Notes')"
           />
         </q-form>
-        <template #foot
-          ><q-btn
+        <template #foot>
+          <q-btn
             v-close-popup
             no-caps
             outline
             size="12px"
             class="u-button"
-            :label="gettext('Cancel')" /><q-btn
+            :label="gettext('Cancel')"
+          />
+          <q-btn
             no-caps
             flat
             size="12px"
             class="bg-primary text-grey-1 u-button"
             :label="gettext('Save')"
             :loading="loading"
-            @click="saveNotes" /></template></UWindow
-    ></q-dialog>
+            @click="saveNotes"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
   </div>
 </template>
 

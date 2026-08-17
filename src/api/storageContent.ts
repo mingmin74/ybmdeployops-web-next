@@ -25,13 +25,14 @@ export function getStorageContent(node: string, storage: string, content: string
   });
 }
 
-export function deleteStorageContent(node: string, storage: string, volid: string) {
+export function deleteStorageContent(node: string, storage: string, volid: string, delay?: number) {
   return request<string>(
     `/api2/extjs/nodes/${node}/storage/${storage}/content/${encodeURIComponent(volid)}`,
     {
       method: 'DELETE',
+      ...(delay === undefined ? {} : { params: { delay } }),
       notifyOnError: true,
-    },
+    }
   );
 }
 
@@ -39,7 +40,7 @@ export function updateStorageContent(
   node: string,
   storage: string,
   volid: string,
-  data: Record<string, unknown>,
+  data: Record<string, unknown>
 ) {
   return request(
     `/api2/extjs/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content/${encodeURIComponent(volid)}`,
@@ -47,7 +48,7 @@ export function updateStorageContent(
       method: 'PUT',
       data,
       notifyOnError: true,
-    },
+    }
   );
 }
 
@@ -83,49 +84,80 @@ export function queryOciRepositoryTags(node: string, reference: string) {
 }
 
 export function pullOciRegistryImage(node: string, storage: string, data: Record<string, unknown>) {
-  return request<string>(`/api2/extjs/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/oci-registry-pull`, {
-    method: 'POST',
-    data,
-    notifyOnError: true,
-  });
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/oci-registry-pull`,
+    {
+      method: 'POST',
+      data,
+      notifyOnError: true,
+    }
+  );
 }
 
 export function queryUrlMetadata(node: string, url: string, verifyCertificates: boolean) {
   return request<PveRecord>(`/api2/json/nodes/${encodeURIComponent(node)}/query-url-metadata`, {
-    method: 'GET', params: { url, 'verify-certificates': verifyCertificates ? 1 : 0 }, notifyOnError: true,
+    method: 'GET',
+    params: { url, 'verify-certificates': verifyCertificates ? 1 : 0 },
+    notifyOnError: true,
   });
 }
 
 export function downloadStorageUrl(node: string, storage: string, data: Record<string, unknown>) {
-  return request<string>(`/api2/extjs/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/download-url`, {
-    method: 'POST', data, notifyOnError: true,
-  });
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/download-url`,
+    {
+      method: 'POST',
+      data,
+      notifyOnError: true,
+    }
+  );
 }
 
 export function previewStorageBackupPrune(
   node: string,
   storage: string,
-  params: Record<string, unknown>,
+  params: Record<string, unknown>
 ) {
-  return request<PveRecord[]>(`/api2/json/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/prunebackups`, {
-    method: 'GET', params, notifyOnError: true,
-  });
+  return request<PveRecord[]>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/prunebackups`,
+    {
+      method: 'GET',
+      params,
+      notifyOnError: true,
+    }
+  );
 }
 
-export function pruneStorageBackups(
-  node: string,
-  storage: string,
-  data: Record<string, unknown>,
-) {
-  return request<string>(`/api2/extjs/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/prunebackups`, {
-    method: 'DELETE', data, notifyOnError: true,
-  });
+export function pruneStorageBackups(node: string, storage: string, data: Record<string, unknown>) {
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/prunebackups`,
+    {
+      method: 'DELETE',
+      data,
+      notifyOnError: true,
+    }
+  );
 }
 
 export function listStorageBackupFiles(storage: string, volume: string, filepath = '') {
-  return request<PveRecord[]>(`/api2/json/nodes/localhost/storage/${encodeURIComponent(storage)}/file-restore/list`, {
-    method: 'GET', params: { volume, filepath }, notifyOnError: true,
-  });
+  return request<PveRecord[]>(
+    `/api2/json/nodes/localhost/storage/${encodeURIComponent(storage)}/file-restore/list`,
+    {
+      method: 'GET',
+      params: { volume, filepath },
+      notifyOnError: true,
+    }
+  );
+}
+
+export function getStorageBackupFileDownloadUrl(
+  storage: string,
+  volume: string,
+  filepath: string,
+  archive = 'all'
+) {
+  const params = new URLSearchParams({ volume, filepath, archive });
+  return `/api2/json/nodes/localhost/storage/${encodeURIComponent(storage)}/file-restore/download?${params.toString()}`;
 }
 
 export function uploadStorageContent(
@@ -139,7 +171,7 @@ export function uploadStorageContent(
     checksumAlgorithm?: string;
     checksum?: string;
     onAbortReady?: (abort: () => void) => void;
-  } = {},
+  } = {}
 ) {
   const session = useSessionStore();
   const form = new FormData();
@@ -154,7 +186,7 @@ export function uploadStorageContent(
     const xhr = new XMLHttpRequest();
     xhr.open(
       'POST',
-      `/api2/json/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/upload`,
+      `/api2/json/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/upload`
     );
     xhr.withCredentials = true;
     if (session.csrfToken) xhr.setRequestHeader('CSRFPreventionToken', session.csrfToken);
