@@ -65,7 +65,7 @@ export function getTaskLog(node: string, upid: string, params: Record<string, un
       method: 'GET',
       params,
       notifyOnError: true,
-    },
+    }
   );
 }
 
@@ -101,7 +101,7 @@ export function getBackupIncludedVolumes(id: string) {
       method: 'GET',
       params: { _dc: Date.now() },
       notifyOnError: true,
-    },
+    }
   );
 }
 
@@ -189,6 +189,8 @@ export type ReplicationTask = PveRecord & {
   remove_job?: boolean | number;
 };
 
+export type ReplicationLogRecord = JournalRecord;
+
 export function getClusterReplicationTasks() {
   return request<ReplicationTask[]>('/api2/json/cluster/replication', {
     method: 'GET',
@@ -205,7 +207,7 @@ export function getReplicationTasks(node: string, guest?: string | number) {
 
   return request<ReplicationTask[]>(
     `/api2/json/nodes/${encodeURIComponent(node)}/replication`,
-    options,
+    options
   );
 }
 
@@ -234,13 +236,13 @@ export function removeReplicationTask(id: string) {
 export function runReplicationTask(node: string, id: string) {
   return request<string>(
     `/api2/extjs/nodes/${encodeURIComponent(node)}/replication/${encodeURIComponent(id)}/schedule_now`,
-    { method: 'POST' },
+    { method: 'POST' }
   );
 }
 
 export function getReplicationLogs(node: string, id: string) {
-  return request<JournalRecord[]>(
+  return request<ReplicationLogRecord[]>(
     `/api2/extjs/nodes/${encodeURIComponent(node)}/replication/${encodeURIComponent(id)}/log`,
-    { method: 'GET', params: { _dc: Date.now(), start: 0, limit: 510 }, notifyOnError: true },
+    { method: 'GET', params: { _dc: Date.now(), start: 0, limit: 510 }, notifyOnError: true }
   );
 }

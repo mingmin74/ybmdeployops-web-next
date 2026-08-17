@@ -4,9 +4,11 @@ import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue';
 import {
   createReplicationTask,
   getClusterReplicationTasks,
+  getReplicationLogs,
   getReplicationTasks,
   getReplicationTask,
   removeReplicationTask,
+  runReplicationTask,
   updateReplicationTask,
   type ReplicationTask,
 } from '@/api/maintenance';
@@ -38,9 +40,14 @@ const selected = ref<Row[]>([]);
 const formVisible = ref(false);
 const formLoading = ref(false);
 const formSaving = ref(false);
+const logVisible = ref(false);
+const logLoading = ref(false);
+const logLines = ref<string[]>([]);
+const scheduleNowLoading = ref(false);
 const action = ref<'add' | 'edit'>('add');
 const standalone = ref(false);
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
+let logRefreshTimer: ReturnType<typeof setInterval> | undefined;
 const form = reactive({
   id: '',
   guest: '',
@@ -58,13 +65,17 @@ const formErrors = reactive({
 });
 const selectedTask = computed(() => selected.value[0]);
 const isGuestScope = computed(() => Boolean(props.node && props.vmid !== undefined));
+const isNodeScope = computed(() => Boolean(props.node));
 const guestValid = computed(() => {
   const value = String(form.guest);
   return /^\d+$/.test(value) && Number(value) >= 100 && Number(value) <= 999999999;
 });
 const targetValid = computed(() =>
-  nodes.value.some((item) => item.node === form.target && item.status === 'online')
+  nodes.value.some(
+    (item) => item.node === form.target && item.status === 'online' && item.node !== props.node
+  )
 );
+const targetOptions = computed(() => nodes.value.filter((item) => item.node !== props.node));
 const rateValid = computed(
   () => !form.rate || (Number.isFinite(Number(form.rate)) && Number(form.rate) >= 1)
 );
@@ -74,6 +85,7 @@ const canManageReplication = computed(() =>
 const canOperate = computed(
   () => canManageReplication.value && Boolean(selectedTask.value) && !standalone.value
 );
+const canRunOnNode = computed(() => canOperate.value && Boolean(props.node));
 const filteredTasks = computed(() => {
   const key = filter.value.trim().toLowerCase();
   return tasks.value.filter(
@@ -115,11 +127,23 @@ const columns: QTableColumn<Row>[] = [
   { name: 'guest', label: gettext('Guest'), field: 'guest', align: 'left', sortable: true },
   { name: 'job', label: gettext('Job'), field: 'jobnum', align: 'left' },
   { name: 'target', label: gettext('Target'), field: 'target', align: 'left' },
+  { name: 'status', label: gettext('Status'), field: 'id', align: 'left' },
+  { name: 'lastSync', label: gettext('Last Sync'), field: 'last_sync', align: 'left' },
+  { name: 'duration', label: gettext('Duration'), field: 'duration', align: 'left' },
+  { name: 'nextSync', label: gettext('Next Sync'), field: 'next_sync', align: 'left' },
   { name: 'schedule', label: gettext('Schedule'), field: 'schedule', align: 'left' },
   { name: 'rate', label: gettext('Rate limit'), field: 'rateText', align: 'left' },
   { name: 'comment', label: gettext('Comment'), field: 'comment', align: 'left' },
 ];
-const visibleColumns = computed(() => ['enabled', 'guest', 'job', 'target', 'schedule', 'comment']);
+const visibleColumns = computed(() => [
+  'enabled',
+  'guest',
+  'job',
+  'target',
+  ...(isNodeScope.value ? ['status', 'lastSync', 'duration', 'nextSync'] : []),
+  'schedule',
+  'comment',
+]);
 function row(task: ReplicationTask): Row {
   return {
     ...task,
@@ -133,6 +157,34 @@ function rowClick(_: Event, value: Row) {
 function rowDblClick(_: Event, value: Row) {
   selected.value = [value];
   openForm('edit');
+}
+function formatTimestamp(value?: number) {
+  return value ? new Date(value * 1000).toLocaleString() : '-';
+}
+function formatDuration(value?: number) {
+  if (!value) return '-';
+  const seconds = Math.max(0, Math.floor(value));
+  const parts = [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60), seconds % 60];
+  return parts[0] ? `${parts[0]}h ${parts[1]}m ${parts[2]}s` : `${parts[1]}m ${parts[2]}s`;
+}
+function statusText(task: Row) {
+  if (task.pid) return gettext('syncing');
+  if (task.remove_job) return gettext('Removal Scheduled');
+  return task.error || gettext('OK');
+}
+function statusIcon(task: Row) {
+  if (task.pid) return 'sync';
+  if (task.remove_job) return 'block';
+  return task.error ? 'close' : 'check';
+}
+function statusColor(task: Row) {
+  if (task.pid) return 'primary';
+  if (task.remove_job) return 'warning';
+  return task.error ? 'negative' : 'positive';
+}
+function nextSyncText(task: Row) {
+  if (!task.next_sync) return '-';
+  return task.next_sync * 1000 < Date.now() ? gettext('pending') : formatTimestamp(task.next_sync);
 }
 function addScheduleOption(
   value: string,
@@ -149,7 +201,9 @@ function validateForm() {
   formErrors.target = !form.target
     ? gettext('Target is required')
     : action.value === 'add' && !targetValid.value
-      ? gettext('Target node seems to be offline')
+      ? form.target === props.node
+        ? gettext('Source and target must not be identical')
+        : gettext('Target node seems to be offline')
       : '';
   formErrors.rate = !rateValid.value ? gettext('Rate limit must be at least 1 MB/s') : '';
   return !formErrors.guest && !formErrors.target && !formErrors.rate;
@@ -167,16 +221,31 @@ async function reload() {
           Number(a.guest || 0) - Number(b.guest || 0) ||
           Number(a.jobnum || 0) - Number(b.jobnum || 0)
       );
-    selected.value = [];
+    const selectedId = selectedTask.value?.id;
+    selected.value = selectedId
+      ? tasks.value.filter((task) => task.id === selectedId).slice(0, 1)
+      : [];
+  } catch {
+    // Request errors are already surfaced by the API layer; avoid timer rejections.
   } finally {
     loading.value = false;
   }
 }
 async function loadInitial() {
-  const [nodeResponse, clusterStatusResponse] = await Promise.all([getNodes(), getClusterStatus()]);
-  nodes.value = nodeResponse.data || [];
-  standalone.value = !(clusterStatusResponse.data || []).some((item) => item.type === 'cluster');
-  await reload();
+  try {
+    const [nodeResponse, clusterStatusResponse] = await Promise.all([
+      getNodes(),
+      getClusterStatus(),
+    ]);
+    nodes.value = nodeResponse.data || [];
+    standalone.value = !(clusterStatusResponse.data || []).some((item) => item.type === 'cluster');
+    if (!standalone.value) {
+      await reload();
+      refreshTimer = setInterval(() => void reload(), 3000);
+    }
+  } catch {
+    // Request errors are already surfaced by the API layer.
+  }
 }
 function resetForm() {
   Object.assign(form, {
@@ -237,17 +306,27 @@ async function save() {
       .filter((task) => String(task.guest || '') === String(form.guest))
       .map((task) => Number(task.jobnum))
       .filter((value) => Number.isFinite(value));
+    const deleteFields =
+      action.value === 'edit'
+        ? [
+            !form.rate ? 'rate' : '',
+            !form.comment ? 'comment' : '',
+            form.schedule === '*/15' ? 'schedule' : '',
+            form.enabled ? 'disable' : '',
+          ].filter(Boolean)
+        : [];
     const data = {
       id: action.value === 'add' ? `${form.guest}-${Math.max(-1, ...jobNums) + 1}` : form.id,
       target: action.value === 'add' ? form.target : undefined,
       schedule:
-        action.value === 'add' && (!form.schedule || form.schedule === '*/15')
+        action.value === 'edit' && form.schedule === '*/15'
           ? undefined
-          : form.schedule,
-      rate: action.value === 'add' && !form.rate ? undefined : form.rate,
-      comment: action.value === 'add' && !form.comment ? undefined : form.comment,
+          : form.schedule || undefined,
+      rate: form.rate || undefined,
+      comment: form.comment || undefined,
       type: action.value === 'add' ? 'local' : undefined,
       disable: action.value === 'add' && form.enabled ? undefined : form.enabled ? 0 : 1,
+      ...(deleteFields.length ? { delete: deleteFields.join(',') } : {}),
       ...(action.value === 'edit' && form.digest ? { digest: form.digest } : {}),
     };
     if (action.value === 'add') await createReplicationTask(data);
@@ -257,6 +336,42 @@ async function save() {
     await reload();
   } finally {
     formSaving.value = false;
+  }
+}
+async function loadLog() {
+  const task = selectedTask.value;
+  if (!props.node || !task) return;
+  logLoading.value = true;
+  try {
+    const response = await getReplicationLogs(props.node, task.id);
+    logLines.value = (response.data || []).map((item) => String(item.t || ''));
+  } catch {
+    // Request errors are already surfaced by the API layer.
+  } finally {
+    logLoading.value = false;
+  }
+}
+function openLog() {
+  if (!canRunOnNode.value) return;
+  logVisible.value = true;
+  void loadLog();
+  if (logRefreshTimer) clearInterval(logRefreshTimer);
+  logRefreshTimer = setInterval(() => void loadLog(), 1000);
+}
+function closeLog() {
+  if (logRefreshTimer) clearInterval(logRefreshTimer);
+  logRefreshTimer = undefined;
+  void reload();
+}
+async function scheduleNow() {
+  const task = selectedTask.value;
+  if (!props.node || !task || !canRunOnNode.value) return;
+  scheduleNowLoading.value = true;
+  try {
+    await runReplicationTask(props.node, task.id);
+    await reload();
+  } finally {
+    scheduleNowLoading.value = false;
   }
 }
 function removeSelected() {
@@ -280,10 +395,10 @@ function removeSelected() {
 }
 onMounted(() => {
   void loadInitial();
-  refreshTimer = setInterval(() => void reload(), 3000);
 });
 onBeforeUnmount(() => {
   if (refreshTimer) clearInterval(refreshTimer);
+  if (logRefreshTimer) clearInterval(logRefreshTimer);
 });
 </script>
 
@@ -336,6 +451,29 @@ onBeforeUnmount(() => {
             :label="gettext('Remove')"
             @click="removeSelected"
           />
+          <q-btn
+            v-if="isNodeScope"
+            no-caps
+            outline
+            size="12px"
+            :color="canRunOnNode ? 'primary' : 'grey-6'"
+            class="u-button"
+            :disable="!canRunOnNode"
+            :label="gettext('Log')"
+            @click="openLog"
+          />
+          <q-btn
+            v-if="isNodeScope"
+            no-caps
+            outline
+            size="12px"
+            :color="canRunOnNode ? 'primary' : 'grey-6'"
+            class="u-button"
+            :disable="!canRunOnNode"
+            :loading="scheduleNowLoading"
+            :label="gettext('Schedule now')"
+            @click="scheduleNow"
+          />
         </div>
         <q-space />
         <q-input
@@ -355,6 +493,27 @@ onBeforeUnmount(() => {
             :class="props.value ? 'text-green' : 'text-red'"
           />
         </q-td>
+      </template>
+      <template #body-cell-status="cellProps">
+        <q-td :props="cellProps">
+          <q-icon
+            :name="statusIcon(cellProps.row)"
+            :color="statusColor(cellProps.row)"
+            class="q-mr-xs"
+          />
+          <span>{{ statusText(cellProps.row) }}</span>
+        </q-td>
+      </template>
+      <template #body-cell-lastSync="cellProps">
+        <q-td :props="cellProps">
+          {{ cellProps.row.pid ? gettext('syncing') : formatTimestamp(cellProps.row.last_sync) }}
+        </q-td>
+      </template>
+      <template #body-cell-duration="cellProps">
+        <q-td :props="cellProps">{{ formatDuration(cellProps.row.duration) }}</q-td>
+      </template>
+      <template #body-cell-nextSync="cellProps">
+        <q-td :props="cellProps">{{ nextSyncText(cellProps.row) }}</q-td>
       </template>
     </q-table>
     <q-inner-loading
@@ -427,7 +586,7 @@ onBeforeUnmount(() => {
               map-options
               option-value="node"
               option-label="node"
-              :options="nodes"
+              :options="targetOptions"
               :label="requiredLabel(gettext('Target'))"
               :error="Boolean(formErrors.target)"
               :error-message="formErrors.target"
@@ -519,6 +678,44 @@ onBeforeUnmount(() => {
       </template>
     </UWindow>
   </q-dialog>
+  <q-dialog
+    v-model="logVisible"
+    persistent
+    transition-show="scale"
+    transition-hide="scale"
+    @hide="closeLog"
+  >
+    <UWindow
+      :title="gettext('Replication Log')"
+      width="800px"
+      :loading="logLoading"
+    >
+      <q-scroll-area class="replication-log">
+        <p
+          v-for="(line, index) in logLines"
+          :key="index"
+          class="replication-log__line"
+        >
+          {{ line }}
+        </p>
+        <p
+          v-if="!logLines.length"
+          class="replication-log__line"
+        >
+          {{ gettext('No logs found') }}
+        </p>
+      </q-scroll-area>
+      <template #foot>
+        <q-btn
+          v-close-popup
+          no-caps
+          flat
+          size="12px"
+          :label="gettext('Close')"
+        />
+      </template>
+    </UWindow>
+  </q-dialog>
 </template>
 <style scoped>
 .replication-tasks-panel {
@@ -540,5 +737,19 @@ onBeforeUnmount(() => {
   border: 1px solid #cbd5e1;
   border-radius: 3px;
   box-shadow: 0 4px 12px rgba(51, 65, 85, 0.14);
+}
+.replication-log {
+  height: 350px;
+  background: #f7f9fc;
+  color: #4b5563;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.replication-log__line {
+  border-bottom: 1px solid #edf0f4;
+  margin: 0;
+  padding: 4px 14px;
+  white-space: pre-wrap;
 }
 </style>
