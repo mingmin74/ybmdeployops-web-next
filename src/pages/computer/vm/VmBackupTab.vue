@@ -232,7 +232,7 @@ const displayedRows = computed(() => {
 });
 const restoreValid = computed(() => {
   const name = restoreForm.name.trim();
-  const validName = !name || /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(name);
+  const validName = !name || isDnsName(name);
   const validInteger = (value: string, min: number, max: number) =>
     !value || (Number.isInteger(Number(value)) && Number(value) >= min && Number(value) <= max);
   const validBandwidth =
@@ -242,7 +242,7 @@ const restoreValid = computed(() => {
     validName &&
     validInteger(restoreForm.cores, 1, 128) &&
     validInteger(restoreForm.sockets, 1, 4) &&
-    validInteger(restoreForm.memory, 1, 1048576) &&
+    validInteger(restoreForm.memory, 32, 4178944) &&
     validBandwidth &&
     (!restoreTargetRequired.value || Boolean(restoreForm.storage))
   );
@@ -273,6 +273,12 @@ const pruneKeepRows = computed(() =>
 function formatTime(value: unknown) {
   const seconds = Number(value);
   return Number.isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000).toLocaleString() : '-';
+}
+
+function isDnsName(value: string) {
+  return /^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*$/.test(
+    value
+  );
 }
 
 function formatEncryption(value: unknown) {
@@ -569,7 +575,7 @@ async function executeRestore() {
       ...(restoreForm.haManaged ? { 'ha-managed': 1 } : {}),
     };
     if (restoreForm.storage) data.storage = restoreForm.storage;
-    if (restoreForm.bwlimit) data.bwlimit = Number(restoreForm.bwlimit);
+    if (restoreForm.bwlimit) data.bwlimit = Number(restoreForm.bwlimit) * 1024;
     if (restoreForm.name.trim()) data.name = restoreForm.name.trim();
     if (restoreForm.cores) data.cores = Number(restoreForm.cores);
     if (restoreForm.memory) data.memory = Number(restoreForm.memory);
@@ -1131,9 +1137,7 @@ watch(listStorage, () => {
                 :label="gettext('Name')"
                 :rules="[
                   (value: unknown) =>
-                    !value ||
-                    /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(String(value)) ||
-                    gettext('Invalid DNS name'),
+                    !value || isDnsName(String(value)) || gettext('Invalid DNS name'),
                 ]"
               />
             </div>
@@ -1215,8 +1219,8 @@ watch(listStorage, () => {
                   (value) =>
                     !value ||
                     (Number.isInteger(Number(value)) &&
-                      Number(value) >= 1 &&
-                      Number(value) <= 1048576) ||
+                      Number(value) >= 32 &&
+                      Number(value) <= 4178944) ||
                     gettext('Invalid memory value'),
                 ]"
               />
@@ -1227,7 +1231,7 @@ watch(listStorage, () => {
                 dense
                 type="number"
                 class="q-field--with-bottom"
-                :label="gettext('Bandwidth Limit (KiB/s)')"
+                :label="gettext('Bandwidth Limit (MiB/s)')"
                 :rules="[
                   (value) =>
                     !value ||
