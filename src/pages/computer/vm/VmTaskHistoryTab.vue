@@ -192,31 +192,119 @@ function formatTime(value: unknown) {
   return Number.isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000).toLocaleString() : '-';
 }
 
+type TaskDescription = [string, string];
+
+const taskDescriptions: Record<string, TaskDescription> = {
+  acmedeactivate: ['ACME Account', gettext('Deactivate')],
+  acmenewcert: ['SRV', gettext('Order Certificate')],
+  acmerefresh: ['ACME Account', gettext('Refresh')],
+  acmeregister: ['ACME Account', gettext('Register')],
+  acmerenew: ['SRV', gettext('Renew Certificate')],
+  acmerevoke: ['SRV', gettext('Revoke Certificate')],
+  acmeupdate: ['ACME Account', gettext('Update')],
+  'auth-realm-sync': [gettext('Realm'), gettext('Sync')],
+  'auth-realm-sync-test': [gettext('Realm'), gettext('Sync Preview')],
+  'bulk-migrate': ['', gettext('Bulk migrate VMs and Containers')],
+  'bulk-shutdown': ['', gettext('Bulk shutdown VMs and Containers')],
+  'bulk-start': ['', gettext('Bulk start VMs and Containers')],
+  'bulk-suspend': ['', gettext('Bulk shutdown VMs and Containers')],
+  cephcreatemds: ['Ceph Metadata Server', gettext('Create')],
+  cephcreatemgr: ['Ceph Manager', gettext('Create')],
+  cephcreatemon: ['Ceph Monitor', gettext('Create')],
+  cephcreateosd: ['Ceph OSD', gettext('Create')],
+  cephcreatepool: ['Ceph Pool', gettext('Create')],
+  cephdestroymds: ['Ceph Metadata Server', gettext('Destroy')],
+  cephdestroymgr: ['Ceph Manager', gettext('Destroy')],
+  cephdestroymon: ['Ceph Monitor', gettext('Destroy')],
+  cephdestroyosd: ['Ceph OSD', gettext('Destroy')],
+  cephdestroyfs: ['CephFS', gettext('Destroy')],
+  cephdestroypool: ['Ceph Pool', gettext('Destroy')],
+  cephfscreate: ['CephFS', gettext('Create')],
+  cephsetflags: ['', gettext('Change global Ceph flags')],
+  cephsetpool: ['Ceph Pool', gettext('Edit')],
+  clustercreate: ['', gettext('Create Cluster')],
+  clusterjoin: ['', gettext('Join Cluster')],
+  dircreate: [gettext('Directory Storage'), gettext('Create')],
+  dirremove: [gettext('Directory'), gettext('Remove')],
+  download: [gettext('File'), gettext('Download')],
+  hamigrate: ['HA', gettext('Migrate')],
+  hashutdown: ['HA', gettext('Shutdown')],
+  hastart: ['HA', gettext('Start')],
+  hastop: ['HA', gettext('Stop')],
+  imgcopy: ['', gettext('Copy data')],
+  imgdel: ['', gettext('Erase data')],
+  lvmcreate: [gettext('LVM Storage'), gettext('Create')],
+  lvmremove: ['Volume Group', gettext('Remove')],
+  lvmthincreate: ['LVM-Thin Storage', gettext('Create')],
+  lvmthinremove: ['Thinpool', gettext('Remove')],
+  migrateall: ['', gettext('Bulk migrate VMs and Containers')],
+  move_volume: ['CT', gettext('Move Volume')],
+  'pbs-download': ['VM/CT', gettext('File Restore Download')],
+  pull_file: ['CT', gettext('Pull file')],
+  push_file: ['CT', gettext('Push file')],
+  qmclone: ['VM', gettext('Clone')],
+  qmconfig: ['VM', gettext('Configure')],
+  qmcreate: ['VM', gettext('Create')],
+  qmdelsnapshot: ['VM', gettext('Delete Snapshot')],
+  qmdestroy: ['VM', gettext('Destroy')],
+  qmigrate: ['VM', gettext('Migrate')],
+  qmmove: ['VM', gettext('Move disk')],
+  qmpause: ['VM', gettext('Pause')],
+  qmreboot: ['VM', gettext('Reboot')],
+  qmreset: ['VM', gettext('Reset')],
+  qmrestore: ['VM', gettext('Restore')],
+  qmresume: ['VM', gettext('Resume')],
+  qmrollback: ['VM', gettext('Rollback')],
+  qmshutdown: ['VM', gettext('Shutdown')],
+  qmsnapshot: ['VM', gettext('Snapshot')],
+  qmstart: ['VM', gettext('Start')],
+  qmstop: ['VM', gettext('Stop')],
+  qmsuspend: ['VM', gettext('Hibernate')],
+  qmtemplate: ['VM', gettext('Convert to template')],
+  reloadnetworkall: ['', gettext('Reload network configuration on all nodes')],
+  resize: ['VM/CT', gettext('Resize')],
+  spiceproxy: ['VM/CT', `${gettext('Console')} (Spice)`],
+  spiceshell: ['', `${gettext('Shell')} (Spice)`],
+  startall: ['', gettext('Bulk start VMs and Containers')],
+  stopall: ['', gettext('Bulk shutdown VMs and Containers')],
+  suspendall: ['', gettext('Suspend all VMs')],
+  unknownimgdel: ['', gettext('Destroy image from unknown guest')],
+  vncproxy: ['VM/CT', gettext('Console')],
+  vncshell: ['', gettext('Shell')],
+  vzclone: ['CT', gettext('Clone')],
+  vzcreate: ['CT', gettext('Create')],
+  vzdelsnapshot: ['CT', gettext('Delete Snapshot')],
+  vzdestroy: ['CT', gettext('Destroy')],
+  vzmigrate: ['CT', gettext('Migrate')],
+  vzmount: ['CT', gettext('Mount')],
+  vzreboot: ['CT', gettext('Reboot')],
+  vzrestore: ['CT', gettext('Restore')],
+  vzresume: ['CT', gettext('Resume')],
+  vzrollback: ['CT', gettext('Rollback')],
+  vzshutdown: ['CT', gettext('Shutdown')],
+  vzsnapshot: ['CT', gettext('Snapshot')],
+  vzstart: ['CT', gettext('Start')],
+  vzstop: ['CT', gettext('Stop')],
+  vzsuspend: ['CT', gettext('Suspend')],
+  vztemplate: ['CT', gettext('Convert to template')],
+  vzumount: ['CT', gettext('Unmount')],
+  wipedisk: ['Device', gettext('Wipe Disk')],
+  zfscreate: [gettext('ZFS Storage'), gettext('Create')],
+  zfsremove: ['ZFS Pool', gettext('Remove')],
+};
+
+function formatTaskDescription(type?: string, id?: string) {
+  if (type === 'vzdump') return id ? `VM/CT ${id} - ${gettext('Backup')}` : gettext('Backup Job');
+  const description = taskDescriptions[type || ''];
+  if (description) {
+    const [subject, action] = description;
+    return subject ? `${subject}${id ? ` ${id}` : ''} - ${action}` : action;
+  }
+  return [type, id].filter(Boolean).join(' ') || '-';
+}
+
 function taskDescription(row: VmTask) {
-  const taskDescriptions: Record<string, [string, string]> = {
-    qmclone: ['VM', gettext('Clone')],
-    qmconfig: ['VM', gettext('Configure')],
-    qmcreate: ['VM', gettext('Create')],
-    qmdelsnapshot: ['VM', gettext('Delete Snapshot')],
-    qmdestroy: ['VM', gettext('Destroy')],
-    qmigrate: ['VM', gettext('Migrate')],
-    qmmove: ['VM', gettext('Move disk')],
-    qmpause: ['VM', gettext('Pause')],
-    qmreboot: ['VM', gettext('Reboot')],
-    qmreset: ['VM', gettext('Reset')],
-    qmrestore: ['VM', gettext('Restore')],
-    qmresume: ['VM', gettext('Resume')],
-    qmrollback: ['VM', gettext('Rollback')],
-    qmshutdown: ['VM', gettext('Shutdown')],
-    qmsnapshot: ['VM', gettext('Snapshot')],
-    qmstart: ['VM', gettext('Start')],
-    qmstop: ['VM', gettext('Stop')],
-    qmsuspend: ['VM', gettext('Suspend')],
-    qmtemplate: ['VM', gettext('Convert to template')],
-  };
-  const description = taskDescriptions[row.type || ''];
-  if (description) return `${description[0]}${row.id ? ` ${row.id}` : ''} - ${description[1]}`;
-  return [row.type, row.id].filter(Boolean).join(' ') || '-';
+  return formatTaskDescription(row.type, row.id);
 }
 
 function formatDuration(starttime?: number, endtime?: number) {
