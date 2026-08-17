@@ -41,7 +41,7 @@ const createVisible = shallowRef(false);
 const actionVisible = shallowRef(false);
 const editVisible = shallowRef(false);
 const action = shallowRef<'rollback' | 'delete'>('rollback');
-const selectedName = shallowRef('');
+const selectedId = shallowRef('');
 const snapshots = shallowRef<PveRecord[]>([]);
 const snapshotFeature = shallowRef(false);
 const autoReloadTimer = shallowRef<number>();
@@ -59,16 +59,14 @@ const canTakeSnapshot = computed(() => canSnapshot.value && snapshotFeature.valu
 const canRollbackPermission = computed(() => Boolean(vmCaps.value['VM.Snapshot.Rollback']));
 
 const selected = computed(() =>
-  treeRows.value
-    .flatMap((row) => flatten(row))
-    .find((row) => row.displayName === selectedName.value)
+  treeRows.value.flatMap((row) => flatten(row)).find((row) => row.id === selectedId.value)
 );
 const selectedIsSnapshot = computed(() => Boolean(selected.value && !selected.value.isCurrent));
 const canRollback = computed(() => canRollbackPermission.value && selectedIsSnapshot.value);
 const canRemove = computed(() => canSnapshot.value && selectedIsSnapshot.value);
 const canEditView = computed(() => selectedIsSnapshot.value);
 const editButtonText = computed(() => (canSnapshot.value ? gettext('Edit') : gettext('View')));
-const selectedSnapshotName = computed(() => selected.value?.displayName || '');
+const selectedSnapshotName = computed(() => selected.value?.id || '');
 
 const treeRows = computed(() => {
   const map = new Map<string, SnapshotRow>();
@@ -197,7 +195,7 @@ function isAgentEnabled(value: unknown) {
 }
 
 function selectRow(row: VisibleSnapshotRow) {
-  selectedName.value = row.displayName;
+  selectedId.value = row.id;
 }
 
 async function loadFeature() {
@@ -225,8 +223,8 @@ async function reload() {
     snapshots.value = snapshotResponse.data || [];
 
     const firstRow = visibleRows.value[0];
-    if (!selectedName.value && firstRow) {
-      selectedName.value = firstRow.displayName;
+    if (!selectedId.value && firstRow) {
+      selectedId.value = firstRow.id;
     }
   } finally {
     loading.value = false;
@@ -360,7 +358,7 @@ function startAutoReload() {
 watch(
   () => [props.node, props.vmid],
   () => {
-    selectedName.value = '';
+    selectedId.value = '';
     void reload();
   },
   { immediate: true }
@@ -448,7 +446,7 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
         :key="row.id"
         class="snapshot-tree-row snapshot-tree-body-row cursor-pointer"
         :class="{
-          'is-selected': selectedName === row.displayName,
+          'is-selected': selectedId === row.id,
           'is-current': row.isCurrent,
           'snapshot-tree-row--without-ram': !isQemu,
         }"
