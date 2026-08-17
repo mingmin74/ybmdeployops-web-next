@@ -14,7 +14,7 @@ import Sortable from 'sortablejs';
 import { getVmPendingConfig, revertVmConfig, updateVmConfig } from '@/api/overview';
 import { getNodeStorage } from '@/api/storageContent';
 import SelectTable from '@/components/SelectTable.vue';
-import { getNodes, type PveRecord } from '@/api/resources';
+import { getClusterResources, type PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
@@ -731,9 +731,8 @@ async function loadVmStateStorages() {
 }
 
 async function loadNodeArchitecture() {
-  const response = await getNodes();
-  const node = response.data?.find((item) => textValue(item.node) === props.node) as
-    PveRecord | undefined;
+  const response = await getClusterResources({ type: 'node' });
+  const node = response.data?.find((item) => textValue(item.node) === props.node);
   hostArchitecture.value = textValue(node?.['host-arch']);
 }
 
