@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, shallowRef, useTemplateRef, watch } from 'vue';
+import { computed, onBeforeUnmount, reactive, shallowRef, useTemplateRef, watch } from 'vue';
 import { Dialog, Notify } from 'quasar';
 import { getVmConfig, getVmPendingConfig, updateVmConfig } from '@/api/overview';
 import { regenerateVmCloudInitImage } from '@/api/vm';
@@ -25,6 +25,8 @@ function optionIcon(key: string) {
 const loading = shallowRef(false);
 const pendingLoading = shallowRef(false);
 const pendingRows = shallowRef<PveRecord[]>([]);
+const PENDING_UPDATE_INTERVAL = 3000;
+let pendingUpdateTimer: number | undefined;
 
 const form = reactive({
   ciuser: '',
@@ -72,8 +74,8 @@ const IPV6ADDR = `(?:${IPV6ADDR_FULL}|${IPV6ADDR_COMP}|${IPV6ADDR_V4MAPPED})`;
 
 const IPV4_RE = new RegExp(`^${IPV4ADDR}$`);
 const IPV6_RE = new RegExp(`^${IPV6ADDR}$`);
-const IPV4CIDR_RE = new RegExp(`^${IPV4ADDR}\\/(?:3[0-2]|[12]?[0-9])$`);
-const IPV6CIDR_RE = new RegExp(`^${IPV6ADDR}\\/(?:12[0-8]|(?:1[01]|[1-9])?[0-9])$`);
+const IPV4CIDR_RE = new RegExp(`^${IPV4ADDR}\\/(?:3[0-2]|[12][0-9]|[89])$`);
+const IPV6CIDR_RE = new RegExp(`^${IPV6ADDR}\\/(?:12[0-8]|(?:1[01]|[2-9])[0-9]|[89])$`);
 
 function isIpv4Address(value: string): boolean {
   return IPV4_RE.test(value);
@@ -100,10 +102,7 @@ function verifyIp64AddressWithSuffix(value: string): boolean {
   if (parts.length > 2) return false;
   const address = parts[0] || '';
   if (parts.length > 1) {
-    const suffix = parts[1] || '';
-    const addr = address.toLowerCase();
-    if (!addr.startsWith('fe80:')) return false;
-    if (!/^[A-Za-z0-9_.~-]+$/.test(suffix)) return false;
+    if (!address.startsWith('fe80:')) return false;
   }
   return verifyIp64Address(address);
 }
@@ -216,9 +215,6 @@ function printIpConfig(parsed: ParsedIpConfig): string {
   switch (parsed.ipv4Mode) {
     case 'dhcp':
       segments.push('ip=dhcp');
-      if (parsed.ipv4Gateway && isIpv4Address(parsed.ipv4Gateway)) {
-        segments.push(`gw=${parsed.ipv4Gateway}`);
-      }
       break;
     case 'static':
       if (parsed.ipv4Cidr && isIpv4Cidr(parsed.ipv4Cidr)) {
@@ -232,15 +228,9 @@ function printIpConfig(parsed: ParsedIpConfig): string {
   switch (parsed.ipv6Mode) {
     case 'dhcp':
       segments.push('ip6=dhcp');
-      if (parsed.ipv6Gateway && isIpv6Address(parsed.ipv6Gateway)) {
-        segments.push(`gw6=${parsed.ipv6Gateway}`);
-      }
       break;
     case 'auto':
       segments.push('ip6=auto');
-      if (parsed.ipv6Gateway && isIpv6Address(parsed.ipv6Gateway)) {
-        segments.push(`gw6=${parsed.ipv6Gateway}`);
-      }
       break;
     case 'static':
       if (parsed.ipv6Cidr && isIpv6Cidr(parsed.ipv6Cidr)) {
@@ -351,24 +341,24 @@ function hasPendingChange(key: string): boolean {
   return nextValue !== textValue(props.config[key]);
 }
 
-function pendingDisplayValue(key: string): string {
+function isPendingDelete(key: string): boolean {
+  return Boolean(pendingByKey.value[key]?.delete);
+}
+
+function currentConfig(key: string): string {
+  return textValue(props.config[key]);
+}
+
+function currentConfigHas(key: string): boolean {
+  const current = props.config[key];
+  return current !== undefined && current !== null && current !== '';
+}
+
+function pendingConfig(key: string): string {
   const pending = pendingByKey.value[key];
   if (!pending) return '';
-  if (pending.delete) return gettext('Deleted');
-  return textValue(pending.pending);
-}
-
-function resolvedConfig(key: string): string {
-  const pending = pendingByKey.value[key];
-  if (!pending) return textValue(props.config[key]);
   if (pending.delete) return '';
   return textValue(pending.pending);
-}
-
-function resolvedConfigHas(key: string): boolean {
-  const pending = pendingByKey.value[key];
-  if (pending) return !pending.delete;
-  return props.config[key] !== undefined && props.config[key] !== null && props.config[key] !== '';
 }
 
 const networkIndexes = computed(() => {
@@ -450,19 +440,29 @@ const canSave = computed(
 const selectedOption = shallowRef('ciuser');
 
 function rowDisplayValue(key: string): string {
-  const resolved = resolvedConfig(key);
-  if (!resolved) return '-';
-  return resolved;
+  const current = currentConfig(key);
+  return current || '-';
 }
 
 function rowHasPassword(): boolean {
-  const pending = pendingByKey.value.cipassword;
-  if (pending) return !pending.delete;
   return (
     props.config.cipassword !== undefined &&
     props.config.cipassword !== null &&
     props.config.cipassword !== ''
   );
+}
+
+function rowPendingValueDisplay(key: string): string {
+  const pending = pendingByKey.value[key];
+  if (!pending) return '';
+  if (key === 'cipassword') {
+    if (pending.delete) return gettext('Deleted');
+    return '********';
+  }
+  if (pending.delete) return gettext('Deleted');
+  if (key === 'ciupgrade')
+    return textValue(pending.pending) === '0' ? gettext('No') : gettext('Yes');
+  return textValue(pending.pending);
 }
 
 const cloudInitRows = computed(() => [
@@ -471,31 +471,35 @@ const cloudInitRows = computed(() => [
     label: gettext('User'),
     value: rowDisplayValue('ciuser'),
     pending: hasPendingChange('ciuser'),
-    pendingValue: pendingDisplayValue('ciuser'),
+    pendingDelete: isPendingDelete('ciuser'),
+    pendingValue: rowPendingValueDisplay('ciuser'),
   },
   {
     key: 'cipassword',
     label: gettext('Password'),
     value: rowHasPassword() ? '********' : '-',
     pending: hasPendingChange('cipassword'),
-    pendingValue: pendingDisplayValue('cipassword') ? '********' : gettext('Deleted'),
+    pendingDelete: isPendingDelete('cipassword'),
+    pendingValue: rowPendingValueDisplay('cipassword'),
   },
   {
     key: 'sshkeys',
     label: gettext('SSH public key'),
     value: '',
     pending: hasPendingChange('sshkeys'),
-    pendingValue: pendingDisplayValue('sshkeys'),
+    pendingDelete: isPendingDelete('sshkeys'),
+    pendingValue: rowPendingValueDisplay('sshkeys'),
   },
   ...networkIndexes.value.map((index) => {
     const key = `ipconfig${index}`;
-    const resolved = resolvedConfig(key);
+    const current = currentConfig(key);
     return {
       key,
       label: `${gettext('IP Config')} (net${index})`,
-      value: resolved || '-',
+      value: current || '-',
       pending: hasPendingChange(key),
-      pendingValue: pendingDisplayValue(key),
+      pendingDelete: isPendingDelete(key),
+      pendingValue: rowPendingValueDisplay(key),
     };
   }),
   {
@@ -503,26 +507,24 @@ const cloudInitRows = computed(() => [
     label: gettext('DNS Server'),
     value: rowDisplayValue('nameserver'),
     pending: hasPendingChange('nameserver'),
-    pendingValue: pendingDisplayValue('nameserver'),
+    pendingDelete: isPendingDelete('nameserver'),
+    pendingValue: rowPendingValueDisplay('nameserver'),
   },
   {
     key: 'searchdomain',
     label: gettext('DNS Search Domain'),
     value: rowDisplayValue('searchdomain'),
     pending: hasPendingChange('searchdomain'),
-    pendingValue: pendingDisplayValue('searchdomain'),
+    pendingDelete: isPendingDelete('searchdomain'),
+    pendingValue: rowPendingValueDisplay('searchdomain'),
   },
   {
     key: 'ciupgrade',
     label: gettext('Upgrade packages'),
-    value:
-      (pendingByKey.value.ciupgrade && !pendingByKey.value.ciupgrade.delete
-        ? textValue(pendingByKey.value.ciupgrade.pending)
-        : textValue(props.config.ciupgrade)) === '0'
-        ? gettext('No')
-        : gettext('Yes'),
+    value: textValue(props.config.ciupgrade) === '0' ? gettext('No') : gettext('Yes'),
     pending: hasPendingChange('ciupgrade'),
-    pendingValue: pendingDisplayValue('ciupgrade') === '0' ? gettext('No') : gettext('Yes'),
+    pendingDelete: isPendingDelete('ciupgrade'),
+    pendingValue: rowPendingValueDisplay('ciupgrade'),
   },
 ]);
 
@@ -554,31 +556,33 @@ function syncFromConfig() {
     props.config.cipassword !== undefined &&
     props.config.cipassword !== null &&
     props.config.cipassword !== '';
-  const pending = pendingByKey.value.cipassword;
-  const effectiveHasPassword = pending ? !pending.delete : hasPassword;
+  const pendingCiupgrade = pendingByKey.value.ciupgrade;
+  const ciupgradeCurrent =
+    pendingCiupgrade && !pendingCiupgrade.delete
+      ? textValue(pendingCiupgrade.pending)
+      : textValue(props.config.ciupgrade);
+  const sshKeyCurrent = decodeSshKeys(currentConfigHas('sshkeys') ? props.config.sshkeys : '');
+  const sshKeyEffective = isPendingDelete('sshkeys')
+    ? ''
+    : pendingByKey.value.sshkeys && !pendingByKey.value.sshkeys.delete
+      ? decodeSshKeys(pendingByKey.value.sshkeys.pending)
+      : sshKeyCurrent;
 
   const next = {
-    ciuser: resolvedConfig('ciuser'),
-    sshkeys: decodeSshKeys(
-      resolvedConfigHas('sshkeys')
-        ? pendingByKey.value.sshkeys && !pendingByKey.value.sshkeys.delete
-          ? pendingByKey.value.sshkeys.pending
-          : props.config.sshkeys
-        : ''
-    ),
-    nameserver: resolvedConfig('nameserver'),
-    searchdomain: resolvedConfig('searchdomain'),
-    ciupgrade:
-      (pendingByKey.value.ciupgrade && !pendingByKey.value.ciupgrade.delete
-        ? textValue(pendingByKey.value.ciupgrade.pending)
-        : textValue(props.config.ciupgrade)) === '0'
-        ? false
-        : true,
+    ciuser: isPendingDelete('ciuser') ? '' : pendingConfig('ciuser') || currentConfig('ciuser'),
+    sshkeys: sshKeyEffective,
+    nameserver: isPendingDelete('nameserver')
+      ? ''
+      : pendingConfig('nameserver') || currentConfig('nameserver'),
+    searchdomain: isPendingDelete('searchdomain')
+      ? ''
+      : pendingConfig('searchdomain') || currentConfig('searchdomain'),
+    ciupgrade: ciupgradeCurrent === '0' ? false : true,
   };
 
   form.ciuser = next.ciuser;
   form.cipassword = '';
-  form.cipasswordHasValue = effectiveHasPassword;
+  form.cipasswordHasValue = isPendingDelete('cipassword') ? false : hasPassword;
   form.sshkeys = next.sshkeys;
   form.nameserver = next.nameserver;
   form.searchdomain = next.searchdomain;
@@ -586,7 +590,7 @@ function syncFromConfig() {
 
   original.value = {
     ciuser: next.ciuser,
-    cipassword: effectiveHasPassword,
+    cipassword: isPendingDelete('cipassword') ? false : hasPassword,
     sshkeys: next.sshkeys,
     nameserver: next.nameserver,
     searchdomain: next.searchdomain,
@@ -596,7 +600,7 @@ function syncFromConfig() {
   const nextIpconfigs: Record<string, string> = {};
   networkIndexes.value.forEach((index) => {
     const key = `ipconfig${index}`;
-    nextIpconfigs[key] = resolvedConfig(key);
+    nextIpconfigs[key] = isPendingDelete(key) ? '' : pendingConfig(key) || currentConfig(key);
   });
 
   Object.keys(ipconfigs).forEach((key) => delete ipconfigs[key]);
@@ -621,6 +625,22 @@ async function loadPending() {
     pendingLoading.value = false;
   }
 }
+
+function startPendingUpdates() {
+  stopPendingUpdates();
+  pendingUpdateTimer = window.setInterval(() => {
+    void loadPending();
+  }, PENDING_UPDATE_INTERVAL);
+}
+
+function stopPendingUpdates() {
+  if (pendingUpdateTimer !== undefined) {
+    window.clearInterval(pendingUpdateTimer);
+    pendingUpdateTimer = undefined;
+  }
+}
+
+onBeforeUnmount(() => stopPendingUpdates());
 
 async function removeSelected() {
   if (!canRemoveSelected.value) return;
@@ -756,6 +776,7 @@ watch(
   () => [props.node, props.vmid, textValue(props.config.digest)],
   () => {
     void loadPending();
+    startPendingUpdates();
   },
   { immediate: true }
 );
@@ -965,9 +986,7 @@ watch(
                 />
               </div>
               <template v-if="activeIpConfig">
-                <div
-                  class="col-12"
-                >
+                <div class="col-12">
                   <div class="row q-col-gutter-lg q-gutter-y-sm">
                     <div class="col-12 col-md-6">
                       <div class="q-mb-sm text-grey-10 text-sm font-semibold">
@@ -994,19 +1013,14 @@ watch(
                         ]"
                       />
                       <q-input
-                        v-if="
-                          activeIpConfig.ipv4Mode === 'static' ||
-                          activeIpConfig.ipv4Mode === 'dhcp'
-                        "
+                        v-if="activeIpConfig.ipv4Mode === 'static'"
                         v-model="activeIpConfig.ipv4Gateway"
                         dense
                         class="q-mt-sm"
                         :label="gettext('Gateway IPv4')"
                         :rules="[
                           (value) =>
-                            !value ||
-                            isIpv4Address(value) ||
-                            gettext('Enter a valid IPv4 gateway'),
+                            !value || isIpv4Address(value) || gettext('Enter a valid IPv4 gateway'),
                         ]"
                       />
                     </div>
@@ -1035,20 +1049,14 @@ watch(
                         ]"
                       />
                       <q-input
-                        v-if="
-                          activeIpConfig.ipv6Mode === 'static' ||
-                          activeIpConfig.ipv6Mode === 'dhcp' ||
-                          activeIpConfig.ipv6Mode === 'auto'
-                        "
+                        v-if="activeIpConfig.ipv6Mode === 'static'"
                         v-model="activeIpConfig.ipv6Gateway"
                         dense
                         class="q-mt-sm"
                         :label="gettext('Gateway IPv6')"
                         :rules="[
                           (value) =>
-                            !value ||
-                            isIpv6Address(value) ||
-                            gettext('Enter a valid IPv6 gateway'),
+                            !value || isIpv6Address(value) || gettext('Enter a valid IPv6 gateway'),
                         ]"
                       />
                     </div>
