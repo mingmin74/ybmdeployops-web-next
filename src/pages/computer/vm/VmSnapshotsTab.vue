@@ -15,10 +15,11 @@ import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
+import { parsePropertyString } from '@/utils/pvePropertyString';
 
 const props = withDefaults(
   defineProps<{ node: string; vmid: string; running: boolean; guestType?: 'qemu' | 'lxc' }>(),
-  { guestType: 'qemu' },
+  { guestType: 'qemu' }
 );
 const emit = defineEmits<{ task: [node: string, upid: string, title: string] }>();
 const session = useSessionStore();
@@ -33,7 +34,6 @@ type SnapshotRow = PveRecord & {
 
 type VisibleSnapshotRow = SnapshotRow & {
   hasChildren: boolean;
-  expanded: boolean;
 };
 
 const loading = shallowRef(false);
@@ -44,7 +44,6 @@ const action = shallowRef<'rollback' | 'delete'>('rollback');
 const selectedName = shallowRef('');
 const snapshots = shallowRef<PveRecord[]>([]);
 const snapshotFeature = shallowRef(false);
-const expandedNames = shallowRef<Set<string>>(new Set());
 const autoReloadTimer = shallowRef<number>();
 const guestAgentEnabled = shallowRef(false);
 const editConfig = shallowRef<PveRecord>({});
@@ -53,7 +52,7 @@ const form = reactive({ snapname: '', description: '', vmstate: false });
 const editDescription = shallowRef('');
 
 const vmCaps = computed(
-  () => (session.caps as unknown as { vms?: Record<string, unknown> }).vms || {},
+  () => (session.caps as unknown as { vms?: Record<string, unknown> }).vms || {}
 );
 const canSnapshot = computed(() => Boolean(vmCaps.value['VM.Snapshot']));
 const canTakeSnapshot = computed(() => canSnapshot.value && snapshotFeature.value);
@@ -62,7 +61,7 @@ const canRollbackPermission = computed(() => Boolean(vmCaps.value['VM.Snapshot.R
 const selected = computed(() =>
   treeRows.value
     .flatMap((row) => flatten(row))
-    .find((row) => row.displayName === selectedName.value),
+    .find((row) => row.displayName === selectedName.value)
 );
 const selectedIsSnapshot = computed(() => Boolean(selected.value && !selected.value.isCurrent));
 const canRollback = computed(() => canRollbackPermission.value && selectedIsSnapshot.value);
@@ -76,8 +75,8 @@ const treeRows = computed(() => {
   const roots: SnapshotRow[] = [];
 
   snapshots.value.forEach((item, index) => {
-    const isCurrent = Boolean(item.current);
-    const name = isCurrent ? '__current__' : snapshotName(item) || `snapshot-${index}`;
+    const name = snapshotName(item) || `snapshot-${index}`;
+    const isCurrent = name === 'current';
 
     map.set(name, {
       ...item,
@@ -103,6 +102,7 @@ const treeRows = computed(() => {
   });
 
   roots.forEach((row) => assignLevels(row, 0));
+  sortSnapshotRows(roots);
   return roots;
 });
 
@@ -115,13 +115,13 @@ const visibleRows = computed(() => {
 
 const isQemu = computed(() => props.guestType === 'qemu');
 const warningVisible = computed(
-  () => isQemu.value && props.running && !guestAgentEnabled.value && !form.vmstate,
+  () => isQemu.value && props.running && !guestAgentEnabled.value && !form.vmstate
 );
 const editSettingsRows = computed(() =>
   Object.entries(editConfig.value)
     .filter(([key]) => key !== 'description' && key !== 'snaptime')
     .map(([key, value]) => ({ key, value: textValue(value) || '-' }))
-    .sort((left, right) => left.key.localeCompare(right.key)),
+    .sort((left, right) => left.key.localeCompare(right.key))
 );
 const editSettingsColumns = computed(() => [
   { name: 'key', label: gettext('Key'), field: 'key', align: 'left' as const },
@@ -143,12 +143,31 @@ function assignLevels(row: SnapshotRow, level: number) {
 
 function appendVisibleRows(row: SnapshotRow, rows: VisibleSnapshotRow[]) {
   const hasChildren = row.children.length > 0;
-  const expanded = expandedNames.value.has(row.displayName);
 
-  rows.push({ ...row, hasChildren, expanded });
-  if (hasChildren && expanded) {
-    row.children.forEach((child) => appendVisibleRows(child, rows));
-  }
+  rows.push({ ...row, hasChildren });
+  row.children.forEach((child) => appendVisibleRows(child, rows));
+}
+
+function snapshotOrder(row: SnapshotRow) {
+  const snaptime = Number(row.snaptime);
+  if (Number.isFinite(snaptime) && snaptime > 0) return snaptime;
+  return row.isCurrent ? 'ZZZ' : textValue(row.snapstate);
+}
+
+function compareSnapshotRows(left: SnapshotRow, right: SnapshotRow) {
+  const leftOrder = snapshotOrder(left);
+  const rightOrder = snapshotOrder(right);
+
+  if (typeof leftOrder === 'number' && typeof rightOrder === 'number')
+    return leftOrder - rightOrder;
+  if (typeof leftOrder === 'number') return -1;
+  if (typeof rightOrder === 'number') return 1;
+  return leftOrder.localeCompare(rightOrder);
+}
+
+function sortSnapshotRows(rows: SnapshotRow[]) {
+  rows.sort(compareSnapshotRows);
+  rows.forEach((row) => sortSnapshotRows(row.children));
 }
 
 function formatTime(value: unknown) {
@@ -172,20 +191,9 @@ function descriptionText(row: SnapshotRow) {
 }
 
 function isAgentEnabled(value: unknown) {
-  const text = textValue(value);
-  if (!text) return false;
-  if (text === '1') return true;
-  return /(?:^|[,;])enabled=1(?:[,;]|$)/.test(text);
-}
-
-function toggleRow(row: VisibleSnapshotRow) {
-  if (!row.hasChildren) return;
-  const next = new Set(expandedNames.value);
-
-  if (next.has(row.displayName)) next.delete(row.displayName);
-  else next.add(row.displayName);
-
-  expandedNames.value = next;
+  const parsed = parsePropertyString(value, 'enabled');
+  const enabled = parsed.enabled || '';
+  return ['1', 'yes', 'true', 'on'].includes(enabled.trim().toLowerCase());
 }
 
 function selectRow(row: VisibleSnapshotRow) {
@@ -216,14 +224,6 @@ async function reload() {
     ]);
     snapshots.value = snapshotResponse.data || [];
 
-    const nextExpanded = new Set(expandedNames.value);
-    treeRows.value.forEach((row) => {
-      flatten(row)
-        .filter((item) => item.children.length)
-        .forEach((item) => nextExpanded.add(item.displayName));
-    });
-    expandedNames.value = nextExpanded;
-
     const firstRow = visibleRows.value[0];
     if (!selectedName.value && firstRow) {
       selectedName.value = firstRow.displayName;
@@ -247,9 +247,9 @@ async function loadGuestAgent() {
 
 async function openCreate() {
   if (!canTakeSnapshot.value) return;
-  form.snapname = `snapshot-${new Date().toISOString().slice(0, 16).replace(/[-T:]/g, '')}`;
+  form.snapname = '';
   form.description = '';
-  form.vmstate = false;
+  form.vmstate = isQemu.value && props.running;
   if (isQemu.value) await loadGuestAgent();
   createVisible.value = true;
 }
@@ -257,7 +257,7 @@ async function openCreate() {
 async function create() {
   if (!canTakeSnapshot.value) return;
   const snapname = form.snapname.trim();
-  if (!snapname) return;
+  if (!isConfigId(snapname)) return;
   loading.value = true;
   try {
     const response = await createVmSnapshot(
@@ -268,7 +268,7 @@ async function create() {
         description: form.description.trim() || undefined,
         ...(isQemu.value ? { vmstate: form.vmstate ? 1 : 0 } : {}),
       },
-      props.guestType,
+      props.guestType
     );
     createVisible.value = false;
     emit('task', props.node, String(response.data || ''), gettext('Take Snapshot'));
@@ -276,6 +276,10 @@ async function create() {
   } finally {
     loading.value = false;
   }
+}
+
+function isConfigId(value: string) {
+  return /^[a-z][a-z0-9_-]+$/i.test(value);
 }
 
 function confirm(nextAction: 'rollback' | 'delete') {
@@ -317,7 +321,7 @@ async function saveEdit() {
       {
         description: editDescription.value,
       },
-      props.guestType,
+      props.guestType
     );
     editVisible.value = false;
     await reload();
@@ -340,7 +344,7 @@ async function runAction() {
       'task',
       props.node,
       String(response.data || ''),
-      action.value === 'rollback' ? gettext('Rollback') : gettext('Remove'),
+      action.value === 'rollback' ? gettext('Rollback') : gettext('Remove')
     );
     await reload();
   } finally {
@@ -357,10 +361,9 @@ watch(
   () => [props.node, props.vmid],
   () => {
     selectedName.value = '';
-    expandedNames.value = new Set();
     void reload();
   },
-  { immediate: true },
+  { immediate: true }
 );
 
 onMounted(startAutoReload);
@@ -411,7 +414,10 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
         :label="gettext('Remove')"
         @click="confirm('delete')"
       />
-      <div v-if="!canTakeSnapshot" class="snapshot-feature-warning">
+      <div
+        v-if="!canTakeSnapshot"
+        class="snapshot-feature-warning"
+      >
         {{ gettext('The current guest configuration does not support taking new snapshots') }}
       </div>
     </div>
@@ -422,11 +428,19 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
         :class="{ 'snapshot-tree-row--without-ram': !isQemu }"
       >
         <div class="snapshot-name-cell">{{ gettext('Name') }}</div>
-        <div v-if="isQemu" class="snapshot-ram-cell">{{ gettext('RAM') }}</div>
+        <div
+          v-if="isQemu"
+          class="snapshot-ram-cell"
+        >
+          {{ gettext('RAM') }}
+        </div>
         <div class="snapshot-status-cell">{{ gettext('Date/Status') }}</div>
         <div class="snapshot-description-cell">{{ gettext('Description') }}</div>
       </div>
-      <div v-if="!visibleRows.length && !loading" class="snapshot-empty">
+      <div
+        v-if="!visibleRows.length && !loading"
+        class="snapshot-empty"
+      >
         {{ gettext('No snapshots') }}
       </div>
       <div
@@ -442,18 +456,10 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
         @dblclick="openEdit"
       >
         <div class="snapshot-name-cell">
-          <div class="snapshot-name-content" :style="{ paddingLeft: `${row.level * 22}px` }">
-            <q-btn
-              v-if="row.hasChildren"
-              flat
-              dense
-              round
-              size="sm"
-              class="snapshot-expander"
-              :icon="row.expanded ? 'keyboard_arrow_down' : 'chevron_right'"
-              @click.stop="toggleRow(row)"
-            />
-            <span v-else class="snapshot-expander-placeholder" />
+          <div
+            class="snapshot-name-content"
+            :style="{ paddingLeft: `${row.level * 22}px` }"
+          >
             <q-icon
               :name="row.isCurrent ? 'desktop_windows' : 'history'"
               size="16px"
@@ -462,14 +468,22 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
             <span class="snapshot-row-name">{{ row.displayName }}</span>
           </div>
         </div>
-        <div v-if="isQemu" class="snapshot-ram-cell">{{ ramText(row) }}</div>
+        <div
+          v-if="isQemu"
+          class="snapshot-ram-cell"
+        >
+          {{ ramText(row) }}
+        </div>
         <div class="snapshot-status-cell">{{ dateOrStatusText(row) }}</div>
         <div class="snapshot-description-cell">{{ descriptionText(row) }}</div>
       </div>
       <q-inner-loading :showing="loading" />
     </div>
 
-    <q-dialog v-model="createVisible" persistent>
+    <q-dialog
+      v-model="createVisible"
+      persistent
+    >
       <UWindow
         :title="`${isQemu ? 'VM' : 'CT'} ${vmid} ${gettext('Snapshot')}`"
         width="450px"
@@ -484,7 +498,13 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
             dense
             autofocus
             :label="gettext('Name')"
-            :rules="[(value) => !!String(value || '').trim() || gettext('Required field')]"
+            :rules="[
+              (value) =>
+                isConfigId(String(value || '').trim()) ||
+                gettext(
+                  'Name must start with a letter and contain at least 2 letters, numbers, underscores, or hyphens'
+                ),
+            ]"
           />
           <q-checkbox
             v-if="isQemu && running"
@@ -493,12 +513,19 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
             color="primary"
             :label="gettext('Include RAM')"
           />
-          <div v-if="warningVisible" class="snapshot-form-warning">
-            <q-icon name="warning_amber" size="18px" class="q-mr-sm" />
+          <div
+            v-if="warningVisible"
+            class="snapshot-form-warning"
+          >
+            <q-icon
+              name="warning_amber"
+              size="18px"
+              class="q-mr-sm"
+            />
             <span>
               {{
                 gettext(
-                  'It is recommended to either include the RAM or use the QEMU Guest Agent when taking a snapshot of a running VM to avoid inconsistencies.',
+                  'It is recommended to either include the RAM or use the QEMU Guest Agent when taking a snapshot of a running VM to avoid inconsistencies.'
                 )
               }}
             </span>
@@ -534,7 +561,10 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
       </UWindow>
     </q-dialog>
 
-    <q-dialog v-model="editVisible" persistent>
+    <q-dialog
+      v-model="editVisible"
+      persistent
+    >
       <UWindow
         :title="`${gettext('Snapshot')} ${selectedSnapshotName}`"
         width="620px"
@@ -543,7 +573,12 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
         <div
           class="snapshot-dialog-form snapshot-edit-form u-dense u-border q-ma-sm q-pa-md u-hidden-error"
         >
-          <q-input :model-value="selectedSnapshotName" dense readonly :label="gettext('Name')" />
+          <q-input
+            :model-value="selectedSnapshotName"
+            dense
+            readonly
+            :label="gettext('Name')"
+          />
           <q-input
             :model-value="formatTime(editConfig.snaptime)"
             dense
@@ -594,7 +629,10 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
       </UWindow>
     </q-dialog>
 
-    <q-dialog v-model="actionVisible" persistent>
+    <q-dialog
+      v-model="actionVisible"
+      persistent
+    >
       <UWindow
         :title="action === 'rollback' ? gettext('Rollback') : gettext('Remove')"
         width="480px"
@@ -604,8 +642,8 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
           <template v-if="action === 'rollback'">
             <div>
               {{ gettext('Are you sure you want to rollback to snapshot') }}
-              <strong>{{ selectedSnapshotName }}</strong
-              >?
+              <strong>{{ selectedSnapshotName }}</strong>
+              ?
             </div>
             <div class="q-mt-sm text-negative">{{ gettext('Current state will be lost.') }}</div>
           </template>
@@ -613,7 +651,7 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
             {{
               gettext('Are you sure you want to remove entry {0}').replace(
                 '{0}',
-                `'${selectedSnapshotName}'`,
+                `'${selectedSnapshotName}'`
               )
             }}
           </template>
@@ -711,18 +749,6 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
   display: flex;
   align-items: center;
   min-width: 0;
-}
-.snapshot-expander {
-  width: 20px;
-  height: 20px;
-  margin-right: 2px;
-  color: #52606d;
-}
-.snapshot-expander-placeholder {
-  display: inline-block;
-  width: 22px;
-  height: 20px;
-  flex: 0 0 22px;
 }
 .snapshot-row-icon {
   flex: 0 0 auto;

@@ -1,17 +1,18 @@
 import { textValue } from './pveFormat';
 
-export function parsePropertyString(value: unknown): Record<string, string> {
+export function parsePropertyString(value: unknown, defaultKey?: string): Record<string, string> {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, textValue(item)]),
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, textValue(item)])
     );
   }
 
   return textValue(value)
     .split(',')
     .reduce<Record<string, string>>((result, item) => {
-      const [key, ...parts] = item.split('=');
+      const [key = '', ...parts] = item.split('=');
       if (key && parts.length) result[key] = parts.join('=');
+      else if (defaultKey && key.trim()) result[defaultKey] = key.trim();
       return result;
     }, {});
 }
