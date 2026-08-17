@@ -85,6 +85,32 @@ const osTypeGroups: OsTypeGroup[] = [
 ];
 
 const hotplugFeatureOrder = ['disk', 'network', 'usb', 'memory', 'cpu'];
+const qemuOptionCapabilities: Record<string, string[]> = {
+  name: ['VM.Config.Options'],
+  description: ['VM.Config.Options'],
+  onboot: ['VM.Config.Options'],
+  ostype: ['VM.Config.Options'],
+  boot: ['VM.Config.Disk'],
+  tablet: ['VM.Config.HWType'],
+  hotplug: ['VM.Config.HWType'],
+  startup: ['VM.Config.Options', 'Sys.Modify'],
+  acpi: ['VM.Config.HWType'],
+  kvm: ['VM.Config.HWType'],
+  freeze: ['VM.PowerMgmt'],
+  localtime: ['VM.Config.Options'],
+  startdate: ['VM.Config.Options'],
+  vmstatestorage: ['VM.Config.Options'],
+  smbios1: ['VM.Config.HWType'],
+  agent: ['VM.Config.Options'],
+  protection: ['VM.Config.Options'],
+  spice: ['VM.Config.Options'],
+  sev: ['VM.Config.HWType'],
+  tdx: ['VM.Config.HWType'],
+};
+const dnsNamePattern =
+  /^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*\.?$/;
+const qemuStartDatePattern = /^(now|\d{4}-\d{1,2}-\d{1,2}(T\d{1,2}:\d{1,2}:\d{1,2})?)$/;
+const uuidPattern = /^[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$/;
 
 function osBaseFor(ostype: string) {
   return (
@@ -95,7 +121,7 @@ function osBaseFor(ostype: string) {
 
 const props = withDefaults(
   defineProps<{ node: string; vmid: string; config: PveRecord; guestType?: 'qemu' | 'lxc' }>(),
-  { guestType: 'qemu' },
+  { guestType: 'qemu' }
 );
 const emit = defineEmits<{ updated: [] }>();
 const session = useSessionStore();
@@ -220,7 +246,7 @@ const bootValue = computed(
     `order=${bootRows.value
       .filter((row) => row.enabled)
       .map((row) => row.name)
-      .join(';')}`,
+      .join(';')}`
 );
 const originalSmbios1Value = shallowRef('');
 const hotplugFeatures = ref<string[]>([]);
@@ -228,30 +254,34 @@ const originalHotplugValue = shallowRef('');
 const hotplugValue = computed(
   () =>
     hotplugFeatureOrder.filter((feature) => hotplugFeatures.value.includes(feature)).join(',') ||
-    '0',
+    '0'
 );
 const canConfigureOptions = computed(() =>
-  Boolean(
-    (session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.Options'],
-  ),
+  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.Options'])
 );
 const canConfigureHardware = computed(() =>
-  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.HWType']),
+  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.HWType'])
+);
+const canConfigureDisk = computed(() =>
+  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.Disk'])
+);
+const canManagePower = computed(() =>
+  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.PowerMgmt'])
 );
 const canModifyNode = computed(() =>
-  Boolean((session.caps as unknown as { nodes?: Record<string, unknown> }).nodes?.['Sys.Modify']),
+  Boolean((session.caps as unknown as { nodes?: Record<string, unknown> }).nodes?.['Sys.Modify'])
 );
 const canEditLxcFeatures = computed(
   () =>
     session.userid === 'root@pam' ||
     (Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Allocate']) &&
-      optionEnabled(props.config.unprivileged)),
+      optionEnabled(props.config.unprivileged))
 );
 const envValue = computed(() =>
   envRows.value
     .filter((row) => row.name.trim())
     .map((row) => `${row.name.trim()}=${row.value}`)
-    .join('\0'),
+    .join('\0')
 );
 const lxcAdvancedChanged = computed(
   () =>
@@ -270,7 +300,7 @@ const lxcAdvancedChanged = computed(
         'entrypoint',
       ] as const
     ).some((key) => form[key] !== original.value[key]) ||
-      envValue.value !== originalEnv.value),
+      envValue.value !== originalEnv.value)
 );
 const hardwareFields = new Set([
   'smbios1',
@@ -291,28 +321,107 @@ const hardwareFields = new Set([
   'tdxVsockCid',
   'tdxVsockPort',
 ]);
-const optionsChanged = computed(
-  () =>
-    bootValue.value !== originalBootValue.value ||
-    hotplugValue.value !== originalHotplugValue.value ||
-    Object.entries(form).some(
-      ([key, value]) =>
-        !hardwareFields.has(key) && value !== original.value[key as keyof typeof original.value],
-    ),
+function hasQemuOptionCapability(option: string) {
+  return (qemuOptionCapabilities[option] || []).every((capability) => {
+    if (capability === 'Sys.Modify') return canModifyNode.value;
+    if (capability === 'VM.Config.Disk') return canConfigureDisk.value;
+    if (capability === 'VM.Config.HWType') return canConfigureHardware.value;
+    if (capability === 'VM.PowerMgmt') return canManagePower.value;
+    return canConfigureOptions.value;
+  });
+}
+function canEditOption(option: string) {
+  if (props.guestType !== 'qemu') return !isLxcReadOnlyOption.value && canConfigureOptions.value;
+  return hasQemuOptionCapability(option);
+}
+const selectedOptionEditable = computed(() => canEditOption(selectedOption.value));
+const changedQemuOptions = computed(() => {
+  const changed = new Set<string>();
+  if (form.name !== original.value.name) changed.add('name');
+  if (form.description !== original.value.description) changed.add('description');
+  if (form.onboot !== original.value.onboot) changed.add('onboot');
+  if (form.protection !== original.value.protection) changed.add('protection');
+  if (
+    form.agent !== original.value.agent ||
+    form.agentFstrimClonedDisks !== original.value.agentFstrimClonedDisks ||
+    form.agentFreezeFs !== original.value.agentFreezeFs ||
+    form.agentType !== original.value.agentType
+  )
+    changed.add('agent');
+  if (form.acpi !== original.value.acpi) changed.add('acpi');
+  if (form.kvm !== original.value.kvm) changed.add('kvm');
+  if (form.tablet !== original.value.tablet) changed.add('tablet');
+  if (hotplugValue.value !== originalHotplugValue.value) changed.add('hotplug');
+  if (startupValue.value !== original.value.startup) changed.add('startup');
+  if (form.ostype !== original.value.ostype) changed.add('ostype');
+  if (bootValue.value !== originalBootValue.value) changed.add('boot');
+  if (form.freeze !== original.value.freeze) changed.add('freeze');
+  if (form.localtime !== original.value.localtime) changed.add('localtime');
+  if (form.startdate !== original.value.startdate) changed.add('startdate');
+  if (form.vmstatestorage !== original.value.vmstatestorage) changed.add('vmstatestorage');
+  if (
+    form.spiceFolderSharing !== original.value.spiceFolderSharing ||
+    form.spiceVideoStreaming !== original.value.spiceVideoStreaming
+  )
+    changed.add('spice');
+  if (smbios1Value.value !== originalSmbios1Value.value) changed.add('smbios1');
+  if (
+    [...hardwareFields].some(
+      (key) => form[key as keyof typeof form] !== original.value[key as keyof typeof original.value]
+    )
+  ) {
+    if (
+      [...hardwareFields].some(
+        (key) =>
+          key.startsWith('sev') &&
+          form[key as keyof typeof form] !== original.value[key as keyof typeof original.value]
+      )
+    )
+      changed.add('sev');
+    if (
+      [...hardwareFields].some(
+        (key) =>
+          key.startsWith('tdx') &&
+          form[key as keyof typeof form] !== original.value[key as keyof typeof original.value]
+      )
+    )
+      changed.add('tdx');
+  }
+  return changed;
+});
+const nameValidationError = computed(() =>
+  form.name.trim() && !dnsNamePattern.test(form.name.trim()) ? gettext('Invalid DNS name') : ''
 );
-const hardwareChanged = computed(() =>
-  [...hardwareFields].some(
-    (key) => form[key as keyof typeof form] !== original.value[key as keyof typeof original.value],
-  ),
+const startdateValidationError = computed(() =>
+  form.startdate.trim() && !qemuStartDatePattern.test(form.startdate.trim())
+    ? gettext('Invalid RTC start date')
+    : ''
 );
-const canSave = computed(
-  () =>
-    (optionsChanged.value || hardwareChanged.value || lxcAdvancedChanged.value) &&
-    (!optionsChanged.value || canConfigureOptions.value) &&
-    (!hardwareChanged.value || canConfigureHardware.value),
+const smbiosUuidValidationError = computed(() =>
+  form.smbiosUuid.trim() && !uuidPattern.test(form.smbiosUuid.trim()) ? gettext('Invalid UUID') : ''
 );
+const hasValidationError = computed(() =>
+  Boolean(
+    nameValidationError.value || startdateValidationError.value || smbiosUuidValidationError.value
+  )
+);
+const canSave = computed(() => {
+  if (hasValidationError.value) return false;
+  if (props.guestType === 'lxc')
+    return (
+      (lxcAdvancedChanged.value ||
+        Object.entries(form).some(
+          ([key, value]) => value !== original.value[key as keyof typeof original.value]
+        )) &&
+      canConfigureOptions.value
+    );
+  return (
+    changedQemuOptions.value.size > 0 &&
+    [...changedQemuOptions.value].every(hasQemuOptionCapability)
+  );
+});
 const spiceDisplayIsQxl = computed(() =>
-  /^qxl\d?$/.test(textValue(parseProperties(props.config.vga).type)),
+  /^qxl\d?$/.test(textValue(parseProperties(props.config.vga).type))
 );
 const startupValue = computed(() =>
   [
@@ -321,7 +430,7 @@ const startupValue = computed(() =>
     form.startupDown.trim() ? `down=${form.startupDown.trim()}` : '',
   ]
     .filter(Boolean)
-    .join(','),
+    .join(',')
 );
 const smbios1Value = computed(() => {
   const fields = [
@@ -339,20 +448,43 @@ const smbios1Value = computed(() => {
   if (fields.some(([key, value]) => key !== 'uuid' && value)) values.push('base64=1');
   return values.join(',');
 });
+const guestArchitecture = computed(() => {
+  const configured = textValue(props.config.arch);
+  return configured && configured !== '__default__'
+    ? configured
+    : textValue(props.config['host-arch'], 'x86_64');
+});
+const availableOsTypeGroups = computed(() =>
+  guestArchitecture.value === 'aarch64'
+    ? osTypeGroups
+        .filter((group) => ['Linux', 'Other'].includes(group.value))
+        .map((group) => ({
+          ...group,
+          versions: group.versions.filter((version) => ['l26', 'other'].includes(version.value)),
+        }))
+    : osTypeGroups
+);
 const osVersionOptions = computed(
-  () => (osTypeGroups.find((group) => group.value === form.osBase) || otherOsTypeGroup).versions,
+  () =>
+    (availableOsTypeGroups.value.find((group) => group.value === form.osBase) || otherOsTypeGroup)
+      .versions
 );
 const selectedOption = shallowRef(props.guestType === 'lxc' ? 'onboot' : 'name');
 const isLxcReadOnlyOption = computed(
   () =>
     props.guestType === 'lxc' &&
-    ['ostype', 'arch', 'unprivileged', 'hookscript'].includes(selectedOption.value),
+    ['ostype', 'arch', 'unprivileged', 'hookscript'].includes(selectedOption.value)
+);
+const isReadOnlyOption = computed(
+  () =>
+    isLxcReadOnlyOption.value ||
+    (props.guestType === 'qemu' && selectedOption.value === 'hookscript')
 );
 const agentAdvanced = shallowRef(false);
 const pendingRows = shallowRef<PveRecord[]>([]);
 const vmStateStorageOptions = shallowRef<PveRecord[]>([]);
 const vmStateStorageDisplayValue = computed(
-  () => form.vmstatestorage || gettext("Automatic (Storage used by the VM, or 'local')"),
+  () => form.vmstatestorage || gettext("Automatic (Storage used by the VM, or 'local')")
 );
 const vmStateStorageColumns: QTableColumn<PveRecord>[] = [
   {
@@ -371,7 +503,7 @@ const vmStateStorageColumns: QTableColumn<PveRecord>[] = [
   },
 ];
 const pendingByKey = computed<Record<string, PveRecord>>(() =>
-  Object.fromEntries(pendingRows.value.map((row) => [textValue(row.key), row])),
+  Object.fromEntries(pendingRows.value.map((row) => [textValue(row.key), row]))
 );
 function optionEnabled(value: unknown) {
   return value === true || value === 1 || textValue(value) === '1';
@@ -524,6 +656,11 @@ const optionRows = computed(() => {
       label: gettext('Intel TDX Type'),
       value: form.tdxType === '__default__' ? gettext('Default') : form.tdxType,
     },
+    {
+      key: 'hookscript',
+      label: gettext('Hookscript'),
+      value: textValue(props.config.hookscript) || '-',
+    },
   ];
 });
 const advancedOptionKeys = new Set([
@@ -537,32 +674,47 @@ const advancedOptionKeys = new Set([
   'spice',
   'sev',
   'tdx',
+  'hookscript',
 ]);
 const basicOptionRows = computed(() =>
   props.guestType === 'lxc'
     ? optionRows.value
-    : optionRows.value.filter((row) => !advancedOptionKeys.has(row.key)),
+    : optionRows.value.filter((row) => !advancedOptionKeys.has(row.key))
 );
 const advancedOptionRows = computed(() =>
-  props.guestType === 'lxc'
-    ? []
-    : optionRows.value.filter((row) => advancedOptionKeys.has(row.key)),
+  props.guestType === 'lxc' ? [] : optionRows.value.filter((row) => advancedOptionKeys.has(row.key))
 );
 const pendingKeyMap: Record<string, string[]> = {
+  boot: ['boot', 'bootdisk'],
   spice: ['spice_enhancements'],
   sev: ['amd-sev'],
   tdx: ['intel-tdx'],
 };
-const hardwareOptionKeys = new Set(['smbios1', 'sev', 'tdx']);
 const pendingKeysForOption = (key: string) => pendingKeyMap[key] || [key];
 const selectedPendingKeys = computed(() => pendingKeysForOption(selectedOption.value));
 const canRevertSelected = computed(() =>
-  selectedPendingKeys.value.some((key) => Boolean(pendingByKey.value[key])),
+  selectedPendingKeys.value.some((key) => Boolean(pendingByKey.value[key]))
 );
-const canRevertCurrentOption = computed(() =>
-  hardwareOptionKeys.has(selectedOption.value)
-    ? canConfigureHardware.value
-    : canConfigureOptions.value,
+function pendingRowForOption(key: string) {
+  return pendingKeysForOption(key)
+    .map((pendingKey) => pendingByKey.value[pendingKey])
+    .find(Boolean);
+}
+function pendingValueForOption(key: string) {
+  const row = pendingRowForOption(key);
+  return row ? textValue(row.pending ?? row.value) : '';
+}
+function pendingDeleteForOption(key: string) {
+  return Boolean(pendingRowForOption(key)?.delete);
+}
+const bootSelectionWarning = computed(
+  () => bootRows.value.length > 0 && !bootRows.value.some((row) => row.enabled)
+);
+const bootRngWarning = computed(
+  () =>
+    textValue(props.config.bios) === 'ovmf' &&
+    !props.config.rng0 &&
+    bootRows.value.some((row) => row.enabled && /^net\d+$/.test(row.name))
 );
 
 async function loadPending() {
@@ -573,12 +725,12 @@ async function loadPending() {
 async function loadVmStateStorages() {
   const response = await getNodeStorage(props.node, 'images');
   vmStateStorageOptions.value = (response.data || []).filter((storage) =>
-    textValue(storage.storage),
+    textValue(storage.storage)
   );
 }
 
 async function revertSelected() {
-  if (!canRevertSelected.value || !canRevertCurrentOption.value) return;
+  if (!canRevertSelected.value) return;
   loading.value = true;
   try {
     await revertVmConfig(props.node, props.vmid, selectedPendingKeys.value, props.guestType);
@@ -598,7 +750,7 @@ function parseProperties(value: unknown) {
       .map((part) => {
         const [key, ...parts] = part.split('=');
         return [key, parts.join('=') || '1'];
-      }),
+      })
   );
 }
 
@@ -679,13 +831,11 @@ function buildBootRows() {
           names.push(
             ...devices
               .filter((device) => /media=cdrom/.test(device.description))
-              .map((device) => device.name),
+              .map((device) => device.name)
           );
         if (legacy.includes('n'))
           names.push(
-            ...devices
-              .filter((device) => /^net\d+$/.test(device.name))
-              .map((device) => device.name),
+            ...devices.filter((device) => /^net\d+$/.test(device.name)).map((device) => device.name)
           );
         return [...new Set(names)];
       })();
@@ -714,6 +864,7 @@ function reorderBootDevice(oldIndex: number, newIndex: number) {
 }
 
 let bootSortable: Sortable | undefined;
+let pendingRefreshTimer: ReturnType<typeof setInterval> | undefined;
 
 onMounted(() => {
   if (!bootTableBody.value) return;
@@ -723,13 +874,17 @@ onMounted(() => {
     handle: '.boot-order-drag-handle',
     ghostClass: 'boot-order-row--ghost',
     onEnd: ({ oldIndex, newIndex }: Sortable.SortableEvent) => {
+      if (!selectedOptionEditable.value) return;
       if (oldIndex === undefined || newIndex === undefined) return;
       reorderBootDevice(oldIndex, newIndex);
     },
   });
 });
 
-onBeforeUnmount(() => bootSortable?.destroy());
+onBeforeUnmount(() => {
+  bootSortable?.destroy();
+  if (pendingRefreshTimer) clearInterval(pendingRefreshTimer);
+});
 
 function syncForm() {
   const spiceEnhancements = parseProperties(props.config.spice_enhancements);
@@ -827,6 +982,7 @@ function syncForm() {
 
 async function save() {
   if (!canSave.value) return;
+  if (hasValidationError.value) return;
   const data: PveRecord = { digest: props.config.digest };
   const deletedKeys: string[] = [];
   const setOptional = (key: string, value: string) => {
@@ -929,8 +1085,7 @@ async function save() {
       'featureFuse',
       'featureMknod',
     ].some(
-      (key) =>
-        form[key as keyof typeof form] !== original.value[key as keyof typeof original.value],
+      (key) => form[key as keyof typeof form] !== original.value[key as keyof typeof original.value]
     );
     if (featureChanged) {
       const features = [
@@ -971,13 +1126,19 @@ watch(
     void loadPending();
     void loadVmStateStorages();
   },
-  { immediate: true },
+  { immediate: true }
 );
+onMounted(() => {
+  pendingRefreshTimer = setInterval(() => void loadPending(), 5000);
+});
 watch(() => props.config, syncForm, { immediate: true });
 </script>
 
 <template>
-  <q-form class="vm-config-legacy vm-options-tab u-hidden-error" @submit.prevent="save">
+  <q-form
+    class="vm-config-legacy vm-options-tab u-hidden-error"
+    @submit.prevent="save"
+  >
     <div class="row q-gutter-sm q-py-sm options-toolbar">
       <q-btn
         no-caps
@@ -985,7 +1146,7 @@ watch(() => props.config, syncForm, { immediate: true });
         size="12px"
         class="u-button"
         :color="canRevertSelected ? 'primary' : 'grey'"
-        :disable="!canRevertSelected || !canRevertCurrentOption"
+        :disable="!canRevertSelected"
         :loading="loading"
         :label="gettext('Revert')"
         @click="revertSelected"
@@ -1002,15 +1163,39 @@ watch(() => props.config, syncForm, { immediate: true });
             @click="selectedOption = row.key"
           >
             <div class="col-4 text-grey-10 options-list-label">
-              <q-icon :name="optionIcon(row.key)" size="16px" class="q-mr-xs options-list-icon" />{{
-                row.label
-              }}:
+              <q-icon
+                :name="optionIcon(row.key)"
+                size="16px"
+                class="q-mr-xs options-list-icon"
+              />
+              {{ row.label }}:
             </div>
-            <div class="col-8 text-grey-8 options-list-value">{{ row.value }}</div>
+            <div class="col-8 text-grey-8 options-list-value">
+              <div :class="{ 'pending-delete': pendingDeleteForOption(row.key) }">
+                {{ row.value }}
+              </div>
+              <div
+                v-if="pendingRowForOption(row.key)"
+                class="pending-value"
+              >
+                {{
+                  pendingDeleteForOption(row.key)
+                    ? gettext('Pending deletion')
+                    : pendingValueForOption(row.key)
+                }}
+              </div>
+            </div>
           </div>
-          <div v-if="advancedOptionRows.length" class="options-advanced-list">
+          <div
+            v-if="advancedOptionRows.length"
+            class="options-advanced-list"
+          >
             <div class="options-advanced-heading">
-              <q-icon name="tune" size="15px" />{{ gettext('Advanced settings') }}
+              <q-icon
+                name="tune"
+                size="15px"
+              />
+              {{ gettext('Advanced settings') }}
             </div>
             <div
               v-for="row in advancedOptionRows"
@@ -1024,9 +1209,24 @@ watch(() => props.config, syncForm, { immediate: true });
                   :name="optionIcon(row.key)"
                   size="16px"
                   class="q-mr-xs options-list-icon"
-                />{{ row.label }}:
+                />
+                {{ row.label }}:
               </div>
-              <div class="col-8 text-grey-8 options-list-value">{{ row.value }}</div>
+              <div class="col-8 text-grey-8 options-list-value">
+                <div :class="{ 'pending-delete': pendingDeleteForOption(row.key) }">
+                  {{ row.value }}
+                </div>
+                <div
+                  v-if="pendingRowForOption(row.key)"
+                  class="pending-value"
+                >
+                  {{
+                    pendingDeleteForOption(row.key)
+                      ? gettext('Pending deletion')
+                      : pendingValueForOption(row.key)
+                  }}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1050,35 +1250,60 @@ watch(() => props.config, syncForm, { immediate: true });
                 :label="gettext('Save')"
               />
             </div>
-            <div v-if="isLxcReadOnlyOption" class="hardware-editor-hint">
+            <div
+              v-if="isReadOnlyOption"
+              class="hardware-editor-hint"
+            >
               {{ gettext('This option cannot be edited.') }}
             </div>
             <div class="row q-col-gutter-lg">
-              <div v-show="selectedOption === 'name'" class="col-12 col-md-6">
-                <q-input v-model="form.name" dense :label="gettext('Name')" />
+              <div
+                v-show="selectedOption === 'name'"
+                class="col-12 col-md-6"
+              >
+                <q-input
+                  v-model="form.name"
+                  dense
+                  :disable="!selectedOptionEditable"
+                  :error="Boolean(nameValidationError)"
+                  :error-message="nameValidationError"
+                  :label="gettext('Name')"
+                />
               </div>
-              <div v-show="selectedOption === 'description'" class="col-12">
+              <div
+                v-show="selectedOption === 'description'"
+                class="col-12"
+              >
                 <q-input
                   v-model="form.description"
                   dense
                   type="textarea"
                   autogrow
+                  :disable="!selectedOptionEditable"
                   :label="gettext('Description')"
                 />
               </div>
-              <div v-show="selectedOption === 'onboot'" class="col-12">
+              <div
+                v-show="selectedOption === 'onboot'"
+                class="col-12"
+              >
                 <q-checkbox
                   v-model="form.onboot"
                   dense
                   color="primary"
+                  :disable="!selectedOptionEditable"
                   :label="gettext('Start at boot')"
                 />
               </div>
-              <div v-show="selectedOption === 'protection'" class="col-12">
+              <div
+                v-show="selectedOption === 'protection'"
+                class="col-12"
+              >
                 <q-checkbox
                   v-model="form.protection"
                   dense
                   color="primary"
+                  :disable="!selectedOptionEditable"
                   :label="props.guestType === 'lxc' ? gettext('Enabled') : gettext('Protection')"
                 />
               </div>
@@ -1140,31 +1365,36 @@ watch(() => props.config, syncForm, { immediate: true });
                     color="primary"
                     :disable="!canEditLxcFeatures || !optionEnabled(props.config.unprivileged)"
                     :label="gettext('keyctl')"
-                  /><q-checkbox
+                  />
+                  <q-checkbox
                     v-model="form.featureNesting"
                     dense
                     color="primary"
                     :disable="!canEditLxcFeatures"
                     :label="gettext('Nesting')"
-                  /><q-checkbox
+                  />
+                  <q-checkbox
                     v-model="form.featureNfs"
                     dense
                     color="primary"
                     :disable="!canEditLxcFeatures || optionEnabled(props.config.unprivileged)"
                     label="NFS"
-                  /><q-checkbox
+                  />
+                  <q-checkbox
                     v-model="form.featureCifs"
                     dense
                     color="primary"
                     :disable="!canEditLxcFeatures || optionEnabled(props.config.unprivileged)"
                     label="SMB/CIFS"
-                  /><q-checkbox
+                  />
+                  <q-checkbox
                     v-model="form.featureFuse"
                     dense
                     color="primary"
                     :disable="!canEditLxcFeatures"
                     label="FUSE"
-                  /><q-checkbox
+                  />
+                  <q-checkbox
                     v-model="form.featureMknod"
                     dense
                     color="primary"
@@ -1188,17 +1418,32 @@ watch(() => props.config, syncForm, { immediate: true });
                   {{ gettext('Changing the entrypoint command can lead to start failure!') }}
                 </div>
               </div>
-              <div v-show="props.guestType === 'lxc' && selectedOption === 'env'" class="col-12">
+              <div
+                v-show="props.guestType === 'lxc' && selectedOption === 'env'"
+                class="col-12"
+              >
                 <div class="row q-col-gutter-sm text-caption text-grey-7 q-mb-xs">
                   <div class="col-5">{{ gettext('Name') }}</div>
                   <div class="col-6">{{ gettext('Value') }}</div>
                 </div>
-                <div v-for="row in envRows" :key="row.id" class="row q-col-gutter-sm q-mb-sm">
+                <div
+                  v-for="row in envRows"
+                  :key="row.id"
+                  class="row q-col-gutter-sm q-mb-sm"
+                >
                   <div class="col-5">
-                    <q-input v-model="row.name" dense :disable="!canConfigureOptions" />
+                    <q-input
+                      v-model="row.name"
+                      dense
+                      :disable="!canConfigureOptions"
+                    />
                   </div>
                   <div class="col-6">
-                    <q-input v-model="row.value" dense :disable="!canConfigureOptions" />
+                    <q-input
+                      v-model="row.value"
+                      dense
+                      :disable="!canConfigureOptions"
+                    />
                   </div>
                   <div class="col-1">
                     <q-btn
@@ -1224,40 +1469,50 @@ watch(() => props.config, syncForm, { immediate: true });
                   @click="addEnvRow"
                 />
               </div>
-              <div v-show="selectedOption === 'agent'" class="col-12">
+              <div
+                v-show="selectedOption === 'agent'"
+                class="col-12"
+              >
                 <div class="column agent-options">
                   <q-checkbox
                     v-model="form.agent"
                     dense
                     color="primary"
+                    :disable="!selectedOptionEditable"
                     :label="gettext('Use QEMU Guest Agent')"
                   />
                   <q-checkbox
                     v-model="form.agentFstrimClonedDisks"
                     dense
                     color="primary"
-                    :disable="!form.agent"
+                    :disable="!selectedOptionEditable || !form.agent"
                     :label="gettext('Run guest-trim after a disk move or VM migration')"
                   />
                   <q-checkbox
                     v-model="form.agentFreezeFs"
                     dense
                     color="primary"
-                    :disable="!form.agent"
+                    :disable="!selectedOptionEditable || !form.agent"
                     :label="
                       gettext(
-                        'Freeze/thaw guest filesystems during certain operations for consistency',
+                        'Freeze/thaw guest filesystems during certain operations for consistency'
                       )
                     "
                   />
-                  <div v-if="form.agent && !form.agentFreezeFs" class="option-hint">
+                  <div
+                    v-if="form.agent && !form.agentFreezeFs"
+                    class="option-hint"
+                  >
                     {{
                       gettext(
-                        'Freeze/thaw for guest filesystems disabled. This can lead to inconsistent disk images during snapshots, backups, and similar operations.',
+                        'Freeze/thaw for guest filesystems disabled. This can lead to inconsistent disk images during snapshots, backups, and similar operations.'
                       )
                     }}
                   </div>
-                  <div v-if="form.agent" class="option-hint">
+                  <div
+                    v-if="form.agent"
+                    class="option-hint"
+                  >
                     {{ gettext('Make sure the QEMU Guest Agent is installed in the VM') }}
                   </div>
                   <q-checkbox
@@ -1268,7 +1523,10 @@ watch(() => props.config, syncForm, { immediate: true });
                     :label="gettext('Advanced')"
                   />
                 </div>
-                <div v-show="agentAdvanced" class="row q-col-gutter-lg q-mt-sm">
+                <div
+                  v-show="agentAdvanced"
+                  class="row q-col-gutter-lg q-mt-sm"
+                >
                   <div class="col-12 col-md-6">
                     <q-select
                       v-model="form.agentType"
@@ -1276,7 +1534,7 @@ watch(() => props.config, syncForm, { immediate: true });
                       options-dense
                       emit-value
                       map-options
-                      :disable="!form.agent"
+                      :disable="!selectedOptionEditable || !form.agent"
                       :options="[
                         { label: `${gettext('Default')} (VirtIO)`, value: '__default__' },
                         { label: 'VirtIO', value: 'virtio' },
@@ -1287,31 +1545,46 @@ watch(() => props.config, syncForm, { immediate: true });
                   </div>
                 </div>
               </div>
-              <div v-show="selectedOption === 'acpi'" class="col-12">
+              <div
+                v-show="selectedOption === 'acpi'"
+                class="col-12"
+              >
                 <q-checkbox
                   v-model="form.acpi"
                   dense
+                  :disable="!selectedOptionEditable"
                   color="primary"
                   :label="gettext('ACPI support')"
                 />
               </div>
-              <div v-show="selectedOption === 'kvm'" class="col-12">
+              <div
+                v-show="selectedOption === 'kvm'"
+                class="col-12"
+              >
                 <q-checkbox
                   v-model="form.kvm"
                   dense
+                  :disable="!selectedOptionEditable"
                   color="primary"
                   :label="gettext('KVM hardware virtualization')"
                 />
               </div>
-              <div v-show="selectedOption === 'tablet'" class="col-12">
+              <div
+                v-show="selectedOption === 'tablet'"
+                class="col-12"
+              >
                 <q-checkbox
                   v-model="form.tablet"
                   dense
+                  :disable="!selectedOptionEditable"
                   color="primary"
                   :label="gettext('USB Tablet')"
                 />
               </div>
-              <div v-show="selectedOption === 'hotplug'" class="col-12 col-md-6">
+              <div
+                v-show="selectedOption === 'hotplug'"
+                class="col-12 col-md-6"
+              >
                 <div class="column hotplug-options">
                   <q-checkbox
                     v-model="hotplugFeatures"
@@ -1350,18 +1623,21 @@ watch(() => props.config, syncForm, { immediate: true });
                   />
                 </div>
               </div>
-              <div v-show="selectedOption === 'startup'" class="col-12 col-md-6">
+              <div
+                v-show="selectedOption === 'startup'"
+                class="col-12 col-md-6"
+              >
                 <q-input
                   v-model="form.startupOrder"
                   dense
-                  :disable="props.guestType === 'lxc' && !canModifyNode"
+                  :disable="!selectedOptionEditable"
                   :label="gettext('Start/Shutdown order')"
                   :placeholder="gettext('any')"
                 />
                 <q-input
                   v-model="form.startupUp"
                   dense
-                  :disable="props.guestType === 'lxc' && !canModifyNode"
+                  :disable="!selectedOptionEditable"
                   class="q-mt-sm"
                   :label="gettext('Startup delay')"
                   :placeholder="gettext('default')"
@@ -1385,7 +1661,8 @@ watch(() => props.config, syncForm, { immediate: true });
                   options-dense
                   emit-value
                   map-options
-                  :options="osTypeGroups"
+                  :options="availableOsTypeGroups"
+                  :disable="!selectedOptionEditable"
                   :label="gettext('Type')"
                   @update:model-value="selectOsBase"
                 />
@@ -1397,11 +1674,20 @@ watch(() => props.config, syncForm, { immediate: true });
                   map-options
                   class="q-mt-sm"
                   :options="osVersionOptions"
+                  :disable="!selectedOptionEditable"
                   :label="gettext('Version')"
                 />
               </div>
-              <div v-show="selectedOption === 'boot'" class="col-12">
-                <q-markup-table dense flat bordered class="boot-order-table">
+              <div
+                v-show="selectedOption === 'boot'"
+                class="col-12"
+              >
+                <q-markup-table
+                  dense
+                  flat
+                  bordered
+                  class="boot-order-table"
+                >
                   <thead>
                     <tr>
                       <th class="text-left">#</th>
@@ -1421,18 +1707,30 @@ watch(() => props.config, syncForm, { immediate: true });
                           name="drag_indicator"
                           size="16px"
                           class="boot-order-drag-handle q-mr-xs"
-                        />{{ index + 1 }}
+                        />
+                        {{ index + 1 }}
                       </td>
-                      <td><q-checkbox v-model="row.enabled" dense color="primary" /></td>
+                      <td>
+                        <q-checkbox
+                          v-model="row.enabled"
+                          dense
+                          color="primary"
+                          :disable="!selectedOptionEditable"
+                        />
+                      </td>
                       <td>{{ row.name }}</td>
                       <td class="boot-order-description">
                         <div class="ellipsis">
-                          {{ row.description }}<q-tooltip>{{ row.description }}</q-tooltip>
+                          {{ row.description }}
+                          <q-tooltip>{{ row.description }}</q-tooltip>
                         </div>
                       </td>
                     </tr>
                     <tr v-if="!bootRows.length">
-                      <td colspan="4" class="text-center text-grey-7">
+                      <td
+                        colspan="4"
+                        class="text-center text-grey-7"
+                      >
                         {{ gettext('No bootable devices available') }}
                       </td>
                     </tr>
@@ -1441,16 +1739,35 @@ watch(() => props.config, syncForm, { immediate: true });
                 <div class="text-caption text-grey-7 q-mt-xs">
                   {{ gettext('Use the arrow buttons to reorder devices') }}
                 </div>
+                <div
+                  v-if="bootSelectionWarning"
+                  class="option-hint"
+                >
+                  {{ gettext('Warning: No devices selected, the VM will probably not boot!') }}
+                </div>
+                <div
+                  v-if="bootRngWarning"
+                  class="option-hint"
+                >
+                  {{ gettext('For PXE boot with OVMF, you must add a VirtIO RNG device!') }}
+                </div>
               </div>
-              <div v-show="selectedOption === 'freeze'" class="col-12 col-md-6">
+              <div
+                v-show="selectedOption === 'freeze'"
+                class="col-12 col-md-6"
+              >
                 <q-checkbox
                   v-model="form.freeze"
                   dense
                   color="primary"
+                  :disable="!selectedOptionEditable"
                   :label="gettext('Freeze CPU at startup')"
                 />
               </div>
-              <div v-show="selectedOption === 'localtime'" class="col-12 col-md-6">
+              <div
+                v-show="selectedOption === 'localtime'"
+                class="col-12 col-md-6"
+              >
                 <q-select
                   v-model="form.localtime"
                   dense
@@ -1463,17 +1780,27 @@ watch(() => props.config, syncForm, { immediate: true });
                     { label: gettext('Yes'), value: '1' },
                     { label: gettext('No'), value: '0' },
                   ]"
+                  :disable="!selectedOptionEditable"
                 />
               </div>
-              <div v-show="selectedOption === 'startdate'" class="col-12 col-md-6">
+              <div
+                v-show="selectedOption === 'startdate'"
+                class="col-12 col-md-6"
+              >
                 <q-input
                   v-model="form.startdate"
                   dense
+                  :disable="!selectedOptionEditable"
+                  :error="Boolean(startdateValidationError)"
+                  :error-message="startdateValidationError"
                   :label="gettext('RTC start date')"
                   hint="now or YYYY-MM-DDTHH:MM:SS"
                 />
               </div>
-              <div v-show="selectedOption === 'vmstatestorage'" class="col-12 col-md-6">
+              <div
+                v-show="selectedOption === 'vmstatestorage'"
+                class="col-12 col-md-6"
+              >
                 <SelectTable
                   v-model="form.vmstatestorage"
                   row-key="storage"
@@ -1484,6 +1811,7 @@ watch(() => props.config, syncForm, { immediate: true });
                   :display-value="vmStateStorageDisplayValue"
                   :get-row-value="(row) => textValue(row.storage)"
                   :label="gettext('VM State storage')"
+                  :disable="!selectedOptionEditable"
                 >
                   <template #selected>
                     <span
@@ -1495,14 +1823,29 @@ watch(() => props.config, syncForm, { immediate: true });
                     </span>
                   </template>
                 </SelectTable>
+                <q-btn
+                  v-if="form.vmstatestorage"
+                  flat
+                  dense
+                  no-caps
+                  class="q-mt-xs"
+                  :disable="!selectedOptionEditable"
+                  :label="gettext('Automatic')"
+                  @click="form.vmstatestorage = ''"
+                />
               </div>
-              <div v-show="selectedOption === 'spice'" class="col-12 col-md-6">
+              <div
+                v-show="selectedOption === 'spice'"
+                class="col-12 col-md-6"
+              >
                 <q-checkbox
                   v-model="form.spiceFolderSharing"
                   dense
                   color="primary"
+                  :disable="!selectedOptionEditable"
                   :label="gettext('SPICE Folder Sharing')"
-                /><q-select
+                />
+                <q-select
                   v-model="form.spiceVideoStreaming"
                   dense
                   options-dense
@@ -1515,27 +1858,45 @@ watch(() => props.config, syncForm, { immediate: true });
                     { label: gettext('All'), value: 'all' },
                     { label: gettext('Filter'), value: 'filter' },
                   ]"
+                  :disable="!selectedOptionEditable"
                 />
-                <div v-if="!spiceDisplayIsQxl" class="option-hint">
+                <div
+                  v-if="!spiceDisplayIsQxl"
+                  class="option-hint"
+                >
                   {{
                     gettext(
-                      'To use these features set the display to SPICE in the hardware settings of the VM.',
+                      'To use these features set the display to SPICE in the hardware settings of the VM.'
                     )
                   }}
                 </div>
-                <div v-if="form.spiceFolderSharing" class="option-hint">
+                <div
+                  v-if="form.spiceFolderSharing"
+                  class="option-hint"
+                >
                   {{ gettext('Make sure the SPICE WebDav daemon is installed in the VM.') }}
                 </div>
               </div>
-              <div v-show="selectedOption === 'smbios1'" class="col-12">
+              <div
+                v-show="selectedOption === 'smbios1'"
+                class="col-12"
+              >
                 <div class="row q-col-gutter-md">
                   <div class="col-12">
-                    <q-input v-model="form.smbiosUuid" dense label="UUID" />
+                    <q-input
+                      v-model="form.smbiosUuid"
+                      dense
+                      :disable="!selectedOptionEditable"
+                      :error="Boolean(smbiosUuidValidationError)"
+                      :error-message="smbiosUuidValidationError"
+                      label="UUID"
+                    />
                   </div>
                   <div class="col-12">
                     <q-input
                       v-model="form.smbiosManufacturer"
                       dense
+                      :disable="!selectedOptionEditable"
                       type="textarea"
                       autogrow
                       :label="gettext('Manufacturer')"
@@ -1545,6 +1906,7 @@ watch(() => props.config, syncForm, { immediate: true });
                     <q-input
                       v-model="form.smbiosProduct"
                       dense
+                      :disable="!selectedOptionEditable"
                       type="textarea"
                       autogrow
                       :label="gettext('Product')"
@@ -1554,6 +1916,7 @@ watch(() => props.config, syncForm, { immediate: true });
                     <q-input
                       v-model="form.smbiosVersion"
                       dense
+                      :disable="!selectedOptionEditable"
                       type="textarea"
                       autogrow
                       :label="gettext('Version')"
@@ -1563,18 +1926,27 @@ watch(() => props.config, syncForm, { immediate: true });
                     <q-input
                       v-model="form.smbiosSerial"
                       dense
+                      :disable="!selectedOptionEditable"
                       type="textarea"
                       autogrow
                       :label="gettext('Serial')"
                     />
                   </div>
                   <div class="col-12">
-                    <q-input v-model="form.smbiosSku" dense type="textarea" autogrow label="SKU" />
+                    <q-input
+                      v-model="form.smbiosSku"
+                      dense
+                      type="textarea"
+                      autogrow
+                      :disable="!selectedOptionEditable"
+                      label="SKU"
+                    />
                   </div>
                   <div class="col-12">
                     <q-input
                       v-model="form.smbiosFamily"
                       dense
+                      :disable="!selectedOptionEditable"
                       type="textarea"
                       autogrow
                       :label="gettext('Family')"
@@ -1582,7 +1954,10 @@ watch(() => props.config, syncForm, { immediate: true });
                   </div>
                 </div>
               </div>
-              <div v-show="selectedOption === 'sev'" class="col-12 col-md-6">
+              <div
+                v-show="selectedOption === 'sev'"
+                class="col-12 col-md-6"
+              >
                 <q-select
                   v-model="form.sevType"
                   dense
@@ -1601,14 +1976,30 @@ watch(() => props.config, syncForm, { immediate: true });
                     { label: gettext('AMD SEV-SNP'), value: 'snp' },
                   ]"
                 />
-                <div v-if="form.sevType !== '__default__'" class="q-mt-sm">
+                <div
+                  v-if="form.sevType !== '__default__'"
+                  class="q-mt-sm"
+                >
+                  <div
+                    v-if="form.sevType === 'snp'"
+                    class="option-hint"
+                  >
+                    {{ gettext('WARNING: When using SEV-SNP no EFI disk is loaded as pflash.') }}
+                  </div>
+                  <div
+                    v-if="form.sevType === 'snp'"
+                    class="option-hint"
+                  >
+                    {{ gettext('Note: SEV-SNP requires host kernel version 6.11 or higher.') }}
+                  </div>
                   <q-checkbox
                     v-model="form.sevDebug"
                     dense
                     color="primary"
                     :disable="!canConfigureHardware"
                     :label="gettext('Allow Debugging')"
-                  /><q-checkbox
+                  />
+                  <q-checkbox
                     v-if="form.sevType !== 'snp'"
                     v-model="form.sevKeySharing"
                     dense
@@ -1616,7 +2007,8 @@ watch(() => props.config, syncForm, { immediate: true });
                     class="q-ml-md"
                     :disable="!canConfigureHardware"
                     :label="gettext('Allow Key-Sharing')"
-                  /><q-checkbox
+                  />
+                  <q-checkbox
                     v-if="form.sevType === 'snp'"
                     v-model="form.sevSmt"
                     dense
@@ -1624,7 +2016,8 @@ watch(() => props.config, syncForm, { immediate: true });
                     class="q-ml-md"
                     :disable="!canConfigureHardware"
                     :label="gettext('Allow SMT')"
-                  /><q-checkbox
+                  />
+                  <q-checkbox
                     v-model="form.sevKernelHashes"
                     dense
                     color="primary"
@@ -1634,7 +2027,10 @@ watch(() => props.config, syncForm, { immediate: true });
                   />
                 </div>
               </div>
-              <div v-show="selectedOption === 'tdx'" class="col-12 col-md-6">
+              <div
+                v-show="selectedOption === 'tdx'"
+                class="col-12 col-md-6"
+              >
                 <q-select
                   v-model="form.tdxType"
                   dense
@@ -1651,7 +2047,20 @@ watch(() => props.config, syncForm, { immediate: true });
                     { label: gettext('Intel TDX'), value: 'tdx' },
                   ]"
                 />
-                <div v-if="form.tdxType === 'tdx'" class="q-mt-sm">
+                <div
+                  v-if="form.tdxType === 'tdx'"
+                  class="q-mt-sm"
+                >
+                  <div class="option-hint">
+                    {{ gettext('WARNING: When using Intel TDX no EFI disk is loaded as pflash.') }}
+                  </div>
+                  <div class="option-hint">
+                    {{
+                      gettext(
+                        'Note: Intel TDX is only supported by specific recent CPU models and requires host kernel version 6.16 or higher.'
+                      )
+                    }}
+                  </div>
                   <q-checkbox
                     v-model="form.tdxAttestation"
                     dense
@@ -1747,6 +2156,15 @@ watch(() => props.config, syncForm, { immediate: true });
   overflow-wrap: anywhere;
   word-break: break-word;
   white-space: normal;
+}
+.pending-value {
+  margin-top: 2px;
+  color: #c05621;
+  font-size: 12px;
+}
+.pending-delete {
+  color: #9b2c2c;
+  text-decoration: line-through;
 }
 .options-list-row:last-child {
   border-bottom: 0;
