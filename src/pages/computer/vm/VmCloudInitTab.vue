@@ -64,32 +64,32 @@ function textValue(value: unknown): string {
   return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 }
 
-const IPV4SEG = '(?:25[0-5]|(?:2[0-4]|1?[0-9])?[0-9])';
-const IPV4ADDR = `(?:${IPV4SEG}\\.){3}${IPV4SEG}`;
-const IPV6_H16 = '[0-9a-fA-F]{1,4}';
-const IPV6_LS32 = `(?:(?:${IPV6_H16}:${IPV6_H16})|${IPV4ADDR})`;
-const IPV6ADDR =
-  `(?:(?:${IPV6_H16}:){7}${IPV6_LS32})` +
-  `|(?:(?:${IPV6_H16}:){1,7}:)` +
-  `|(?:(?:${IPV6_H16}:){1,6}:${IPV6_H16})` +
-  `|(?:(?:${IPV6_H16}:){1,5}(?::${IPV6_H16}){1,2})` +
-  `|(?:(?:${IPV6_H16}:){1,4}(?::${IPV6_H16}){1,3})` +
-  `|(?:(?:${IPV6_H16}:){1,3}(?::${IPV6_H16}){1,4})` +
-  `|(?:(?:${IPV6_H16}:){1,2}(?::${IPV6_H16}){1,5})` +
-  `|(?:${IPV6_H16}:(?::${IPV6_H16}){1,6})` +
-  `|(?::(?::${IPV6_H16}){1,7}|:)` +
-  `|(?:(?:${IPV6_H16}:){6}${IPV6_LS32})` +
-  `|(?:(?:${IPV6_H16}:){1,5}:${IPV6_LS32})` +
-  `|(?:(?:${IPV6_H16}:){1,4}:(?:${IPV6_H16}:){1}${IPV6_LS32})` +
-  `|(?:(?:${IPV6_H16}:){1,3}:(?:${IPV6_H16}:){1,2}${IPV6_LS32})` +
-  `|(?:(?:${IPV6_H16}:){1,2}:(?:${IPV6_H16}:){1,3}${IPV6_LS32})` +
-  `|(?:${IPV6_H16}:(?:${IPV6_H16}:){1,4}${IPV6_LS32})` +
-  `|(?::(?:${IPV6_H16}:){1,5}${IPV6_LS32})`;
+const IPV4_OCTET = '(?:25[0-5]|(?:[1-9]|1[0-9]|2[0-4])?[0-9])';
+const IPV4_REGEXP = `(?:(?:${IPV4_OCTET}\\.){3}${IPV4_OCTET})`;
+const IPV6_H16 = '(?:[0-9a-fA-F]{1,4})';
+const IPV6_LS32 = `(?:(?:${IPV6_H16}:${IPV6_H16})|${IPV4_REGEXP})`;
+const IPV6_REGEXP =
+  `(?:` +
+  `(?:(?:(?:${IPV6_H16}:){6})${IPV6_LS32})` +
+  `|(?:(?:::(?:${IPV6_H16}:){5})${IPV6_LS32})` +
+  `|(?:(?:(?:${IPV6_H16})?::(?:${IPV6_H16}:){4})${IPV6_LS32})` +
+  `|(?:(?:(?:(?:${IPV6_H16}:){0,1}${IPV6_H16})?::(?:${IPV6_H16}:){3})${IPV6_LS32})` +
+  `|(?:(?:(?:(?:${IPV6_H16}:){0,2}${IPV6_H16})?::(?:${IPV6_H16}:){2})${IPV6_LS32})` +
+  `|(?:(?:(?:(?:${IPV6_H16}:){0,3}${IPV6_H16})?::(?:${IPV6_H16}:){1})${IPV6_LS32})` +
+  `|(?:(?:(?:(?:${IPV6_H16}:){0,4}${IPV6_H16})?::)${IPV6_LS32})` +
+  `|(?:(?:(?:(?:${IPV6_H16}:){0,5}${IPV6_H16})?::)${IPV6_H16})` +
+  `|(?:(?:(?:(?:${IPV6_H16}:){0,7}${IPV6_H16})?::)` +
+  `)` +
+  `)`;
 
-const IPV4_RE = new RegExp(`^${IPV4ADDR}$`);
-const IPV6_RE = new RegExp(`^(?:${IPV6ADDR})$`);
-const IPV4CIDR_RE = new RegExp(`^${IPV4ADDR}\\/(?:3[0-2]|[12][0-9]|[89])$`);
-const IPV6CIDR_RE = new RegExp(`^(?:${IPV6ADDR})\\/(?:12[0-8]|(?:1[01]|[2-9])[0-9]|[89])$`);
+const IPV6ADDR = IPV6_REGEXP;
+const IP64_REGEXP = `(?:${IPV6_REGEXP}|${IPV4_REGEXP})`;
+
+const IPV4_RE = new RegExp(`^${IPV4_REGEXP}$`);
+const IPV6_RE = new RegExp(`^${IPV6ADDR}$`);
+const IP64_RE = new RegExp(`^${IP64_REGEXP}$`);
+const IPV4CIDR_RE = new RegExp(`^${IPV4_REGEXP}\\/(?:3[0-2]|[12][0-9]|[89])$`);
+const IPV6CIDR_RE = new RegExp(`^${IPV6ADDR}\\/(?:12[0-8]|(?:1[01]|[2-9])[0-9]|[89])$`);
 
 function isIpv4Address(value: string): boolean {
   return IPV4_RE.test(value);
@@ -108,7 +108,7 @@ function isIpv6Cidr(value: string): boolean {
 }
 
 function verifyIp64Address(value: string): boolean {
-  return isIpv4Address(value) || isIpv6Address(value);
+  return IP64_RE.test(value);
 }
 
 function verifyIp64AddressWithSuffix(value: string): boolean {
