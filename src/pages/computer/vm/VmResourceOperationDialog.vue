@@ -255,6 +255,9 @@ async function checkMigratePreconditions() {
     for (const resource of dependentHa) diagnostics.push({ severity: 'warning', text: `${gettext('HA resource')} ${resource} ${gettext('with positive affinity is also migrated to selected target node.')}` });
     if (vm.status === 'running' && !sourceDbus) diagnostics.push({ severity: 'info', text: gettext('Cannot migrate conntrack state, source node is lacking support.') });
     if (vm.status === 'running' && !capabilities.data?.['has-dbus-vmstate']) diagnostics.push({ severity: 'warning', text: gettext('Cannot migrate conntrack state, target node is lacking support. Active network connections might get dropped.') });
+    if (vm.status === 'running' && bothHaveDbusVmstate.value && !migrateConntrackState.value) {
+      diagnostics.push({ severity: 'warning', text: gettext('Conntrack state migration disabled. Active network connections might get dropped.') });
+    }
     migrationPossible.value = info.possible !== false && (!allowed || allowed.includes(target.value)) && !diagnostics.some((item) => item.severity === 'error');
     migrationMessage.value = diagnostics.map((item) => item.text).filter(Boolean).join('\n') || '';
   } catch {
@@ -330,6 +333,7 @@ watch(cloneStorage, (storage) => {
   cloneFormat.value = storageFormats.value[0] || '';
 });
 watch(forceMigration, () => { if (model.value && props.operation === 'migrate') void checkMigratePreconditions(); });
+watch(migrateConntrackState, () => { if (model.value && props.operation === 'migrate') void checkMigratePreconditions(); });
 watch(nextId, async (vmid) => {
   if (!model.value || props.operation !== 'clone' || !vmid) {
     cloneIdAvailable.value = false;

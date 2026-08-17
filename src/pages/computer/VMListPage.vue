@@ -103,8 +103,9 @@ const backupProtected = shallowRef(false);
 const backupNotificationMode = shallowRef<'notification-system' | 'legacy-sendmail'>('notification-system');
 const backupMailto = shallowRef('');
 const backupNotesTemplate = shallowRef('');
-const backupPrune = shallowRef('');
 const backupPruneEnabled = shallowRef(false);
+const backupRetention = shallowRef<Array<{ key: string; value: string }>>([]);
+const backupPruneAvailable = computed(() => backupRetention.value.length > 0);
 const configIdPattern = /^[a-z][a-z0-9_-]+$/i;
 const defaultVisibleColumns = ['vmid', 'name', 'status', 'node', 'cpu', 'memory', 'disk', 'uptime'];
 const visibleColumnNames = shallowRef<string[]>(
@@ -431,6 +432,19 @@ function guestAgentEnabled(agent: unknown) {
   return ['1', 'yes', 'true', 'on'].includes(String(raw).trim().toLowerCase());
 }
 
+function parseBackupRetention(value: unknown) {
+  const entries = Object.fromEntries(
+    textValue(value)
+      .split(',')
+      .map((part) => part.trim().split('=', 2))
+      .filter(([key, item]) => Boolean(key) && item !== undefined),
+  );
+  if (entries['keep-all'] === '1') return [];
+  return ['keep-last', 'keep-hourly', 'keep-daily', 'keep-weekly', 'keep-monthly', 'keep-yearly']
+    .filter((key) => entries[key] !== undefined && entries[key] !== '' && entries[key] !== '0')
+    .map((key) => ({ key, value: entries[key] }));
+}
+
 function formatUptime(value: unknown) {
   const seconds = Number(value);
   if (!Number.isFinite(seconds) || seconds <= 0) return '-';
@@ -706,8 +720,8 @@ async function applyBackupDefaults(node: string, storage: string) {
   backupNotificationMode.value = 'notification-system';
   backupMailto.value = '';
   backupNotesTemplate.value = '';
-  backupPrune.value = '';
   backupPruneEnabled.value = false;
+  backupRetention.value = [];
   if (!storage) return;
   const response = await getVmBackupDefaults(node, storage);
   const defaults = response.data || {};
@@ -718,7 +732,7 @@ async function applyBackupDefaults(node: string, storage: string) {
     ? 'legacy-sendmail'
     : 'notification-system';
   backupNotesTemplate.value = textValue(defaults['notes-template']);
-  backupPrune.value = textValue(defaults['prune-backups']);
+  backupRetention.value = parseBackupRetention(defaults['prune-backups']);
   if (backupStorageTypes.value[storage] === 'pbs') backupCompression.value = 'zstd';
 }
 
@@ -735,7 +749,7 @@ async function backupNow() {
       ...(backupNotificationMode.value ? { 'notification-mode': backupNotificationMode.value } : {}),
       ...(backupMailto.value.trim() ? { mailto: backupMailto.value.trim() } : {}),
       ...(backupNotesTemplate.value.trim() ? { 'notes-template': backupNotesTemplate.value.trim() } : {}),
-      ...(backupPrune.value && backupPruneEnabled.value ? { remove: 1 } : {}),
+      remove: backupPruneAvailable.value && backupPruneEnabled.value ? 1 : 0,
     });
     backupVisible.value = false;
     if (response.data) openTask(String(vm.node), response.data, gettext('Backup'));
@@ -1550,8 +1564,10 @@ onBeforeUnmount(() => {
             :label="gettext('Notification')"
           />
           <q-input v-model="backupMailto" dense square outlined :label="gettext('Send email to')" />
-          <q-checkbox v-if="backupPrune" v-model="backupPruneEnabled" dense color="primary" :label="gettext('Prune')" />
-          <div v-if="backupPrune" class="text-caption text-grey-7">{{ backupPrune }}</div>
+          <q-checkbox v-if="backupPruneAvailable" v-model="backupPruneEnabled" dense color="primary" :label="gettext('Prune')" />
+          <div v-if="backupPruneAvailable" class="text-caption text-grey-7">
+            <div v-for="entry in backupRetention" :key="entry.key">{{ `${entry.key}: ${entry.value}` }}</div>
+          </div>
           <q-input v-model="backupNotesTemplate" dense square outlined type="textarea" autogrow :label="gettext('Notes')" />
         </div>
         <template #foot
