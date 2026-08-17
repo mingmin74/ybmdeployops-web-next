@@ -164,8 +164,8 @@ export function getVmCloneFeature(
 
 /** A cluster bulk action is one server-side task, rather than browser-managed per-VM requests. */
 export function runVmBulkAction(
-  action: 'start' | 'shutdown' | 'stop' | 'suspend' | 'migrate',
-  data: Record<string, unknown>,
+  action: 'start' | 'shutdown' | 'suspend' | 'migrate',
+  data: Record<string, unknown> & { vms: Array<number | string>; 'max-workers'?: number },
 ) {
   return request<string>(`/api2/extjs/cluster/bulk-action/guest/${action}`, {
     method: 'POST',

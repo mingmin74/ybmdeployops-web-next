@@ -11,7 +11,7 @@ import {
   migrateVm,
   type VmResource,
 } from '@/api/vm';
-import { getNodes, type PveNode } from '@/api/resources';
+import { getNodes, getPools, type PveNode, type PvePool } from '@/api/resources';
 import { getNodeStorage } from '@/api/storageContent';
 import { getVmSnapshots } from '@/api/overview';
 import UWindow from '@/components/UWindow.vue';
@@ -47,6 +47,7 @@ const cloneStorage = shallowRef('');
 const cloneFormat = shallowRef('');
 const cloneSnapshot = shallowRef('current');
 const clonePool = shallowRef('');
+const pools = shallowRef<PvePool[]>([]);
 const storageOptions = shallowRef<string[]>([]);
 const storageFormats = shallowRef<string[]>([]);
 const storageFormatOptions = shallowRef<Record<string, string[]>>({});
@@ -90,11 +91,12 @@ const canSubmit = computed(() => {
     return Boolean(props.vm?.node && props.vm?.vmid && deleteConfirmation.value === String(props.vm.vmid));
   if (props.operation === 'migrate')
     return Boolean(props.vm?.node && props.vm?.vmid && target.value && migrationPossible.value && !checking.value);
-  return Boolean(props.vm?.node && props.vm?.vmid && target.value && nextId.value && cloneIdAvailable.value && !checking.value);
+  return Boolean(props.vm?.node && props.vm?.vmid && target.value && nextId.value && cloneIdAvailable.value && cloneNameValid.value && !checking.value);
 });
 const cloneSnapshotVisible = computed(
   () => !props.vm?.template && snapshots.value.some((snapshot) => snapshot !== 'current'),
 );
+const cloneNameValid = computed(() => !cloneName.value.trim() || /^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*$/.test(cloneName.value.trim()));
 const showForceMigration = computed(
   () => props.vm?.status !== 'running' && migrationLocalResources.value && session.userid === 'root@pam',
 );
@@ -118,11 +120,12 @@ async function initialize() {
   try {
     if (props.operation === 'delete' || props.operation === 'template') return;
 
-    const nodesResponse = await getNodes();
+    const [nodesResponse, poolsResponse] = await Promise.all([getNodes(), getPools()]);
     const nextIdResponse = props.operation === 'clone' ? await getNextVmId() : undefined;
     nodes.value = (nodesResponse.data || []).sort((left, right) =>
       left.node.localeCompare(right.node),
     );
+    pools.value = poolsResponse.data || [];
     target.value =
       (props.operation === 'clone' && onlineNodes.value.some((node) => node.node === props.vm?.node)
         ? props.vm.node
@@ -172,9 +175,14 @@ async function refreshTarget(targetNode = target.value) {
   const entries = storageResponse.data || [];
   storageOptions.value = entries.map((item) => textValue(item.storage)).filter(Boolean);
   storageFormatOptions.value = Object.fromEntries(entries.map((item) => {
-    const formats = (item as Record<string, unknown>).format;
-    const values = Array.isArray(formats) ? formats.map(textValue).filter(Boolean) : textValue(formats).split(',').filter(Boolean);
-    return [textValue((item as Record<string, unknown>).storage), values];
+    const record = item as Record<string, unknown>;
+    const formats = record.formats as Record<string, unknown> | undefined;
+    const legacy = record.format;
+    const values = Array.isArray(formats?.supported)
+      ? formats.supported.map(textValue).filter(Boolean)
+      : Array.isArray(legacy) ? legacy.map(textValue).filter(Boolean) : textValue(legacy).split(',').filter(Boolean);
+    const preferred = values.includes('qcow2') ? 'qcow2' : values.includes('raw') ? 'raw' : textValue(formats?.default);
+    return [textValue(record.storage), preferred ? [preferred, ...values.filter((value) => value !== preferred)] : values];
   }));
   storageFormats.value = storageFormatOptions.value[cloneStorage.value] || [];
   if (props.operation === 'migrate') await checkMigratePreconditions();
@@ -223,7 +231,14 @@ async function checkMigratePreconditions() {
     const blockingHa = (disallowed['blocking-ha-resources'] || []) as Array<{ sid?: string; cause?: string }>;
     migrationLocalResources.value = localResources.some((resource) => !mappedResources[resource]);
     if (unavailable.length) diagnostics.push({ severity: 'error', text: `${gettext('Mapped Resources')} (${unavailable.join(', ')}) ${gettext('not available on selected target.')}` });
-    if (migrationLocalResources.value && vm.status !== 'running') diagnostics.push({ severity: 'error', text: `${gettext('Cannot migrate VM with local resources')}: ${localResources.join(', ')}` });
+    if (migrationLocalResources.value && vm.status !== 'running') {
+      diagnostics.push({
+        severity: forceMigration.value ? 'warning' : 'error',
+        text: forceMigration.value
+          ? `${gettext('Migrating VM with local resources')}: ${localResources.join(', ')}`
+          : `${gettext('Cannot migrate VM with local resources')}: ${localResources.join(', ')}`,
+      });
+    }
     if (vm.status === 'running') {
       const notLive = Object.entries(mappedResources).filter(([, resource]) => !resource['live-migration']).map(([name]) => name);
       if (notLive.length) diagnostics.push({ severity: 'error', text: `${gettext('Cannot migrate running VM with mapped resources')}: ${notLive.join(', ')}` });
@@ -236,6 +251,10 @@ async function checkMigratePreconditions() {
     for (const resource of blockingHa) diagnostics.push({ severity: 'error', text: `${gettext('Cannot migrate VM, because blocking HA resource')} ${resource.sid || ''} ${gettext('is on selected target node.')}` });
     const sourceDbus = Boolean(info['has-dbus-vmstate']);
     bothHaveDbusVmstate.value = sourceDbus && Boolean(capabilities.data?.['has-dbus-vmstate']);
+    const dependentHa = (info['dependent-ha-resources'] || []) as string[];
+    for (const resource of dependentHa) diagnostics.push({ severity: 'warning', text: `${gettext('HA resource')} ${resource} ${gettext('with positive affinity is also migrated to selected target node.')}` });
+    if (vm.status === 'running' && !sourceDbus) diagnostics.push({ severity: 'info', text: gettext('Cannot migrate conntrack state, source node is lacking support.') });
+    if (vm.status === 'running' && !capabilities.data?.['has-dbus-vmstate']) diagnostics.push({ severity: 'warning', text: gettext('Cannot migrate conntrack state, target node is lacking support. Active network connections might get dropped.') });
     migrationPossible.value = info.possible !== false && (!allowed || allowed.includes(target.value)) && !diagnostics.some((item) => item.severity === 'error');
     migrationMessage.value = diagnostics.map((item) => item.text).filter(Boolean).join('\n') || '';
   } catch {
@@ -307,9 +326,10 @@ watch(
 watch(target, (value) => { if (model.value) void refreshTarget(value); });
 watch([cloneMode, cloneSnapshot], () => { if (model.value && props.operation === 'clone') void verifyCloneFeature(); });
 watch(cloneStorage, (storage) => {
-  cloneFormat.value = '';
   storageFormats.value = storageFormatOptions.value[storage] || [];
+  cloneFormat.value = storageFormats.value[0] || '';
 });
+watch(forceMigration, () => { if (model.value && props.operation === 'migrate') void checkMigratePreconditions(); });
 watch(nextId, async (vmid) => {
   if (!model.value || props.operation !== 'clone' || !vmid) {
     cloneIdAvailable.value = false;
@@ -384,7 +404,7 @@ watch(nextId, async (vmid) => {
               <q-input v-model="nextId" dense outlined square :label="gettext('New VM ID')" />
             </div>
             <div class="col-12 col-sm-6">
-              <q-input v-model="cloneName" dense outlined square :label="gettext('Name')" />
+              <q-input v-model="cloneName" dense outlined square :label="gettext('Name')" :error="!cloneNameValid" :error-message="gettext('Invalid DNS name')" />
             </div>
             <div v-if="canCreateLinkedClone" class="col-12">
               <q-select
@@ -436,11 +456,15 @@ watch(nextId, async (vmid) => {
               />
             </div>
             <div class="col-12 col-sm-6">
-              <q-input
+              <q-select
                 v-model="clonePool"
                 dense
                 outlined
                 square
+                clearable
+                emit-value
+                map-options
+                :options="pools.map((pool) => ({ label: pool.poolid, value: pool.poolid }))"
                 :label="gettext('Resource Pool')"
               />
             </div>
