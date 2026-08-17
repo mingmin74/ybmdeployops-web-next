@@ -72,7 +72,7 @@ function openDialog(mode: 'add' | 'edit') {
         Object.entries(selected.value[0] || {}).map(([key, value]) => [
           key,
           value == null ? undefined : textValue(value),
-        ]),
+        ])
       )
     : {};
   originalName.value = textValue(form.value.name);
@@ -84,7 +84,10 @@ async function submitForm() {
   try {
     if (editing.value) {
       const { name, ...values } = form.value;
-      await updateFirewallAliasByBaseUrl(baseUrl, originalName.value, { ...values, rename: textValue(name) });
+      await updateFirewallAliasByBaseUrl(baseUrl, originalName.value, {
+        ...values,
+        rename: textValue(name),
+      });
     } else {
       await createFirewallAliasByBaseUrl(baseUrl, form.value);
     }
@@ -177,17 +180,43 @@ onMounted(refreshData);
           />
         </div>
         <q-space />
-        <q-input v-model="filter" borderless dense debounce="300" :placeholder="gettext('Search')"
-          ><template #append><q-icon name="search" /></template
-        ></q-input>
+        <q-input
+          v-model="filter"
+          borderless
+          dense
+          debounce="300"
+          :placeholder="gettext('Search')"
+        >
+          <template #append><q-icon name="search" /></template>
+        </q-input>
       </template>
     </q-table>
-    <q-dialog v-model="dialog" persistent>
-      <UWindow :title="gettext(editing ? 'Edit' : 'Add')" width="480px" :loading="loading">
-        <div class="q-pa-md q-gutter-sm">
-          <q-input v-model="form.name" square outlined dense :label="gettext('Name')" :rules="[value => !!value || gettext('This field is required')]" />
-          <q-input v-model="form.cidr" square outlined dense label="CIDR" :rules="[value => !!value || gettext('This field is required')]" />
-          <q-input v-model="form.comment" square outlined dense :label="gettext('Comment')" />
+    <q-dialog
+      v-model="dialog"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <UWindow
+        :title="gettext(editing ? 'Edit' : 'Add')"
+        width="480px"
+        :loading="loading"
+      >
+        <div class="u-border q-ma-sm q-pa-md u-dense">
+          <q-input
+            v-model="form.name"
+            :label="gettext('Name')"
+            :rules="[(value) => !!value || gettext('This field is required')]"
+          />
+          <q-input
+            v-model="form.cidr"
+            label="CIDR"
+            :rules="[(value) => !!value || gettext('This field is required')]"
+          />
+          <q-input
+            v-model="form.comment"
+            :label="gettext('Comment')"
+          />
         </div>
         <template #foot>
           <q-btn

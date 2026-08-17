@@ -137,10 +137,10 @@ const draggedPos = shallowRef<string | number | undefined>();
 const selectedRule = computed(() => selected.value[0]);
 const allowedDirections = computed(() => directions[firewallType]);
 const allowedActions = computed(() =>
-  form.value.type === 'forward' ? ['ACCEPT', 'DROP'] : ['ACCEPT', 'REJECT', 'DROP'],
+  form.value.type === 'forward' ? ['ACCEPT', 'DROP'] : ['ACCEPT', 'REJECT', 'DROP']
 );
 const isGroupEditor = computed(
-  () => mode.value === 'group' || (mode.value === 'edit' && selectedRule.value?.type === 'group'),
+  () => mode.value === 'group' || (mode.value === 'edit' && selectedRule.value?.type === 'group')
 );
 const hasMacro = computed(() => Boolean(form.value.macro));
 const isIcmp = computed(() => ['icmp', 'icmpv6', 'ipv6-icmp'].includes(String(form.value.proto)));
@@ -149,7 +149,7 @@ const macroOptions = computed(() =>
   macros.value.map((item) => ({
     label: `${textValue(item.macro)}${item.descr ? ` — ${textValue(item.descr)}` : ''}`,
     value: textValue(item.macro),
-  })),
+  }))
 );
 const refOptions = computed(() =>
   refs.value.map((item) => {
@@ -166,7 +166,7 @@ const refOptions = computed(() =>
       label: `${textValue(item.ref)}${item.comment ? ` — ${textValue(item.comment)}` : ''}`,
       value,
     };
-  }),
+  })
 );
 
 const columns = computed<QTableColumn<PveRecord>[]>(() => {
@@ -258,7 +258,7 @@ const columns = computed<QTableColumn<PveRecord>[]>(() => {
       align: 'left',
       field: (row) => row.comment || '-',
       sortable: false,
-    },
+    }
   );
   return result;
 });
@@ -279,7 +279,7 @@ function ruleForm(row?: PveRecord): RuleForm {
       comment: '',
     };
   const result = Object.fromEntries(
-    Object.entries(row).map(([key, value]) => [key, value == null ? '' : textValue(value)]),
+    Object.entries(row).map(([key, value]) => [key, value == null ? '' : textValue(value)])
   ) as RuleForm;
   result.enable = Number(row.enable) ? 1 : 0;
   return result;
@@ -453,13 +453,13 @@ watch(
   () => baseUrl,
   () => {
     void refreshData();
-  },
+  }
 );
 watch(
   () => listRefsUrl,
   () => {
     void loadSelectors();
-  },
+  }
 );
 </script>
 
@@ -478,8 +478,8 @@ watch(
       :no-data-label="gettext('No firewall rule configured here.')"
       @update:selected="selected = [...$event]"
     >
-      <template #top
-        ><div class="row q-gutter-sm">
+      <template #top>
+        <div class="row q-gutter-sm">
           <q-btn
             no-caps
             outline
@@ -537,10 +537,11 @@ watch(
             class="u-button"
             :label="gettext('Refresh')"
             @click="refreshData"
-          /></div
-      ></template>
-      <template #body="scope"
-        ><q-tr
+          />
+        </div>
+      </template>
+      <template #body="scope">
+        <q-tr
           :props="scope"
           draggable="true"
           class="firewall-rule-row"
@@ -552,221 +553,235 @@ watch(
             openDialog('edit');
           "
         >
-          <q-td key="pos" :props="scope"
-            ><q-icon name="drag_indicator" class="cursor-move" /> {{ scope.row.pos }}</q-td
+          <q-td
+            key="pos"
+            :props="scope"
           >
-          <q-td key="enable" :props="scope"
-            ><q-checkbox
+            <q-icon
+              name="drag_indicator"
+              class="cursor-move"
+            />
+            {{ scope.row.pos }}
+          </q-td>
+          <q-td
+            key="enable"
+            :props="scope"
+          >
+            <q-checkbox
               dense
               :model-value="Boolean(scope.row.enable)"
               @update:model-value="setEnabled(scope.row, Boolean($event))"
-          /></q-td>
-          <q-td v-for="column in columns.slice(2)" :key="column.name" :props="scope">
-            <span :class="{ 'text-negative': cellError(scope.row, String(column.name)) }">{{
-              scope.row[column.name] || '-'
-            }}</span>
-            <q-tooltip v-if="cellError(scope.row, String(column.name))">{{
-              cellError(scope.row, String(column.name))
-            }}</q-tooltip>
+            />
           </q-td>
-        </q-tr></template
-      >
+          <q-td
+            v-for="column in columns.slice(2)"
+            :key="column.name"
+            :props="scope"
+          >
+            <span :class="{ 'text-negative': cellError(scope.row, String(column.name)) }">
+              {{ scope.row[column.name] || '-' }}
+            </span>
+            <q-tooltip v-if="cellError(scope.row, String(column.name))">
+              {{ cellError(scope.row, String(column.name)) }}
+            </q-tooltip>
+          </q-td>
+        </q-tr>
+      </template>
     </q-table>
-    <q-dialog v-model="dialog" persistent
-      ><UWindow
+    <q-dialog
+      v-model="dialog"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <UWindow
         :title="
           gettext(
-            mode === 'edit' ? 'Edit Rule' : isGroupEditor ? 'Insert Security Group' : 'Add Rule',
+            mode === 'edit' ? 'Edit Rule' : isGroupEditor ? 'Insert Security Group' : 'Add Rule'
           )
         "
         width="680px"
         :loading="loading"
-        ><div class="q-pa-md row q-col-gutter-md u-hidden-error">
-          <template v-if="isGroupEditor"
-            ><q-select
-              v-model="form.action"
+      >
+        <div class="u-border q-ma-sm q-pa-md u-dense">
+          <div class="row q-col-gutter-md u-hidden-error">
+            <template v-if="isGroupEditor">
+              <q-select
+                v-model="form.action"
+                class="col-12"
+                options-dense
+                emit-value
+                map-options
+                :label="gettext('Security Group')"
+                :options="
+                  groups.map((group) => ({
+                    label: textValue(group.group),
+                    value: textValue(group.group),
+                  }))
+                "
+              />
+              <q-input
+                v-model="form.comment"
+                class="col-12"
+                :label="gettext('Comment')"
+              />
+              <q-input
+                v-if="allowIface"
+                v-model="form.iface"
+                class="col-12"
+                :label="gettext('Interface')"
+              />
+            </template>
+            <template v-else>
+              <q-select
+                v-model="form.type"
+                class="col-6"
+                options-dense
+                emit-value
+                map-options
+                :label="gettext('Direction')"
+                :options="allowedDirections.map((value) => ({ label: value, value }))"
+                @update:model-value="onDirectionChange"
+              />
+              <q-select
+                v-model="form.action"
+                class="col-6"
+                options-dense
+                :label="gettext('Action')"
+                :options="allowedActions"
+              />
+              <q-select
+                v-model="form.macro"
+                class="col-6"
+                options-dense
+                clearable
+                emit-value
+                map-options
+                use-input
+                input-debounce="0"
+                :label="gettext('Macro')"
+                :options="macroOptions"
+                @new-value="acceptNewValue"
+                @update:model-value="onMacroChange"
+              />
+              <q-select
+                v-model="form.proto"
+                class="col-6"
+                options-dense
+                clearable
+                use-input
+                input-debounce="0"
+                :disable="hasMacro"
+                :label="gettext('Protocol')"
+                :options="protocols"
+                @new-value="acceptNewValue"
+                @update:model-value="onProtocolChange"
+              />
+              <q-select
+                v-model="form.source"
+                class="col-6"
+                options-dense
+                clearable
+                use-input
+                input-debounce="0"
+                emit-value
+                map-options
+                :label="gettext('Source')"
+                :options="refOptions"
+                :rules="[ipRefLengthRule]"
+                @new-value="acceptNewValue"
+              />
+              <q-select
+                v-model="form.dest"
+                class="col-6"
+                options-dense
+                clearable
+                use-input
+                input-debounce="0"
+                emit-value
+                map-options
+                :label="gettext('Destination')"
+                :options="refOptions"
+                :rules="[ipRefLengthRule]"
+                @new-value="acceptNewValue"
+              />
+              <q-input
+                v-model="form.sport"
+                class="col-4"
+                :disable="hasMacro"
+                :label="gettext('Source port')"
+              />
+              <q-input
+                v-if="!isIcmp"
+                v-model="form.dport"
+                class="col-4"
+                :disable="hasMacro"
+                :label="gettext('Dest. port')"
+              />
+              <q-select
+                v-if="isIcmp"
+                v-model="form['icmp-type']"
+                class="col-4"
+                options-dense
+                clearable
+                :options="isIcmpV4 ? icmpV4Types : icmpV6Types"
+                :label="gettext('ICMP type')"
+              />
+              <q-select
+                v-model="form.log"
+                class="col-4"
+                options-dense
+                :label="gettext('Log level')"
+                :options="logLevels"
+              />
+              <q-input
+                v-model="form.comment"
+                class="col-12"
+                :label="gettext('Comment')"
+              />
+              <div
+                v-if="form.type === 'forward'"
+                class="col-12 text-sm text-grey-7"
+              >
+                {{
+                  gettext(
+                    'Forward rules only take effect when the nftables firewall is activated in the host options'
+                  )
+                }}
+              </div>
+            </template>
+            <q-checkbox
+              v-model="form.enable"
               class="col-12"
-              square
-              outlined
               dense
-              options-dense
-              emit-value
-              map-options
-              :label="gettext('Security Group')"
-              :options="
-                groups.map((group) => ({
-                  label: textValue(group.group),
-                  value: textValue(group.group),
-                }))
-              " /><q-input
-              v-model="form.comment"
-              class="col-12"
-              square
-              outlined
-              dense
-              :label="gettext('Comment')"
-          /><q-input
-            v-if="allowIface"
-            v-model="form.iface"
-            class="col-12"
-            square
-            outlined
-            dense
-            :label="gettext('Interface')"
-          /></template>
-          <template v-else
-            ><q-select
-              v-model="form.type"
-              class="col-6"
-              square
-              outlined
-              dense
-              emit-value
-              map-options
-              :label="gettext('Direction')"
-              :options="allowedDirections.map((value) => ({ label: value, value }))"
-              @update:model-value="onDirectionChange"
-            /><q-select
-              v-model="form.action"
-              class="col-6"
-              square
-              outlined
-              dense
-              :label="gettext('Action')"
-              :options="allowedActions"
-            /><q-select
-              v-model="form.macro"
-              class="col-6"
-              square
-              outlined
-              dense
-              clearable
-              emit-value
-              map-options
-              use-input
-              input-debounce="0"
-              :label="gettext('Macro')"
-              :options="macroOptions"
-              @new-value="acceptNewValue"
-              @update:model-value="onMacroChange"
-            /><q-select
-              v-model="form.proto"
-              class="col-6"
-              square
-              outlined
-              dense
-              clearable
-              use-input
-              input-debounce="0"
-              :disable="hasMacro"
-              :label="gettext('Protocol')"
-              :options="protocols"
-              @new-value="acceptNewValue"
-              @update:model-value="onProtocolChange"
-            /><q-select
-              v-model="form.source"
-              class="col-6"
-              square
-              outlined
-              dense
-              clearable
-              use-input
-              input-debounce="0"
-              emit-value
-              map-options
-              :label="gettext('Source')"
-              :options="refOptions"
-              :rules="[ipRefLengthRule]"
-              @new-value="acceptNewValue"
-            /><q-select
-              v-model="form.dest"
-              class="col-6"
-              square
-              outlined
-              dense
-              clearable
-              use-input
-              input-debounce="0"
-              emit-value
-              map-options
-              :label="gettext('Destination')"
-              :options="refOptions"
-              :rules="[ipRefLengthRule]"
-              @new-value="acceptNewValue"
-            /><q-input
-              v-model="form.sport"
-              class="col-4"
-              square
-              outlined
-              dense
-              :disable="hasMacro"
-              :label="gettext('Source port')"
-            /><q-input
-              v-if="!isIcmp"
-              v-model="form.dport"
-              class="col-4"
-              square
-              outlined
-              dense
-              :disable="hasMacro"
-              :label="gettext('Dest. port')"
-            /><q-select
-              v-if="isIcmp"
-              v-model="form['icmp-type']"
-              class="col-4"
-              square
-              outlined
-              dense
-              clearable
-              :options="isIcmpV4 ? icmpV4Types : icmpV6Types"
-              :label="gettext('ICMP type')"
-            /><q-select
-              v-model="form.log"
-              class="col-4"
-              square
-              outlined
-              dense
-              :label="gettext('Log level')"
-              :options="logLevels"
-            /><q-input
-              v-model="form.comment"
-              class="col-12"
-              square
-              outlined
-              dense
-              :label="gettext('Comment')"
+              right-label
+              color="primary"
+              :true-value="1"
+              :false-value="0"
+              :label="gettext('Enable')"
             />
-            <div v-if="form.type === 'forward'" class="col-12 text-caption text-grey-7">
-              {{
-                gettext(
-                  'Forward rules only take effect when the nftables firewall is activated in the host options',
-                )
-              }}
-            </div></template
-          >
-          <q-checkbox
-            v-model="form.enable"
-            class="col-12"
-            :true-value="1"
-            :false-value="0"
-            :label="gettext('Enable')"
-          />
+          </div>
         </div>
-        <template #foot
-          ><q-btn
+        <template #foot>
+          <q-btn
             v-close-popup
             no-caps
             flat
             size="12px"
             class="u-button"
-            :label="gettext('Cancel')" /><q-btn
+            :label="gettext('Cancel')"
+          />
+          <q-btn
             no-caps
             flat
             size="12px"
             class="bg-primary text-grey-1 u-button"
             :disable="isGroupEditor && !form.action"
             :label="gettext('Save')"
-            @click="submitForm" /></template></UWindow
-    ></q-dialog>
+            @click="submitForm"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
   </div>
 </template>
