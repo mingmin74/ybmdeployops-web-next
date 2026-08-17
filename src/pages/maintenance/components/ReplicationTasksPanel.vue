@@ -79,13 +79,30 @@ const targetOptions = computed(() => nodes.value.filter((item) => item.node !== 
 const rateValid = computed(
   () => !form.rate || (Number.isFinite(Number(form.rate)) && Number(form.rate) >= 1)
 );
-const canManageReplication = computed(() =>
-  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Backup'])
+const vmCaps = computed(
+  () => (session.caps as unknown as { vms?: Record<string, unknown> }).vms || {}
+);
+const nodeCaps = computed(
+  () => (session.caps as unknown as { nodes?: Record<string, unknown> }).nodes || {}
+);
+const canAuditReplication = computed(() => Boolean(vmCaps.value['VM.Audit']));
+const canManageReplication = computed(() => Boolean(vmCaps.value['VM.Replicate']));
+const canViewLog = computed(
+  () => canAuditReplication.value || Boolean(nodeCaps.value['Sys.Audit'])
 );
 const canOperate = computed(
   () => canManageReplication.value && Boolean(selectedTask.value) && !standalone.value
 );
-const canRunOnNode = computed(() => canOperate.value && Boolean(props.node));
+const canOpenLog = computed(
+  () => canViewLog.value && Boolean(selectedTask.value) && Boolean(props.node) && !standalone.value
+);
+const canScheduleNow = computed(
+  () =>
+    canManageReplication.value &&
+    Boolean(selectedTask.value) &&
+    Boolean(props.node) &&
+    !standalone.value
+);
 const filteredTasks = computed(() => {
   const key = filter.value.trim().toLowerCase();
   return tasks.value.filter(
@@ -209,6 +226,7 @@ function validateForm() {
   return !formErrors.guest && !formErrors.target && !formErrors.rate;
 }
 async function reload() {
+  if (!canAuditReplication.value) return;
   loading.value = true;
   try {
     const response = isGuestScope.value
@@ -239,7 +257,7 @@ async function loadInitial() {
     ]);
     nodes.value = nodeResponse.data || [];
     standalone.value = !(clusterStatusResponse.data || []).some((item) => item.type === 'cluster');
-    if (!standalone.value) {
+    if (!standalone.value && canAuditReplication.value) {
       await reload();
       refreshTimer = setInterval(() => void reload(), 3000);
     }
@@ -340,7 +358,7 @@ async function save() {
 }
 async function loadLog() {
   const task = selectedTask.value;
-  if (!props.node || !task) return;
+  if (!props.node || !task || !canViewLog.value) return;
   logLoading.value = true;
   try {
     const response = await getReplicationLogs(props.node, task.id);
@@ -352,7 +370,7 @@ async function loadLog() {
   }
 }
 function openLog() {
-  if (!canRunOnNode.value) return;
+  if (!canOpenLog.value) return;
   logVisible.value = true;
   void loadLog();
   if (logRefreshTimer) clearInterval(logRefreshTimer);
@@ -365,7 +383,7 @@ function closeLog() {
 }
 async function scheduleNow() {
   const task = selectedTask.value;
-  if (!props.node || !task || !canRunOnNode.value) return;
+  if (!props.node || !task || !canScheduleNow.value) return;
   scheduleNowLoading.value = true;
   try {
     await runReplicationTask(props.node, task.id);
@@ -456,9 +474,9 @@ onBeforeUnmount(() => {
             no-caps
             outline
             size="12px"
-            :color="canRunOnNode ? 'primary' : 'grey-6'"
+            :color="canOpenLog ? 'primary' : 'grey-6'"
             class="u-button"
-            :disable="!canRunOnNode"
+            :disable="!canOpenLog"
             :label="gettext('Log')"
             @click="openLog"
           />
@@ -467,9 +485,9 @@ onBeforeUnmount(() => {
             no-caps
             outline
             size="12px"
-            :color="canRunOnNode ? 'primary' : 'grey-6'"
+            :color="canScheduleNow ? 'primary' : 'grey-6'"
             class="u-button"
-            :disable="!canRunOnNode"
+            :disable="!canScheduleNow"
             :loading="scheduleNowLoading"
             :label="gettext('Schedule now')"
             @click="scheduleNow"
