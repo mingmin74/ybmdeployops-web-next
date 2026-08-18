@@ -27,12 +27,13 @@ const { state, errors, actions, derived } = wizard;
 const { loading, step, advanced, networkAdvanced } = state;
 const { validationError } = errors;
 const { moveStep, submit } = actions;
-const { canSubmit, canProceedGeneral, canProceedTemplate } = derived;
+const { canSubmit, canProceedGeneral, canProceedTemplate, canProceedHardware } = derived;
 const nextDisabled = computed(
   () =>
     loading.value ||
     (step.value === 'general' && !canProceedGeneral.value) ||
-    (step.value === 'template' && !canProceedTemplate.value)
+    (step.value === 'template' && !canProceedTemplate.value) ||
+    (step.value === 'hardware' && !canProceedHardware.value)
 );
 
 async function next() {
@@ -158,7 +159,7 @@ const currentAdvanced = computed({
       </q-stepper>
       <template #foot>
         <q-checkbox
-          v-if="step === 'general' || step === 'mounts' || step === 'limits'"
+          v-if="step === 'general' || step === 'hardware' || step === 'mounts' || step === 'limits'"
           v-model="currentAdvanced"
           dense
           right-label

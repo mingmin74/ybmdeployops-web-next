@@ -42,6 +42,41 @@ const stepOrder: CreateCtStepName[] = [
 ];
 const featuresOptions = ['nesting', 'fuse', 'keyctl', 'fscaps', 'mknod'];
 const knownTemplateArchitectures = ['amd64', 'arm64', 'i386', 'riscv64'];
+const diskSizeMinimum = 0.001;
+const diskSizeMaximum = 128 * 1024;
+const maximumManagedMountId = 255;
+
+function isValidDiskSize(value: number | null) {
+  const size = Number(value);
+  return (
+    Number.isFinite(size) &&
+    size >= diskSizeMinimum &&
+    size <= diskSizeMaximum &&
+    Math.round(size * 1000) === size * 1000
+  );
+}
+
+function isValidIdMapValue(value: string, minimum: number) {
+  return /^\d+$/.test(value.trim()) && Number(value) >= minimum;
+}
+
+function areIdMapsValid(rows: CreateCtForm['rootfsIdMaps'], passthrough: boolean) {
+  return (
+    passthrough ||
+    rows.every(
+      (row) =>
+        (row.type === 'u' || row.type === 'g') &&
+        isValidIdMapValue(row.ct, 0) &&
+        isValidIdMapValue(row.host, 0) &&
+        isValidIdMapValue(row.length, 1)
+    )
+  );
+}
+
+function isValidManagedMountId(id: string) {
+  const match = /^mp(\d+)$/.exec(id);
+  return Boolean(match && Number(match[1]) >= 0 && Number(match[1]) <= maximumManagedMountId);
+}
 
 function templateArch(volid: string) {
   const arch = volid.match(/_([a-z][a-z0-9]*)\.tar(?:\.\w+)?$/)?.[1];
@@ -82,7 +117,7 @@ function defaultForm(): CreateCtForm {
     unprivileged: true,
     features: '',
     rootfsStorage: '',
-    rootfsSize: 8192,
+    rootfsSize: 8,
     rootfsQuota: false,
     rootfsAcl: '__default__',
     rootfsSkipReplication: false,
@@ -115,7 +150,7 @@ export function useCreateCtWizard(
   const nodes = shallowRef<PveNodeWithArchitecture[]>([]);
   const pools = shallowRef<PvePool[]>([]);
   const storageOptions = shallowRef<PveRecord[]>([]);
-  const rootfsStorageOptions = shallowRef<string[]>([]);
+  const rootfsStorageOptions = shallowRef<PveRecord[]>([]);
   const allTemplateRows = shallowRef<PveRecord[]>([]);
   const showAllTemplateArchitectures = shallowRef(false);
   const validationError = shallowRef('');
@@ -210,17 +245,29 @@ export function useCreateCtWizard(
         (Number.isFinite(Number(form.netRate)) &&
           Number(form.netRate) >= 0 &&
           Number(form.netRate) <= 10240));
-    const rootfsOk = !(
-      form.rootfsStorage &&
-      (form.rootfsSize === null || Number(form.rootfsSize) <= 0)
-    );
-    const managedMountsOk = form.managedMounts.every(
-      (mount) => mount.storage && Number(mount.size) > 0 && mount.mountPoint.trim().startsWith('/')
-    );
-    return basic && rootfsOk && managedMountsOk;
+    return basic && canProceedHardware.value;
   });
   const canProceedTemplate = computed(() => form.ostemplate !== '');
-  const canProceedHardware = computed(() => true);
+  const quotaAllowed = (storage: string) => {
+    const type = textValue(
+      rootfsStorageOptions.value.find((item) => textValue(item.storage) === storage)?.type
+    );
+    return !form.unprivileged && type !== 'zfs' && type !== 'zfspool';
+  };
+  const canProceedHardware = computed(
+    () =>
+      Boolean(form.rootfsStorage) &&
+      isValidDiskSize(form.rootfsSize) &&
+      areIdMapsValid(form.rootfsIdMaps, form.rootfsIdMapPassthrough) &&
+      form.managedMounts.every(
+        (mount) =>
+          isValidManagedMountId(mount.id) &&
+          Boolean(mount.storage) &&
+          isValidDiskSize(mount.size) &&
+          mount.mountPoint.trim().startsWith('/') &&
+          areIdMapsValid(mount.idMaps, mount.idMapPassthrough)
+      )
+  );
   const summaryRows = computed<[string, string | number][]>(() => [
     ['Node', form.node],
     ['VMID', form.vmid],
@@ -280,26 +327,38 @@ export function useCreateCtWizard(
           'rootfsStorage',
           gettext('Storage') + ': ' + gettext('This field is required.')
         );
-      if (!Number.isFinite(Number(form.rootfsSize)) || Number(form.rootfsSize) < 1)
+      if (!isValidDiskSize(form.rootfsSize))
         addValidationError(
           'rootfsSize',
-          gettext('Disk size') + ': ' + gettext('Value must be at least 1.')
+          gettext('Disk size') + ': ' + gettext('Value must be between 0.001 and 131072.')
         );
-      form.managedMounts.forEach((mount, index) => {
+      if (!areIdMapsValid(form.rootfsIdMaps, form.rootfsIdMapPassthrough))
+        addValidationError(
+          'rootfsIdMaps',
+          gettext('ID Mapping') + ': ' + gettext('Invalid value.')
+        );
+      form.managedMounts.forEach((mount) => {
         if (!mount.storage)
           addValidationError(
-            `mp${index}Storage`,
+            `${mount.id}Storage`,
             `${mount.id}: ${gettext('Storage')} - ${gettext('This field is required.')}`
           );
-        if (!Number.isFinite(Number(mount.size)) || Number(mount.size) < 1)
+        if (!isValidDiskSize(mount.size))
           addValidationError(
-            `mp${index}Size`,
-            `${mount.id}: ${gettext('Disk size')} - ${gettext('Value must be at least 1.')}`
+            `${mount.id}Size`,
+            `${mount.id}: ${gettext('Disk size')} - ${gettext('Value must be between 0.001 and 131072.')}`
           );
         if (!mount.mountPoint.trim().startsWith('/'))
           addValidationError(
-            `mp${index}Path`,
+            `${mount.id}Path`,
             `${mount.id}: ${gettext('Mount Point')} - ${gettext('Path has to start with /')}`
+          );
+        if (!isValidManagedMountId(mount.id))
+          addValidationError(`${mount.id}Id`, `${mount.id}: ${gettext('Invalid value.')}`);
+        if (!areIdMapsValid(mount.idMaps, mount.idMapPassthrough))
+          addValidationError(
+            `${mount.id}IdMaps`,
+            `${mount.id}: ${gettext('ID Mapping')} - ${gettext('Invalid value.')}`
           );
       });
     }
@@ -494,10 +553,14 @@ export function useCreateCtWizard(
     try {
       const response = await getNodeStorage(form.node, 'rootdir');
       rootfsStorageOptions.value = (response.data || [])
-        .map((item: PveRecord) => textValue(item.storage))
-        .filter(Boolean);
-      if (!rootfsStorageOptions.value.includes(form.rootfsStorage))
-        form.rootfsStorage = rootfsStorageOptions.value[0] || '';
+        .filter((item: PveRecord) => Boolean(textValue(item.storage)))
+        .sort((left: PveRecord, right: PveRecord) =>
+          textValue(left.storage).localeCompare(textValue(right.storage))
+        );
+      if (
+        !rootfsStorageOptions.value.some((item) => textValue(item.storage) === form.rootfsStorage)
+      )
+        form.rootfsStorage = textValue(rootfsStorageOptions.value[0]?.storage);
     } catch {
       rootfsStorageOptions.value = [];
       form.rootfsStorage = '';
@@ -556,8 +619,8 @@ export function useCreateCtWizard(
       searchdomain: '',
       unprivileged: true,
       features: '',
-      rootfsStorage: rootfsStorageOptions.value[0] || '',
-      rootfsSize: 8192,
+      rootfsStorage: textValue(rootfsStorageOptions.value[0]?.storage),
+      rootfsSize: 8,
       rootfsQuota: false,
       rootfsAcl: '__default__',
       rootfsSkipReplication: false,
@@ -634,30 +697,31 @@ export function useCreateCtWizard(
         CtManagedMount,
         'quota' | 'acl' | 'skipReplication' | 'mountOptions' | 'idMapPassthrough' | 'idMaps'
       > &
-        Partial<Pick<CtManagedMount, 'mountPoint' | 'backup' | 'readOnly'>>
+        Partial<Pick<CtManagedMount, 'mountPoint' | 'backup' | 'readOnly' | 'keepAttrs'>>
     ) => {
-      const values = [`${storage}:${Number(size)}M`];
+      const values = [`${storage}:${Number(size)}G`];
       if (options.mountPoint) values.push(`mp=${options.mountPoint}`);
       if (options.quota) values.push('quota=1');
       if (options.acl !== '__default__') values.push(`acl=${options.acl}`);
       if (options.skipReplication) values.push('replicate=0');
       if (options.backup === false) values.push('backup=0');
       if (options.readOnly) values.push('ro=1');
+      if (options.keepAttrs) values.push('keepattrs=1');
       if (options.mountOptions.length)
         values.push(`mountoptions=${options.mountOptions.join(';')}`);
       if (options.idMapPassthrough) values.push('idmap=passthrough');
       else {
         const idMap = options.idMaps
-          .filter((row) => row.ct && row.host && row.length)
           .map((row) => `${row.type}:${row.ct}:${row.host}:${row.length}`)
           .join(';');
         if (idMap) values.push(`idmap=${idMap}`);
       }
       return values.join(',');
     };
-    if (form.rootfsStorage && Number(form.rootfsSize))
+    if (!canProceedHardware.value) throw new Error(gettext('Please complete all required fields.'));
+    if (form.rootfsStorage && isValidDiskSize(form.rootfsSize))
       payload.rootfs = mountValue(form.rootfsStorage, form.rootfsSize, {
-        quota: form.rootfsQuota,
+        quota: quotaAllowed(form.rootfsStorage) && form.rootfsQuota,
         acl: form.rootfsAcl,
         skipReplication: form.rootfsSkipReplication,
         mountOptions: form.rootfsMountOptions,
@@ -665,8 +729,10 @@ export function useCreateCtWizard(
         idMaps: form.rootfsIdMaps,
       });
     form.managedMounts.forEach((mount) => {
-      if (mount.storage && Number(mount.size) > 0 && mount.mountPoint.trim())
-        payload[mount.id] = mountValue(mount.storage, mount.size, mount);
+      payload[mount.id] = mountValue(mount.storage, mount.size, {
+        ...mount,
+        quota: quotaAllowed(mount.storage) && mount.quota,
+      });
     });
     if (form.sshkeys.trim()) payload['ssh-public-keys'] = form.sshkeys.trim();
     let mountIndex = form.managedMounts.reduce(
@@ -674,6 +740,8 @@ export function useCreateCtWizard(
       0
     );
     const addMount = (value: string) => {
+      if (mountIndex > maximumManagedMountId)
+        throw new Error(gettext('Maximum number of mount points reached.'));
       payload[`mp${mountIndex}`] = value;
       mountIndex += 1;
     };
@@ -705,7 +773,7 @@ export function useCreateCtWizard(
   }
   async function submit() {
     validationError.value = '';
-    if (!canSubmit.value) {
+    if (!canSubmit.value || !validateStep('hardware')) {
       validationError.value = gettext('Please complete all required fields.');
       return;
     }
@@ -754,6 +822,19 @@ export function useCreateCtWizard(
         form.featuresChecked = form.featuresChecked.filter((feature) => feature !== 'nesting');
     }
   );
+  watch(
+    () => [
+      form.unprivileged,
+      form.rootfsStorage,
+      ...form.managedMounts.map((mount) => mount.storage),
+    ],
+    () => {
+      if (!quotaAllowed(form.rootfsStorage)) form.rootfsQuota = false;
+      form.managedMounts.forEach((mount) => {
+        if (!quotaAllowed(mount.storage)) mount.quota = false;
+      });
+    }
+  );
   watch(model, (visible) => {
     if (visible) void initialize();
     else resetForm();
@@ -773,6 +854,13 @@ export function useCreateCtWizard(
     errors: { validationError, validationErrors, generalFieldErrors, validationErrorEntries },
     options: { featuresOptions },
     actions: { moveStep, validateStep, submit },
-    derived: { canSubmit, canProceedGeneral, canProceedTemplate, canProceedHardware, summaryRows },
+    derived: {
+      canSubmit,
+      canProceedGeneral,
+      canProceedTemplate,
+      canProceedHardware,
+      quotaAllowed,
+      summaryRows,
+    },
   };
 }

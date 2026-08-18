@@ -24,6 +24,7 @@ export type CtManagedMount = {
   acl: '__default__' | '0' | '1';
   backup: boolean;
   readOnly: boolean;
+  keepAttrs: boolean;
   skipReplication: boolean;
   mountOptions: string[];
   idMapPassthrough: boolean;
@@ -102,7 +103,7 @@ export type CreateCtWizardContext = {
     nodes: Ref<PveNode[]>;
     pools: Ref<PvePool[]>;
     storageOptions: Ref<PveRecord[]>;
-    rootfsStorageOptions: Ref<string[]>;
+    rootfsStorageOptions: Ref<PveRecord[]>;
     templateRows: Ref<PveRecord[]>;
     showAllTemplateArchitectures: Ref<boolean>;
   };
@@ -125,6 +126,7 @@ export type CreateCtWizardContext = {
     canProceedGeneral: ComputedRef<boolean>;
     canProceedTemplate: ComputedRef<boolean>;
     canProceedHardware: ComputedRef<boolean>;
+    quotaAllowed: (storage: string) => boolean;
     summaryRows: ComputedRef<[string, string | number][]>;
   };
 };
