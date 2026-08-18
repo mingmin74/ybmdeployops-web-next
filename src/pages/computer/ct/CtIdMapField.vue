@@ -63,6 +63,21 @@ function clear() {
   sync();
 }
 
+/**
+ * Validity of the whole idmap form. Empty idmap and passthrough are valid;
+ * any visible row with a blank/out-of-range value makes the form invalid.
+ * The parent must gate Add/Save on this — serialization alone silently drops
+ * incomplete rows, which must never be treated as "the form is valid".
+ */
+function isValid() {
+  if (passthrough.value) return true;
+  return entries.every(
+    (entry) => isInteger(entry.ct, 0) && isInteger(entry.host, 0) && isInteger(entry.length, 1)
+  );
+}
+
+defineExpose({ isValid });
+
 watch(
   model,
   (value) => {

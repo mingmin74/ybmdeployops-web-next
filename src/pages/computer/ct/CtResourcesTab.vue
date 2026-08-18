@@ -256,6 +256,10 @@ const addStorageType = computed(() => storageTypes.value[addForm.storage] || '')
 const addQuotaDisabled = computed(
   () => isUnprivileged.value || ['zfs', 'zfspool'].includes(addStorageType.value)
 );
+const addIdMapRef = shallowRef<{ isValid: () => boolean } | null>(null);
+const editIdMapRef = shallowRef<{ isValid: () => boolean } | null>(null);
+const addIdMapValid = computed(() => !addIdMapRef.value || addIdMapRef.value.isValid());
+const editIdMapValid = computed(() => !editIdMapRef.value || editIdMapRef.value.isValid());
 
 watch(addQuotaDisabled, (disabled) => {
   if (disabled) addForm.quota = false;
@@ -334,7 +338,8 @@ const addMountValid = computed(
     Boolean(addForm.storage && addForm.mountPath) &&
     Number(addForm.size) >= 0.001 &&
     Number(addForm.size) <= 131072 &&
-    hasAtMostThreeDecimals(addForm.size)
+    hasAtMostThreeDecimals(addForm.size) &&
+    addIdMapValid.value
 );
 const deviceValid = computed(() => validDevice(form));
 const addDeviceValid = computed(() => validDevice(addForm));
@@ -382,6 +387,7 @@ function openAdd(kind: 'mount' | 'device') {
   addForm.gid = '';
   addForm.mode = '';
   addForm.denyWrite = false;
+  addForm.idmap = '';
   if (kind === 'mount') void loadRootdirStorages();
   addVisible.value = true;
 }
@@ -699,6 +705,7 @@ async function saveMount() {
   const key = selectedKey.value;
   if (!canEditMount.value || !form.volume || (selectedKey.value !== 'rootfs' && !form.mountPath))
     return;
+  if (!editIdMapValid.value) return;
   const mountKey = isUnusedDisk.value ? `mp${form.mountId}` : key;
   if (
     isUnusedDisk.value &&
@@ -1073,7 +1080,10 @@ onUnmounted(() => {
                     color="primary"
                     :label="gettext('Keep attributes')"
                   />
-                  <CtIdMapField v-model="form.idmap" />
+                  <CtIdMapField
+                    ref="editIdMapRef"
+                    v-model="form.idmap"
+                  />
                 </template>
               </div>
               <div
@@ -1181,7 +1191,7 @@ onUnmounted(() => {
                 no-caps
                 size="12px"
                 class="bg-primary text-grey-1 u-button"
-                :disable="!canEditMount"
+                :disable="!canEditMount || !editIdMapValid"
                 :loading="loading"
                 :label="gettext('Save')"
                 @click="saveMount"
@@ -1335,7 +1345,10 @@ onUnmounted(() => {
                     color="primary"
                     :label="gettext('Keep Attributes')"
                   />
-                  <CtIdMapField v-model="addForm.idmap" />
+                  <CtIdMapField
+                    ref="addIdMapRef"
+                    v-model="addForm.idmap"
+                  />
                 </div>
               </div>
             </template>
