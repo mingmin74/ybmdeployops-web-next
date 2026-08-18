@@ -7,6 +7,7 @@ import type { PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
+import { isIpv4Address, isIpv4Cidr, isIpv6Address, isIpv6Cidr } from '@/utils/ipValidation';
 
 type NetworkForm = {
   id: string;
@@ -26,7 +27,12 @@ type NetworkForm = {
   rate: string;
   hostManaged: boolean;
 };
-type NetworkRow = NetworkForm & { ipDisplay: string[]; gatewayDisplay: string[] };
+type NetworkRow = NetworkForm & {
+  ipDisplay: string[];
+  gatewayDisplay: string[];
+  /** Live interface name from /interfaces, used for display only. */
+  displayName: string;
+};
 
 const props = defineProps<{ node: string; vmid: string; config: PveRecord }>();
 const emit = defineEmits<{ updated: [] }>();
@@ -38,43 +44,55 @@ const selectedRows = shallowRef<NetworkRow[]>([]);
 const bridges = shallowRef<string[]>([]);
 const liveInterfaces = shallowRef<PveRecord>({});
 const form = reactive<NetworkForm>(emptyForm());
+/** Snapshot of the config (with digest) taken when Add/Edit opens. */
+const configSnapshot = shallowRef<PveRecord>({ ...props.config });
 
 const canEdit = computed(() =>
-  Boolean(
-    (session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.Network'],
-  ),
+  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.Network'])
 );
 const networks = computed<NetworkRow[]>(() =>
   Object.keys(props.config)
     .filter((key) => /^net\d+$/.test(key))
     .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
-    .map((id) => toNetworkRow(id, textValue(props.config[id]))),
+    .map((id) => toNetworkRow(id, textValue(props.config[id])))
 );
 const selected = computed(() => selectedRows.value[0]);
 const maxNetworksReached = computed(() => networks.value.length >= 32);
 const nameValid = computed(
   () =>
     Boolean(form.name.trim()) &&
-    networks.value.every((row) => row.id === form.id || row.name !== form.name.trim()),
+    networks.value.every((row) => row.id === form.id || row.name !== form.name.trim())
 );
 const bridgeValid = computed(() => Boolean(form.bridge));
 const macValid = computed(
-  () => !form.hwaddr.trim() || /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(form.hwaddr.trim()),
+  () => !form.hwaddr.trim() || /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(form.hwaddr.trim())
 );
 const tagValid = computed(
   () =>
     !form.tag ||
-    (Number.isInteger(Number(form.tag)) && Number(form.tag) >= 1 && Number(form.tag) <= 4094),
+    (Number.isInteger(Number(form.tag)) && Number(form.tag) >= 1 && Number(form.tag) <= 4094)
 );
 const mtuValid = computed(
   () =>
     !form.mtu ||
-    (Number.isInteger(Number(form.mtu)) && Number(form.mtu) >= 576 && Number(form.mtu) <= 65535),
+    (Number.isInteger(Number(form.mtu)) && Number(form.mtu) >= 576 && Number(form.mtu) <= 65535)
 );
 const rateValid = computed(
   () =>
     !form.rate ||
-    (Number.isFinite(Number(form.rate)) && Number(form.rate) >= 0 && Number(form.rate) <= 10240),
+    (Number.isFinite(Number(form.rate)) && Number(form.rate) >= 0 && Number(form.rate) <= 10240)
+);
+const ipv4Valid = computed(
+  () => form.ipv4mode !== 'static' || !form.ip.trim() || isIpv4Cidr(form.ip.trim())
+);
+const ipv4GatewayValid = computed(
+  () => form.ipv4mode !== 'static' || !form.gw.trim() || isIpv4Address(form.gw.trim())
+);
+const ipv6Valid = computed(
+  () => form.ipv6mode !== 'static' || !form.ip6.trim() || isIpv6Cidr(form.ip6.trim())
+);
+const ipv6GatewayValid = computed(
+  () => form.ipv6mode !== 'static' || !form.gw6.trim() || isIpv6Address(form.gw6.trim())
 );
 const canSave = computed(
   () =>
@@ -83,7 +101,11 @@ const canSave = computed(
     macValid.value &&
     tagValid.value &&
     mtuValid.value &&
-    rateValid.value,
+    rateValid.value &&
+    ipv4Valid.value &&
+    ipv4GatewayValid.value &&
+    ipv6Valid.value &&
+    ipv6GatewayValid.value
 );
 
 function emptyForm(): NetworkForm {
@@ -135,36 +157,45 @@ function parseNetwork(id: string, raw: string): NetworkForm {
 
 function toNetworkRow(id: string, raw: string): NetworkRow {
   const row = parseNetwork(id, raw);
-  const addresses = interfaceAddresses(row.hwaddr);
+  const iface = findLiveInterface(row.hwaddr);
   return {
     ...row,
-    ipDisplay: addresses.length
-      ? addresses
-      : [
-          formatConfiguredAddress(row.ipv4mode === 'dhcp' ? 'dhcp' : row.ip, 'ip'),
-          formatConfiguredAddress(row.ipv6mode === 'static' ? row.ip6 : row.ipv6mode, 'ip6'),
-        ].filter(Boolean),
+    displayName: iface ? textValue(iface.name) || row.name : row.name,
+    ipDisplay: buildIpDisplay(row, iface),
     gatewayDisplay: [row.gw, row.gw6].filter(Boolean),
   };
 }
 
-function interfaceAddresses(hwaddr: string) {
-  const iface = Object.values(liveInterfaces.value).find(
-    (value) =>
-      textValue((value as PveRecord)['hardware-address']).toLowerCase() === hwaddr.toLowerCase(),
+function findLiveInterface(hwaddr: string) {
+  if (!hwaddr) return undefined;
+  const key = hwaddr.toLowerCase();
+  return Object.values(liveInterfaces.value).find(
+    (value) => textValue((value as PveRecord)['hardware-address']).toLowerCase() === key
   ) as PveRecord | undefined;
+}
+
+function buildIpDisplay(row: NetworkForm, iface?: PveRecord) {
   const addresses = Array.isArray(iface?.['ip-addresses'])
     ? (iface['ip-addresses'] as PveRecord[])
     : [];
-  return addresses
+  const lines = addresses
     .map((address) => {
       const ip = textValue(address['ip-address']);
       const prefix = textValue(address.prefix);
-      return ip
-        ? `${ip}/${prefix} (${address['ip-address-type'] === 'inet' ? 'dynamic' : 'dynamic'})`
-        : '';
+      if (!ip) return '';
+      // PVE compares the runtime address with the configured one:
+      // matching -> (static), anything else (dhcp/slaac/manual) -> (dynamic)
+      const type = textValue(address['ip-address-type']);
+      const configured = type === 'inet' ? row.ip : row.ip6;
+      const label = `${ip}/${prefix}` === configured ? 'static' : 'dynamic';
+      return `${ip}/${prefix} (${label})`;
     })
     .filter(Boolean);
+  if (lines.length) return lines;
+  return [
+    formatConfiguredAddress(row.ipv4mode === 'dhcp' ? 'dhcp' : row.ip, 'ip'),
+    formatConfiguredAddress(row.ipv6mode === 'static' ? row.ip6 : row.ipv6mode, 'ip6'),
+  ].filter(Boolean);
 }
 
 function formatConfiguredAddress(value: string, prefix: string) {
@@ -183,7 +214,7 @@ function nextNetworkId() {
 
 async function loadSupplementaryData() {
   const [networkResult, interfaceResult] = await Promise.allSettled([
-    getNodeNetwork(props.node),
+    getNodeNetwork(props.node, { type: 'any_bridge' }),
     getCtInterfaces(props.node, props.vmid),
   ]);
   if (networkResult.status === 'fulfilled') {
@@ -199,16 +230,41 @@ async function loadSupplementaryData() {
 
 function openAdd() {
   if (!canEdit.value || maxNetworksReached.value) return;
-  Object.assign(form, emptyForm(), { id: nextNetworkId(), name: `eth${networks.value.length}` });
+  configSnapshot.value = { ...props.config };
+  Object.assign(form, emptyForm(), { id: nextNetworkId() });
   editing.value = false;
   dialogVisible.value = true;
+  void loadSupplementaryData();
 }
 
 function openEdit() {
   if (!canEdit.value || !selected.value) return;
-  Object.assign(form, selected.value);
+  configSnapshot.value = { ...props.config };
+  const row = selected.value;
+  Object.assign(form, {
+    id: row.id,
+    name: row.name,
+    hwaddr: row.hwaddr,
+    bridge: row.bridge,
+    tag: row.tag,
+    firewall: row.firewall,
+    ipv4mode: row.ipv4mode,
+    ip: row.ip,
+    gw: row.gw,
+    ipv6mode: row.ipv6mode,
+    ip6: row.ip6,
+    gw6: row.gw6,
+    linkDown: row.linkDown,
+    mtu: row.mtu,
+    rate: row.rate,
+    hostManaged: row.hostManaged,
+  });
+  // PVE clears gw/gw6 whenever the mode is not static (ip=dhcp / ip6=dhcp|auto).
+  if (form.ipv4mode !== 'static') form.gw = '';
+  if (form.ipv6mode !== 'static') form.gw6 = '';
   editing.value = true;
   dialogVisible.value = true;
+  void loadSupplementaryData();
 }
 
 function editRow(_event: Event, row: NetworkRow) {
@@ -224,9 +280,10 @@ function networkValue() {
     ...(form.tag ? [`tag=${form.tag}`] : []),
     ...(form.firewall ? ['firewall=1'] : []),
     `ip=${form.ipv4mode === 'dhcp' ? 'dhcp' : form.ip.trim()}`,
-    ...(form.gw.trim() ? [`gw=${form.gw.trim()}`] : []),
+    // gw/gw6 are only valid for static configs; never submit them with dhcp/slaac.
+    ...(form.ipv4mode === 'static' && form.gw.trim() ? [`gw=${form.gw.trim()}`] : []),
     `ip6=${form.ipv6mode === 'static' ? form.ip6.trim() : form.ipv6mode}`,
-    ...(form.gw6.trim() ? [`gw6=${form.gw6.trim()}`] : []),
+    ...(form.ipv6mode === 'static' && form.gw6.trim() ? [`gw6=${form.gw6.trim()}`] : []),
     ...(form.linkDown ? ['link_down=1'] : []),
     ...(form.mtu ? [`mtu=${form.mtu}`] : []),
     ...(form.rate ? [`rate=${form.rate}`] : []),
@@ -242,11 +299,17 @@ async function save() {
     await updateVmConfig(
       props.node,
       props.vmid,
-      { digest: props.config.digest, [form.id]: networkValue() },
-      'lxc',
+      {
+        digest: textValue(configSnapshot.value.digest),
+        [form.id]: networkValue(),
+      },
+      'lxc'
     );
     dialogVisible.value = false;
     emit('updated');
+    void loadSupplementaryData();
+  } catch {
+    // the global Notify already surfaced the error; consume the rejection here
   } finally {
     loading.value = false;
   }
@@ -258,7 +321,7 @@ function removeNetwork() {
     title: gettext('Remove'),
     message: gettext('Are you sure you want to remove entry {0}').replace(
       '{0}',
-      `'${selected.value.id}'`,
+      `'${selected.value.id}'`
     ),
     cancel: true,
     persistent: true,
@@ -267,10 +330,16 @@ function removeNetwork() {
     void updateVmConfig(
       props.node,
       props.vmid,
-      { digest: props.config.digest, delete: selected.value!.id },
-      'lxc',
+      { digest: textValue(props.config.digest), delete: selected.value!.id },
+      'lxc'
     )
-      .then(() => emit('updated'))
+      .then(() => {
+        emit('updated');
+        void loadSupplementaryData();
+      })
+      .catch(() => {
+        // the global Notify already surfaced the error; consume the rejection here
+      })
       .finally(() => {
         loading.value = false;
       });
@@ -283,14 +352,28 @@ watch(
     const selectedId = selectedRows.value[0]?.id;
     if (!rows.some((row) => row.id === selectedId)) selectedRows.value = rows[0] ? [rows[0]] : [];
   },
-  { immediate: true },
+  { immediate: true }
 );
 watch(
   () => [props.node, props.vmid],
   () => {
     void loadSupplementaryData();
   },
-  { immediate: true },
+  { immediate: true }
+);
+// Switching to DHCP/SLAAC makes the gateway meaningless; drop the stale value
+// so it is never re-submitted if the user toggles back to static later.
+watch(
+  () => form.ipv4mode,
+  (mode) => {
+    if (mode !== 'static') form.gw = '';
+  }
+);
+watch(
+  () => form.ipv6mode,
+  (mode) => {
+    if (mode !== 'static') form.gw6 = '';
+  }
 );
 </script>
 
@@ -335,7 +418,7 @@ watch(
       :rows="networks"
       :columns="[
         { name: 'id', label: 'ID', field: 'id', align: 'left' },
-        { name: 'name', label: gettext('Name'), field: 'name', align: 'left' },
+        { name: 'name', label: gettext('Name'), field: 'displayName', align: 'left' },
         { name: 'bridge', label: gettext('Bridge'), field: 'bridge', align: 'left' },
         { name: 'firewall', label: gettext('Firewall'), field: 'firewall', align: 'left' },
         { name: 'tag', label: gettext('VLAN Tag'), field: 'tag', align: 'left' },
@@ -353,43 +436,60 @@ watch(
       class="ct-network-table"
       @row-dblclick="editRow"
     >
-      <template #body-cell-firewall="scope"
-        ><q-td :props="scope"
-          ><q-icon
+      <template #body-cell-firewall="scope">
+        <q-td :props="scope">
+          <q-icon
             :name="scope.value ? 'check' : 'close'"
-            :color="scope.value ? 'positive' : 'grey'" /></q-td
-      ></template>
-      <template #body-cell-ip="scope"
-        ><q-td :props="scope"
-          ><div v-for="value in scope.value" :key="value">{{ value }}</div></q-td
-        ></template
-      >
-      <template #body-cell-gateway="scope"
-        ><q-td :props="scope"
-          ><div v-for="value in scope.value" :key="value">{{ value }}</div></q-td
-        ></template
-      >
-      <template #body-cell-linkDown="scope"
-        ><q-td :props="scope"
-          ><q-icon
+            :color="scope.value ? 'positive' : 'grey'"
+          />
+        </q-td>
+      </template>
+      <template #body-cell-ip="scope">
+        <q-td :props="scope">
+          <div
+            v-for="value in scope.value"
+            :key="value"
+          >
+            {{ value }}
+          </div>
+        </q-td>
+      </template>
+      <template #body-cell-gateway="scope">
+        <q-td :props="scope">
+          <div
+            v-for="value in scope.value"
+            :key="value"
+          >
+            {{ value }}
+          </div>
+        </q-td>
+      </template>
+      <template #body-cell-linkDown="scope">
+        <q-td :props="scope">
+          <q-icon
             :name="scope.value ? 'check' : 'close'"
-            :color="scope.value ? 'positive' : 'grey'" /></q-td
-      ></template>
-      <template #no-data
-        ><div class="full-width row flex-center q-pa-md text-grey">
+            :color="scope.value ? 'positive' : 'grey'"
+          />
+        </q-td>
+      </template>
+      <template #no-data>
+        <div class="full-width row flex-center q-pa-md text-grey">
           {{ gettext('No network device') }}
-        </div></template
-      >
+        </div>
+      </template>
     </q-table>
   </div>
-  <q-dialog v-model="dialogVisible" persistent>
-    <q-card class="ct-network-dialog"
-      ><q-card-section class="text-subtitle1">{{
-        `${editing ? gettext('Edit') : gettext('Add')}: ${gettext('Network Device')}`
-      }}</q-card-section
-      ><q-separator />
-      <q-card-section class="q-gutter-md"
-        ><div class="row q-col-gutter-md">
+  <q-dialog
+    v-model="dialogVisible"
+    persistent
+  >
+    <q-card class="ct-network-dialog">
+      <q-card-section class="text-subtitle1">
+        {{ `${editing ? gettext('Edit') : gettext('Add')}: ${gettext('Network Device')}` }}
+      </q-card-section>
+      <q-separator />
+      <q-card-section class="q-gutter-md">
+        <div class="row q-col-gutter-md">
           <div class="col-6 q-gutter-sm">
             <q-input
               v-model="form.name"
@@ -397,14 +497,16 @@ watch(
               :label="gettext('Name')"
               :error="!nameValid"
               :error-message="gettext('This field is required')"
-            /><q-input
+            />
+            <q-input
               v-model="form.hwaddr"
               dense
               :label="gettext('MAC address')"
               placeholder="auto"
               :error="!macValid"
               :error-message="gettext('Invalid Value')"
-            /><q-select
+            />
+            <q-select
               v-model="form.bridge"
               dense
               options-dense
@@ -412,7 +514,8 @@ watch(
               :label="gettext('Bridge')"
               :error="!bridgeValid"
               :error-message="gettext('This field is required')"
-            /><q-input
+            />
+            <q-input
               v-model="form.tag"
               dense
               type="number"
@@ -421,7 +524,12 @@ watch(
               :label="gettext('VLAN Tag')"
               :error="!tagValid"
               error-message="[1-4094]"
-            /><q-checkbox v-model="form.firewall" dense :label="gettext('Firewall')" />
+            />
+            <q-checkbox
+              v-model="form.firewall"
+              dense
+              :label="gettext('Firewall')"
+            />
           </div>
           <div class="col-6 q-gutter-sm">
             <q-option-group
@@ -433,17 +541,25 @@ watch(
                 { label: gettext('Static'), value: 'static' },
                 { label: 'DHCP', value: 'dhcp' },
               ]"
-            /><q-input
+            />
+            <q-input
               v-model="form.ip"
               dense
               label="IPv4/CIDR"
               :disable="form.ipv4mode !== 'static'"
-            /><q-input
+              :error="!ipv4Valid"
+              :error-message="`${gettext('Example')}: 192.168.1.1/24, ${gettext('Valid CIDR Range')}: 8-32`"
+            />
+            <q-input
               v-model="form.gw"
               dense
               :label="`${gettext('Gateway')} (IPv4)`"
               :disable="form.ipv4mode !== 'static'"
-            /><q-separator class="q-my-sm" /><q-option-group
+              :error="!ipv4GatewayValid"
+              :error-message="`${gettext('Example')}: 192.168.1.1`"
+            />
+            <q-separator class="q-my-sm" />
+            <q-option-group
               v-model="form.ipv6mode"
               inline
               dense
@@ -453,23 +569,34 @@ watch(
                 { label: 'DHCP', value: 'dhcp' },
                 { label: 'SLAAC', value: 'auto' },
               ]"
-            /><q-input
+            />
+            <q-input
               v-model="form.ip6"
               dense
               label="IPv6/CIDR"
               :disable="form.ipv6mode !== 'static'"
-            /><q-input
+              :error="!ipv6Valid"
+              :error-message="`${gettext('Example')}: 2001:DB8::42/64, ${gettext('Valid CIDR Range')}: 8-128`"
+            />
+            <q-input
               v-model="form.gw6"
               dense
               :label="`${gettext('Gateway')} (IPv6)`"
               :disable="form.ipv6mode !== 'static'"
+              :error="!ipv6GatewayValid"
+              :error-message="`${gettext('Example')}: 2001:DB8::42`"
             />
           </div>
         </div>
         <q-separator />
         <div class="row q-col-gutter-md">
           <div class="col-6">
-            <q-checkbox v-model="form.linkDown" dense :label="gettext('Disconnect')" /><q-input
+            <q-checkbox
+              v-model="form.linkDown"
+              dense
+              :label="gettext('Disconnect')"
+            />
+            <q-input
               v-model="form.mtu"
               dense
               type="number"
@@ -492,18 +619,32 @@ watch(
               placeholder="unlimited"
               :error="!rateValid"
               error-message="[0-10240]"
-            /><q-checkbox v-model="form.hostManaged" dense :label="gettext('Host-Managed')" />
-          </div></div
-      ></q-card-section>
-      <q-card-actions align="right"
-        ><q-btn v-close-popup flat no-caps :label="gettext('Cancel')" /><q-btn
+            />
+            <q-checkbox
+              v-model="form.hostManaged"
+              dense
+              :label="gettext('Host-Managed')"
+            />
+          </div>
+        </div>
+      </q-card-section>
+      <q-card-actions align="right">
+        <q-btn
+          v-close-popup
+          flat
+          no-caps
+          :label="gettext('Cancel')"
+        />
+        <q-btn
           no-caps
           color="primary"
           :loading="loading"
           :disable="!canSave"
           :label="gettext('OK')"
-          @click="save" /></q-card-actions
-    ></q-card>
+          @click="save"
+        />
+      </q-card-actions>
+    </q-card>
   </q-dialog>
 </template>
 
