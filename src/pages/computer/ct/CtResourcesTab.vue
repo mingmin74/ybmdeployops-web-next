@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Dialog } from 'quasar';
-import { computed, reactive, shallowRef, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, shallowRef, watch } from 'vue';
 import { getVmConfig, getVmPendingConfig, revertVmConfig, updateVmConfig } from '@/api/overview';
 import type { PveRecord } from '@/api/resources';
+import { getClusterResources } from '@/api/resources';
 import { getNodeStorage, getVmResources } from '@/api/storageContent';
 import { moveCtVolume, reassignCtVolume, resizeCtVolume } from '@/api/vm';
 import UWindow from '@/components/UWindow.vue';
@@ -11,7 +12,7 @@ import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
 
 const props = defineProps<{ node: string; vmid: string; config: PveRecord }>();
-const emit = defineEmits<{ updated: [] }>();
+const emit = defineEmits<{ updated: []; task: [node: string, upid: string, title: string] }>();
 const session = useSessionStore();
 const loading = shallowRef(false);
 const selectedKey = shallowRef('memory');
@@ -28,6 +29,9 @@ const storages = shallowRef<string[]>([]);
 const ctTargets = shallowRef<PveRecord[]>([]);
 const targetCtConfig = shallowRef<PveRecord>({});
 const pendingRows = shallowRef<PveRecord[]>([]);
+const pendingTimer = shallowRef<number>();
+const cgroupMode = shallowRef(2);
+const storageTypes = shallowRef<Record<string, string>>({});
 const addForm = reactive({
   mpid: 0,
   storage: '',
@@ -40,6 +44,8 @@ const addForm = reactive({
   acl: '__default__',
   skipReplication: false,
   keepAttrs: false,
+  idmap: '',
+  mountId: 0,
   deviceId: 0,
   devicePath: '',
   uid: '',
@@ -65,6 +71,8 @@ const form = reactive({
   acl: '__default__',
   skipReplication: false,
   keepAttrs: false,
+  idmap: '',
+  mountId: 0,
   devicePath: '',
   uid: '',
   gid: '',
@@ -77,15 +85,40 @@ function numberValue(value: unknown, fallback: number) {
   return Number.isFinite(number) ? number : fallback;
 }
 
+const cpuunitsDefault = computed(() => (cgroupMode.value === 1 ? 1024 : 100));
+const cpuunitsMax = computed(() => (cgroupMode.value === 1 ? 500000 : 10000));
+const currentConfig = computed(() => {
+  const config = { ...props.config };
+  pendingRows.value.forEach((pending) => {
+    const key = textValue(pending.key);
+    if (!key) return;
+    if (pending.delete) delete config[key];
+    else if (pending.pending !== undefined && textValue(pending.pending) !== '')
+      config[key] = pending.pending;
+  });
+  return config;
+});
+function rowValue(key: string, fallback = '') {
+  const pending = pendingByKey.value[key];
+  if (pending?.delete)
+    return `${textValue(props.config[key]) || fallback || '-'} (${gettext('Deleted')})`;
+  return textValue(currentConfig.value[key]) || fallback;
+}
 const rows = computed(() => {
-  const config = props.config;
+  const config = currentConfig.value;
   const cpuLimit = numberValue(config.cpulimit, 0);
   const cpuUnits = numberValue(config.cpuunits, 0);
   const cores = numberValue(config.cores, 0);
   const cpuDetails = [String(cores || gettext('unlimited'))];
   if (cpuLimit) cpuDetails.push(`[cpulimit=${cpuLimit}]`);
   if (cpuUnits) cpuDetails.push(`[cpuunits=${cpuUnits}]`);
-  const mountPoints = Object.keys(config)
+  const mountPoints = [
+    ...new Set([
+      ...Object.keys(props.config),
+      ...Object.keys(config),
+      ...Object.keys(pendingByKey.value),
+    ]),
+  ]
     .filter((key) => /^(mp|unused)\d+$/.test(key))
     .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
     .map((key) => ({
@@ -94,16 +127,22 @@ const rows = computed(() => {
       name: key.startsWith('mp')
         ? `${gettext('Mount Point')} (${key})`
         : `${gettext('Unused Disk')} ${key.replace('unused', '')}`,
-      value: textValue(config[key]) || '-',
+      value: rowValue(key, '-'),
     }));
-  const devices = Object.keys(config)
+  const devices = [
+    ...new Set([
+      ...Object.keys(props.config),
+      ...Object.keys(config),
+      ...Object.keys(pendingByKey.value),
+    ]),
+  ]
     .filter((key) => /^dev\d+$/.test(key))
     .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
     .map((key) => ({
       key,
       icon: 'settings_input_component',
       name: `${gettext('Device')} (${key})`,
-      value: textValue(config[key]) || '-',
+      value: rowValue(key, '-'),
     }));
 
   return [
@@ -124,7 +163,7 @@ const rows = computed(() => {
       key: 'rootfs',
       icon: 'storage',
       name: gettext('Root Disk'),
-      value: textValue(config.rootfs) || gettext('None'),
+      value: rowValue('rootfs', gettext('None')),
     },
     ...mountPoints,
     ...devices,
@@ -134,33 +173,68 @@ const selectedRow = computed(() => rows.value.find((row) => row.key === selected
 const isMemoryEditor = computed(() => ['memory', 'swap'].includes(selectedKey.value));
 const isCpuEditor = computed(() => selectedKey.value === 'cores');
 const isMountEditor = computed(
-  () => selectedKey.value === 'rootfs' || /^mp\d+$/.test(selectedKey.value),
+  () => selectedKey.value === 'rootfs' || /^(mp|unused)\d+$/.test(selectedKey.value)
 );
+const isUnusedDisk = computed(() => /^unused\d+$/.test(selectedKey.value));
 const isDeviceEditor = computed(() => /^dev\d+$/.test(selectedKey.value));
 const isDisk = computed(
-  () => selectedKey.value === 'rootfs' || /^(mp|unused)\d+$/.test(selectedKey.value),
+  () => selectedKey.value === 'rootfs' || /^(mp|unused)\d+$/.test(selectedKey.value)
 );
 const isUsedVolume = computed(
-  () => selectedKey.value === 'rootfs' || /^mp\d+$/.test(selectedKey.value),
+  () => selectedKey.value === 'rootfs' || /^mp\d+$/.test(selectedKey.value)
 );
-const canDetach = computed(
+const canRemove = computed(
   () =>
-    canEditDisk.value && /^mp\d+$/.test(selectedKey.value) && !hasPendingChange(selectedKey.value),
+    canEditDisk.value &&
+    selectedKey.value !== 'rootfs' &&
+    (/^(mp|unused)\d+$/.test(selectedKey.value) || /^dev\d+$/.test(selectedKey.value)) &&
+    !hasPendingChange(selectedKey.value)
+);
+const removeLabel = computed(() =>
+  /^mp\d+$/.test(selectedKey.value) ? gettext('Detach') : gettext('Remove')
 );
 const canRevert = computed(() => Boolean(selectedKey.value && hasPendingChange(selectedKey.value)));
 const pendingByKey = computed<Record<string, PveRecord>>(() =>
-  Object.fromEntries(pendingRows.value.map((row) => [textValue(row.key), row])),
+  Object.fromEntries(pendingRows.value.map((row) => [textValue(row.key), row]))
 );
 const canEditMemory = computed(() =>
-  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.Memory']),
+  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.Memory'])
 );
 const canEditCpu = computed(() =>
-  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.CPU']),
+  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.CPU'])
 );
 const canEditDisk = computed(() =>
-  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.Disk']),
+  Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.['VM.Config.Disk'])
 );
 const canEditDevice = computed(() => session.userid === 'root@pam');
+const selectedMount = computed(() =>
+  parsePropertyString(currentConfig.value[selectedKey.value], 'volume')
+);
+const selectedMountType = computed(() =>
+  textValue(selectedMount.value.volume).startsWith('/') ? 'bind' : 'volume'
+);
+const selectedStorageType = computed(
+  () => storageTypes.value[textValue(selectedMount.value.volume).split(':', 1)[0] || ''] || ''
+);
+const isUnprivileged = computed(() => numberValue(currentConfig.value.unprivileged, 0) === 1);
+const mountIsBind = computed(() => selectedMountType.value === 'bind');
+const canEditMount = computed(
+  () =>
+    canEditDisk.value &&
+    isMountEditor.value &&
+    !isPendingDelete(selectedKey.value) &&
+    (session.userid === 'root@pam' ||
+      !/^mp\d+$/.test(selectedKey.value) ||
+      selectedMountType.value === 'volume')
+);
+const quotaDisabled = computed(
+  () =>
+    mountIsBind.value ||
+    isUnprivileged.value ||
+    ['zfs', 'zfspool'].includes(selectedStorageType.value)
+);
+const mountBackupDisabled = computed(() => mountIsBind.value || selectedKey.value === 'rootfs');
+const mountAclDisabled = computed(() => mountIsBind.value);
 
 function parsePropertyString(value: unknown, defaultKey: string) {
   const result: Record<string, string> = {};
@@ -187,7 +261,7 @@ function printPropertyString(values: Record<string, string | boolean>, defaultKe
 
 function nextFreeKey(prefix: 'mp' | 'dev') {
   let index = 0;
-  while (props.config[`${prefix}${index}`] !== undefined) index += 1;
+  while (currentConfig.value[`${prefix}${index}`] !== undefined) index += 1;
   return index;
 }
 
@@ -198,17 +272,71 @@ function hasPendingChange(key: string) {
   const value = textValue(pending.pending);
   return value !== '' && value !== textValue(props.config[key]);
 }
+function isPendingDelete(key: string) {
+  return Boolean(pendingByKey.value[key]?.delete);
+}
+function isIntegerInRange(value: unknown, min: number, max = Number.MAX_SAFE_INTEGER) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= min && number <= max;
+}
+function isOptionalNumberInRange(value: unknown, min: number, max = Number.MAX_SAFE_INTEGER) {
+  return value === '' || value === null || value === undefined || isIntegerInRange(value, min, max);
+}
+function hasAtMostThreeDecimals(value: unknown) {
+  return /^\d+(?:\.\d{1,3})?$/.test(String(value));
+}
+function validDevice(values: Pick<typeof form, 'devicePath' | 'uid' | 'gid' | 'mode'>) {
+  return (
+    values.devicePath.startsWith('/dev/') &&
+    isOptionalNumberInRange(values.uid, 0) &&
+    isOptionalNumberInRange(values.gid, 0) &&
+    (/^0[0-7]{3}$/.test(values.mode) || values.mode === '')
+  );
+}
+const memoryValid = computed(
+  () => isIntegerInRange(form.memory, 16) && isIntegerInRange(form.swap, 0)
+);
+const cpuValid = computed(
+  () =>
+    isOptionalNumberInRange(form.cores, 1, 8192) &&
+    isOptionalNumberInRange(form.cpulimit, 0) &&
+    isOptionalNumberInRange(form.cpuunits, 8, cpuunitsMax.value)
+);
+const addMountValid = computed(
+  () =>
+    isIntegerInRange(addForm.mpid, 0, 255) &&
+    currentConfig.value[`mp${addForm.mpid}`] === undefined &&
+    Boolean(addForm.storage && addForm.mountPath) &&
+    Number(addForm.size) >= 0.001 &&
+    Number(addForm.size) <= 131072 &&
+    hasAtMostThreeDecimals(addForm.size)
+);
+const deviceValid = computed(() => validDevice(form));
+const addDeviceValid = computed(() => validDevice(addForm));
+const resizeValid = computed(
+  () =>
+    Number(resizeSize.value) >= 0 &&
+    Number(resizeSize.value) <= 131072 &&
+    hasAtMostThreeDecimals(resizeSize.value)
+);
 
 async function loadPending() {
   const response = await getVmPendingConfig(props.node, props.vmid, 'lxc');
   pendingRows.value = response.data || [];
 }
+async function loadCgroupMode() {
+  const response = await getClusterResources({ type: 'node' });
+  const node = (response.data || []).find((item) => textValue(item.node) === props.node);
+  cgroupMode.value = Number(node?.['cgroup-mode'] ?? 2);
+}
 
 async function loadRootdirStorages() {
   const response = await getNodeStorage(props.node, 'rootdir');
   storages.value = (response.data || []).map((item) => textValue(item.storage)).filter(Boolean);
+  storageTypes.value = Object.fromEntries(
+    (response.data || []).map((item) => [textValue(item.storage), textValue(item.type)])
+  );
   addForm.storage = storages.value[0] || '';
-  moveForm.storage = storages.value[0] || '';
 }
 
 function openAdd(kind: 'mount' | 'device') {
@@ -235,7 +363,7 @@ function openAdd(kind: 'mount' | 'device') {
 
 async function createResource() {
   if (addKind.value === 'mount') {
-    if (!canEditDisk.value || !addForm.storage || !addForm.mountPath || addForm.size <= 0) return;
+    if (!canEditDisk.value || !addMountValid.value) return;
     await updateVmConfig(
       props.node,
       props.vmid,
@@ -252,14 +380,15 @@ async function createResource() {
             acl: addForm.acl,
             replicate: addForm.skipReplication ? '0' : '',
             keepattrs: addForm.keepAttrs,
+            idmap: addForm.idmap,
           },
-          'volume',
+          'volume'
         ),
       },
-      'lxc',
+      'lxc'
     );
   } else {
-    if (!canEditDevice.value || !addForm.devicePath) return;
+    if (!canEditDevice.value || !addDeviceValid.value) return;
     await updateVmConfig(
       props.node,
       props.vmid,
@@ -273,30 +402,34 @@ async function createResource() {
             mode: addForm.mode,
             'deny-write': addForm.denyWrite,
           },
-          'path',
+          'path'
         ),
       },
-      'lxc',
+      'lxc'
     );
   }
   addVisible.value = false;
   emit('updated');
 }
 
-function detachSelected() {
-  if (!canDetach.value) return;
+function removeSelected() {
+  if (!canRemove.value) return;
   const key = selectedKey.value;
   Dialog.create({
-    title: gettext('Detach'),
-    message: gettext('Are you sure you want to detach entry {0}').replace(
+    title: removeLabel.value,
+    message: `${gettext(
+      /^mp\d+$/.test(key)
+        ? 'Are you sure you want to detach entry {0}'
+        : 'Are you sure you want to remove entry {0}'
+    ).replace(
       '{0}',
-      selectedRow.value?.name || key,
-    ),
+      selectedRow.value?.name || key
+    )}${/^unused\d+$/.test(key) ? ` ${gettext('This will permanently erase all data.')}` : ''}`,
     cancel: true,
     persistent: true,
   }).onOk(() => {
     loading.value = true;
-    void updateVmConfig(props.node, props.vmid, { digest: props.config.digest, delete: key }, 'lxc')
+    void updateVmConfig(props.node, props.vmid, { delete: key }, 'lxc')
       .then(() => emit('updated'))
       .finally(() => {
         loading.value = false;
@@ -307,6 +440,7 @@ function detachSelected() {
 function openMove() {
   if (!isUsedVolume.value || !canEditDisk.value) return;
   void loadRootdirStorages();
+  moveForm.storage = '';
   moveForm.deleteSource = false;
   moveVisible.value = true;
 }
@@ -315,12 +449,13 @@ async function moveVolume() {
   if (!isUsedVolume.value || !moveForm.storage) return;
   loading.value = true;
   try {
-    await moveCtVolume(props.node, props.vmid, {
+    const response = await moveCtVolume(props.node, props.vmid, {
       volume: selectedKey.value,
       storage: moveForm.storage,
       delete: moveForm.deleteSource ? 1 : 0,
     });
     moveVisible.value = false;
+    if (response.data) emit('task', props.node, response.data, gettext('Move Storage'));
     emit('updated');
   } finally {
     loading.value = false;
@@ -334,11 +469,17 @@ function openResize() {
 }
 
 async function resizeVolume() {
-  if (!isUsedVolume.value || !resizeSize.value || Number(resizeSize.value) <= 0) return;
+  if (!isUsedVolume.value || !resizeValid.value) return;
   loading.value = true;
   try {
-    await resizeCtVolume(props.node, props.vmid, selectedKey.value, `+${resizeSize.value}G`);
+    const response = await resizeCtVolume(
+      props.node,
+      props.vmid,
+      selectedKey.value,
+      `+${resizeSize.value}G`
+    );
     resizeVisible.value = false;
+    if (response.data) emit('task', props.node, response.data, gettext('Resize disk'));
     emit('updated');
   } finally {
     loading.value = false;
@@ -353,7 +494,7 @@ async function openReassign() {
       textValue(item.type) === 'lxc' &&
       textValue(item.node) === props.node &&
       textValue(item.vmid) !== props.vmid &&
-      !item.template,
+      !item.template
   );
   reassignForm.targetVmid = textValue(ctTargets.value[0]?.vmid);
   reassignForm.targetType = /^unused\d+$/.test(selectedKey.value) ? 'unused' : 'mp';
@@ -362,15 +503,22 @@ async function openReassign() {
 }
 
 async function reassignVolume() {
-  if (!reassignForm.targetVmid) return;
+  const targetKey = `${reassignForm.targetType}${reassignForm.targetId}`;
+  if (
+    !reassignForm.targetVmid ||
+    !isIntegerInRange(reassignForm.targetId, 0, 255) ||
+    targetCtConfig.value[targetKey] !== undefined
+  )
+    return;
   loading.value = true;
   try {
-    await reassignCtVolume(props.node, props.vmid, {
+    const response = await reassignCtVolume(props.node, props.vmid, {
       volume: selectedKey.value,
       'target-vmid': reassignForm.targetVmid,
       'target-volume': `${reassignForm.targetType}${reassignForm.targetId}`,
     });
     reassignVisible.value = false;
+    if (response.data) emit('task', props.node, response.data, gettext('Reassign Volume'));
     emit('updated');
   } finally {
     loading.value = false;
@@ -390,12 +538,15 @@ async function revertSelected() {
 }
 
 watch(
-  () => [props.config.memory, props.config.swap],
+  () => selectedKey.value,
   () => {
-    form.memory = numberValue(props.config.memory, 512);
-    form.swap = numberValue(props.config.swap, form.memory);
+    form.memory = numberValue(currentConfig.value.memory, 512);
+    form.swap = numberValue(currentConfig.value.swap, form.memory);
+    form.cores = numberValue(currentConfig.value.cores, 0);
+    form.cpulimit = numberValue(currentConfig.value.cpulimit, 0);
+    form.cpuunits = numberValue(currentConfig.value.cpuunits, cpuunitsDefault.value);
   },
-  { immediate: true },
+  { immediate: true }
 );
 
 watch(
@@ -403,7 +554,7 @@ watch(
   () => {
     void loadPending();
   },
-  { immediate: true },
+  { immediate: true }
 );
 
 watch(
@@ -418,19 +569,21 @@ watch(
     let index = 0;
     while (targetCtConfig.value[`${targetType}${index}`] !== undefined) index += 1;
     reassignForm.targetId = index;
-  },
+  }
 );
 
 watch(
-  selectedRow,
-  (row) => {
+  () => selectedKey.value,
+  (key) => {
+    const row = rows.value.find((item) => item.key === key);
     if (!row) return;
-    form.cores = numberValue(props.config.cores, 0);
-    form.cpulimit = numberValue(props.config.cpulimit, 0);
-    form.cpuunits = numberValue(props.config.cpuunits, 100);
-    if (row.key === 'rootfs' || /^mp\d+$/.test(row.key)) {
-      const mount = parsePropertyString(props.config[row.key], 'volume');
+    if (row.key === 'rootfs' || /^(mp|unused)\d+$/.test(row.key)) {
+      const mount = parsePropertyString(
+        currentConfig.value[row.key] ?? props.config[row.key],
+        'volume'
+      );
       form.volume = mount.volume || '';
+      form.mountId = isUnusedDisk.value ? nextFreeKey('mp') : 0;
       form.mountPath = mount.mp || '';
       form.backup = mount.backup !== '0';
       form.quota = mount.quota === '1';
@@ -439,6 +592,7 @@ watch(
       form.acl = mount.acl || '__default__';
       form.skipReplication = mount.replicate === '0';
       form.keepAttrs = mount.keepattrs === '1';
+      form.idmap = mount.idmap || '';
       mountExtras.value = Object.fromEntries(
         Object.entries(mount).filter(
           ([key]) =>
@@ -452,12 +606,13 @@ watch(
               'acl',
               'replicate',
               'keepattrs',
-            ].includes(key),
-        ),
+              'idmap',
+            ].includes(key)
+        )
       );
     }
     if (/^dev\d+$/.test(row.key)) {
-      const device = parsePropertyString(props.config[row.key], 'path');
+      const device = parsePropertyString(currentConfig.value[row.key], 'path');
       form.devicePath = device.path || '';
       form.uid = device.uid || '';
       form.gid = device.gid || '';
@@ -465,18 +620,18 @@ watch(
       form.denyWrite = device['deny-write'] === '1';
     }
   },
-  { immediate: true },
+  { immediate: true }
 );
 
 async function saveMemory() {
-  if (!canEditMemory.value) return;
+  if (!canEditMemory.value || !memoryValid.value) return;
   loading.value = true;
   try {
     await updateVmConfig(
       props.node,
       props.vmid,
       { digest: props.config.digest, memory: form.memory, swap: form.swap },
-      'lxc',
+      'lxc'
     );
     emit('updated');
   } finally {
@@ -485,7 +640,16 @@ async function saveMemory() {
 }
 
 async function saveCpu() {
-  if (!canEditCpu.value) return;
+  if (!canEditCpu.value || !cpuValid.value) return;
+  const deleted = ['cores', 'cpulimit', 'cpuunits'].filter((key) => {
+    const value = form[key as 'cores' | 'cpulimit' | 'cpuunits'];
+    return (
+      value === null ||
+      (key === 'cores' && Number(value) === 0) ||
+      (key === 'cpulimit' && Number(value) === 0) ||
+      (key === 'cpuunits' && Number(value) === cpuunitsDefault.value)
+    );
+  });
   loading.value = true;
   try {
     await updateVmConfig(
@@ -493,11 +657,12 @@ async function saveCpu() {
       props.vmid,
       {
         digest: props.config.digest,
-        cores: form.cores || '',
-        cpulimit: form.cpulimit || '',
-        cpuunits: form.cpuunits || '',
+        ...(deleted.includes('cores') ? {} : { cores: form.cores }),
+        ...(deleted.includes('cpulimit') ? {} : { cpulimit: form.cpulimit }),
+        ...(deleted.includes('cpuunits') ? {} : { cpuunits: form.cpuunits }),
+        ...(deleted.length ? { delete: deleted.join(',') } : {}),
       },
-      'lxc',
+      'lxc'
     );
     emit('updated');
   } finally {
@@ -507,28 +672,42 @@ async function saveCpu() {
 
 async function saveMount() {
   const key = selectedKey.value;
-  if (!canEditDisk.value || !isMountEditor.value) return;
+  if (!canEditMount.value || !form.volume || (selectedKey.value !== 'rootfs' && !form.mountPath))
+    return;
+  const mountKey = isUnusedDisk.value ? `mp${form.mountId}` : key;
+  if (
+    isUnusedDisk.value &&
+    (!isIntegerInRange(form.mountId, 0, 255) || currentConfig.value[mountKey] !== undefined)
+  )
+    return;
   const data = printPropertyString(
     {
       ...mountExtras.value,
       volume: form.volume,
-      ...(key === 'rootfs' ? {} : { mp: form.mountPath, backup: form.backup ? '1' : '0' }),
-      quota: form.quota ? '1' : '0',
+      ...(key === 'rootfs'
+        ? {}
+        : { mp: form.mountPath, backup: mountBackupDisabled.value ? '' : form.backup ? '1' : '0' }),
+      quota: quotaDisabled.value ? '' : form.quota ? '1' : '0',
       ro: form.readOnly ? '1' : '0',
       mountoptions: form.mountOptions.join(';'),
-      acl: form.acl,
+      acl: mountAclDisabled.value ? '' : form.acl,
       replicate: form.skipReplication ? '0' : '',
       keepattrs: form.keepAttrs,
+      idmap: form.idmap,
     },
-    'volume',
+    'volume'
   );
   loading.value = true;
   try {
     await updateVmConfig(
       props.node,
       props.vmid,
-      { digest: props.config.digest, [key]: data },
-      'lxc',
+      {
+        digest: props.config.digest,
+        [mountKey]: data,
+        ...(isUnusedDisk.value ? { delete: key } : {}),
+      },
+      'lxc'
     );
     emit('updated');
   } finally {
@@ -538,7 +717,7 @@ async function saveMount() {
 
 async function saveDevice() {
   const key = selectedKey.value;
-  if (!canEditDevice.value || !isDeviceEditor.value) return;
+  if (!canEditDevice.value || !isDeviceEditor.value || !deviceValid.value) return;
   const data = printPropertyString(
     {
       path: form.devicePath,
@@ -547,7 +726,7 @@ async function saveDevice() {
       mode: form.mode,
       'deny-write': form.denyWrite,
     },
-    'path',
+    'path'
   );
   loading.value = true;
   try {
@@ -555,13 +734,20 @@ async function saveDevice() {
       props.node,
       props.vmid,
       { digest: props.config.digest, [key]: data },
-      'lxc',
+      'lxc'
     );
     emit('updated');
   } finally {
     loading.value = false;
   }
 }
+onMounted(() => {
+  void loadCgroupMode();
+  pendingTimer.value = window.setInterval(() => void loadPending(), 2_000);
+});
+onUnmounted(() => {
+  if (pendingTimer.value) window.clearInterval(pendingTimer.value);
+});
 </script>
 
 <template>
@@ -576,14 +762,24 @@ async function saveDevice() {
         :label="gettext('Add')"
       >
         <q-list>
-          <q-item v-close-popup clickable :disable="!canEditDisk" @click="openAdd('mount')"
-            ><q-item-section avatar><q-icon name="storage" /></q-item-section
-            ><q-item-section>{{ gettext('Mount Point') }}</q-item-section></q-item
+          <q-item
+            v-close-popup
+            clickable
+            :disable="!canEditDisk"
+            @click="openAdd('mount')"
           >
-          <q-item v-close-popup clickable :disable="!canEditDevice" @click="openAdd('device')"
-            ><q-item-section avatar><q-icon name="settings_input_component" /></q-item-section
-            ><q-item-section>{{ gettext('Device Passthrough') }}</q-item-section></q-item
+            <q-item-section avatar><q-icon name="storage" /></q-item-section>
+            <q-item-section>{{ gettext('Mount Point') }}</q-item-section>
+          </q-item>
+          <q-item
+            v-close-popup
+            clickable
+            :disable="!canEditDevice"
+            @click="openAdd('device')"
           >
+            <q-item-section avatar><q-icon name="settings_input_component" /></q-item-section>
+            <q-item-section>{{ gettext('Device Passthrough') }}</q-item-section>
+          </q-item>
         </q-list>
       </q-btn-dropdown>
       <q-btn
@@ -592,9 +788,9 @@ async function saveDevice() {
         size="12px"
         color="negative"
         class="u-button"
-        :disable="!canDetach"
-        :label="gettext('Detach')"
-        @click="detachSelected"
+        :disable="!canRemove"
+        :label="removeLabel"
+        @click="removeSelected"
       />
       <q-btn-dropdown
         no-caps
@@ -606,15 +802,30 @@ async function saveDevice() {
         :label="gettext('Volume Action')"
       >
         <q-list>
-          <q-item v-close-popup clickable :disable="!isUsedVolume" @click="openMove"
-            ><q-item-section>{{ gettext('Move Storage') }}</q-item-section></q-item
+          <q-item
+            v-close-popup
+            clickable
+            :disable="!isUsedVolume"
+            @click="openMove"
           >
-          <q-item v-close-popup clickable :disable="selectedKey === 'rootfs'" @click="openReassign"
-            ><q-item-section>{{ gettext('Reassign Owner') }}</q-item-section></q-item
+            <q-item-section>{{ gettext('Move Storage') }}</q-item-section>
+          </q-item>
+          <q-item
+            v-close-popup
+            clickable
+            :disable="selectedKey === 'rootfs'"
+            @click="openReassign"
           >
-          <q-item v-close-popup clickable :disable="!isUsedVolume" @click="openResize"
-            ><q-item-section>{{ gettext('Resize') }}</q-item-section></q-item
+            <q-item-section>{{ gettext('Reassign Owner') }}</q-item-section>
+          </q-item>
+          <q-item
+            v-close-popup
+            clickable
+            :disable="!isUsedVolume"
+            @click="openResize"
           >
+            <q-item-section>{{ gettext('Resize') }}</q-item-section>
+          </q-item>
         </q-list>
       </q-btn-dropdown>
       <q-btn
@@ -641,9 +852,12 @@ async function saveDevice() {
               @click="selectedKey = row.key"
             >
               <div class="col-4 text-grey-10 resource-list-label">
-                <q-icon :name="row.icon" size="16px" class="q-mr-xs resource-list__icon" />{{
-                  row.name
-                }}:
+                <q-icon
+                  :name="row.icon"
+                  size="16px"
+                  class="q-mr-xs resource-list__icon"
+                />
+                {{ row.name }}:
               </div>
               <div class="col-8 text-grey-8 resource-list-value">{{ row.value }}</div>
             </div>
@@ -657,7 +871,10 @@ async function saveDevice() {
               <div class="row items-center no-wrap editor-titlebar">
                 <div class="editor-title text-grey-10">{{ selectedRow.name }}</div>
               </div>
-              <div v-if="isMemoryEditor" class="resource-editor__body">
+              <div
+                v-if="isMemoryEditor"
+                class="resource-editor__body"
+              >
                 <q-input
                   v-model.number="form.memory"
                   dense
@@ -665,6 +882,9 @@ async function saveDevice() {
                   min="16"
                   step="32"
                   :label="gettext('Memory (MiB)')"
+                  :rules="[
+                    (value) => isIntegerInRange(value, 16) || gettext('Minimum value is 16'),
+                  ]"
                 />
                 <q-input
                   v-model.number="form.swap"
@@ -673,9 +893,13 @@ async function saveDevice() {
                   min="0"
                   step="32"
                   :label="gettext('Swap (MiB)')"
+                  :rules="[(value) => isIntegerInRange(value, 0) || gettext('Minimum value is 0')]"
                 />
               </div>
-              <div v-else-if="isCpuEditor" class="resource-editor__body">
+              <div
+                v-else-if="isCpuEditor"
+                class="resource-editor__body"
+              >
                 <q-input
                   v-model.number="form.cores"
                   dense
@@ -684,6 +908,11 @@ async function saveDevice() {
                   max="8192"
                   :label="gettext('Cores')"
                   :placeholder="gettext('unlimited')"
+                  :rules="[
+                    (value) =>
+                      isOptionalNumberInRange(value, 1, 8192) ||
+                      gettext('Value must be between 1 and 8192'),
+                  ]"
                 />
                 <template v-if="cpuAdvanced">
                   <q-input
@@ -694,20 +923,53 @@ async function saveDevice() {
                     step="1"
                     :label="gettext('CPU limit')"
                     :placeholder="gettext('unlimited')"
+                    :rules="[
+                      (value) =>
+                        isOptionalNumberInRange(value, 0) ||
+                        gettext('Value must be zero or greater'),
+                    ]"
                   />
                   <q-input
                     v-model.number="form.cpuunits"
                     dense
                     type="number"
                     min="8"
-                    max="10000"
+                    :max="cpuunitsMax"
                     :label="gettext('CPU units')"
-                    :placeholder="gettext('Default') + ' (100)'"
+                    :placeholder="gettext('Default') + ` (${cpuunitsDefault})`"
+                    :rules="[
+                      (value) =>
+                        isOptionalNumberInRange(value, 8, cpuunitsMax) ||
+                        gettext('Invalid CPU units'),
+                    ]"
                   />
                 </template>
               </div>
-              <div v-else-if="isMountEditor" class="resource-editor__body">
-                <q-input v-model="form.volume" dense :label="gettext('Disk image')" />
+              <div
+                v-else-if="isMountEditor"
+                class="resource-editor__body"
+              >
+                <q-input
+                  v-model="form.volume"
+                  dense
+                  readonly
+                  :label="gettext('Disk image')"
+                />
+                <q-input
+                  v-if="isUnusedDisk"
+                  v-model.number="form.mountId"
+                  dense
+                  type="number"
+                  min="0"
+                  max="255"
+                  :label="gettext('Mount Point') + ' ID'"
+                  :rules="[
+                    (value) =>
+                      (isIntegerInRange(value, 0, 255) &&
+                        currentConfig[`mp${value}`] === undefined) ||
+                      gettext('Mount point is already in use.'),
+                  ]"
+                />
                 <q-input
                   v-if="selectedKey !== 'rootfs'"
                   v-model="form.mountPath"
@@ -720,6 +982,7 @@ async function saveDevice() {
                   v-model="form.backup"
                   dense
                   color="primary"
+                  :disable="mountBackupDisabled"
                   :label="gettext('Backup')"
                 />
                 <template v-if="mountAdvanced">
@@ -727,6 +990,7 @@ async function saveDevice() {
                     v-model="form.quota"
                     dense
                     color="primary"
+                    :disable="quotaDisabled"
                     :label="gettext('Enable quota')"
                   />
                   <q-checkbox
@@ -761,6 +1025,7 @@ async function saveDevice() {
                       { label: gettext('Enabled'), value: '1' },
                       { label: gettext('Disabled'), value: '0' },
                     ]"
+                    :disable="mountAclDisabled"
                   />
                   <q-checkbox
                     v-model="form.skipReplication"
@@ -775,14 +1040,26 @@ async function saveDevice() {
                     color="primary"
                     :label="gettext('Keep attributes')"
                   />
+                  <q-input
+                    v-model="form.idmap"
+                    dense
+                    :label="gettext('ID Mapping')"
+                    placeholder="u 0 100000 65536"
+                  />
                 </template>
               </div>
-              <div v-else-if="isDeviceEditor" class="resource-editor__body">
+              <div
+                v-else-if="isDeviceEditor"
+                class="resource-editor__body"
+              >
                 <q-input
                   v-model="form.devicePath"
                   dense
                   :label="gettext('Device Path')"
                   placeholder="/dev/xyz"
+                  :rules="[
+                    (value) => value.startsWith('/dev/') || gettext('Path has to start with /dev/'),
+                  ]"
                 />
                 <q-input
                   v-model="form.uid"
@@ -790,6 +1067,10 @@ async function saveDevice() {
                   type="number"
                   min="0"
                   :label="gettext('UID') + ' ' + gettext('in CT')"
+                  :rules="[
+                    (value) =>
+                      isOptionalNumberInRange(value, 0) || gettext('Value must be zero or greater'),
+                  ]"
                 />
                 <q-input
                   v-model="form.gid"
@@ -797,12 +1078,22 @@ async function saveDevice() {
                   type="number"
                   min="0"
                   :label="gettext('GID') + ' ' + gettext('in CT')"
+                  :rules="[
+                    (value) =>
+                      isOptionalNumberInRange(value, 0) || gettext('Value must be zero or greater'),
+                  ]"
                 />
                 <q-input
                   v-model="form.mode"
                   dense
                   :label="gettext('Access Mode in CT')"
                   placeholder="0660"
+                  :rules="[
+                    (value) =>
+                      !value ||
+                      /^0[0-7]{3}$/.test(value) ||
+                      gettext('Access mode has to be an octal number'),
+                  ]"
                 />
                 <q-checkbox
                   v-model="form.denyWrite"
@@ -811,7 +1102,10 @@ async function saveDevice() {
                   :label="gettext('Read only')"
                 />
               </div>
-              <div v-else class="resource-editor__body text-grey-8 wrap">
+              <div
+                v-else
+                class="resource-editor__body text-grey-8 wrap"
+              >
                 {{ selectedRow.value }}
               </div>
             </div>
@@ -839,7 +1133,7 @@ async function saveDevice() {
                 no-caps
                 size="12px"
                 class="bg-primary text-grey-1 u-button"
-                :disable="!canEditMemory"
+                :disable="!canEditMemory || !memoryValid"
                 :loading="loading"
                 :label="gettext('Save')"
                 @click="saveMemory"
@@ -849,7 +1143,7 @@ async function saveDevice() {
                 no-caps
                 size="12px"
                 class="bg-primary text-grey-1 u-button"
-                :disable="!canEditCpu"
+                :disable="!canEditCpu || !cpuValid"
                 :loading="loading"
                 :label="gettext('Save')"
                 @click="saveCpu"
@@ -859,7 +1153,7 @@ async function saveDevice() {
                 no-caps
                 size="12px"
                 class="bg-primary text-grey-1 u-button"
-                :disable="!canEditDisk"
+                :disable="!canEditMount"
                 :loading="loading"
                 :label="gettext('Save')"
                 @click="saveMount"
@@ -869,7 +1163,7 @@ async function saveDevice() {
                 no-caps
                 size="12px"
                 class="bg-primary text-grey-1 u-button"
-                :disable="!canEditDevice"
+                :disable="!canEditDevice || !deviceValid"
                 :loading="loading"
                 :label="gettext('Save')"
                 @click="saveDevice"
@@ -879,13 +1173,19 @@ async function saveDevice() {
         </div>
       </div>
     </div>
-    <q-dialog v-model="addVisible" persistent>
+    <q-dialog
+      v-model="addVisible"
+      persistent
+    >
       <UWindow
         :title="addKind === 'mount' ? gettext('Mount Point') : gettext('Device Passthrough')"
         width="640px"
         :loading="loading"
       >
-        <div v-if="addKind === 'mount'" class="q-pa-md u-dense">
+        <div
+          v-if="addKind === 'mount'"
+          class="q-pa-md u-dense"
+        >
           <div class="u-border q-pa-md">
             <div class="row q-col-gutter-lg">
               <div class="col-6">
@@ -894,8 +1194,15 @@ async function saveDevice() {
                   dense
                   type="number"
                   min="0"
+                  max="255"
                   class="q-field--with-bottom"
                   :label="gettext('Mount Point') + ' ID'"
+                  :rules="[
+                    (value) =>
+                      (isIntegerInRange(value, 0, 255) &&
+                        currentConfig[`mp${value}`] === undefined) ||
+                      gettext('Mount point is already in use.'),
+                  ]"
                 />
                 <q-select
                   v-model="addForm.storage"
@@ -910,6 +1217,19 @@ async function saveDevice() {
                   dense
                   type="number"
                   min="1"
+                  max="131072"
+                  step="0.001"
+                  :rules="[
+                    (value) =>
+                      (isIntegerInRange(addForm.mpid, 0, 255) &&
+                        currentConfig[`mp${addForm.mpid}`] === undefined) ||
+                      gettext('Mount point is already in use.'),
+                    (value) =>
+                      (Number(value) >= 0.001 &&
+                        Number(value) <= 131072 &&
+                        hasAtMostThreeDecimals(value)) ||
+                      gettext('Invalid disk size'),
+                  ]"
                   :label="gettext('Disk size') + ' (GiB)'"
                 />
               </div>
@@ -939,13 +1259,15 @@ async function saveDevice() {
                     right-label
                     color="primary"
                     :label="gettext('Enable quota')"
-                  /><q-checkbox
+                  />
+                  <q-checkbox
                     v-model="addForm.readOnly"
                     dense
                     right-label
                     color="primary"
                     :label="gettext('Read-only')"
-                  /><q-select
+                  />
+                  <q-select
                     v-model="addForm.mountOptions"
                     dense
                     multiple
@@ -969,25 +1291,36 @@ async function saveDevice() {
                       { label: gettext('Disabled'), value: '0' },
                     ]"
                     label="ACLs"
-                  /><q-checkbox
+                  />
+                  <q-checkbox
                     v-model="addForm.skipReplication"
                     dense
                     right-label
                     color="primary"
                     :label="gettext('Skip replication')"
-                  /><q-checkbox
+                  />
+                  <q-checkbox
                     v-model="addForm.keepAttrs"
                     dense
                     right-label
                     color="primary"
                     :label="gettext('Keep Attributes')"
                   />
+                  <q-input
+                    v-model="addForm.idmap"
+                    dense
+                    :label="gettext('ID Mapping')"
+                    placeholder="u 0 100000 65536"
+                  />
                 </div>
               </div>
             </template>
           </div>
         </div>
-        <div v-else class="q-pa-md u-dense">
+        <div
+          v-else
+          class="q-pa-md u-dense"
+        >
           <div class="u-border q-pa-md">
             <q-input
               v-model="addForm.devicePath"
@@ -995,6 +1328,9 @@ async function saveDevice() {
               class="q-field--with-bottom"
               :label="gettext('Device Path')"
               placeholder="/dev/xyz"
+              :rules="[
+                (value) => value.startsWith('/dev/') || gettext('Path has to start with /dev/'),
+              ]"
             />
             <template v-if="addAdvanced">
               <div class="row q-col-gutter-lg">
@@ -1006,12 +1342,23 @@ async function saveDevice() {
                     min="0"
                     class="q-field--with-bottom"
                     :label="gettext('UID') + ' ' + gettext('in CT')"
-                  /><q-input
+                    :rules="[
+                      (value) =>
+                        isOptionalNumberInRange(value, 0) ||
+                        gettext('Value must be zero or greater'),
+                    ]"
+                  />
+                  <q-input
                     v-model="addForm.gid"
                     dense
                     type="number"
                     min="0"
                     :label="gettext('GID') + ' ' + gettext('in CT')"
+                    :rules="[
+                      (value) =>
+                        isOptionalNumberInRange(value, 0) ||
+                        gettext('Value must be zero or greater'),
+                    ]"
                   />
                 </div>
                 <div class="col-6">
@@ -1021,7 +1368,14 @@ async function saveDevice() {
                     class="q-field--with-bottom"
                     :label="gettext('Access Mode in CT')"
                     placeholder="0660"
-                  /><q-checkbox
+                    :rules="[
+                      (value) =>
+                        !value ||
+                        /^0[0-7]{3}$/.test(value) ||
+                        gettext('Access mode has to be an octal number'),
+                    ]"
+                  />
+                  <q-checkbox
                     v-model="addForm.denyWrite"
                     dense
                     right-label
@@ -1033,35 +1387,46 @@ async function saveDevice() {
             </template>
           </div>
         </div>
-        <template #foot
-          ><q-checkbox
+        <template #foot>
+          <q-checkbox
             v-model="addAdvanced"
             dense
             right-label
             color="primary"
-            :label="gettext('Advanced')" /><q-space /><q-btn
+            :label="gettext('Advanced')"
+          />
+          <q-space />
+          <q-btn
             v-close-popup
             no-caps
             outline
             size="12px"
             class="u-button"
-            :label="gettext('Cancel')" /><q-btn
+            :label="gettext('Cancel')"
+          />
+          <q-btn
             no-caps
             flat
             size="12px"
             class="bg-primary text-grey-1 u-button"
-            :disable="
-              addKind === 'mount' ? !addForm.storage || !addForm.mountPath : !addForm.devicePath
-            "
+            :disable="addKind === 'mount' ? !addMountValid : !addDeviceValid"
             :loading="loading"
             :label="gettext('Add')"
             @click="createResource"
-        /></template>
+          />
+        </template>
       </UWindow>
     </q-dialog>
-    <q-dialog v-model="moveVisible" persistent
-      ><UWindow :title="gettext('Move Volume')" width="440px" :loading="loading"
-        ><div class="q-pa-md u-dense">
+    <q-dialog
+      v-model="moveVisible"
+      persistent
+    >
+      <UWindow
+        :title="gettext('Move Volume')"
+        width="440px"
+        :loading="loading"
+      >
+        <div class="q-pa-md u-dense">
           <div class="u-border q-pa-md">
             <q-select
               v-model="moveForm.storage"
@@ -1070,7 +1435,8 @@ async function saveDevice() {
               class="q-field--with-bottom"
               :options="storages"
               :label="gettext('Target Storage')"
-            /><q-checkbox
+            />
+            <q-checkbox
               v-model="moveForm.deleteSource"
               dense
               right-label
@@ -1079,14 +1445,16 @@ async function saveDevice() {
             />
           </div>
         </div>
-        <template #foot
-          ><q-btn
+        <template #foot>
+          <q-btn
             v-close-popup
             no-caps
             outline
             size="12px"
             class="u-button"
-            :label="gettext('Cancel')" /><q-btn
+            :label="gettext('Cancel')"
+          />
+          <q-btn
             no-caps
             flat
             size="12px"
@@ -1094,41 +1462,72 @@ async function saveDevice() {
             :disable="!moveForm.storage"
             :loading="loading"
             :label="gettext('Move Volume')"
-            @click="moveVolume" /></template></UWindow
-    ></q-dialog>
-    <q-dialog v-model="resizeVisible" persistent
-      ><UWindow :title="gettext('Resize disk')" width="420px" :loading="loading"
-        ><div class="q-pa-md u-dense">
+            @click="moveVolume"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
+    <q-dialog
+      v-model="resizeVisible"
+      persistent
+    >
+      <UWindow
+        :title="gettext('Resize disk')"
+        width="420px"
+        :loading="loading"
+      >
+        <div class="q-pa-md u-dense">
           <div class="u-border q-pa-md">
             <q-input
               v-model="resizeSize"
               dense
               type="number"
-              min="1"
+              min="0"
+              max="131072"
+              step="0.001"
+              :rules="[
+                (value) =>
+                  (Number(value) >= 0 &&
+                    Number(value) <= 131072 &&
+                    hasAtMostThreeDecimals(value)) ||
+                  gettext('Invalid resize value'),
+              ]"
               :label="gettext('Size Increment') + ' (GiB)'"
             />
           </div>
         </div>
-        <template #foot
-          ><q-btn
+        <template #foot>
+          <q-btn
             v-close-popup
             no-caps
             outline
             size="12px"
             class="u-button"
-            :label="gettext('Cancel')" /><q-btn
+            :label="gettext('Cancel')"
+          />
+          <q-btn
             no-caps
             flat
             size="12px"
             class="bg-primary text-grey-1 u-button"
-            :disable="!resizeSize || Number(resizeSize) <= 0"
+            :disable="!resizeValid"
             :loading="loading"
             :label="gettext('Resize disk')"
-            @click="resizeVolume" /></template></UWindow
-    ></q-dialog>
-    <q-dialog v-model="reassignVisible" persistent
-      ><UWindow :title="gettext('Reassign Volume')" width="440px" :loading="loading"
-        ><div class="q-pa-md u-dense">
+            @click="resizeVolume"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
+    <q-dialog
+      v-model="reassignVisible"
+      persistent
+    >
+      <UWindow
+        :title="gettext('Reassign Volume')"
+        width="440px"
+        :loading="loading"
+      >
+        <div class="q-pa-md u-dense">
           <div class="u-border q-pa-md">
             <q-select
               v-model="reassignForm.targetVmid"
@@ -1157,38 +1556,47 @@ async function saveDevice() {
                   { label: gettext('Mount Point'), value: 'mp' },
                   { label: gettext('Unused Disk'), value: 'unused' },
                 ]"
+                :disable="isUnusedDisk"
                 :label="gettext('Add as')"
-              /><q-input
+              />
+              <q-input
                 v-model.number="reassignForm.targetId"
                 class="col q-field--with-bottom"
                 dense
                 type="number"
                 min="0"
+                max="255"
                 :label="gettext('ID')"
               />
             </div>
           </div>
         </div>
-        <template #foot
-          ><q-btn
+        <template #foot>
+          <q-btn
             v-close-popup
             no-caps
             outline
             size="12px"
             class="u-button"
-            :label="gettext('Cancel')" /><q-btn
+            :label="gettext('Cancel')"
+          />
+          <q-btn
             no-caps
             flat
             size="12px"
             class="bg-primary text-grey-1 u-button"
             :disable="
               !reassignForm.targetVmid ||
+              !isIntegerInRange(reassignForm.targetId, 0, 255) ||
               targetCtConfig[`${reassignForm.targetType}${reassignForm.targetId}`] !== undefined
             "
             :loading="loading"
             :label="gettext('Reassign Volume')"
-            @click="reassignVolume" /></template></UWindow
-    ></q-dialog>
+            @click="reassignVolume"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
   </div>
 </template>
 
