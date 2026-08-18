@@ -48,11 +48,12 @@ const maximumManagedMountId = 255;
 
 function isValidDiskSize(value: number | null) {
   const size = Number(value);
+  const decimalPlaces = String(size).split('.')[1]?.length || 0;
   return (
     Number.isFinite(size) &&
     size >= diskSizeMinimum &&
     size <= diskSizeMaximum &&
-    Math.round(size * 1000) === size * 1000
+    decimalPlaces <= 3
   );
 }
 
