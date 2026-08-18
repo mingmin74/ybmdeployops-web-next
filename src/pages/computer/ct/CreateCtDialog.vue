@@ -169,7 +169,7 @@ const currentAdvanced = computed({
           flat
           size="12px"
           class="bg-grey-8 text-grey-1 u-button"
-          :disable="nextDisabled"
+          :disable="loading"
           :label="gettext('Back')"
           @click="moveStep(-1)"
         />
@@ -179,7 +179,7 @@ const currentAdvanced = computed({
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button q-ml-sm"
-          :disable="loading"
+          :disable="nextDisabled"
           :label="gettext('Next')"
           @click="next"
         />
