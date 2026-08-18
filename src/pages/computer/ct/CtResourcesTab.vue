@@ -7,6 +7,7 @@ import { getClusterResources } from '@/api/resources';
 import { getNodeStorage, getVmResources } from '@/api/storageContent';
 import { moveCtVolume, reassignCtVolume, resizeCtVolume } from '@/api/vm';
 import UWindow from '@/components/UWindow.vue';
+import CtIdMapField from './CtIdMapField.vue';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
@@ -87,31 +88,36 @@ function numberValue(value: unknown, fallback: number) {
 
 const cpuunitsDefault = computed(() => (cgroupMode.value === 1 ? 1024 : 100));
 const cpuunitsMax = computed(() => (cgroupMode.value === 1 ? 500000 : 10000));
-const currentConfig = computed(() => {
-  const config = { ...props.config };
-  pendingRows.value.forEach((pending) => {
-    const key = textValue(pending.key);
-    if (!key) return;
-    if (pending.delete) delete config[key];
-    else if (pending.pending !== undefined && textValue(pending.pending) !== '')
-      config[key] = pending.pending;
-  });
-  return config;
-});
+const currentConfig = computed(() => ({ ...props.config }));
 function rowValue(key: string, fallback = '') {
-  const pending = pendingByKey.value[key];
-  if (pending?.delete)
-    return `${textValue(props.config[key]) || fallback || '-'} (${gettext('Deleted')})`;
   return textValue(currentConfig.value[key]) || fallback;
 }
-const rows = computed(() => {
-  const config = currentConfig.value;
+function pendingValue(key: string) {
+  const pending = pendingByKey.value[key];
+  if (!pending || !hasPendingChange(key)) return '';
+  return pending.delete ? gettext('Deleted') : textValue(pending.pending);
+}
+function cpuDetails(config: PveRecord) {
+  const details = [String(numberValue(config.cores, 0) || gettext('unlimited'))];
   const cpuLimit = numberValue(config.cpulimit, 0);
   const cpuUnits = numberValue(config.cpuunits, 0);
-  const cores = numberValue(config.cores, 0);
-  const cpuDetails = [String(cores || gettext('unlimited'))];
-  if (cpuLimit) cpuDetails.push(`[cpulimit=${cpuLimit}]`);
-  if (cpuUnits) cpuDetails.push(`[cpuunits=${cpuUnits}]`);
+  if (cpuLimit) details.push(`[cpulimit=${cpuLimit}]`);
+  if (cpuUnits) details.push(`[cpuunits=${cpuUnits}]`);
+  return details.join(' ');
+}
+const pendingCpuValue = computed(() => {
+  const pendingConfig = { ...props.config };
+  const hasPendingCpu = ['cores', 'cpulimit', 'cpuunits'].some((key) => hasPendingChange(key));
+  if (!hasPendingCpu) return '';
+  ['cores', 'cpulimit', 'cpuunits'].forEach((key) => {
+    const pending = pendingByKey.value[key];
+    if (pending?.delete) delete pendingConfig[key];
+    else if (pending && textValue(pending.pending) !== '') pendingConfig[key] = pending.pending;
+  });
+  return cpuDetails(pendingConfig);
+});
+const rows = computed(() => {
+  const config = currentConfig.value;
   const mountPoints = [
     ...new Set([
       ...Object.keys(props.config),
@@ -128,6 +134,7 @@ const rows = computed(() => {
         ? `${gettext('Mount Point')} (${key})`
         : `${gettext('Unused Disk')} ${key.replace('unused', '')}`,
       value: rowValue(key, '-'),
+      pending: pendingValue(key),
     }));
   const devices = [
     ...new Set([
@@ -143,6 +150,7 @@ const rows = computed(() => {
       icon: 'settings_input_component',
       name: `${gettext('Device')} (${key})`,
       value: rowValue(key, '-'),
+      pending: pendingValue(key),
     }));
 
   return [
@@ -151,19 +159,28 @@ const rows = computed(() => {
       icon: 'memory',
       name: gettext('Memory'),
       value: `${numberValue(config.memory, 512)} MiB`,
+      pending: pendingValue('memory') && `${pendingValue('memory')} MiB`,
     },
     {
       key: 'swap',
       icon: 'swap_horiz',
       name: gettext('Swap'),
       value: `${numberValue(config.swap, 512)} MiB`,
+      pending: pendingValue('swap') && `${pendingValue('swap')} MiB`,
     },
-    { key: 'cores', icon: 'developer_board', name: gettext('Cores'), value: cpuDetails.join(' ') },
+    {
+      key: 'cores',
+      icon: 'developer_board',
+      name: gettext('Cores'),
+      value: cpuDetails(config),
+      pending: pendingCpuValue.value,
+    },
     {
       key: 'rootfs',
       icon: 'storage',
       name: gettext('Root Disk'),
       value: rowValue('rootfs', gettext('None')),
+      pending: pendingValue('rootfs'),
     },
     ...mountPoints,
     ...devices,
@@ -235,6 +252,14 @@ const quotaDisabled = computed(
 );
 const mountBackupDisabled = computed(() => mountIsBind.value || selectedKey.value === 'rootfs');
 const mountAclDisabled = computed(() => mountIsBind.value);
+const addStorageType = computed(() => storageTypes.value[addForm.storage] || '');
+const addQuotaDisabled = computed(
+  () => isUnprivileged.value || ['zfs', 'zfspool'].includes(addStorageType.value)
+);
+
+watch(addQuotaDisabled, (disabled) => {
+  if (disabled) addForm.quota = false;
+});
 
 function parsePropertyString(value: unknown, defaultKey: string) {
   const result: Record<string, string> = {};
@@ -374,7 +399,7 @@ async function createResource() {
             volume: `${addForm.storage}:${addForm.size}`,
             mp: addForm.mountPath,
             backup: addForm.backup ? '1' : '0',
-            quota: addForm.quota ? '1' : '0',
+            quota: addQuotaDisabled.value ? '' : addForm.quota ? '1' : '0',
             ro: addForm.readOnly ? '1' : '0',
             mountoptions: addForm.mountOptions.join(';'),
             acl: addForm.acl,
@@ -859,7 +884,15 @@ onUnmounted(() => {
                 />
                 {{ row.name }}:
               </div>
-              <div class="col-8 text-grey-8 resource-list-value">{{ row.value }}</div>
+              <div class="col-8 text-grey-8 resource-list-value">
+                <div>{{ `${gettext('Current')}: ${row.value}` }}</div>
+                <div
+                  v-if="row.pending"
+                  class="resource-list-pending"
+                >
+                  {{ `${gettext('Pending')}: ${row.pending}` }}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1040,12 +1073,7 @@ onUnmounted(() => {
                     color="primary"
                     :label="gettext('Keep attributes')"
                   />
-                  <q-input
-                    v-model="form.idmap"
-                    dense
-                    :label="gettext('ID Mapping')"
-                    placeholder="u 0 100000 65536"
-                  />
+                  <CtIdMapField v-model="form.idmap" />
                 </template>
               </div>
               <div
@@ -1216,7 +1244,7 @@ onUnmounted(() => {
                   v-model.number="addForm.size"
                   dense
                   type="number"
-                  min="1"
+                  min="0.001"
                   max="131072"
                   step="0.001"
                   :rules="[
@@ -1258,6 +1286,7 @@ onUnmounted(() => {
                     dense
                     right-label
                     color="primary"
+                    :disable="addQuotaDisabled"
                     :label="gettext('Enable quota')"
                   />
                   <q-checkbox
@@ -1306,12 +1335,7 @@ onUnmounted(() => {
                     color="primary"
                     :label="gettext('Keep Attributes')"
                   />
-                  <q-input
-                    v-model="addForm.idmap"
-                    dense
-                    :label="gettext('ID Mapping')"
-                    placeholder="u 0 100000 65536"
-                  />
+                  <CtIdMapField v-model="addForm.idmap" />
                 </div>
               </div>
             </template>
@@ -1646,6 +1670,9 @@ onUnmounted(() => {
   overflow-wrap: anywhere;
   word-break: break-word;
   white-space: normal;
+}
+.resource-list-pending {
+  color: #a06200;
 }
 .resource-list-row:last-child {
   border-bottom: 0;
