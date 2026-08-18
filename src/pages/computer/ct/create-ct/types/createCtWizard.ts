@@ -54,7 +54,7 @@ export type CreateCtForm = {
   netBridge: string;
   netName: string;
   netHwaddr: string;
-  netVlanTag: number | null;
+  netVlanTag: number | null | '';
   netFirewall: boolean;
   netIpv4Mode: 'static' | 'dhcp';
   netIp: string;
@@ -63,8 +63,8 @@ export type CreateCtForm = {
   netIp6: string;
   netGateway6: string;
   netDisconnect: boolean;
-  netMtu: number | null;
-  netRate: number | null;
+  netMtu: number | null | '';
+  netRate: number | null | '';
   netHostManaged: boolean;
   nameserver: string;
   searchdomain: string;
@@ -105,6 +105,7 @@ export type CreateCtWizardContext = {
     storageOptions: Ref<PveRecord[]>;
     rootfsStorageOptions: Ref<PveRecord[]>;
     templateRows: Ref<PveRecord[]>;
+    bridgeRows: Ref<PveRecord[]>;
     showAllTemplateArchitectures: Ref<boolean>;
   };
   errors: {

@@ -9,8 +9,10 @@ import {
   type PveRecord,
 } from '@/api/resources';
 import { getNodeStorage, getStorageContent } from '@/api/storageContent';
+import { getNodeNetwork } from '@/api/host';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
+import { isIpv4Address, isIpv4Cidr, isIpv6Address, isIpv6Cidr } from '@/utils/ipValidation';
 import {
   hasValidSshPublicKey,
   isDnsName,
@@ -65,10 +67,14 @@ function isIntegerInRange(value: unknown, minimum: number, maximum?: number) {
   if (isBlankNumber(value)) return false;
   const number = Number(value);
   return (
-    Number.isInteger(number) &&
-    number >= minimum &&
-    (maximum === undefined || number <= maximum)
+    Number.isInteger(number) && number >= minimum && (maximum === undefined || number <= maximum)
   );
+}
+
+function isNumberInRange(value: unknown, minimum: number, maximum: number) {
+  if (isBlankNumber(value)) return true;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= minimum && number <= maximum;
 }
 
 function isValidIdMapValue(value: string, minimum: number) {
@@ -112,7 +118,7 @@ function defaultForm(): CreateCtForm {
     cores: 1,
     password: '',
     confirmPassword: '',
-    netBridge: 'vmbr0',
+    netBridge: '',
     netName: 'eth0',
     netHwaddr: '',
     netVlanTag: null,
@@ -166,6 +172,7 @@ export function useCreateCtWizard(
   const pools = shallowRef<PvePool[]>([]);
   const storageOptions = shallowRef<PveRecord[]>([]);
   const rootfsStorageOptions = shallowRef<PveRecord[]>([]);
+  const bridgeRows = shallowRef<PveRecord[]>([]);
   const allTemplateRows = shallowRef<PveRecord[]>([]);
   const showAllTemplateArchitectures = shallowRef(false);
   const validationError = shallowRef('');
@@ -179,11 +186,34 @@ export function useCreateCtWizard(
     if (hostArch === 'aarch64') return 'arm64';
     return undefined;
   });
-  const cgroupMode = computed(
-    () => (nodes.value.find((node) => node.node === form.node)?.['cgroup-mode'] === 1 ? 1 : 2)
+  const cgroupMode = computed(() =>
+    nodes.value.find((node) => node.node === form.node)?.['cgroup-mode'] === 1 ? 1 : 2
   );
   const cpuUnitsDefault = computed(() => (cgroupMode.value === 1 ? 1024 : 100));
   const cpuUnitsMaximum = computed(() => (cgroupMode.value === 1 ? 500000 : 10000));
+  const bridgeValid = computed(
+    () =>
+      Boolean(form.netBridge) &&
+      bridgeRows.value.some((bridge) => textValue(bridge.iface) === form.netBridge)
+  );
+  const ipv4Valid = computed(
+    () => form.netIpv4Mode !== 'static' || !form.netIp.trim() || isIpv4Cidr(form.netIp.trim())
+  );
+  const ipv4GatewayValid = computed(
+    () =>
+      form.netIpv4Mode !== 'static' ||
+      !form.netGateway.trim() ||
+      isIpv4Address(form.netGateway.trim())
+  );
+  const ipv6Valid = computed(
+    () => form.netIpv6Mode !== 'static' || !form.netIp6.trim() || isIpv6Cidr(form.netIp6.trim())
+  );
+  const ipv6GatewayValid = computed(
+    () =>
+      form.netIpv6Mode !== 'static' ||
+      !form.netGateway6.trim() ||
+      isIpv6Address(form.netGateway6.trim())
+  );
   const templateRows = computed(() => {
     if (showAllTemplateArchitectures.value || !nodeTemplateArchitecture.value)
       return allTemplateRows.value;
@@ -245,19 +275,14 @@ export function useCreateCtWizard(
         (Number.isFinite(Number(form.cpuLimit)) && Number(form.cpuLimit) >= 0)) &&
       (isBlankNumber(form.cpuUnits) || isIntegerInRange(form.cpuUnits, 8, cpuUnitsMaximum.value)) &&
       form.netName.trim() !== '' &&
-      form.netBridge.trim() !== '' &&
-      (form.netVlanTag === null ||
-        (Number.isFinite(Number(form.netVlanTag)) &&
-          Number(form.netVlanTag) >= 1 &&
-          Number(form.netVlanTag) <= 4094)) &&
-      (form.netMtu === null ||
-        (Number.isFinite(Number(form.netMtu)) &&
-          Number(form.netMtu) >= 576 &&
-          Number(form.netMtu) <= 65535)) &&
-      (form.netRate === null ||
-        (Number.isFinite(Number(form.netRate)) &&
-          Number(form.netRate) >= 0 &&
-          Number(form.netRate) <= 10240));
+      bridgeValid.value &&
+      ipv4Valid.value &&
+      ipv4GatewayValid.value &&
+      ipv6Valid.value &&
+      ipv6GatewayValid.value &&
+      (isBlankNumber(form.netVlanTag) || isIntegerInRange(form.netVlanTag, 1, 4094)) &&
+      (isBlankNumber(form.netMtu) || isIntegerInRange(form.netMtu, 576, 65535)) &&
+      isNumberInRange(form.netRate, 0, 10240);
     return basic && canProceedHardware.value;
   });
   const canProceedTemplate = computed(() => form.ostemplate !== '');
@@ -376,10 +401,7 @@ export function useCreateCtWizard(
       });
     }
     if (stepName === 'mounts') {
-      if (
-        !isBlankNumber(form.cores) &&
-        !isIntegerInRange(form.cores, 1, 8192)
-      ) {
+      if (!isBlankNumber(form.cores) && !isIntegerInRange(form.cores, 1, 8192)) {
         addValidationError(
           'cores',
           gettext('Cores') + ': ' + gettext('Value must be between 1 and 8192.')
@@ -420,47 +442,41 @@ export function useCreateCtWizard(
     if (stepName === 'limits') {
       if (!form.netName.trim())
         addValidationError('netName', gettext('Name') + ': ' + gettext('This field is required.'));
-      if (!form.netBridge.trim())
-        addValidationError(
-          'netBridge',
-          gettext('Bridge') + ': ' + gettext('This field is required.')
-        );
+      if (!bridgeValid.value)
+        addValidationError('netBridge', gettext('Bridge') + ': ' + gettext('Invalid value.'));
       if (form.netHwaddr.trim() && !/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(form.netHwaddr)) {
         addValidationError(
           'netHwaddr',
           gettext('MAC address') + ': ' + gettext('Invalid MAC address')
         );
       }
-      if (
-        form.netVlanTag !== null &&
-        (!Number.isFinite(Number(form.netVlanTag)) ||
-          Number(form.netVlanTag) < 1 ||
-          Number(form.netVlanTag) > 4094)
-      ) {
+      if (!isBlankNumber(form.netVlanTag) && !isIntegerInRange(form.netVlanTag, 1, 4094)) {
         addValidationError(
           'netVlanTag',
           gettext('VLAN Tag') + ': ' + gettext('Value must be between 1 and 4094.')
         );
       }
-      if (
-        form.netMtu !== null &&
-        (!Number.isFinite(Number(form.netMtu)) ||
-          Number(form.netMtu) < 576 ||
-          Number(form.netMtu) > 65535)
-      ) {
+      if (!isBlankNumber(form.netMtu) && !isIntegerInRange(form.netMtu, 576, 65535)) {
         addValidationError('netMtu', 'MTU: ' + gettext('Value must be between 576 and 65535.'));
       }
-      if (
-        form.netRate !== null &&
-        (!Number.isFinite(Number(form.netRate)) ||
-          Number(form.netRate) < 0 ||
-          Number(form.netRate) > 10240)
-      ) {
+      if (!isNumberInRange(form.netRate, 0, 10240)) {
         addValidationError(
           'netRate',
           gettext('Rate limit') + ': ' + gettext('Value must be between 0 and 10240.')
         );
       }
+      if (!ipv4Valid.value) addValidationError('netIp', 'IPv4/CIDR: ' + gettext('Invalid value.'));
+      if (!ipv4GatewayValid.value)
+        addValidationError(
+          'netGateway',
+          gettext('Gateway') + ' (IPv4): ' + gettext('Invalid value.')
+        );
+      if (!ipv6Valid.value) addValidationError('netIp6', 'IPv6/CIDR: ' + gettext('Invalid value.'));
+      if (!ipv6GatewayValid.value)
+        addValidationError(
+          'netGateway6',
+          gettext('Gateway') + ' (IPv6): ' + gettext('Invalid value.')
+        );
     }
     return validationErrorEntries.value.length === 0;
   }
@@ -605,6 +621,28 @@ export function useCreateCtWizard(
       form.ostemplate = '';
     }
   }
+  let bridgeLoadRequest = 0;
+  async function loadBridges() {
+    const request = ++bridgeLoadRequest;
+    if (!form.node) {
+      bridgeRows.value = [];
+      form.netBridge = '';
+      return;
+    }
+    try {
+      const response = await getNodeNetwork(form.node, { type: 'any_bridge' });
+      if (request !== bridgeLoadRequest) return;
+      bridgeRows.value = (response.data || [])
+        .filter((bridge) => Boolean(textValue(bridge.iface)))
+        .sort((left, right) => textValue(left.iface).localeCompare(textValue(right.iface)));
+      if (!bridgeRows.value.some((bridge) => textValue(bridge.iface) === form.netBridge))
+        form.netBridge = textValue(bridgeRows.value[0]?.iface);
+    } catch {
+      if (request !== bridgeLoadRequest) return;
+      bridgeRows.value = [];
+      form.netBridge = '';
+    }
+  }
   function resetForm() {
     Object.assign(form, {
       node:
@@ -622,7 +660,7 @@ export function useCreateCtWizard(
       cores: 1,
       password: '',
       confirmPassword: '',
-      netBridge: 'vmbr0',
+      netBridge: '',
       netName: 'eth0',
       netHwaddr: '',
       netVlanTag: null,
@@ -665,6 +703,7 @@ export function useCreateCtWizard(
   }
   async function initialize() {
     await loadNodes();
+    await loadBridges();
     await loadPools();
     await loadNextId();
     await loadStorageOptions();
@@ -683,7 +722,7 @@ export function useCreateCtWizard(
         form.netName && `name=${form.netName}`,
         form.netBridge && `bridge=${form.netBridge}`,
         form.netHwaddr && `hwaddr=${form.netHwaddr}`,
-        form.netVlanTag !== null && `tag=${form.netVlanTag}`,
+        !isBlankNumber(form.netVlanTag) && `tag=${form.netVlanTag}`,
         `firewall=${form.netFirewall ? 1 : 0}`,
         form.netIpv4Mode === 'static' ? form.netIp && `ip=${form.netIp}` : `ip=${form.netIpv4Mode}`,
         form.netIpv4Mode === 'static' && form.netGateway && `gw=${form.netGateway}`,
@@ -692,8 +731,8 @@ export function useCreateCtWizard(
           : `ip6=${form.netIpv6Mode}`,
         form.netIpv6Mode === 'static' && form.netGateway6 && `gw6=${form.netGateway6}`,
         form.netDisconnect && 'link_down=1',
-        form.netMtu !== null && `mtu=${form.netMtu}`,
-        form.netRate !== null && `rate=${form.netRate}`,
+        !isBlankNumber(form.netMtu) && `mtu=${form.netMtu}`,
+        !isBlankNumber(form.netRate) && `rate=${form.netRate}`,
         form.netHostManaged && 'host-managed=1',
       ]
         .filter(Boolean)
@@ -826,6 +865,7 @@ export function useCreateCtWizard(
     async () => {
       await loadStorageOptions();
       await loadRootfsStorageOptions();
+      await loadBridges();
       await loadNextId();
     }
   );
@@ -873,6 +913,7 @@ export function useCreateCtWizard(
       storageOptions,
       rootfsStorageOptions,
       templateRows,
+      bridgeRows,
       showAllTemplateArchitectures,
     },
     errors: { validationError, validationErrors, generalFieldErrors, validationErrorEntries },

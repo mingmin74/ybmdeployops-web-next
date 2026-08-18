@@ -1,12 +1,32 @@
 <script setup lang="ts">
+import type { QTableColumn } from 'quasar';
+import type { PveRecord } from '@/api/resources';
+import SelectTable from '@/components/SelectTable.vue';
 import { gettext } from '@/locale';
+import { textValue } from '@/utils/pveFormat';
 import { useCreateCtWizardContext } from './create-ct/context/createCtWizardContext';
 
 defineOptions({ name: 'CtLimitsStep' });
 
-const { form, state, errors } = useCreateCtWizardContext();
+const { form, state, resources, errors } = useCreateCtWizardContext();
 const { networkAdvanced } = state;
+const { bridgeRows } = resources;
 const { validationErrors } = errors;
+const bridgeColumns: QTableColumn<PveRecord>[] = [
+  { name: 'iface', label: gettext('Bridge'), field: (row) => textValue(row.iface), align: 'left' },
+  {
+    name: 'active',
+    label: gettext('Active'),
+    field: (row) => ((row.active ?? row.running) ? gettext('Yes') : gettext('No')),
+    align: 'left',
+  },
+  {
+    name: 'comments',
+    label: gettext('Comment'),
+    field: (row) => textValue(row.comments),
+    align: 'left',
+  },
+];
 const ipv4ModeOptions = [
   { label: gettext('Static'), value: 'static' },
   { label: 'DHCP', value: 'dhcp' },
@@ -19,7 +39,10 @@ const ipv6ModeOptions = [
 </script>
 
 <template>
-  <q-scroll-area class="q-pa-sm" style="height: 466px">
+  <q-scroll-area
+    class="q-pa-sm"
+    style="height: 466px"
+  >
     <div class="u-border-dotted-blue bg-white q-px-md q-py-sm">
       <div class="row q-gutter-lg">
         <div class="col">
@@ -41,12 +64,18 @@ const ipv6ModeOptions = [
             :label="gettext('MAC address')"
             :placeholder="gettext('auto')"
           />
-          <q-input
+          <SelectTable
             v-model="form.netBridge"
-            dense
-            class="q-field--with-bottom"
+            row-key="iface"
+            field-style="standard"
+            width="500px"
+            style="width: 100%"
+            :rows="bridgeRows"
+            :columns="bridgeColumns"
+            :display-value="form.netBridge"
+            :get-row-value="(row) => textValue(row.iface)"
             :error="Boolean(validationErrors.netBridge)"
-            :error-message="validationErrors.netBridge"
+            :error-message="validationErrors.netBridge || ''"
             :label="gettext('Bridge')"
           />
           <q-input
@@ -84,6 +113,8 @@ const ipv6ModeOptions = [
             dense
             class="q-field--with-bottom"
             :disable="form.netIpv4Mode !== 'static'"
+            :error="Boolean(validationErrors.netIp)"
+            :error-message="validationErrors.netIp"
             :label="'IPv4/CIDR'"
             :placeholder="gettext('None')"
           />
@@ -92,6 +123,8 @@ const ipv6ModeOptions = [
             dense
             class="q-field--with-bottom"
             :disable="form.netIpv4Mode !== 'static'"
+            :error="Boolean(validationErrors.netGateway)"
+            :error-message="validationErrors.netGateway"
             :label="`${gettext('Gateway')} (IPv4)`"
           />
           <q-separator class="q-my-sm" />
@@ -109,20 +142,28 @@ const ipv6ModeOptions = [
             dense
             class="q-field--with-bottom"
             :disable="form.netIpv6Mode !== 'static'"
+            :error="Boolean(validationErrors.netIp6)"
+            :error-message="validationErrors.netIp6"
             :label="'IPv6/CIDR'"
             :placeholder="gettext('None')"
           />
           <q-input
             v-model="form.netGateway6"
             dense
+            class="q-field--with-bottom"
             :disable="form.netIpv6Mode !== 'static'"
+            :error="Boolean(validationErrors.netGateway6)"
+            :error-message="validationErrors.netGateway6"
             :label="`${gettext('Gateway')} (IPv6)`"
           />
         </div>
       </div>
     </div>
 
-    <div v-if="networkAdvanced" class="q-mt-sm u-border-dotted-blue bg-white q-px-md q-py-sm">
+    <div
+      v-if="networkAdvanced"
+      class="q-mt-sm u-border-dotted-blue bg-white q-px-md q-py-sm"
+    >
       <div class="row q-gutter-lg">
         <div class="col">
           <q-checkbox
