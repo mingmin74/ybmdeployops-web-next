@@ -57,6 +57,20 @@ function isValidDiskSize(value: number | null) {
   );
 }
 
+function isBlankNumber(value: unknown) {
+  return value === null || value === '';
+}
+
+function isIntegerInRange(value: unknown, minimum: number, maximum?: number) {
+  if (isBlankNumber(value)) return false;
+  const number = Number(value);
+  return (
+    Number.isInteger(number) &&
+    number >= minimum &&
+    (maximum === undefined || number <= maximum)
+  );
+}
+
 function isValidIdMapValue(value: string, minimum: number) {
   return /^\d+$/.test(value.trim()) && Number(value) >= minimum;
 }
@@ -165,6 +179,11 @@ export function useCreateCtWizard(
     if (hostArch === 'aarch64') return 'arm64';
     return undefined;
   });
+  const cgroupMode = computed(
+    () => (nodes.value.find((node) => node.node === form.node)?.['cgroup-mode'] === 1 ? 1 : 2)
+  );
+  const cpuUnitsDefault = computed(() => (cgroupMode.value === 1 ? 1024 : 100));
+  const cpuUnitsMaximum = computed(() => (cgroupMode.value === 1 ? 500000 : 10000));
   const templateRows = computed(() => {
     if (showAllTemplateArchitectures.value || !nodeTemplateArchitecture.value)
       return allTemplateRows.value;
@@ -219,19 +238,12 @@ export function useCreateCtWizard(
       canProceedGeneral.value &&
       (!form.password.trim() || form.password === form.confirmPassword) &&
       form.ostemplate !== '' &&
-      Number.isFinite(Number(form.memory)) &&
-      Number(form.memory) >= 16 &&
-      Number.isFinite(Number(form.swap)) &&
-      Number(form.swap) >= 0 &&
-      Number.isFinite(Number(form.cores)) &&
-      Number(form.cores) >= 1 &&
-      Number(form.cores) <= 8192 &&
-      (form.cpuLimit === null ||
+      isIntegerInRange(form.memory, 16) &&
+      isIntegerInRange(form.swap, 0) &&
+      (isBlankNumber(form.cores) || isIntegerInRange(form.cores, 1, 8192)) &&
+      (isBlankNumber(form.cpuLimit) ||
         (Number.isFinite(Number(form.cpuLimit)) && Number(form.cpuLimit) >= 0)) &&
-      (form.cpuUnits === null ||
-        (Number.isFinite(Number(form.cpuUnits)) &&
-          Number(form.cpuUnits) >= 8 &&
-          Number(form.cpuUnits) <= 10000)) &&
+      (isBlankNumber(form.cpuUnits) || isIntegerInRange(form.cpuUnits, 8, cpuUnitsMaximum.value)) &&
       form.netName.trim() !== '' &&
       form.netBridge.trim() !== '' &&
       (form.netVlanTag === null ||
@@ -365,9 +377,8 @@ export function useCreateCtWizard(
     }
     if (stepName === 'mounts') {
       if (
-        !Number.isFinite(Number(form.cores)) ||
-        Number(form.cores) < 1 ||
-        Number(form.cores) > 8192
+        !isBlankNumber(form.cores) &&
+        !isIntegerInRange(form.cores, 1, 8192)
       ) {
         addValidationError(
           'cores',
@@ -375,7 +386,7 @@ export function useCreateCtWizard(
         );
       }
       if (
-        form.cpuLimit !== null &&
+        !isBlankNumber(form.cpuLimit) &&
         (!Number.isFinite(Number(form.cpuLimit)) || Number(form.cpuLimit) < 0)
       ) {
         addValidationError(
@@ -384,25 +395,25 @@ export function useCreateCtWizard(
         );
       }
       if (
-        form.cpuUnits !== null &&
-        (!Number.isFinite(Number(form.cpuUnits)) ||
-          Number(form.cpuUnits) < 8 ||
-          Number(form.cpuUnits) > 10000)
+        !isBlankNumber(form.cpuUnits) &&
+        !isIntegerInRange(form.cpuUnits, 8, cpuUnitsMaximum.value)
       ) {
         addValidationError(
           'cpuUnits',
-          gettext('CPU units') + ': ' + gettext('Value must be between 8 and 10000.')
+          gettext('CPU units') +
+            ': ' +
+            gettext(`Value must be between 8 and ${cpuUnitsMaximum.value}.`)
         );
       }
     }
     if (stepName === 'bindmounts') {
-      if (!Number.isFinite(Number(form.memory)) || Number(form.memory) < 16) {
+      if (!isIntegerInRange(form.memory, 16)) {
         addValidationError(
           'memory',
           gettext('Memory') + ': ' + gettext('Value must be at least 16.')
         );
       }
-      if (!Number.isFinite(Number(form.swap)) || Number(form.swap) < 0) {
+      if (!isIntegerInRange(form.swap, 0)) {
         addValidationError('swap', gettext('Swap') + ': ' + gettext('Value must be at least 0.'));
       }
     }
@@ -476,9 +487,19 @@ export function useCreateCtWizard(
             textValue(resource['host-arch']) || 'x86_64',
           ])
       );
+      const cgroupModes = new Map(
+        (resourcesResponse.data || [])
+          .filter((resource) => textValue(resource.type) === 'node')
+          .map((resource) => [textValue(resource.node), Number(resource['cgroup-mode'])])
+      );
       nodes.value = (nodesResponse.data || []).map((node) => {
         const hostArch = architectures.get(node.node);
-        return hostArch ? { ...node, 'host-arch': hostArch } : node;
+        const cgroupMode = cgroupModes.get(node.node);
+        return {
+          ...node,
+          ...(hostArch ? { 'host-arch': hostArch } : {}),
+          ...(cgroupMode === 1 || cgroupMode === 2 ? { 'cgroup-mode': cgroupMode } : {}),
+        };
       });
       const preferred = preferredNode();
       if (preferred && nodes.value.some((node) => node.node === preferred)) form.node = preferred;
@@ -632,6 +653,8 @@ export function useCreateCtWizard(
       tags: '',
       featuresChecked: ['nesting'],
       managedMounts: [],
+      cpuUnits: null,
+      cpuLimit: null,
     });
     validationError.value = '';
     validationErrors.value = {};
@@ -654,9 +677,8 @@ export function useCreateCtWizard(
       vmid: form.vmid.trim(),
       hostname: form.hostname.trim(),
       ostemplate: form.ostemplate,
-      memory: form.memory,
-      swap: form.swap,
-      cores: form.cores,
+      memory: Number(form.memory),
+      swap: Number(form.swap),
       net0: [
         form.netName && `name=${form.netName}`,
         form.netBridge && `bridge=${form.netBridge}`,
@@ -677,6 +699,7 @@ export function useCreateCtWizard(
         .filter(Boolean)
         .join(','),
     };
+    if (!isBlankNumber(form.cores)) payload.cores = Number(form.cores);
     if (form.password.trim()) payload.password = form.password.trim();
     payload.unprivileged = form.unprivileged ? 1 : 0;
     if (form.pool) payload.pool = form.pool;
@@ -758,8 +781,8 @@ export function useCreateCtWizard(
       if (mount.propagation) parts.push(`prop=${mount.propagation}`);
       addMount(parts.join(':'));
     });
-    if (form.cpuUnits) payload.cpuunits = Number(form.cpuUnits);
-    if (form.cpuLimit) payload.cpulimit = Number(form.cpuLimit);
+    if (!isBlankNumber(form.cpuUnits)) payload.cpuunits = Number(form.cpuUnits);
+    if (!isBlankNumber(form.cpuLimit)) payload.cpulimit = Number(form.cpuLimit);
     if (form.cpuset.trim()) payload.cpuset = form.cpuset.trim();
     if (form.iopsRd.trim()) payload.iops_rd = form.iopsRd.trim();
     if (form.iopsWr.trim()) payload.iops_wr = form.iopsWr.trim();
@@ -860,6 +883,8 @@ export function useCreateCtWizard(
       canProceedGeneral,
       canProceedTemplate,
       canProceedHardware,
+      cpuUnitsDefault,
+      cpuUnitsMaximum,
       quotaAllowed,
       summaryRows,
     },

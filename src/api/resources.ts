@@ -5,6 +5,7 @@ export type PveRecord = Record<string, unknown>;
 export type PveNode = {
   node: string;
   'host-arch'?: string;
+  'cgroup-mode'?: number;
   status?: string;
   disk?: number;
   maxdisk?: number;

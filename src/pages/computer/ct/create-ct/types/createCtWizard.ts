@@ -46,9 +46,9 @@ export type CreateCtForm = {
   haManaged: boolean;
   templateStorage: string;
   ostemplate: string;
-  memory: number;
-  swap: number;
-  cores: number;
+  memory: number | '';
+  swap: number | '';
+  cores: number | '';
   password: string;
   confirmPassword: string;
   netBridge: string;
@@ -84,8 +84,8 @@ export type CreateCtForm = {
   mounts: CtMount[];
   bindMounts: CtBindMount[];
   managedMounts: CtManagedMount[];
-  cpuUnits: number | null;
-  cpuLimit: number | null;
+  cpuUnits: number | null | '';
+  cpuLimit: number | null | '';
   cpuset: string;
   iopsRd: string;
   iopsWr: string;
@@ -126,6 +126,8 @@ export type CreateCtWizardContext = {
     canProceedGeneral: ComputedRef<boolean>;
     canProceedTemplate: ComputedRef<boolean>;
     canProceedHardware: ComputedRef<boolean>;
+    cpuUnitsDefault: ComputedRef<number>;
+    cpuUnitsMaximum: ComputedRef<number>;
     quotaAllowed: (storage: string) => boolean;
     summaryRows: ComputedRef<[string, string | number][]>;
   };

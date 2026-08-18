@@ -4,7 +4,7 @@ import { useCreateCtWizardContext } from './create-ct/context/createCtWizardCont
 
 defineOptions({ name: 'CtMountsStep' });
 
-const { form, state, errors } = useCreateCtWizardContext();
+const { form, state, errors, derived } = useCreateCtWizardContext();
 const { advanced } = state;
 const { validationErrors } = errors;
 </script>
@@ -23,6 +23,7 @@ const { validationErrors } = errors;
           :error="Boolean(validationErrors.cores)"
           :error-message="validationErrors.cores"
           :label="gettext('Cores')"
+          :placeholder="gettext('unlimited')"
         />
       </div>
 
@@ -44,12 +45,12 @@ const { validationErrors } = errors;
           dense
           type="number"
           min="8"
-          max="10000"
+          :max="derived.cpuUnitsMaximum.value"
           class="col q-field--with-bottom"
           :error="Boolean(validationErrors.cpuUnits)"
           :error-message="validationErrors.cpuUnits"
           :label="gettext('CPU units')"
-          placeholder="100"
+          :placeholder="String(derived.cpuUnitsDefault.value)"
         />
       </div>
     </div>
