@@ -12,13 +12,7 @@ defineOptions({ name: 'CtTemplateStep' });
 const { form, resources, errors } = useCreateCtWizardContext();
 const { validationErrors } = errors;
 
-const storageRows = computed<PveRecord[]>(() =>
-  resources.storageOptions.value.map((storage) => ({
-    storage,
-    type: 'storage',
-    content: 'vztmpl',
-  })),
-);
+const storageRows = computed<PveRecord[]>(() => resources.storageOptions.value);
 const templateRows = computed<PveRecord[]>(() => resources.templateRows.value);
 function templateValue(row: PveRecord) {
   return textValue(row.volid) || textValue(row.filename);
@@ -41,16 +35,22 @@ function formatSize(value: unknown) {
 const storageColumns: QTableColumn<PveRecord>[] = [
   {
     name: 'storage',
-    label: gettext('Storage'),
+    label: gettext('Name'),
     field: (row) => textValue(row.storage),
     align: 'left',
   },
   { name: 'type', label: gettext('Type'), field: (row) => textValue(row.type), align: 'left' },
   {
-    name: 'content',
-    label: gettext('Content'),
-    field: (row) => textValue(row.content),
-    align: 'left',
+    name: 'avail',
+    label: gettext('Avail'),
+    field: (row) => formatSize(row.avail),
+    align: 'right',
+  },
+  {
+    name: 'total',
+    label: gettext('Capacity'),
+    field: (row) => formatSize(row.total),
+    align: 'right',
   },
 ];
 const templateColumns: QTableColumn<PveRecord>[] = [
@@ -82,7 +82,10 @@ const templateColumns: QTableColumn<PveRecord>[] = [
 </script>
 
 <template>
-  <q-scroll-area class="q-pa-sm" style="height: 466px">
+  <q-scroll-area
+    class="q-pa-sm"
+    style="height: 466px"
+  >
     <div class="u-border-dotted-blue bg-white q-px-md q-py-sm">
       <div class="row q-gutter-lg">
         <div class="col">
@@ -117,6 +120,12 @@ const templateColumns: QTableColumn<PveRecord>[] = [
             :error="Boolean(validationErrors.ostemplate)"
             :error-message="validationErrors.ostemplate || ''"
             :label="gettext('Template')"
+          />
+          <q-checkbox
+            v-model="resources.showAllTemplateArchitectures.value"
+            dense
+            class="q-mt-sm"
+            :label="gettext('Show all architectures')"
           />
         </div>
       </div>

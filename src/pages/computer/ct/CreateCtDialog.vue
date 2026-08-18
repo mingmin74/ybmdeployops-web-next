@@ -27,9 +27,12 @@ const { state, errors, actions, derived } = wizard;
 const { loading, step, advanced, networkAdvanced } = state;
 const { validationError } = errors;
 const { moveStep, submit } = actions;
-const { canSubmit, canProceedGeneral } = derived;
+const { canSubmit, canProceedGeneral, canProceedTemplate } = derived;
 const nextDisabled = computed(
-  () => loading.value || (step.value === 'general' && !canProceedGeneral.value)
+  () =>
+    loading.value ||
+    (step.value === 'general' && !canProceedGeneral.value) ||
+    (step.value === 'template' && !canProceedTemplate.value)
 );
 
 async function next() {

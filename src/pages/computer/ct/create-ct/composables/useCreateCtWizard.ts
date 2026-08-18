@@ -1,6 +1,13 @@
 import { computed, reactive, shallowRef, watch, type Ref } from 'vue';
 import { createCt, getCtNextId } from '@/api/vm';
-import { getNodes, getPools, type PveNode, type PvePool, type PveRecord } from '@/api/resources';
+import {
+  getClusterResources,
+  getNodes,
+  getPools,
+  type PveNode,
+  type PvePool,
+  type PveRecord,
+} from '@/api/resources';
 import { getNodeStorage, getStorageContent } from '@/api/storageContent';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
@@ -21,6 +28,7 @@ type CreateCtWizardEmit = {
   (event: 'completed'): void;
   (event: 'task', payload: { node: string; upid: string; title: string }): void;
 };
+type PveNodeWithArchitecture = PveNode & { 'host-arch'?: string };
 
 const stepOrder: CreateCtStepName[] = [
   'general',
@@ -33,6 +41,12 @@ const stepOrder: CreateCtStepName[] = [
   'confirm',
 ];
 const featuresOptions = ['nesting', 'fuse', 'keyctl', 'fscaps', 'mknod'];
+const knownTemplateArchitectures = ['amd64', 'arm64', 'i386', 'riscv64'];
+
+function templateArch(volid: string) {
+  const arch = volid.match(/_([a-z][a-z0-9]*)\.tar(?:\.\w+)?$/)?.[1];
+  return arch && knownTemplateArchitectures.includes(arch) ? arch : undefined;
+}
 
 function defaultForm(): CreateCtForm {
   return {
@@ -98,17 +112,32 @@ export function useCreateCtWizard(
   const step = shallowRef<CreateCtStepName>('general');
   const advanced = shallowRef(false);
   const networkAdvanced = shallowRef(false);
-  const nodes = shallowRef<PveNode[]>([]);
+  const nodes = shallowRef<PveNodeWithArchitecture[]>([]);
   const pools = shallowRef<PvePool[]>([]);
-  const storageOptions = shallowRef<string[]>([]);
+  const storageOptions = shallowRef<PveRecord[]>([]);
   const rootfsStorageOptions = shallowRef<string[]>([]);
-  const templateOptions = shallowRef<string[]>([]);
-  const templateRows = shallowRef<PveRecord[]>([]);
+  const allTemplateRows = shallowRef<PveRecord[]>([]);
+  const showAllTemplateArchitectures = shallowRef(false);
   const validationError = shallowRef('');
   const validationErrors = shallowRef<Record<string, string>>({});
   const vmidAvailability = shallowRef<'idle' | 'checking' | 'available' | 'unavailable'>('idle');
   let vmidValidationRequest = 0;
   const form = reactive<CreateCtForm>(defaultForm());
+  const nodeTemplateArchitecture = computed(() => {
+    const hostArch = textValue(nodes.value.find((node) => node.node === form.node)?.['host-arch']);
+    if (hostArch === 'x86_64') return 'amd64';
+    if (hostArch === 'aarch64') return 'arm64';
+    return undefined;
+  });
+  const templateRows = computed(() => {
+    if (showAllTemplateArchitectures.value || !nodeTemplateArchitecture.value)
+      return allTemplateRows.value;
+    return allTemplateRows.value.filter((item) => {
+      const volid = textValue(item.volid) || textValue(item.filename);
+      const arch = templateArch(volid);
+      return !arch || arch === nodeTemplateArchitecture.value;
+    });
+  });
   const validationErrorEntries = computed(() => Object.entries(validationErrors.value));
   const vmidValid = computed(
     () =>
@@ -375,8 +404,22 @@ export function useCreateCtWizard(
 
   async function loadNodes() {
     try {
-      const response = await getNodes();
-      nodes.value = response.data || [];
+      const [nodesResponse, resourcesResponse] = await Promise.all([
+        getNodes(),
+        getClusterResources({ type: 'node' }).catch(() => ({ data: [] })),
+      ]);
+      const architectures = new Map(
+        (resourcesResponse.data || [])
+          .filter((resource) => textValue(resource.type) === 'node')
+          .map((resource) => [
+            textValue(resource.node),
+            textValue(resource['host-arch']) || 'x86_64',
+          ])
+      );
+      nodes.value = (nodesResponse.data || []).map((node) => {
+        const hostArch = architectures.get(node.node);
+        return hostArch ? { ...node, 'host-arch': hostArch } : node;
+      });
       const preferred = preferredNode();
       if (preferred && nodes.value.some((node) => node.node === preferred)) form.node = preferred;
       else if (!form.node && nodes.value.length) form.node = nodes.value[0]?.node || '';
@@ -424,17 +467,22 @@ export function useCreateCtWizard(
     if (!form.node) {
       storageOptions.value = [];
       form.templateStorage = '';
+      form.ostemplate = '';
       return;
     }
     try {
       const response = await getNodeStorage(form.node, 'vztmpl');
       storageOptions.value = (response.data || [])
-        .map((item: PveRecord) => textValue(item.storage))
-        .filter(Boolean);
-      form.templateStorage = storageOptions.value[0] || '';
+        .filter((item: PveRecord) => Boolean(textValue(item.storage)))
+        .sort((left: PveRecord, right: PveRecord) =>
+          textValue(left.storage).localeCompare(textValue(right.storage))
+        );
+      form.templateStorage = textValue(storageOptions.value[0]?.storage);
+      form.ostemplate = '';
     } catch {
       storageOptions.value = [];
       form.templateStorage = '';
+      form.ostemplate = '';
     }
   }
   async function loadRootfsStorageOptions() {
@@ -457,23 +505,18 @@ export function useCreateCtWizard(
   }
   async function loadTemplates() {
     if (!form.node || !form.templateStorage) {
-      templateOptions.value = [];
-      templateRows.value = [];
+      allTemplateRows.value = [];
       form.ostemplate = '';
       return;
     }
     try {
       const response = await getStorageContent(form.node, form.templateStorage, 'vztmpl');
-      templateRows.value = (response.data || []).filter((item: PveRecord) =>
+      allTemplateRows.value = (response.data || []).filter((item: PveRecord) =>
         Boolean(item.volid || item.filename)
       );
-      templateOptions.value = templateRows.value.map(
-        (item) => textValue(item.volid) || textValue(item.filename)
-      );
-      form.ostemplate = templateOptions.value[0] || '';
+      form.ostemplate = '';
     } catch {
-      templateOptions.value = [];
-      templateRows.value = [];
+      allTemplateRows.value = [];
       form.ostemplate = '';
     }
   }
@@ -530,8 +573,8 @@ export function useCreateCtWizard(
     validationErrors.value = {};
     advanced.value = false;
     networkAdvanced.value = false;
-    templateOptions.value = [];
-    templateRows.value = [];
+    allTemplateRows.value = [];
+    showAllTemplateArchitectures.value = false;
   }
   async function initialize() {
     await loadNodes();
@@ -724,8 +767,8 @@ export function useCreateCtWizard(
       pools,
       storageOptions,
       rootfsStorageOptions,
-      templateOptions,
       templateRows,
+      showAllTemplateArchitectures,
     },
     errors: { validationError, validationErrors, generalFieldErrors, validationErrorEntries },
     options: { featuresOptions },

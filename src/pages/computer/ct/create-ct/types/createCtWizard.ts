@@ -101,10 +101,10 @@ export type CreateCtWizardContext = {
   resources: {
     nodes: Ref<PveNode[]>;
     pools: Ref<PvePool[]>;
-    storageOptions: Ref<string[]>;
+    storageOptions: Ref<PveRecord[]>;
     rootfsStorageOptions: Ref<string[]>;
-    templateOptions: Ref<string[]>;
     templateRows: Ref<PveRecord[]>;
+    showAllTemplateArchitectures: Ref<boolean>;
   };
   errors: {
     validationError: Ref<string>;
