@@ -1392,7 +1392,10 @@ void loadEditSnapshot();
               {{ row.label }}:
             </div>
             <div class="col-8 text-grey-8 options-list-value">
-              <div :class="{ 'pending-delete': pendingDeleteForOption(row.key) }">
+              <div
+                v-if="!pendingRowForOption(row.key) || pendingDeleteForOption(row.key)"
+                :class="{ 'pending-delete': pendingDeleteForOption(row.key) }"
+              >
                 {{ row.value }}
               </div>
               <div
