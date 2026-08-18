@@ -2,10 +2,12 @@
  * PVE-equivalent IP address / CIDR validators.
  *
  * Mirrors proxmox-widget-toolkit `src/Toolkit.js` VTypes:
- *   IPAddress        -> IP4_match
- *   IPCIDRAddress    -> IP4_cidr_match, prefix 8..32
- *   IP6Address       -> IP6_match
- *   IP6CIDRAddress   -> IP6_cidr_match, prefix 8..128
+ *   IPAddress              -> IP4_match
+ *   IPCIDRAddress          -> IP4_cidr_match, prefix 8..32
+ *   IP6Address             -> IP6_match
+ *   IP6CIDRAddress         -> IP6_cidr_match, prefix 8..128
+ *   IP64Address            -> IP64_match (IPv4 or IPv6)
+ *   IP64AddressWithSuffixList -> PVE.Utils.verify_ip64_address_list(v, true)
  *
  * Prefix limits follow pve-common `PVE/JSONSchema.pm`.
  */
@@ -30,6 +32,7 @@ const IPV6_REGEXP =
 
 const IPV4_RE = new RegExp(`^(?:${IPV4_REGEXP})$`);
 const IPV6_RE = new RegExp(`^(?:${IPV6_REGEXP})$`);
+const IP64_RE = new RegExp(`^(?:${IPV6_REGEXP}|${IPV4_REGEXP})$`);
 const IPV4_CIDR_RE = new RegExp(`^(?:${IPV4_REGEXP})/([0-9]{1,2})$`);
 const IPV6_CIDR_RE = new RegExp(`^(?:${IPV6_REGEXP})/([0-9]{1,3})$`);
 
@@ -41,6 +44,10 @@ export function isIpv6Address(value: string): boolean {
   return IPV6_RE.test(value);
 }
 
+export function isIp64Address(value: string): boolean {
+  return IP64_RE.test(value);
+}
+
 export function isIpv4Cidr(value: string): boolean {
   const result = IPV4_CIDR_RE.exec(value);
   return result !== null && Number(result[1]) >= 8 && Number(result[1]) <= 32;
@@ -49,4 +56,29 @@ export function isIpv4Cidr(value: string): boolean {
 export function isIpv6Cidr(value: string): boolean {
   const result = IPV6_CIDR_RE.exec(value);
   return result !== null && Number(result[1]) >= 8 && Number(result[1]) <= 128;
+}
+
+/**
+ * Single IPv4/IPv6 address optionally followed by a scope suffix (%iface).
+ * Mirrors PVE `verify_ip64_address_with_suffix`: at most one '%', and a suffix
+ * is only allowed on fe80: link-local addresses.
+ */
+export function isIp64AddressWithSuffix(value: string): boolean {
+  const parts = value.split('%');
+  if (parts.length > 2) return false;
+  const address = parts[0] || '';
+  if (parts.length > 1 && !address.startsWith('fe80:')) return false;
+  return isIp64Address(address);
+}
+
+/**
+ * List of IPv4/IPv6 addresses separated by space/comma/semicolon, each
+ * optionally carrying a scope suffix. Mirrors PVE `verify_ip64_address_list`
+ * (vtype IP64AddressWithSuffixList); an empty value is valid ("use host settings").
+ */
+export function isIp64AddressWithSuffixList(value: string): boolean {
+  return value
+    .split(/[ ,;]+/)
+    .filter(Boolean)
+    .every(isIp64AddressWithSuffix);
 }
