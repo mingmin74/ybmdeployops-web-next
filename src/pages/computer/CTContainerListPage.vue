@@ -940,6 +940,7 @@ onMounted(() => {
     />
     <CreateCtDialog
       v-model="createDialogVisible"
+      :preferred-node="selectedNode"
       @completed="reload"
       @task="openTask($event.node, $event.upid, $event.title)"
     />

@@ -2,35 +2,44 @@
 import { computed, shallowRef, useTemplateRef } from 'vue';
 import NodeSelectTable from '@/components/NodeSelectTable.vue';
 import { gettext } from '@/locale';
+import { isValidPveTag, isValidSshPublicKeys } from '@/utils/pveValidation';
 import { useCreateCtWizardContext } from './create-ct/context/createCtWizardContext';
 
 defineOptions({ name: 'CtGeneralStep' });
 
 const { form, state, resources, errors } = useCreateCtWizardContext();
 const { advanced } = state;
-const { validationErrors } = errors;
+const { generalFieldErrors } = errors;
 const tagInput = shallowRef('');
 const tagError = shallowRef('');
+const sshKeyFileError = shallowRef('');
 const sshKeyFileInput = useTemplateRef<HTMLInputElement>('sshKeyFileInput');
 const tags = computed(() =>
   form.tags
     .split(/[;, ]/)
     .map((tag) => tag.trim())
-    .filter(Boolean),
+    .filter(Boolean)
 );
 const passwordError = computed(
   () =>
-    validationErrors.value.password ||
+    generalFieldErrors.value.password ||
     (form.password && form.password.length < 5
       ? gettext('Password must contain at least 5 characters.')
-      : ''),
+      : '')
 );
 const confirmPasswordError = computed(
   () =>
-    validationErrors.value.confirmPassword ||
+    generalFieldErrors.value.confirmPassword ||
     (form.confirmPassword && form.password !== form.confirmPassword
       ? gettext('Passwords do not match!')
-      : ''),
+      : '')
+);
+const sshKeysError = computed(
+  () =>
+    generalFieldErrors.value.sshkeys ||
+    (form.sshkeys.trim() && !isValidSshPublicKeys(form.sshkeys)
+      ? gettext('Failed to recognize ssh key')
+      : '')
 );
 
 function addTag() {
@@ -38,7 +47,7 @@ function addTag() {
     .split(/[;, ]/)
     .map((tag) => tag.trim())
     .filter(Boolean);
-  const invalidTag = newTags.find((tag) => !/^[\p{L}\p{N}\p{Pd}_.:]+$/u.test(tag));
+  const invalidTag = newTags.find((tag) => !isValidPveTag(tag));
   if (invalidTag) {
     tagError.value = gettext('Tags contain invalid characters.');
     return;
@@ -58,16 +67,25 @@ function chooseSshKeyFile() {
 
 async function loadSshKey(event: Event) {
   const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  if (!file) return;
-  const key = (await file.text()).trim();
-  if (key) form.sshkeys = form.sshkeys.trim() ? `${form.sshkeys.trim()}\n${key}` : key;
+  const files = Array.from(input.files || []);
+  const keys = await Promise.all(
+    files.filter((file) => file.size <= 8192).map((file) => file.text())
+  );
+  sshKeyFileError.value = files.some((file) => file.size > 8192)
+    ? gettext('SSH key files must not exceed 8192 bytes.')
+    : '';
+  const loadedKeys = keys.map((key) => key.trim()).filter(Boolean);
+  if (loadedKeys.length)
+    form.sshkeys = [form.sshkeys.trim(), ...loadedKeys].filter(Boolean).join('\n');
   input.value = '';
 }
 </script>
 
 <template>
-  <q-scroll-area class="q-pa-sm" style="height: 466px">
+  <q-scroll-area
+    class="q-pa-sm"
+    style="height: 466px"
+  >
     <div class="u-border-dotted-blue bg-white q-px-md q-py-sm">
       <div class="row q-gutter-lg">
         <div class="col">
@@ -78,26 +96,28 @@ async function loadSshKey(event: Event) {
             field-style="standard"
             class="q-field--with-bottom"
             :label="gettext('Node')"
-            :error="Boolean(validationErrors.node)"
-            :error-message="validationErrors.node || ''"
+            :error="Boolean(generalFieldErrors.node)"
+            :error-message="generalFieldErrors.node || ''"
           />
           <q-input
             v-model="form.vmid"
             dense
             type="number"
             min="100"
+            max="999999999"
+            step="1"
             class="q-field--with-bottom"
             :label="gettext('VM ID')"
-            :error="Boolean(validationErrors.vmid)"
-            :error-message="validationErrors.vmid || ''"
+            :error="Boolean(generalFieldErrors.vmid)"
+            :error-message="generalFieldErrors.vmid || ''"
           />
           <q-input
             v-model="form.hostname"
             dense
             class="q-field--with-bottom"
             :label="gettext('Hostname')"
-            :error="Boolean(validationErrors.hostname)"
-            :error-message="validationErrors.hostname || ''"
+            :error="Boolean(generalFieldErrors.hostname)"
+            :error-message="generalFieldErrors.hostname || ''"
           />
           <q-checkbox
             v-model="form.unprivileged"
@@ -161,11 +181,14 @@ async function loadSshKey(event: Event) {
             type="textarea"
             class="q-field--with-bottom"
             :label="gettext('SSH public key(s)')"
+            :error="Boolean(sshKeysError)"
+            :error-message="sshKeysError"
           />
           <input
             ref="sshKeyFileInput"
             class="hidden"
             type="file"
+            multiple
             accept=".pub,text/plain"
             @change="loadSshKey"
           />
@@ -178,10 +201,19 @@ async function loadSshKey(event: Event) {
             :label="gettext('Load SSH Key File')"
             @click="chooseSshKeyFile"
           />
+          <div
+            v-if="sshKeyFileError"
+            class="text-negative text-caption q-mt-xs"
+          >
+            {{ sshKeyFileError }}
+          </div>
         </div>
       </div>
     </div>
-    <div v-if="advanced" class="q-mt-sm u-border-dotted-blue q-px-md q-py-sm bg-white">
+    <div
+      v-if="advanced"
+      class="q-mt-sm u-border-dotted-blue q-px-md q-py-sm bg-white"
+    >
       <div class="ct-create-tags">
         <div>{{ gettext('Tags') }}</div>
         <q-input
@@ -195,7 +227,13 @@ async function loadSshKey(event: Event) {
           @keyup.space="addTag"
           @blur="addTag"
         >
-          <template #append><q-icon name="add" class="cursor-pointer" @click="addTag" /></template>
+          <template #append>
+            <q-icon
+              name="add"
+              class="cursor-pointer"
+              @click="addTag"
+            />
+          </template>
         </q-input>
         <div class="row q-gutter-sm q-col-gutter-sm">
           <q-chip
@@ -207,8 +245,9 @@ async function loadSshKey(event: Event) {
             color="primary"
             text-color="white"
             @remove="removeTag(tag)"
-            >{{ tag }}</q-chip
           >
+            {{ tag }}
+          </q-chip>
         </div>
       </div>
     </div>

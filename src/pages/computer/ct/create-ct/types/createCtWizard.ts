@@ -109,6 +109,7 @@ export type CreateCtWizardContext = {
   errors: {
     validationError: Ref<string>;
     validationErrors: Ref<Record<string, string>>;
+    generalFieldErrors: ComputedRef<Record<string, string>>;
     validationErrorEntries: ComputedRef<[string, string][]>;
   };
   options: {

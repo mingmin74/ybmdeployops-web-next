@@ -4,6 +4,12 @@ import { getNodes, getPools, type PveNode, type PvePool, type PveRecord } from '
 import { getNodeStorage, getStorageContent } from '@/api/storageContent';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
+import {
+  hasValidSshPublicKey,
+  isDnsName,
+  isValidPveTag,
+  isValidSshPublicKeys,
+} from '@/utils/pveValidation';
 import type {
   CreateCtForm,
   CreateCtStepName,
@@ -86,6 +92,7 @@ function defaultForm(): CreateCtForm {
 export function useCreateCtWizard(
   model: Ref<boolean>,
   emit: CreateCtWizardEmit,
+  preferredNode: () => string = () => ''
 ): CreateCtWizardContext {
   const loading = shallowRef(false);
   const step = shallowRef<CreateCtStepName>('general');
@@ -99,16 +106,52 @@ export function useCreateCtWizard(
   const templateRows = shallowRef<PveRecord[]>([]);
   const validationError = shallowRef('');
   const validationErrors = shallowRef<Record<string, string>>({});
+  const vmidAvailability = shallowRef<'idle' | 'checking' | 'available' | 'unavailable'>('idle');
+  let vmidValidationRequest = 0;
   const form = reactive<CreateCtForm>(defaultForm());
   const validationErrorEntries = computed(() => Object.entries(validationErrors.value));
+  const vmidValid = computed(
+    () =>
+      /^\d+$/.test(form.vmid.trim()) && Number(form.vmid) >= 100 && Number(form.vmid) <= 999999999
+  );
+  const hostnameValid = computed(() => !form.hostname.trim() || isDnsName(form.hostname.trim()));
+  const sshKeysValid = computed(() => !form.sshkeys.trim() || isValidSshPublicKeys(form.sshkeys));
+  const tagsValid = computed(() => form.tags.split(/[;, ]/).filter(Boolean).every(isValidPveTag));
+  const generalFieldErrors = computed(() => {
+    const errors = { ...validationErrors.value };
+    if (form.vmid.trim()) {
+      if (!vmidValid.value)
+        errors.vmid =
+          gettext('VM ID') + ': ' + gettext('Value must be an integer between 100 and 999999999.');
+      else if (vmidAvailability.value === 'checking')
+        errors.vmid = gettext('VM ID is still being validated.');
+      else if (vmidAvailability.value === 'unavailable')
+        errors.vmid = gettext('VM ID is already in use.');
+    }
+    if (form.hostname.trim() && !hostnameValid.value)
+      errors.hostname = gettext('Hostname') + ': ' + gettext('Invalid DNS name');
+    if (form.sshkeys.trim() && !sshKeysValid.value)
+      errors.sshkeys = gettext('Failed to recognize ssh key');
+    if (!tagsValid.value) errors.tags = gettext('Tags contain invalid characters.');
+    return errors;
+  });
+  const canProceedGeneral = computed(
+    () =>
+      form.node !== '' &&
+      vmidValid.value &&
+      vmidAvailability.value === 'available' &&
+      hostnameValid.value &&
+      sshKeysValid.value &&
+      (form.password.trim().length >= 5 || hasValidSshPublicKey(form.sshkeys)) &&
+      (!form.password.trim() || form.password === form.confirmPassword) &&
+      tagsValid.value
+  );
 
   const canSubmit = computed(() => {
     const basic =
       !loading.value &&
       form.node !== '' &&
-      form.vmid.trim() !== '' &&
-      form.hostname.trim() !== '' &&
-      (form.password.trim().length >= 5 || form.sshkeys.trim() !== '') &&
+      canProceedGeneral.value &&
       (!form.password.trim() || form.password === form.confirmPassword) &&
       form.ostemplate !== '' &&
       Number.isFinite(Number(form.memory)) &&
@@ -143,18 +186,10 @@ export function useCreateCtWizard(
       (form.rootfsSize === null || Number(form.rootfsSize) <= 0)
     );
     const managedMountsOk = form.managedMounts.every(
-      (mount) => mount.storage && Number(mount.size) > 0 && mount.mountPoint.trim().startsWith('/'),
+      (mount) => mount.storage && Number(mount.size) > 0 && mount.mountPoint.trim().startsWith('/')
     );
     return basic && rootfsOk && managedMountsOk;
   });
-  const canProceedGeneral = computed(
-    () =>
-      form.node !== '' &&
-      form.vmid.trim() !== '' &&
-      form.hostname.trim() !== '' &&
-      (form.password.trim().length >= 5 || form.sshkeys.trim() !== '') &&
-      (!form.password.trim() || form.password === form.confirmPassword),
-  );
   const canProceedTemplate = computed(() => form.ostemplate !== '');
   const canProceedHardware = computed(() => true);
   const summaryRows = computed<[string, string | number][]>(() => [
@@ -177,56 +212,65 @@ export function useCreateCtWizard(
         addValidationError('node', gettext('Node') + ': ' + gettext('This field is required.'));
       if (!form.vmid.trim())
         addValidationError('vmid', gettext('VM ID') + ': ' + gettext('This field is required.'));
-      if (!form.hostname.trim())
+      else if (!vmidValid.value)
         addValidationError(
-          'hostname',
-          gettext('Hostname') + ': ' + gettext('This field is required.'),
+          'vmid',
+          gettext('VM ID') + ': ' + gettext('Value must be an integer between 100 and 999999999.')
         );
-      if (!form.password.trim() && !form.sshkeys.trim())
+      else if (vmidAvailability.value === 'checking')
+        addValidationError('vmid', gettext('VM ID is still being validated.'));
+      else if (vmidAvailability.value !== 'available')
+        addValidationError('vmid', gettext('VM ID is already in use.'));
+      if (form.hostname.trim() && !hostnameValid.value)
+        addValidationError('hostname', gettext('Hostname') + ': ' + gettext('Invalid DNS name'));
+      if (form.sshkeys.trim() && !sshKeysValid.value)
+        addValidationError('sshkeys', gettext('Failed to recognize ssh key'));
+      if (!form.password.trim() && !hasValidSshPublicKey(form.sshkeys))
         addValidationError('password', gettext('Password or SSH public key is required.'));
       if (form.password.trim() && form.password.trim().length < 5)
         addValidationError('password', gettext('Password must contain at least 5 characters.'));
       if (form.password !== form.confirmPassword)
         addValidationError('confirmPassword', gettext('Passwords do not match!'));
+      if (!tagsValid.value) addValidationError('tags', gettext('Tags contain invalid characters.'));
     }
     if (stepName === 'template') {
       if (!form.templateStorage)
         addValidationError(
           'templateStorage',
-          gettext('Storage') + ': ' + gettext('This field is required.'),
+          gettext('Storage') + ': ' + gettext('This field is required.')
         );
       if (!form.ostemplate)
         addValidationError(
           'ostemplate',
-          gettext('Template') + ': ' + gettext('This field is required.'),
+          gettext('Template') + ': ' + gettext('This field is required.')
         );
     }
     if (stepName === 'hardware') {
       if (!form.rootfsStorage)
         addValidationError(
           'rootfsStorage',
-          gettext('Storage') + ': ' + gettext('This field is required.'),
+          gettext('Storage') + ': ' + gettext('This field is required.')
         );
       if (!Number.isFinite(Number(form.rootfsSize)) || Number(form.rootfsSize) < 1)
         addValidationError(
           'rootfsSize',
-          gettext('Disk size') + ': ' + gettext('Value must be at least 1.'),
+          gettext('Disk size') + ': ' + gettext('Value must be at least 1.')
         );
       form.managedMounts.forEach((mount, index) => {
         if (!mount.storage)
           addValidationError(
             `mp${index}Storage`,
-            `${mount.id}: ${gettext('Storage')} - ${gettext('This field is required.')}`,
+            `${mount.id}: ${gettext('Storage')} - ${gettext('This field is required.')}`
           );
         if (!Number.isFinite(Number(mount.size)) || Number(mount.size) < 1)
           addValidationError(
             `mp${index}Size`,
-            `${mount.id}: ${gettext('Disk size')} - ${gettext('Value must be at least 1.')}`,
+            `${mount.id}: ${gettext('Disk size')} - ${gettext('Value must be at least 1.')}`
           );
         if (!mount.mountPoint.trim().startsWith('/'))
           addValidationError(
             `mp${index}Path`,
-            `${mount.id}: ${gettext('Mount Point')} - ${gettext('Path has to start with /')}`,
+            `${mount.id}: ${gettext('Mount Point')} - ${gettext('Path has to start with /')}`
           );
       });
     }
@@ -238,7 +282,7 @@ export function useCreateCtWizard(
       ) {
         addValidationError(
           'cores',
-          gettext('Cores') + ': ' + gettext('Value must be between 1 and 8192.'),
+          gettext('Cores') + ': ' + gettext('Value must be between 1 and 8192.')
         );
       }
       if (
@@ -247,7 +291,7 @@ export function useCreateCtWizard(
       ) {
         addValidationError(
           'cpuLimit',
-          gettext('CPU limit') + ': ' + gettext('Value must be at least 0.'),
+          gettext('CPU limit') + ': ' + gettext('Value must be at least 0.')
         );
       }
       if (
@@ -258,7 +302,7 @@ export function useCreateCtWizard(
       ) {
         addValidationError(
           'cpuUnits',
-          gettext('CPU units') + ': ' + gettext('Value must be between 8 and 10000.'),
+          gettext('CPU units') + ': ' + gettext('Value must be between 8 and 10000.')
         );
       }
     }
@@ -266,7 +310,7 @@ export function useCreateCtWizard(
       if (!Number.isFinite(Number(form.memory)) || Number(form.memory) < 16) {
         addValidationError(
           'memory',
-          gettext('Memory') + ': ' + gettext('Value must be at least 16.'),
+          gettext('Memory') + ': ' + gettext('Value must be at least 16.')
         );
       }
       if (!Number.isFinite(Number(form.swap)) || Number(form.swap) < 0) {
@@ -279,12 +323,12 @@ export function useCreateCtWizard(
       if (!form.netBridge.trim())
         addValidationError(
           'netBridge',
-          gettext('Bridge') + ': ' + gettext('This field is required.'),
+          gettext('Bridge') + ': ' + gettext('This field is required.')
         );
       if (form.netHwaddr.trim() && !/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(form.netHwaddr)) {
         addValidationError(
           'netHwaddr',
-          gettext('MAC address') + ': ' + gettext('Invalid MAC address'),
+          gettext('MAC address') + ': ' + gettext('Invalid MAC address')
         );
       }
       if (
@@ -295,7 +339,7 @@ export function useCreateCtWizard(
       ) {
         addValidationError(
           'netVlanTag',
-          gettext('VLAN Tag') + ': ' + gettext('Value must be between 1 and 4094.'),
+          gettext('VLAN Tag') + ': ' + gettext('Value must be between 1 and 4094.')
         );
       }
       if (
@@ -314,7 +358,7 @@ export function useCreateCtWizard(
       ) {
         addValidationError(
           'netRate',
-          gettext('Rate limit') + ': ' + gettext('Value must be between 0 and 10240.'),
+          gettext('Rate limit') + ': ' + gettext('Value must be between 0 and 10240.')
         );
       }
     }
@@ -333,7 +377,9 @@ export function useCreateCtWizard(
     try {
       const response = await getNodes();
       nodes.value = response.data || [];
-      if (!form.node && nodes.value.length) form.node = nodes.value[0]?.node || '';
+      const preferred = preferredNode();
+      if (preferred && nodes.value.some((node) => node.node === preferred)) form.node = preferred;
+      else if (!form.node && nodes.value.length) form.node = nodes.value[0]?.node || '';
     } catch {
       nodes.value = [];
     }
@@ -342,7 +388,7 @@ export function useCreateCtWizard(
     try {
       const response = await getPools();
       pools.value = (response.data || []).sort((left, right) =>
-        left.poolid.localeCompare(right.poolid),
+        left.poolid.localeCompare(right.poolid)
       );
     } catch {
       pools.value = [];
@@ -355,6 +401,23 @@ export function useCreateCtWizard(
       if (response.data !== undefined && response.data !== null) form.vmid = String(response.data);
     } catch {
       /* ignore */
+    }
+  }
+  async function validateVmidAvailability() {
+    const vmid = form.vmid.trim();
+    const requestId = ++vmidValidationRequest;
+    if (!/^\d+$/.test(vmid) || Number(vmid) < 100 || Number(vmid) > 999999999) {
+      vmidAvailability.value = 'idle';
+      return;
+    }
+    vmidAvailability.value = 'checking';
+    try {
+      const response = await getCtNextId(vmid);
+      if (requestId !== vmidValidationRequest) return;
+      vmidAvailability.value =
+        String(response.data) === String(Number(vmid)) ? 'available' : 'unavailable';
+    } catch {
+      if (requestId === vmidValidationRequest) vmidAvailability.value = 'unavailable';
     }
   }
   async function loadStorageOptions() {
@@ -402,10 +465,10 @@ export function useCreateCtWizard(
     try {
       const response = await getStorageContent(form.node, form.templateStorage, 'vztmpl');
       templateRows.value = (response.data || []).filter((item: PveRecord) =>
-        Boolean(item.volid || item.filename),
+        Boolean(item.volid || item.filename)
       );
       templateOptions.value = templateRows.value.map(
-        (item) => textValue(item.volid) || textValue(item.filename),
+        (item) => textValue(item.volid) || textValue(item.filename)
       );
       form.ostemplate = templateOptions.value[0] || '';
     } catch {
@@ -416,7 +479,10 @@ export function useCreateCtWizard(
   }
   function resetForm() {
     Object.assign(form, {
-      node: nodes.value[0]?.node || '',
+      node:
+        nodes.value.find((node) => node.node === preferredNode())?.node ||
+        nodes.value[0]?.node ||
+        '',
       vmid: '',
       hostname: '',
       pool: '',
@@ -505,7 +571,7 @@ export function useCreateCtWizard(
         .join(','),
     };
     if (form.password.trim()) payload.password = form.password.trim();
-    if (form.unprivileged) payload.unprivileged = 1;
+    payload.unprivileged = form.unprivileged ? 1 : 0;
     if (form.pool) payload.pool = form.pool;
     if (form.haManaged) payload['ha-managed'] = 1;
     if (form.tags.trim()) payload.tags = form.tags.trim();
@@ -514,7 +580,10 @@ export function useCreateCtWizard(
       .map((item) => item.trim())
       .filter(Boolean);
     featureList.push(...form.featuresChecked.filter((feature) => !featureList.includes(feature)));
-    if (featureList.length) payload.features = featureList.join(',');
+    if (featureList.length)
+      payload.features = featureList
+        .map((feature) => (feature.includes('=') ? feature : `${feature}=1`))
+        .join(',');
     const mountValue = (
       storage: string,
       size: number | null,
@@ -522,7 +591,7 @@ export function useCreateCtWizard(
         CtManagedMount,
         'quota' | 'acl' | 'skipReplication' | 'mountOptions' | 'idMapPassthrough' | 'idMaps'
       > &
-        Partial<Pick<CtManagedMount, 'mountPoint' | 'backup' | 'readOnly'>>,
+        Partial<Pick<CtManagedMount, 'mountPoint' | 'backup' | 'readOnly'>>
     ) => {
       const values = [`${storage}:${Number(size)}M`];
       if (options.mountPoint) values.push(`mp=${options.mountPoint}`);
@@ -559,7 +628,7 @@ export function useCreateCtWizard(
     if (form.sshkeys.trim()) payload['ssh-public-keys'] = form.sshkeys.trim();
     let mountIndex = form.managedMounts.reduce(
       (next, mount) => Math.max(next, Number(mount.id.slice(2)) + 1),
-      0,
+      0
     );
     const addMount = (value: string) => {
       payload[`mp${mountIndex}`] = value;
@@ -610,7 +679,7 @@ export function useCreateCtWizard(
         });
     } catch (error) {
       validationError.value = String(
-        error instanceof Error ? error.message : gettext('Create failed.'),
+        error instanceof Error ? error.message : gettext('Create failed.')
       );
     } finally {
       loading.value = false;
@@ -623,20 +692,24 @@ export function useCreateCtWizard(
       await loadStorageOptions();
       await loadRootfsStorageOptions();
       await loadNextId();
-    },
+    }
+  );
+  watch(
+    () => form.vmid,
+    () => void validateVmidAvailability()
   );
   watch(
     () => form.templateStorage,
     async () => {
       await loadTemplates();
-    },
+    }
   );
   watch(
     () => form.unprivileged,
     (unprivileged) => {
       if (!unprivileged)
         form.featuresChecked = form.featuresChecked.filter((feature) => feature !== 'nesting');
-    },
+    }
   );
   watch(model, (visible) => {
     if (visible) void initialize();
@@ -654,7 +727,7 @@ export function useCreateCtWizard(
       templateOptions,
       templateRows,
     },
-    errors: { validationError, validationErrors, validationErrorEntries },
+    errors: { validationError, validationErrors, generalFieldErrors, validationErrorEntries },
     options: { featuresOptions },
     actions: { moveStep, validateStep, submit },
     derived: { canSubmit, canProceedGeneral, canProceedTemplate, canProceedHardware, summaryRows },

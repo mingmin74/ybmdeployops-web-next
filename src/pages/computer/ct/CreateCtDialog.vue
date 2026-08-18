@@ -15,18 +15,22 @@ import CreateCtDns from './Dns.vue';
 import CreateCtValidationBanner from './CreateCtValidationBanner.vue';
 
 const model = defineModel<boolean>({ required: true });
+const props = defineProps<{ preferredNode?: string }>();
 const emit = defineEmits<{
   completed: [];
   task: [payload: { node: string; upid: string; title: string }];
 }>();
-const wizard = useCreateCtWizard(model, emit);
+const wizard = useCreateCtWizard(model, emit, () => props.preferredNode || '');
 provide(createCtWizardKey, wizard);
 
 const { state, errors, actions, derived } = wizard;
 const { loading, step, advanced, networkAdvanced } = state;
 const { validationError } = errors;
 const { moveStep, submit } = actions;
-const { canSubmit } = derived;
+const { canSubmit, canProceedGeneral } = derived;
+const nextDisabled = computed(
+  () => loading.value || (step.value === 'general' && !canProceedGeneral.value)
+);
 
 async function next() {
   await moveStep(1);
@@ -42,8 +46,17 @@ const currentAdvanced = computed({
 </script>
 
 <template>
-  <q-dialog v-model="model" persistent transition-show="scale" transition-hide="scale">
-    <UWindow :title="gettext('Create CT Container')" width="800px" :loading="loading">
+  <q-dialog
+    v-model="model"
+    persistent
+    transition-show="scale"
+    transition-hide="scale"
+  >
+    <UWindow
+      :title="gettext('Create CT Container')"
+      width="800px"
+      :loading="loading"
+    >
       <q-stepper
         v-model="step"
         flat
@@ -113,7 +126,13 @@ const currentAdvanced = computed({
           <CreateCtValidationBanner />
           <CreateCtLimits />
         </q-step>
-        <q-step name="dns" :title="gettext('DNS')" icon="dns" active-icon="dns" done-icon="check">
+        <q-step
+          name="dns"
+          :title="gettext('DNS')"
+          icon="dns"
+          active-icon="dns"
+          done-icon="check"
+        >
           <CreateCtValidationBanner />
           <CreateCtDns />
         </q-step>
@@ -126,14 +145,17 @@ const currentAdvanced = computed({
         >
           <CreateCtValidationBanner />
           <CreateCtConfirm />
-          <div v-if="validationError" class="text-negative text-caption q-mt-sm q-pa-md">
+          <div
+            v-if="validationError"
+            class="text-negative text-caption q-mt-sm q-pa-md"
+          >
             {{ validationError }}
           </div>
         </q-step>
       </q-stepper>
       <template #foot>
         <q-checkbox
-          v-if="step === 'mounts' || step === 'limits'"
+          v-if="step === 'general' || step === 'mounts' || step === 'limits'"
           v-model="currentAdvanced"
           dense
           right-label
@@ -147,7 +169,7 @@ const currentAdvanced = computed({
           flat
           size="12px"
           class="bg-grey-8 text-grey-1 u-button"
-          :disable="loading"
+          :disable="nextDisabled"
           :label="gettext('Back')"
           @click="moveStep(-1)"
         />
