@@ -464,7 +464,7 @@ const canSave = computed(() => {
   );
 });
 const spiceDisplayIsQxl = computed(() =>
-  /^qxl\d?$/.test(textValue(parseProperties(props.config.vga).type))
+  /^qxl\d?$/.test(textValue(parseProperties(editConfig.value.vga).type))
 );
 const startupValue = computed(() =>
   [
@@ -492,7 +492,7 @@ const smbios1Value = computed(() => {
   return values.join(',');
 });
 const guestArchitecture = computed(() => {
-  const configured = textValue(props.config.arch);
+  const configured = textValue(editConfig.value.arch);
   return configured && configured !== '__default__'
     ? configured
     : hostArchitecture.value || 'x86_64';
@@ -708,8 +708,8 @@ const bootSelectionWarning = computed(
 );
 const bootRngWarning = computed(
   () =>
-    textValue(props.config.bios) === 'ovmf' &&
-    !props.config.rng0 &&
+    textValue(editConfig.value.bios) === 'ovmf' &&
+    !editConfig.value.rng0 &&
     bootRows.value.some((row) => row.enabled && /^net\d+$/.test(row.name))
 );
 
