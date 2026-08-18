@@ -44,6 +44,7 @@ export type CreateCtForm = {
   hostname: string;
   pool: string;
   haManaged: boolean;
+  start: boolean;
   templateStorage: string;
   ostemplate: string;
   memory: number | '';
@@ -132,6 +133,6 @@ export type CreateCtWizardContext = {
     cpuUnitsDefault: ComputedRef<number>;
     cpuUnitsMaximum: ComputedRef<number>;
     quotaAllowed: (storage: string) => boolean;
-    summaryRows: ComputedRef<[string, string | number][]>;
+    summaryRows: ComputedRef<[string, string][]>;
   };
 };

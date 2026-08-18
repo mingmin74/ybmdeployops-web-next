@@ -53,6 +53,15 @@ const knownTemplateArchitectures = ['amd64', 'arm64', 'i386', 'riscv64'];
 const diskSizeMinimum = 0.001;
 const diskSizeMaximum = 128 * 1024;
 const maximumManagedMountId = 255;
+const validationSteps: CreateCtStepName[] = [
+  'general',
+  'template',
+  'hardware',
+  'mounts',
+  'bindmounts',
+  'limits',
+  'dns',
+];
 
 function isValidDiskSize(value: number | null) {
   const size = Number(value);
@@ -117,6 +126,7 @@ function defaultForm(): CreateCtForm {
     hostname: '',
     pool: '',
     haManaged: false,
+    start: false,
     templateStorage: '',
     ostemplate: '',
     memory: 512,
@@ -222,6 +232,9 @@ export function useCreateCtWizard(
   );
   const nameserverValid = computed(() => isIp64AddressWithSuffixList(form.nameserver.trim()));
   const canProceedDns = computed(() => nameserverValid.value);
+  const macAddressValid = computed(
+    () => !form.netHwaddr.trim() || /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(form.netHwaddr)
+  );
   const templateRows = computed(() => {
     if (showAllTemplateArchitectures.value || !nodeTemplateArchitecture.value)
       return allTemplateRows.value;
@@ -275,6 +288,7 @@ export function useCreateCtWizard(
       form.node !== '' &&
       canProceedGeneral.value &&
       (!form.password.trim() || form.password === form.confirmPassword) &&
+      form.templateStorage !== '' &&
       form.ostemplate !== '' &&
       isIntegerInRange(form.memory, 16) &&
       isIntegerInRange(form.swap, 0) &&
@@ -288,6 +302,7 @@ export function useCreateCtWizard(
       ipv4GatewayValid.value &&
       ipv6Valid.value &&
       ipv6GatewayValid.value &&
+      macAddressValid.value &&
       canProceedDns.value &&
       (isBlankNumber(form.netVlanTag) || isIntegerInRange(form.netVlanTag, 1, 4094)) &&
       (isBlankNumber(form.netMtu) || isIntegerInRange(form.netMtu, 576, 65535)) &&
@@ -315,21 +330,18 @@ export function useCreateCtWizard(
           areIdMapsValid(mount.idMaps, mount.idMapPassthrough)
       )
   );
-  const summaryRows = computed<[string, string | number][]>(() => [
-    ['Node', form.node],
-    ['VMID', form.vmid],
-    ['Hostname', form.hostname],
-    ['Template', form.ostemplate],
-    ['Memory', form.memory],
-    ['Cores', form.cores],
-    ['Net0', `${form.netName}/${form.netBridge}${form.netIp ? ` ${form.netIp}` : ''}`],
-  ]);
+  const summaryRows = computed<[string, string][]>(() =>
+    [['node', form.node], ...Object.entries(buildPayload())]
+      .filter(([key]) => key !== 'password')
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => [key === 'node' ? gettext('Node') : key, String(value)])
+  );
 
   function addValidationError(field: string, message: string) {
     validationErrors.value = { ...validationErrors.value, [field]: message };
   }
-  function validateStep(stepName: CreateCtStepName) {
-    validationErrors.value = {};
+  function validateStep(stepName: CreateCtStepName, resetErrors = true) {
+    if (resetErrors) validationErrors.value = {};
     if (stepName === 'general') {
       if (!form.node)
         addValidationError('node', gettext('Node') + ': ' + gettext('This field is required.'));
@@ -453,7 +465,7 @@ export function useCreateCtWizard(
         addValidationError('netName', gettext('Name') + ': ' + gettext('This field is required.'));
       if (!bridgeValid.value)
         addValidationError('netBridge', gettext('Bridge') + ': ' + gettext('Invalid value.'));
-      if (form.netHwaddr.trim() && !/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(form.netHwaddr)) {
+      if (!macAddressValid.value) {
         addValidationError(
           'netHwaddr',
           gettext('MAC address') + ': ' + gettext('Invalid MAC address')
@@ -492,6 +504,11 @@ export function useCreateCtWizard(
         'nameserver',
         gettext('DNS servers') + ': ' + gettext('Enter valid IPv4 or IPv6 addresses.')
       );
+    return validationErrorEntries.value.length === 0;
+  }
+  function validateAllSteps() {
+    validationErrors.value = {};
+    validationSteps.forEach((stepName) => validateStep(stepName, false));
     return validationErrorEntries.value.length === 0;
   }
   async function moveStep(delta: number) {
@@ -667,6 +684,7 @@ export function useCreateCtWizard(
       hostname: '',
       pool: '',
       haManaged: false,
+      start: false,
       templateStorage: '',
       ostemplate: '',
       memory: 512,
@@ -757,6 +775,7 @@ export function useCreateCtWizard(
     payload.unprivileged = form.unprivileged ? 1 : 0;
     if (form.pool) payload.pool = form.pool;
     if (form.haManaged) payload['ha-managed'] = 1;
+    if (form.start) payload.start = 1;
     if (form.tags.trim()) payload.tags = form.tags.trim();
     const featureList = form.features
       .split(',')
@@ -850,7 +869,7 @@ export function useCreateCtWizard(
   }
   async function submit() {
     validationError.value = '';
-    if (!validateStep('dns') || !canSubmit.value || !validateStep('hardware')) {
+    if (!validateAllSteps() || !canSubmit.value) {
       validationError.value = gettext('Please complete all required fields.');
       return;
     }

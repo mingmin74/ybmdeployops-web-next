@@ -3,22 +3,34 @@ import { useCreateCtWizardContext } from './create-ct/context/createCtWizardCont
 
 defineOptions({ name: 'CtConfirmStep' });
 
-const { derived } = useCreateCtWizardContext();
+const { form, derived } = useCreateCtWizardContext();
 const { summaryRows } = derived;
 </script>
 
 <template>
-  <q-scroll-area class="q-pa-sm" style="height: 466px">
+  <q-scroll-area
+    class="q-pa-sm"
+    style="height: 466px"
+  >
     <div class="u-border-dotted-blue bg-white q-px-md q-py-sm">
       <q-list>
-        <q-item v-for="[key, value] in summaryRows" :key="key">
+        <q-item
+          v-for="[key, value] in summaryRows"
+          :key="key"
+        >
           <q-item-section>
             <div>
-              <strong>{{ key }}:</strong> {{ value }}
+              <strong>{{ key }}:</strong>
+              {{ value }}
             </div>
           </q-item-section>
         </q-item>
       </q-list>
+      <q-checkbox
+        v-model="form.start"
+        dense
+        :label="gettext('Start after created')"
+      />
     </div>
   </q-scroll-area>
 </template>
