@@ -127,6 +127,8 @@ export type CreateCtWizardContext = {
     canProceedGeneral: ComputedRef<boolean>;
     canProceedTemplate: ComputedRef<boolean>;
     canProceedHardware: ComputedRef<boolean>;
+    canProceedDns: ComputedRef<boolean>;
+    nameserverValid: ComputedRef<boolean>;
     cpuUnitsDefault: ComputedRef<number>;
     cpuUnitsMaximum: ComputedRef<number>;
     quotaAllowed: (storage: string) => boolean;

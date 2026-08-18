@@ -12,7 +12,13 @@ import { getNodeStorage, getStorageContent } from '@/api/storageContent';
 import { getNodeNetwork } from '@/api/host';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
-import { isIpv4Address, isIpv4Cidr, isIpv6Address, isIpv6Cidr } from '@/utils/ipValidation';
+import {
+  isIp64AddressWithSuffixList,
+  isIpv4Address,
+  isIpv4Cidr,
+  isIpv6Address,
+  isIpv6Cidr,
+} from '@/utils/ipValidation';
 import {
   hasValidSshPublicKey,
   isDnsName,
@@ -214,6 +220,8 @@ export function useCreateCtWizard(
       !form.netGateway6.trim() ||
       isIpv6Address(form.netGateway6.trim())
   );
+  const nameserverValid = computed(() => isIp64AddressWithSuffixList(form.nameserver.trim()));
+  const canProceedDns = computed(() => nameserverValid.value);
   const templateRows = computed(() => {
     if (showAllTemplateArchitectures.value || !nodeTemplateArchitecture.value)
       return allTemplateRows.value;
@@ -280,6 +288,7 @@ export function useCreateCtWizard(
       ipv4GatewayValid.value &&
       ipv6Valid.value &&
       ipv6GatewayValid.value &&
+      canProceedDns.value &&
       (isBlankNumber(form.netVlanTag) || isIntegerInRange(form.netVlanTag, 1, 4094)) &&
       (isBlankNumber(form.netMtu) || isIntegerInRange(form.netMtu, 576, 65535)) &&
       isNumberInRange(form.netRate, 0, 10240);
@@ -478,6 +487,11 @@ export function useCreateCtWizard(
           gettext('Gateway') + ' (IPv6): ' + gettext('Invalid value.')
         );
     }
+    if (stepName === 'dns' && !nameserverValid.value)
+      addValidationError(
+        'nameserver',
+        gettext('DNS servers') + ': ' + gettext('Enter valid IPv4 or IPv6 addresses.')
+      );
     return validationErrorEntries.value.length === 0;
   }
   async function moveStep(delta: number) {
@@ -836,7 +850,7 @@ export function useCreateCtWizard(
   }
   async function submit() {
     validationError.value = '';
-    if (!canSubmit.value || !validateStep('hardware')) {
+    if (!validateStep('dns') || !canSubmit.value || !validateStep('hardware')) {
       validationError.value = gettext('Please complete all required fields.');
       return;
     }
@@ -924,6 +938,8 @@ export function useCreateCtWizard(
       canProceedGeneral,
       canProceedTemplate,
       canProceedHardware,
+      canProceedDns,
+      nameserverValid,
       cpuUnitsDefault,
       cpuUnitsMaximum,
       quotaAllowed,

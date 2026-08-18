@@ -4,11 +4,18 @@ import { useCreateCtWizardContext } from './create-ct/context/createCtWizardCont
 
 defineOptions({ name: 'CtDnsStep' });
 
-const { form } = useCreateCtWizardContext();
+const {
+  form,
+  errors: { validationErrors },
+  derived: { nameserverValid },
+} = useCreateCtWizardContext();
 </script>
 
 <template>
-  <q-scroll-area class="q-pa-sm" style="height: 466px">
+  <q-scroll-area
+    class="q-pa-sm"
+    style="height: 466px"
+  >
     <div class="u-border-dotted-blue bg-white q-px-md q-py-sm">
       <q-input
         v-model="form.searchdomain"
@@ -23,6 +30,10 @@ const { form } = useCreateCtWizardContext();
         class="q-field--with-bottom"
         :label="gettext('DNS servers')"
         :placeholder="gettext('use host settings')"
+        :error="!nameserverValid"
+        :error-message="
+          validationErrors.nameserver || gettext('Enter valid IPv4 or IPv6 addresses.')
+        "
       />
     </div>
   </q-scroll-area>
