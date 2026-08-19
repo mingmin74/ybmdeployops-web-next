@@ -4,6 +4,9 @@ import { computed, onMounted, shallowRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   getVmResources,
+  getVmBackupDefaults,
+  getVmTaskHistory,
+  runVmBulkAction,
   runCtPowerCommand,
   runVmBackup,
   type VmPowerCommand,
@@ -11,6 +14,7 @@ import {
 } from '@/api/vm';
 import { getNodeStorage } from '@/api/storageContent';
 import CreateCtDialog from '@/pages/computer/ct/CreateCtDialog.vue';
+import CtResourceOperationDialog from '@/pages/computer/ct/CtResourceOperationDialog.vue';
 import UWindow from '@/components/UWindow.vue';
 import UsageProgress from '@/components/UsageProgress.vue';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
@@ -20,6 +24,7 @@ import { usagePercent } from '@/utils/format';
 import { textValue } from '@/utils/pveFormat';
 import { toChineseStr } from '@/utils/unicode';
 import { getVmConfig, updateVmConfig } from '@/api/overview';
+import { createHaResource, getHaResource, updateHaResource } from '@/api/ha';
 
 type ContainerTreeNode = QTreeNode & {
   kind: 'node' | 'category' | 'container';
@@ -54,10 +59,17 @@ const tagValue = shallowRef('');
 const backupVisible = shallowRef(false);
 const backupLoading = shallowRef(false);
 const backupStorages = shallowRef<string[]>([]);
+const backupStorageTypes = shallowRef<Record<string, string>>({});
 const backupStorage = shallowRef('');
 const backupMode = shallowRef<'snapshot' | 'suspend' | 'stop'>('snapshot');
 const backupCompression = shallowRef<'zstd' | 'lzo' | 'gzip' | '0'>('zstd');
 const backupProtected = shallowRef(false);
+const backupNotificationMode = shallowRef<'notification-system' | 'legacy-sendmail'>(
+  'notification-system'
+);
+const backupMailto = shallowRef('');
+const backupNotesTemplate = shallowRef('');
+const backupPbsChangeDetection = shallowRef<'legacy' | 'data' | 'metadata'>('legacy');
 const createDialogVisible = shallowRef(false);
 const defaultVisibleColumns = ['vmid', 'name', 'status', 'node', 'cpu', 'memory', 'disk', 'uptime'];
 
@@ -66,7 +78,7 @@ const visibleColumnNames = shallowRef<string[]>(
   (() => {
     try {
       const saved = JSON.parse(
-        window.localStorage.getItem('ct-container-list-visible-columns') || '[]',
+        window.localStorage.getItem('ct-container-list-visible-columns') || '[]'
       );
       return Array.isArray(saved) && saved.length
         ? saved.filter((value): value is string => typeof value === 'string')
@@ -74,7 +86,7 @@ const visibleColumnNames = shallowRef<string[]>(
     } catch {
       return defaultVisibleColumns;
     }
-  })(),
+  })()
 );
 
 const treeNodes = computed<ContainerTreeNode[]>(() => {
@@ -100,8 +112,8 @@ const treeNodes = computed<ContainerTreeNode[]>(() => {
       });
       const sortedRows = [...rows].sort((left, right) =>
         (textValue(left.name) || textValue(left.vmid)).localeCompare(
-          textValue(right.name) || textValue(right.vmid),
-        ),
+          textValue(right.name) || textValue(right.vmid)
+        )
       );
       return {
         key: `node:${node}`,
@@ -147,68 +159,89 @@ const selectedCategory = computed(() =>
     ? 'containers'
     : selectedTreeNode.value.endsWith(':templates')
       ? 'templates'
-      : '',
+      : ''
 );
 
 const selectedContainer = computed(() => selectedRows.value[0]);
+const hasSingleSelection = computed(() => selectedRows.value.length === 1);
 const isStopped = computed(() => selectedContainer.value?.status === 'stopped');
-const isSuspended = computed(() =>
-  ['paused', 'suspended'].includes(String(selectedContainer.value?.status || '')),
-);
 const isTemplate = computed(() => Boolean(selectedContainer.value?.template));
 const canPowerManage = computed(() => hasCapability('VM.PowerMgmt'));
 const canStart = computed(
   () =>
-    Boolean(selectedContainer.value) &&
+    hasSingleSelection.value &&
     canPowerManage.value &&
-    isStopped.value &&
-    !isTemplate.value,
+    selectedContainer.value?.status !== 'running' &&
+    !isTemplate.value
 );
 const canStop = computed(
-  () => Boolean(selectedContainer.value) && canPowerManage.value && !isStopped.value,
+  () => hasSingleSelection.value && canPowerManage.value && !isStopped.value && !isTemplate.value
 );
 const canShutdown = computed(
   () =>
-    Boolean(selectedContainer.value) &&
+    hasSingleSelection.value &&
     canPowerManage.value &&
     selectedContainer.value?.status === 'running' &&
-    !isTemplate.value,
+    !isTemplate.value
 );
 const canReboot = computed(
   () =>
-    Boolean(selectedContainer.value) &&
+    hasSingleSelection.value &&
     canPowerManage.value &&
     selectedContainer.value?.status === 'running' &&
-    !isTemplate.value,
+    !isTemplate.value
 );
-const canSuspend = computed(
-  () =>
-    Boolean(selectedContainer.value) &&
-    canPowerManage.value &&
-    selectedContainer.value?.status === 'running' &&
-    !isTemplate.value,
+const canBackup = computed(() => hasSingleSelection.value && hasCapability('VM.Backup'));
+const canMigrate = computed(() => hasSingleSelection.value && hasCapability('VM.Migrate'));
+const canConsole = computed(
+  () => hasSingleSelection.value && hasCapability('VM.Console') && !isTemplate.value
 );
-const canResume = computed(
-  () =>
-    Boolean(selectedContainer.value) &&
-    canPowerManage.value &&
-    isSuspended.value &&
-    !isTemplate.value,
+const canClone = computed(() => hasSingleSelection.value && hasCapability('VM.Clone'));
+const canTemplate = computed(
+  () => hasSingleSelection.value && hasCapability('VM.Allocate') && !isTemplate.value
 );
-const canBackup = computed(
-  () => Boolean(selectedContainer.value) && hasCapability('VM.Backup') && !isTemplate.value,
+const canRemove = computed(
+  () => hasSingleSelection.value && hasCapability('VM.Allocate') && isStopped.value
 );
+const canTags = computed(() => hasSingleSelection.value && hasCapability('VM.Config.Options'));
+const canManageHa = computed(() => hasSingleSelection.value && hasCapability('Sys.Console'));
 const pendingCommandLabel = computed(
-  () => pendingCommandTitle.value || commandLabel(pendingCommand.value),
+  () => pendingCommandTitle.value || commandLabel(pendingCommand.value)
 );
 const confirmationText = computed(() => {
   const vm = selectedContainer.value;
   if (!vm || !pendingCommand.value) return '';
   return `${gettext('Are you sure you want to')} ${pendingCommandLabel.value}: ${containerDisplayName(vm) || vm.vmid} ?`;
 });
-const canBulkPower = computed(
-  () => canPowerManage.value && selectedRows.value.some((row) => !row.template),
+const canBulkStart = computed(
+  () =>
+    canPowerManage.value &&
+    selectedRows.value.some((row) => !row.template && row.status === 'stopped')
 );
+const canBulkShutdown = computed(
+  () =>
+    canPowerManage.value &&
+    selectedRows.value.some((row) => !row.template && row.status === 'running')
+);
+const canBulkStop = computed(
+  () =>
+    canPowerManage.value &&
+    selectedRows.value.some((row) => !row.template && row.status !== 'stopped')
+);
+const bulkVisible = shallowRef(false);
+const bulkAction = shallowRef<'start' | 'shutdown' | 'stop'>('start');
+const bulkParallel = shallowRef(1);
+const bulkForce = shallowRef(true);
+const bulkTimeout = shallowRef(180);
+const stopVisible = shallowRef(false);
+const stopOverrule = shallowRef(false);
+const stopCanOverrule = shallowRef(false);
+const operationVisible = shallowRef(false);
+const operation = shallowRef<'migrate' | 'clone' | 'template' | 'delete'>('migrate');
+const haVisible = shallowRef(false);
+const haLoading = shallowRef(false);
+const haState = shallowRef<'started' | 'stopped'>('started');
+const haResourceExists = shallowRef(false);
 
 const filteredRows = computed(() => {
   const keyword = search.value.trim().toLocaleLowerCase();
@@ -280,7 +313,7 @@ watch(
   (value) => {
     window.localStorage.setItem('ct-container-list-visible-columns', JSON.stringify(value));
   },
-  { deep: true },
+  { deep: true }
 );
 
 function containerKey(row: VmResource) {
@@ -390,24 +423,39 @@ function toggleRowSelection(_event: Event, row: VmResource) {
     : [...selectedRows.value, row];
 }
 
-function requestCommand(command: VmPowerCommand, data?: Record<string, unknown>, title = '') {
-  if (!selectedContainer.value) return;
+function requestCommand(command: VmPowerCommand, data?: Record<string, unknown>) {
+  if (!hasSingleSelection.value) return;
+  if (command === 'start') {
+    void runCommand(command, data);
+    return;
+  }
+  if (command === 'stop') {
+    void openStop();
+    return;
+  }
   pendingCommand.value = command;
   pendingCommandData.value = data;
-  pendingCommandTitle.value = title;
+  pendingCommandTitle.value = '';
   confirmVisible.value = true;
 }
 
 async function confirmCommand() {
+  await runCommand(pendingCommand.value, pendingCommandData.value, pendingCommandTitle.value, true);
+}
+async function runCommand(
+  command?: VmPowerCommand,
+  data?: Record<string, unknown>,
+  title = '',
+  closeConfirm = false
+) {
   const vm = selectedContainer.value;
-  const command = pendingCommand.value;
-  if (!vm?.node || !vm.vmid || !command) return;
+  if (!hasSingleSelection.value || !vm?.node || !vm.vmid || !command) return;
 
   commandLoading.value = true;
   try {
-    const taskCommandLabel = pendingCommandLabel.value || commandLabel(command);
-    const response = await runCtPowerCommand(vm.node, vm.vmid, command, pendingCommandData.value);
-    confirmVisible.value = false;
+    const taskCommandLabel = title || commandLabel(command);
+    const response = await runCtPowerCommand(vm.node, vm.vmid, command, data);
+    if (closeConfirm) confirmVisible.value = false;
     pendingCommand.value = undefined;
     pendingCommandData.value = undefined;
     await reload();
@@ -415,14 +463,47 @@ async function confirmCommand() {
       openTask(
         vm.node,
         response.data,
-        `${containerDisplayName(vm) || vm.vmid}: ${taskCommandLabel}`,
+        `${containerDisplayName(vm) || vm.vmid}: ${taskCommandLabel}`
       );
   } finally {
     commandLoading.value = false;
   }
 }
 
-async function bulkCommand(command: 'start' | 'shutdown' | 'stop') {
+async function openStop() {
+  const vm = selectedContainer.value;
+  if (!canStop.value || !vm?.node || vm.vmid === undefined) return;
+  commandLoading.value = true;
+  try {
+    const tasks = await getVmTaskHistory(vm.node, vm.vmid, { limit: 50 });
+    const active = (tasks.data || []).some(
+      (task) => task.type === 'vzshutdown' && !task.endtime && task.status === undefined
+    );
+    stopCanOverrule.value = Boolean(active && !vm.hastate);
+    stopOverrule.value = stopCanOverrule.value;
+    stopVisible.value = true;
+  } finally {
+    commandLoading.value = false;
+  }
+}
+async function confirmStop() {
+  await runCommand(
+    'stop',
+    stopOverrule.value && stopCanOverrule.value ? { 'overrule-shutdown': 1 } : undefined,
+    gettext('Stop')
+  );
+  stopVisible.value = false;
+}
+
+function bulkCommand(command: 'start' | 'shutdown' | 'stop') {
+  bulkAction.value = command;
+  bulkParallel.value = 1;
+  bulkForce.value = true;
+  bulkTimeout.value = 180;
+  bulkVisible.value = true;
+}
+async function submitBulkCommand() {
+  const command = bulkAction.value;
   const targets = selectedRows.value.filter(
     (row) =>
       !row.template &&
@@ -432,29 +513,29 @@ async function bulkCommand(command: 'start' | 'shutdown' | 'stop') {
         ? row.status === 'stopped'
         : command === 'shutdown'
           ? row.status === 'running'
-          : row.status !== 'stopped'),
+          : row.status !== 'stopped')
   );
   if (!targets.length) return;
 
   commandLoading.value = true;
   try {
-    const responses = await Promise.all(
-      targets.map((row) => runCtPowerCommand(String(row.node), row.vmid, command)),
-    );
+    const response = await runVmBulkAction(command, {
+      vms: targets.map((row) => row.vmid),
+      'max-workers': bulkParallel.value,
+      ...(command !== 'start'
+        ? { 'force-stop': bulkForce.value ? 1 : 0, timeout: bulkTimeout.value }
+        : {}),
+    });
+    bulkVisible.value = false;
     await reload();
-    const task = responses.find((response) => response.data);
-    if (task?.data)
-      openTask(
-        String(targets[0]?.node || ''),
-        task.data,
-        `${gettext('Bulk')} ${commandLabel(command)}`,
-      );
+    if (response.data) openTask('', response.data, `${gettext('Bulk')} ${commandLabel(command)}`);
   } finally {
     commandLoading.value = false;
   }
 }
 
 function openTags() {
+  if (!canTags.value) return;
   tagValue.value = selectedRows.value.length === 1 ? String(selectedRows.value[0]?.tags || '') : '';
   tagsDialogVisible.value = true;
 }
@@ -464,7 +545,7 @@ function openCreateDialog() {
 }
 
 async function saveTags() {
-  const targets = selectedRows.value.filter((row) => row.node && row.vmid && !row.template);
+  const targets = selectedRows.value.filter((row) => row.node && row.vmid);
   if (!targets.length) return;
   tagsSaving.value = true;
   try {
@@ -479,13 +560,62 @@ async function saveTags() {
             tags: tagValue.value.trim(),
           },
           'lxc',
+          'PUT',
+          ['tags']
         );
-      }),
+      })
     );
     tagsDialogVisible.value = false;
     await reload();
   } finally {
     tagsSaving.value = false;
+  }
+}
+
+function openOperation(value: 'migrate' | 'clone' | 'template' | 'delete') {
+  if (!hasSingleSelection.value) return;
+  operation.value = value;
+  operationVisible.value = true;
+}
+function openConsole() {
+  const vm = selectedContainer.value;
+  if (!canConsole.value || !vm?.node || vm.vmid === undefined) return;
+  const params = new URLSearchParams({
+    console: 'lxc',
+    novnc: '1',
+    node: vm.node,
+    vmid: String(vm.vmid),
+    resize: 'scale',
+    autoconnect: '1',
+    reconnect: '1',
+  });
+  window.open(`/?${params.toString()}`, `ct-console-${vm.vmid}`, 'innerWidth=745,innerHeight=427');
+}
+async function openHa() {
+  const vm = selectedContainer.value;
+  if (!canManageHa.value || vm?.vmid === undefined) return;
+  haLoading.value = true;
+  try {
+    const response = await getHaResource(`ct:${vm.vmid}`).catch(() => null);
+    haResourceExists.value = Boolean(response?.data);
+    haState.value = textValue(response?.data?.state) === 'stopped' ? 'stopped' : 'started';
+    haVisible.value = true;
+  } finally {
+    haLoading.value = false;
+  }
+}
+async function saveHa() {
+  const vm = selectedContainer.value;
+  if (!canManageHa.value || vm?.vmid === undefined) return;
+  haLoading.value = true;
+  try {
+    const id = `ct:${vm.vmid}`;
+    const data = { sid: id, type: 'ct', state: haState.value };
+    if (haResourceExists.value) await updateHaResource(id, data);
+    else await createHaResource(data);
+    haVisible.value = false;
+  } finally {
+    haLoading.value = false;
   }
 }
 
@@ -498,14 +628,36 @@ async function openBackup() {
     backupStorages.value = (response.data || [])
       .map((item) => textValue(item.storage))
       .filter(Boolean);
+    backupStorageTypes.value = Object.fromEntries(
+      (response.data || []).map((item) => [textValue(item.storage), textValue(item.type)])
+    );
     backupStorage.value = backupStorages.value[0] || '';
-    backupMode.value = 'snapshot';
-    backupCompression.value = 'zstd';
+    await applyBackupDefaults(String(vm.node), backupStorage.value);
     backupProtected.value = false;
     backupVisible.value = true;
   } finally {
     backupLoading.value = false;
   }
+}
+async function applyBackupDefaults(node: string, storage: string) {
+  backupMode.value = 'snapshot';
+  backupCompression.value = 'zstd';
+  backupNotificationMode.value = 'notification-system';
+  backupMailto.value = '';
+  backupNotesTemplate.value = '';
+  backupPbsChangeDetection.value = 'legacy';
+  if (!storage) return;
+  const defaults = (await getVmBackupDefaults(node, storage)).data || {};
+  if (['snapshot', 'suspend', 'stop'].includes(String(defaults.mode)))
+    backupMode.value = defaults.mode as typeof backupMode.value;
+  if (['zstd', 'lzo', 'gzip', '0'].includes(String(defaults.compress)))
+    backupCompression.value = defaults.compress as typeof backupCompression.value;
+  backupMailto.value = textValue(defaults.mailto);
+  backupNotesTemplate.value = textValue(defaults['notes-template']);
+  backupNotificationMode.value =
+    textValue(defaults['notification-mode']) === 'legacy-sendmail'
+      ? 'legacy-sendmail'
+      : 'notification-system';
 }
 
 async function backupNow() {
@@ -518,13 +670,21 @@ async function backupNow() {
       mode: backupMode.value,
       compress: backupCompression.value,
       protected: backupProtected.value ? 1 : 0,
+      'notification-mode': backupNotificationMode.value,
+      ...(backupMailto.value.trim() ? { mailto: backupMailto.value.trim() } : {}),
+      ...(backupNotesTemplate.value.trim()
+        ? { 'notes-template': backupNotesTemplate.value.trim() }
+        : {}),
+      ...(backupStorageTypes.value[backupStorage.value] === 'pbs'
+        ? { 'pbs-change-detection-mode': backupPbsChangeDetection.value }
+        : {}),
     });
     backupVisible.value = false;
     if (response.data)
       openTask(
         String(vm.node),
         response.data,
-        `${containerDisplayName(vm) || vm.vmid}: ${gettext('Backup')}`,
+        `${containerDisplayName(vm) || vm.vmid}: ${gettext('Backup')}`
       );
   } finally {
     backupLoading.value = false;
@@ -551,7 +711,7 @@ async function reload() {
     });
     selectedRows.value = selectedRows.value
       .map((selected) =>
-        resources.value.find((row) => containerKey(row) === containerKey(selected)),
+        resources.value.find((row) => containerKey(row) === containerKey(selected))
       )
       .filter((row): row is VmResource => Boolean(row));
   } finally {
@@ -613,7 +773,12 @@ onMounted(() => {
                   >
                     {{ node.label }}
                   </button>
-                  <span v-else class="ellipsis">{{ node.label }}</span>
+                  <span
+                    v-else
+                    class="ellipsis"
+                  >
+                    {{ node.label }}
+                  </span>
                 </div>
               </template>
             </q-tree>
@@ -657,7 +822,7 @@ onMounted(() => {
                     color="primary"
                     class="u-button"
                     :label="gettext('Power')"
-                    :disable="!selectedContainer || commandLoading"
+                    :disable="!hasSingleSelection || commandLoading"
                   >
                     <q-list dense>
                       <q-item
@@ -665,45 +830,33 @@ onMounted(() => {
                         clickable
                         :disable="!canStart"
                         @click="requestCommand('start')"
-                        ><q-item-section>{{ gettext('Start') }}</q-item-section></q-item
                       >
+                        <q-item-section>{{ gettext('Start') }}</q-item-section>
+                      </q-item>
                       <q-item
                         v-close-popup
                         clickable
                         :disable="!canShutdown"
                         @click="requestCommand('shutdown')"
-                        ><q-item-section>{{ gettext('Shutdown') }}</q-item-section></q-item
                       >
+                        <q-item-section>{{ gettext('Shutdown') }}</q-item-section>
+                      </q-item>
                       <q-item
                         v-close-popup
                         clickable
                         :disable="!canStop"
                         @click="requestCommand('stop')"
-                        ><q-item-section class="text-red">{{
-                          gettext('Stop')
-                        }}</q-item-section></q-item
                       >
+                        <q-item-section class="text-red">{{ gettext('Stop') }}</q-item-section>
+                      </q-item>
                       <q-item
                         v-close-popup
                         clickable
                         :disable="!canReboot"
                         @click="requestCommand('reboot')"
-                        ><q-item-section>{{ gettext('Reboot') }}</q-item-section></q-item
                       >
-                      <q-item
-                        v-close-popup
-                        clickable
-                        :disable="!canSuspend"
-                        @click="requestCommand('suspend')"
-                        ><q-item-section>{{ gettext('Suspend') }}</q-item-section></q-item
-                      >
-                      <q-item
-                        v-close-popup
-                        clickable
-                        :disable="!canResume"
-                        @click="requestCommand('resume')"
-                        ><q-item-section>{{ gettext('Resume') }}</q-item-section></q-item
-                      >
+                        <q-item-section>{{ gettext('Reboot') }}</q-item-section>
+                      </q-item>
                     </q-list>
                   </q-btn-dropdown>
                   <q-btn-dropdown
@@ -719,24 +872,27 @@ onMounted(() => {
                       <q-item
                         v-close-popup
                         clickable
-                        :disable="!canBulkPower"
+                        :disable="!canBulkStart"
                         @click="bulkCommand('start')"
-                        ><q-item-section>{{ gettext('Bulk Start') }}</q-item-section></q-item
                       >
+                        <q-item-section>{{ gettext('Bulk Start') }}</q-item-section>
+                      </q-item>
                       <q-item
                         v-close-popup
                         clickable
-                        :disable="!canBulkPower"
+                        :disable="!canBulkShutdown"
                         @click="bulkCommand('shutdown')"
-                        ><q-item-section>{{ gettext('Bulk Shutdown') }}</q-item-section></q-item
                       >
+                        <q-item-section>{{ gettext('Bulk Shutdown') }}</q-item-section>
+                      </q-item>
                       <q-item
                         v-close-popup
                         clickable
-                        :disable="!canBulkPower"
+                        :disable="!canBulkStop"
                         @click="bulkCommand('stop')"
-                        ><q-item-section>{{ gettext('Bulk Stop') }}</q-item-section></q-item
                       >
+                        <q-item-section>{{ gettext('Bulk Stop') }}</q-item-section>
+                      </q-item>
                     </q-list>
                   </q-btn-dropdown>
                   <q-btn-dropdown
@@ -746,21 +902,79 @@ onMounted(() => {
                     color="primary"
                     class="u-button"
                     :label="gettext('More')"
-                    :disable="!selectedContainer || commandLoading"
+                    :disable="!hasSingleSelection || commandLoading"
                   >
                     <q-list dense>
                       <q-item
                         v-close-popup
                         clickable
-                        :disable="!selectedRows.length"
+                        :disable="!canTags"
                         @click="openTags"
-                        ><q-item-section>{{ gettext('Edit Tags') }}</q-item-section></q-item
                       >
-                      <q-item v-close-popup clickable :disable="!canBackup" @click="openBackup"
-                        ><q-item-section>{{ gettext('Backup now') }}</q-item-section></q-item
+                        <q-item-section>{{ gettext('Edit Tags') }}</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canBackup"
+                        @click="openBackup"
                       >
+                        <q-item-section>{{ gettext('Backup now') }}</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canClone"
+                        @click="openOperation('clone')"
+                      >
+                        <q-item-section>{{ gettext('Clone') }}</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canTemplate"
+                        @click="openOperation('template')"
+                      >
+                        <q-item-section>{{ gettext('Convert to template') }}</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canManageHa"
+                        @click="openHa"
+                      >
+                        <q-item-section>{{ gettext('Manage HA') }}</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canRemove"
+                        @click="openOperation('delete')"
+                      >
+                        <q-item-section class="text-red">{{ gettext('Remove') }}</q-item-section>
+                      </q-item>
                     </q-list>
                   </q-btn-dropdown>
+                  <q-btn
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    :label="gettext('Migrate')"
+                    :disable="!canMigrate || commandLoading"
+                    @click="openOperation('migrate')"
+                  />
+                  <q-btn
+                    no-caps
+                    outline
+                    size="12px"
+                    color="primary"
+                    class="u-button"
+                    :label="gettext('Console')"
+                    :disable="!canConsole || commandLoading"
+                    @click="openConsole"
+                  />
                   <q-btn
                     flat
                     dense
@@ -792,10 +1006,18 @@ onMounted(() => {
                     :aria-label="gettext('Columns')"
                   >
                     <q-list dense>
-                      <q-item v-for="column in columns" :key="column.name" tag="label">
-                        <q-item-section avatar
-                          ><q-checkbox v-model="visibleColumnNames" :val="column.name" dense
-                        /></q-item-section>
+                      <q-item
+                        v-for="column in columns"
+                        :key="column.name"
+                        tag="label"
+                      >
+                        <q-item-section avatar>
+                          <q-checkbox
+                            v-model="visibleColumnNames"
+                            :val="column.name"
+                            dense
+                          />
+                        </q-item-section>
                         <q-item-section>{{ column.label }}</q-item-section>
                       </q-item>
                     </q-list>
@@ -805,7 +1027,11 @@ onMounted(() => {
               <template #body-cell-name="scope">
                 <q-td :props="scope">
                   <div class="vm-name-cell">
-                    <q-icon name="inventory_2" size="18px" color="primary" />
+                    <q-icon
+                      name="inventory_2"
+                      size="18px"
+                      color="primary"
+                    />
                     <button
                       type="button"
                       class="vm-display-name-text ellipsis"
@@ -851,13 +1077,25 @@ onMounted(() => {
       </q-card-section>
     </q-card>
 
-    <q-dialog v-model="confirmVisible" persistent>
-      <UWindow :title="pendingCommandLabel" width="420px" :loading="commandLoading">
+    <q-dialog
+      v-model="confirmVisible"
+      persistent
+    >
+      <UWindow
+        :title="pendingCommandLabel"
+        width="420px"
+        :loading="commandLoading"
+      >
         <div class="q-pa-md">
           <div class="text-body2">{{ confirmationText }}</div>
         </div>
         <template #footer>
-          <q-btn flat :label="gettext('Cancel')" v-close-popup :disable="commandLoading" />
+          <q-btn
+            flat
+            :label="gettext('Cancel')"
+            v-close-popup
+            :disable="commandLoading"
+          />
           <q-btn
             color="primary"
             :label="gettext('Confirm')"
@@ -869,19 +1107,43 @@ onMounted(() => {
     </q-dialog>
 
     <q-dialog v-model="tagsDialogVisible">
-      <UWindow :title="gettext('Edit Tags')" width="420px" :loading="tagsSaving">
+      <UWindow
+        :title="gettext('Edit Tags')"
+        width="420px"
+        :loading="tagsSaving"
+      >
         <div class="q-pa-md">
-          <q-input v-model="tagValue" dense outlined square :label="gettext('Tags')" />
+          <q-input
+            v-model="tagValue"
+            dense
+            outlined
+            square
+            :label="gettext('Tags')"
+          />
         </div>
         <template #footer>
-          <q-btn flat :label="gettext('Cancel')" v-close-popup :disable="tagsSaving" />
-          <q-btn color="primary" :label="gettext('Save')" :loading="tagsSaving" @click="saveTags" />
+          <q-btn
+            flat
+            :label="gettext('Cancel')"
+            v-close-popup
+            :disable="tagsSaving"
+          />
+          <q-btn
+            color="primary"
+            :label="gettext('Save')"
+            :loading="tagsSaving"
+            @click="saveTags"
+          />
         </template>
       </UWindow>
     </q-dialog>
 
     <q-dialog v-model="backupVisible">
-      <UWindow :title="gettext('Backup')" width="520px" :loading="backupLoading">
+      <UWindow
+        :title="gettext('Backup')"
+        width="520px"
+        :loading="backupLoading"
+      >
         <div class="q-pa-md q-gutter-md">
           <q-select
             v-model="backupStorage"
@@ -892,6 +1154,9 @@ onMounted(() => {
             map-options
             :label="gettext('Storage')"
             :options="backupStorages"
+            @update:model-value="
+              applyBackupDefaults(String(selectedContainer?.node || ''), backupStorage)
+            "
           />
           <q-select
             v-model="backupMode"
@@ -915,18 +1180,152 @@ onMounted(() => {
             emit-value
             map-options
             :label="gettext('Compression')"
+            :disable="backupStorageTypes[backupStorage] === 'pbs'"
             :options="['zstd', 'lzo', 'gzip', '0']"
           />
-          <q-checkbox v-model="backupProtected" dense :label="gettext('Protected')" />
+          <q-checkbox
+            v-model="backupProtected"
+            dense
+            :label="gettext('Protected')"
+          />
+          <q-select
+            v-model="backupNotificationMode"
+            dense
+            outlined
+            square
+            emit-value
+            map-options
+            :options="[
+              { label: gettext('Notification System'), value: 'notification-system' },
+              { label: gettext('Legacy sendmail'), value: 'legacy-sendmail' },
+            ]"
+            :label="gettext('Notification')"
+          />
+          <q-input
+            v-model="backupMailto"
+            dense
+            outlined
+            square
+            :label="gettext('Send email to')"
+          />
+          <q-input
+            v-model="backupNotesTemplate"
+            dense
+            outlined
+            square
+            type="textarea"
+            :label="gettext('Notes template')"
+          />
+          <q-select
+            v-if="backupStorageTypes[backupStorage] === 'pbs'"
+            v-model="backupPbsChangeDetection"
+            dense
+            outlined
+            square
+            emit-value
+            map-options
+            :options="['legacy', 'data', 'metadata']"
+            :label="gettext('Change detection mode')"
+          />
         </div>
         <template #footer>
-          <q-btn flat :label="gettext('Cancel')" v-close-popup :disable="backupLoading" />
+          <q-btn
+            flat
+            :label="gettext('Cancel')"
+            v-close-popup
+            :disable="backupLoading"
+          />
           <q-btn
             color="primary"
             :label="gettext('Backup')"
             :disable="!backupStorage"
             :loading="backupLoading"
             @click="backupNow"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
+
+    <q-dialog
+      v-model="stopVisible"
+      persistent
+    >
+      <UWindow
+        :title="gettext('Stop')"
+        width="420px"
+        :loading="commandLoading"
+      >
+        <div class="q-pa-md q-gutter-md">
+          <div>{{ confirmationText }}</div>
+          <q-checkbox
+            v-if="stopCanOverrule"
+            v-model="stopOverrule"
+            dense
+            :label="gettext('Overrule active shutdown tasks')"
+          />
+        </div>
+        <template #foot>
+          <q-btn
+            v-close-popup
+            flat
+            :label="gettext('Cancel')"
+          />
+          <q-btn
+            color="negative"
+            :loading="commandLoading"
+            :label="gettext('Stop')"
+            @click="confirmStop"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
+    <q-dialog
+      v-model="bulkVisible"
+      persistent
+    >
+      <UWindow
+        :title="`${gettext('Bulk')} ${commandLabel(bulkAction)}`"
+        width="440px"
+        :loading="commandLoading"
+      >
+        <div class="q-pa-md q-gutter-md">
+          <q-input
+            v-model.number="bulkParallel"
+            dense
+            outlined
+            type="number"
+            min="1"
+            max="64"
+            :label="gettext('Parallel jobs')"
+          />
+          <template v-if="bulkAction !== 'start'">
+            <q-checkbox
+              v-model="bulkForce"
+              dense
+              :label="gettext('Force Stop')"
+            />
+            <q-input
+              v-model.number="bulkTimeout"
+              dense
+              outlined
+              type="number"
+              min="0"
+              max="7200"
+              :label="gettext('Timeout (s)')"
+            />
+          </template>
+        </div>
+        <template #foot>
+          <q-btn
+            v-close-popup
+            flat
+            :label="gettext('Cancel')"
+          />
+          <q-btn
+            color="primary"
+            :loading="commandLoading"
+            :label="gettext('Start')"
+            @click="submitBulkCommand"
           />
         </template>
       </UWindow>
@@ -944,6 +1343,51 @@ onMounted(() => {
       @completed="reload"
       @task="openTask($event.node, $event.upid, $event.title)"
     />
+    <CtResourceOperationDialog
+      v-model="operationVisible"
+      :operation="operation"
+      :vm="selectedContainer"
+      @completed="reload"
+      @task="openTask($event.node, $event.upid, $event.title)"
+    />
+    <q-dialog
+      v-model="haVisible"
+      persistent
+    >
+      <UWindow
+        :title="gettext('Manage HA')"
+        width="420px"
+        :loading="haLoading"
+      >
+        <div class="q-pa-md">
+          <q-select
+            v-model="haState"
+            dense
+            outlined
+            emit-value
+            map-options
+            :options="[
+              { label: gettext('Started'), value: 'started' },
+              { label: gettext('Stopped'), value: 'stopped' },
+            ]"
+            :label="gettext('Requested State')"
+          />
+        </div>
+        <template #foot>
+          <q-btn
+            v-close-popup
+            flat
+            :label="gettext('Cancel')"
+          />
+          <q-btn
+            color="primary"
+            :loading="haLoading"
+            :label="gettext('Save')"
+            @click="saveHa"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
   </div>
 </template>
 

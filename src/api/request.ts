@@ -20,6 +20,7 @@ export type RequestOptions = {
   silent?: boolean;
   notifyOnError?: boolean;
   timeout?: number;
+  keepEmptyKeys?: string[];
 };
 
 const baseUrl = import.meta.env.VITE_PVE_BASE_URL || '';
@@ -33,11 +34,12 @@ function stringifyParam(value: unknown) {
   return JSON.stringify(value);
 }
 
-function compactParams(params?: Record<string, unknown>) {
+function compactParams(params?: Record<string, unknown>, keepEmptyKeys: string[] = []) {
   const search = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === '') return;
+    if (value === undefined || value === null || (value === '' && !keepEmptyKeys.includes(key)))
+      return;
 
     if (Array.isArray(value)) {
       value.forEach((item) => search.append(key, stringifyParam(item)));
@@ -50,12 +52,15 @@ function compactParams(params?: Record<string, unknown>) {
   return search;
 }
 
-export function toFormBody(data?: Record<string, unknown> | URLSearchParams | string) {
+export function toFormBody(
+  data?: Record<string, unknown> | URLSearchParams | string,
+  keepEmptyKeys: string[] = []
+) {
   if (!data) return undefined;
   if (typeof data === 'string') return data;
   if (data instanceof URLSearchParams) return data.toString();
 
-  return compactParams(data).toString();
+  return compactParams(data, keepEmptyKeys).toString();
 }
 
 function normalizeUrl(url: string) {
@@ -114,7 +119,7 @@ function createRequestInit(method: RequestMethod, options: RequestOptions, csrfT
       body = JSON.stringify(options.data);
     } else {
       headers['Content-Type'] = 'application/x-www-form-urlencoded';
-      body = toFormBody(options.data);
+      body = toFormBody(options.data, options.keepEmptyKeys);
     }
   }
 
@@ -142,7 +147,7 @@ export async function request<T = unknown>(url: string, options: RequestOptions 
   try {
     const response = await fetch(
       resolveUrl(url, method === 'GET' ? options.params : undefined),
-      requestInit,
+      requestInit
     );
     const payload = parseResponseText(await response.text());
     const parsed = parsePveResponse<T>(response, payload);
