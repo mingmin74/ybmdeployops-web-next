@@ -195,7 +195,15 @@ export function useCreateCtWizard(
   const validationErrors = shallowRef<Record<string, string>>({});
   const vmidAvailability = shallowRef<'idle' | 'checking' | 'available' | 'unavailable'>('idle');
   let vmidValidationRequest = 0;
+  let nodeLoadRequest = 0;
+  let nextIdLoadRequest = 0;
+  let storageLoadRequest = 0;
+  let rootfsStorageLoadRequest = 0;
+  let templateLoadRequest = 0;
   const form = reactive<CreateCtForm>(defaultForm());
+  const selectedNodeOnline = computed(() =>
+    nodes.value.some((node) => node.node === form.node && node.status === 'online')
+  );
   const nodeTemplateArchitecture = computed(() => {
     const hostArch = textValue(nodes.value.find((node) => node.node === form.node)?.['host-arch']);
     if (hostArch === 'x86_64') return 'amd64';
@@ -249,7 +257,7 @@ export function useCreateCtWizard(
     () =>
       /^\d+$/.test(form.vmid.trim()) && Number(form.vmid) >= 100 && Number(form.vmid) <= 999999999
   );
-  const hostnameValid = computed(() => !form.hostname.trim() || isDnsName(form.hostname.trim()));
+  const hostnameValid = computed(() => !form.hostname || isDnsName(form.hostname));
   const sshKeysValid = computed(() => !form.sshkeys.trim() || isValidSshPublicKeys(form.sshkeys));
   const tagsValid = computed(() => form.tags.split(/[;, ]/).filter(Boolean).every(isValidPveTag));
   const generalFieldErrors = computed(() => {
@@ -272,24 +280,23 @@ export function useCreateCtWizard(
   });
   const canProceedGeneral = computed(
     () =>
-      form.node !== '' &&
+      selectedNodeOnline.value &&
       vmidValid.value &&
       vmidAvailability.value === 'available' &&
       hostnameValid.value &&
       sshKeysValid.value &&
-      (form.password.trim().length >= 5 || hasValidSshPublicKey(form.sshkeys)) &&
-      (!form.password.trim() || form.password === form.confirmPassword) &&
+      (form.password.length >= 5 || hasValidSshPublicKey(form.sshkeys)) &&
+      form.password === form.confirmPassword &&
       tagsValid.value
   );
 
   const canSubmit = computed(() => {
     const basic =
       !loading.value &&
-      form.node !== '' &&
+      selectedNodeOnline.value &&
       canProceedGeneral.value &&
-      (!form.password.trim() || form.password === form.confirmPassword) &&
-      form.templateStorage !== '' &&
-      form.ostemplate !== '' &&
+      form.password === form.confirmPassword &&
+      canProceedTemplate.value &&
       isIntegerInRange(form.memory, 16) &&
       isIntegerInRange(form.swap, 0) &&
       (isBlankNumber(form.cores) || isIntegerInRange(form.cores, 1, 8192)) &&
@@ -309,7 +316,15 @@ export function useCreateCtWizard(
       isNumberInRange(form.netRate, 0, 10240);
     return basic && canProceedHardware.value;
   });
-  const canProceedTemplate = computed(() => form.ostemplate !== '');
+  const templateStorageValid = computed(() =>
+    storageOptions.value.some((item) => textValue(item.storage) === form.templateStorage)
+  );
+  const templateValid = computed(() =>
+    templateRows.value.some(
+      (item) => (textValue(item.volid) || textValue(item.filename)) === form.ostemplate
+    )
+  );
+  const canProceedTemplate = computed(() => templateStorageValid.value && templateValid.value);
   const quotaAllowed = (storage: string) => {
     const type = textValue(
       rootfsStorageOptions.value.find((item) => textValue(item.storage) === storage)?.type
@@ -319,12 +334,18 @@ export function useCreateCtWizard(
   const canProceedHardware = computed(
     () =>
       Boolean(form.rootfsStorage) &&
+      rootfsStorageOptions.value.some(
+        (storage) => textValue(storage.storage) === form.rootfsStorage
+      ) &&
       isValidDiskSize(form.rootfsSize) &&
       areIdMapsValid(form.rootfsIdMaps, form.rootfsIdMapPassthrough) &&
       form.managedMounts.every(
         (mount) =>
           isValidManagedMountId(mount.id) &&
           Boolean(mount.storage) &&
+          rootfsStorageOptions.value.some(
+            (storage) => textValue(storage.storage) === mount.storage
+          ) &&
           isValidDiskSize(mount.size) &&
           mount.mountPoint.trim().startsWith('/') &&
           areIdMapsValid(mount.idMaps, mount.idMapPassthrough)
@@ -345,6 +366,8 @@ export function useCreateCtWizard(
     if (stepName === 'general') {
       if (!form.node)
         addValidationError('node', gettext('Node') + ': ' + gettext('This field is required.'));
+      else if (!selectedNodeOnline.value)
+        addValidationError('node', gettext('Node') + ': ' + gettext('Node seems to be offline!'));
       if (!form.vmid.trim())
         addValidationError('vmid', gettext('VM ID') + ': ' + gettext('This field is required.'));
       else if (!vmidValid.value)
@@ -356,13 +379,13 @@ export function useCreateCtWizard(
         addValidationError('vmid', gettext('VM ID is still being validated.'));
       else if (vmidAvailability.value !== 'available')
         addValidationError('vmid', gettext('VM ID is already in use.'));
-      if (form.hostname.trim() && !hostnameValid.value)
+      if (form.hostname && !hostnameValid.value)
         addValidationError('hostname', gettext('Hostname') + ': ' + gettext('Invalid DNS name'));
       if (form.sshkeys.trim() && !sshKeysValid.value)
         addValidationError('sshkeys', gettext('Failed to recognize ssh key'));
-      if (!form.password.trim() && !hasValidSshPublicKey(form.sshkeys))
+      if (!form.password && !hasValidSshPublicKey(form.sshkeys))
         addValidationError('password', gettext('Password or SSH public key is required.'));
-      if (form.password.trim() && form.password.trim().length < 5)
+      if (form.password && form.password.length < 5)
         addValidationError('password', gettext('Password must contain at least 5 characters.'));
       if (form.password !== form.confirmPassword)
         addValidationError('confirmPassword', gettext('Passwords do not match!'));
@@ -374,11 +397,18 @@ export function useCreateCtWizard(
           'templateStorage',
           gettext('Storage') + ': ' + gettext('This field is required.')
         );
+      else if (!templateStorageValid.value)
+        addValidationError(
+          'templateStorage',
+          gettext('Storage') + ': ' + gettext('Invalid value.')
+        );
       if (!form.ostemplate)
         addValidationError(
           'ostemplate',
           gettext('Template') + ': ' + gettext('This field is required.')
         );
+      else if (!templateValid.value)
+        addValidationError('ostemplate', gettext('Template') + ': ' + gettext('Invalid value.'));
     }
     if (stepName === 'hardware') {
       if (!form.rootfsStorage)
@@ -386,6 +416,10 @@ export function useCreateCtWizard(
           'rootfsStorage',
           gettext('Storage') + ': ' + gettext('This field is required.')
         );
+      else if (
+        !rootfsStorageOptions.value.some((item) => textValue(item.storage) === form.rootfsStorage)
+      )
+        addValidationError('rootfsStorage', gettext('Storage') + ': ' + gettext('Invalid value.'));
       if (!isValidDiskSize(form.rootfsSize))
         addValidationError(
           'rootfsSize',
@@ -401,6 +435,13 @@ export function useCreateCtWizard(
           addValidationError(
             `${mount.id}Storage`,
             `${mount.id}: ${gettext('Storage')} - ${gettext('This field is required.')}`
+          );
+        else if (
+          !rootfsStorageOptions.value.some((item) => textValue(item.storage) === mount.storage)
+        )
+          addValidationError(
+            `${mount.id}Storage`,
+            `${mount.id}: ${gettext('Storage')} - ${gettext('Invalid value.')}`
           );
         if (!isValidDiskSize(mount.size))
           addValidationError(
@@ -521,6 +562,7 @@ export function useCreateCtWizard(
   }
 
   async function loadNodes() {
+    const request = ++nodeLoadRequest;
     try {
       const [nodesResponse, resourcesResponse] = await Promise.all([
         getNodes(),
@@ -539,6 +581,7 @@ export function useCreateCtWizard(
           .filter((resource) => textValue(resource.type) === 'node')
           .map((resource) => [textValue(resource.node), Number(resource['cgroup-mode'])])
       );
+      if (request !== nodeLoadRequest || !model.value) return;
       nodes.value = (nodesResponse.data || []).map((node) => {
         const hostArch = architectures.get(node.node);
         const cgroupMode = cgroupModes.get(node.node);
@@ -549,10 +592,15 @@ export function useCreateCtWizard(
         };
       });
       const preferred = preferredNode();
-      if (preferred && nodes.value.some((node) => node.node === preferred)) form.node = preferred;
-      else if (!form.node && nodes.value.length) form.node = nodes.value[0]?.node || '';
+      if (
+        preferred &&
+        nodes.value.some((node) => node.node === preferred && node.status === 'online')
+      )
+        form.node = preferred;
+      else if (!selectedNodeOnline.value)
+        form.node = nodes.value.find((node) => node.status === 'online')?.node || '';
     } catch {
-      nodes.value = [];
+      if (request === nodeLoadRequest && model.value) nodes.value = [];
     }
   }
   async function loadPools() {
@@ -566,10 +614,18 @@ export function useCreateCtWizard(
     }
   }
   async function loadNextId() {
-    if (!form.node) return;
+    if (form.vmid) return;
+    const request = ++nextIdLoadRequest;
     try {
       const response = await getCtNextId();
-      if (response.data !== undefined && response.data !== null) form.vmid = String(response.data);
+      if (
+        request === nextIdLoadRequest &&
+        model.value &&
+        !form.vmid &&
+        response.data !== undefined &&
+        response.data !== null
+      )
+        form.vmid = String(response.data);
     } catch {
       /* ignore */
     }
@@ -592,14 +648,17 @@ export function useCreateCtWizard(
     }
   }
   async function loadStorageOptions() {
-    if (!form.node) {
+    const request = ++storageLoadRequest;
+    const node = form.node;
+    if (!node) {
       storageOptions.value = [];
       form.templateStorage = '';
       form.ostemplate = '';
       return;
     }
     try {
-      const response = await getNodeStorage(form.node, 'vztmpl');
+      const response = await getNodeStorage(node, 'vztmpl');
+      if (request !== storageLoadRequest || !model.value || form.node !== node) return;
       storageOptions.value = (response.data || [])
         .filter((item: PveRecord) => Boolean(textValue(item.storage)))
         .sort((left: PveRecord, right: PveRecord) =>
@@ -608,19 +667,23 @@ export function useCreateCtWizard(
       form.templateStorage = textValue(storageOptions.value[0]?.storage);
       form.ostemplate = '';
     } catch {
+      if (request !== storageLoadRequest || !model.value || form.node !== node) return;
       storageOptions.value = [];
       form.templateStorage = '';
       form.ostemplate = '';
     }
   }
   async function loadRootfsStorageOptions() {
-    if (!form.node) {
+    const request = ++rootfsStorageLoadRequest;
+    const node = form.node;
+    if (!node) {
       rootfsStorageOptions.value = [];
       form.rootfsStorage = '';
       return;
     }
     try {
-      const response = await getNodeStorage(form.node, 'rootdir');
+      const response = await getNodeStorage(node, 'rootdir');
+      if (request !== rootfsStorageLoadRequest || !model.value || form.node !== node) return;
       rootfsStorageOptions.value = (response.data || [])
         .filter((item: PveRecord) => Boolean(textValue(item.storage)))
         .sort((left: PveRecord, right: PveRecord) =>
@@ -631,23 +694,41 @@ export function useCreateCtWizard(
       )
         form.rootfsStorage = textValue(rootfsStorageOptions.value[0]?.storage);
     } catch {
+      if (request !== rootfsStorageLoadRequest || !model.value || form.node !== node) return;
       rootfsStorageOptions.value = [];
       form.rootfsStorage = '';
     }
   }
   async function loadTemplates() {
-    if (!form.node || !form.templateStorage) {
+    const request = ++templateLoadRequest;
+    const node = form.node;
+    const storage = form.templateStorage;
+    if (!node || !storage) {
       allTemplateRows.value = [];
       form.ostemplate = '';
       return;
     }
     try {
-      const response = await getStorageContent(form.node, form.templateStorage, 'vztmpl');
+      const response = await getStorageContent(node, storage, 'vztmpl');
+      if (
+        request !== templateLoadRequest ||
+        !model.value ||
+        form.node !== node ||
+        form.templateStorage !== storage
+      )
+        return;
       allTemplateRows.value = (response.data || []).filter((item: PveRecord) =>
         Boolean(item.volid || item.filename)
       );
       form.ostemplate = '';
     } catch {
+      if (
+        request !== templateLoadRequest ||
+        !model.value ||
+        form.node !== node ||
+        form.templateStorage !== storage
+      )
+        return;
       allTemplateRows.value = [];
       form.ostemplate = '';
     }
@@ -655,30 +736,49 @@ export function useCreateCtWizard(
   let bridgeLoadRequest = 0;
   async function loadBridges() {
     const request = ++bridgeLoadRequest;
-    if (!form.node) {
+    const node = form.node;
+    if (!node) {
       bridgeRows.value = [];
       form.netBridge = '';
       return;
     }
     try {
-      const response = await getNodeNetwork(form.node, { type: 'any_bridge' });
-      if (request !== bridgeLoadRequest) return;
+      const response = await getNodeNetwork(node, { type: 'any_bridge' });
+      if (request !== bridgeLoadRequest || !model.value || form.node !== node) return;
       bridgeRows.value = (response.data || [])
         .filter((bridge) => Boolean(textValue(bridge.iface)))
         .sort((left, right) => textValue(left.iface).localeCompare(textValue(right.iface)));
       if (!bridgeRows.value.some((bridge) => textValue(bridge.iface) === form.netBridge))
         form.netBridge = textValue(bridgeRows.value[0]?.iface);
     } catch {
-      if (request !== bridgeLoadRequest) return;
+      if (request !== bridgeLoadRequest || !model.value || form.node !== node) return;
       bridgeRows.value = [];
       form.netBridge = '';
     }
   }
+  function invalidateDependentData() {
+    storageLoadRequest += 1;
+    rootfsStorageLoadRequest += 1;
+    templateLoadRequest += 1;
+    bridgeLoadRequest += 1;
+    storageOptions.value = [];
+    rootfsStorageOptions.value = [];
+    bridgeRows.value = [];
+    allTemplateRows.value = [];
+    form.templateStorage = '';
+    form.ostemplate = '';
+    form.rootfsStorage = '';
+    form.netBridge = '';
+  }
   function resetForm() {
+    nodeLoadRequest += 1;
+    nextIdLoadRequest += 1;
+    invalidateDependentData();
     Object.assign(form, {
       node:
-        nodes.value.find((node) => node.node === preferredNode())?.node ||
-        nodes.value[0]?.node ||
+        nodes.value.find((node) => node.node === preferredNode() && node.status === 'online')
+          ?.node ||
+        nodes.value.find((node) => node.status === 'online')?.node ||
         '',
       vmid: '',
       hostname: '',
@@ -711,7 +811,7 @@ export function useCreateCtWizard(
       searchdomain: '',
       unprivileged: true,
       features: '',
-      rootfsStorage: textValue(rootfsStorageOptions.value[0]?.storage),
+      rootfsStorage: '',
       rootfsSize: 8,
       rootfsQuota: false,
       rootfsAcl: '__default__',
@@ -735,18 +835,15 @@ export function useCreateCtWizard(
   }
   async function initialize() {
     await loadNodes();
-    await loadBridges();
     await loadPools();
     await loadNextId();
-    await loadStorageOptions();
-    await loadRootfsStorageOptions();
+    await Promise.all([loadBridges(), loadStorageOptions(), loadRootfsStorageOptions()]);
     await loadTemplates();
     step.value = 'general';
   }
   function buildPayload(): Record<string, unknown> {
     const payload: Record<string, unknown> = {
       vmid: form.vmid.trim(),
-      hostname: form.hostname.trim(),
       ostemplate: form.ostemplate,
       memory: Number(form.memory),
       swap: Number(form.swap),
@@ -770,8 +867,9 @@ export function useCreateCtWizard(
         .filter(Boolean)
         .join(','),
     };
+    if (form.hostname) payload.hostname = form.hostname;
     if (!isBlankNumber(form.cores)) payload.cores = Number(form.cores);
-    if (form.password.trim()) payload.password = form.password.trim();
+    if (form.password) payload.password = form.password;
     payload.unprivileged = form.unprivileged ? 1 : 0;
     if (form.pool) payload.pool = form.pool;
     if (form.haManaged) payload['ha-managed'] = 1;
@@ -895,11 +993,9 @@ export function useCreateCtWizard(
 
   watch(
     () => form.node,
-    async () => {
-      await loadStorageOptions();
-      await loadRootfsStorageOptions();
-      await loadBridges();
-      await loadNextId();
+    () => {
+      invalidateDependentData();
+      void Promise.all([loadStorageOptions(), loadRootfsStorageOptions(), loadBridges()]);
     }
   );
   watch(
@@ -908,8 +1004,11 @@ export function useCreateCtWizard(
   );
   watch(
     () => form.templateStorage,
-    async () => {
-      await loadTemplates();
+    () => {
+      templateLoadRequest += 1;
+      allTemplateRows.value = [];
+      form.ostemplate = '';
+      void loadTemplates();
     }
   );
   watch(

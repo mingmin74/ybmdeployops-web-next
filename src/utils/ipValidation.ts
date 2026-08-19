@@ -67,7 +67,7 @@ export function isIp64AddressWithSuffix(value: string): boolean {
   const parts = value.split('%');
   if (parts.length > 2) return false;
   const address = parts[0] || '';
-  if (parts.length > 1 && (!parts[1] || !address.toLowerCase().startsWith('fe80:'))) return false;
+  if (parts.length > 1 && !address.startsWith('fe80:')) return false;
   return isIp64Address(address);
 }
 

@@ -27,7 +27,7 @@ const props = withDefaults(
     error: false,
     errorMessage: '',
     autoSelect: true,
-  },
+  }
 );
 
 const emit = defineEmits<{
@@ -95,7 +95,7 @@ function isUsageColumn(name: string) {
 }
 
 function canSelect(row: PveNode) {
-  return !props.disableOffline || row.status !== 'offline';
+  return !props.disableOffline || row.status === 'online';
 }
 
 function sortNodes(items: PveNode[]) {
@@ -103,11 +103,13 @@ function sortNodes(items: PveNode[]) {
 }
 
 function ensureSelectedNode() {
-  if (model.value && nodes.value.some((item) => item.node === model.value)) return;
+  const selected = nodes.value.find((item) => item.node === model.value);
+  if (selected && canSelect(selected)) return;
+  if (model.value) model.value = '';
   if (!props.autoSelect) return;
 
   const candidate =
-    nodes.value.find((item) => item.status === 'online') ||
+    (props.disableOffline ? nodes.value.find((item) => item.status === 'online') : undefined) ||
     nodes.value.find((item) => canSelect(item)) ||
     nodes.value[0];
 
@@ -158,7 +160,10 @@ onMounted(() => {
     </template>
 
     <template #body-cell="scope">
-      <UsageProgress v-if="isUsageColumn(scope.col.name)" :percent="Number(scope.value)" />
+      <UsageProgress
+        v-if="isUsageColumn(scope.col.name)"
+        :percent="Number(scope.value)"
+      />
       <q-badge
         v-else-if="scope.col.name === 'status'"
         :color="nodeStatusColor(scope.row.status as string | undefined)"
