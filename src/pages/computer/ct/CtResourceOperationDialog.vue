@@ -46,7 +46,7 @@ const canSubmit = computed(() => {
   if (props.operation === 'delete') return confirm.value === String(vm.vmid);
   if (props.operation === 'template') return true;
   if (props.operation === 'migrate') return Boolean(target.value && migrationPossible.value);
-  return Boolean(target.value && newid.value && hostname.value);
+  return Boolean(newid.value && hostname.value);
 });
 async function initialize() {
   if (!model.value || !props.operation || !props.vm) return;
@@ -54,7 +54,10 @@ async function initialize() {
   try {
     const response = await getNodes();
     nodes.value = (response.data || [])
-      .filter((node) => node.status === 'online' && node.node !== props.vm?.node)
+      .filter(
+        (node) =>
+          node.status === 'online' && (props.operation === 'clone' || node.node !== props.vm?.node)
+      )
       .map((node) => node.node);
     target.value = nodes.value[0] || '';
     hostname.value = props.vm.name ? `${props.vm.name}-clone` : '';
@@ -105,14 +108,14 @@ async function submit() {
     if (props.operation === 'migrate')
       response = await migrateCt(vm.node, vm.vmid, {
         target: target.value,
-        ...(vm.status === 'running' ? { online: 1 } : {}),
+        ...(vm.status === 'running' ? { restart: 1 } : {}),
         ...(localDisks.value ? { 'with-local-disks': 1 } : {}),
       });
     else if (props.operation === 'clone')
       response = await cloneCt(vm.node, vm.vmid, {
         newid: newid.value,
         hostname: hostname.value,
-        target: target.value,
+        ...(target.value && target.value !== vm.node ? { target: target.value } : {}),
         full: 1,
       });
     else if (props.operation === 'template') response = await convertCtToTemplate(vm.node, vm.vmid);

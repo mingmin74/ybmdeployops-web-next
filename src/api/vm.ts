@@ -17,6 +17,7 @@ export type VmResource = {
   maxdisk?: number;
   uptime?: number;
   tags?: string;
+  hastate?: string;
   pool?: string;
   template?: number | boolean;
 };
@@ -187,7 +188,7 @@ export function runVmBulkAction(
 export function migrateCt(
   node: string,
   vmid: number | string,
-  data: { target: string; online?: 1; 'with-local-disks'?: 1 }
+  data: { target: string; restart?: 1; 'with-local-disks'?: 1 }
 ) {
   return request<string>(
     `/api2/extjs/nodes/${encodeURIComponent(node)}/lxc/${encodeURIComponent(String(vmid))}/migrate`,

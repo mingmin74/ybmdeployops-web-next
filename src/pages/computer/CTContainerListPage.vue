@@ -13,6 +13,7 @@ import {
   type VmResource,
 } from '@/api/vm';
 import { getNodeStorage } from '@/api/storageContent';
+import { getNodes } from '@/api/resources';
 import CreateCtDialog from '@/pages/computer/ct/CreateCtDialog.vue';
 import CtResourceOperationDialog from '@/pages/computer/ct/CtResourceOperationDialog.vue';
 import UWindow from '@/components/UWindow.vue';
@@ -35,6 +36,7 @@ type ContainerTreeNode = QTreeNode & {
 };
 
 const loading = shallowRef(false);
+const standalone = shallowRef(false);
 const resources = shallowRef<VmResource[]>([]);
 const selectedRows = shallowRef<VmResource[]>([]);
 const selectedTreeNode = shallowRef('');
@@ -69,7 +71,7 @@ const backupNotificationMode = shallowRef<'notification-system' | 'legacy-sendma
 );
 const backupMailto = shallowRef('');
 const backupNotesTemplate = shallowRef('');
-const backupPbsChangeDetection = shallowRef<'legacy' | 'data' | 'metadata'>('legacy');
+const backupPbsChangeDetection = shallowRef<'__default__' | 'data' | 'metadata'>('__default__');
 const backupPruneEnabled = shallowRef(false);
 const backupRetention = shallowRef<Array<{ key: string; value: string }>>([]);
 const backupPruneAvailable = computed(() => backupRetention.value.length > 0);
@@ -184,7 +186,7 @@ const canShutdown = computed(
   () =>
     hasSingleSelection.value &&
     canPowerManage.value &&
-    selectedContainer.value?.status === 'running' &&
+    selectedContainer.value?.status !== 'stopped' &&
     !isTemplate.value
 );
 const canReboot = computed(
@@ -195,7 +197,9 @@ const canReboot = computed(
     !isTemplate.value
 );
 const canBackup = computed(() => hasSingleSelection.value && hasCapability('VM.Backup'));
-const canMigrate = computed(() => hasSingleSelection.value && hasCapability('VM.Migrate'));
+const canMigrate = computed(
+  () => hasSingleSelection.value && hasCapability('VM.Migrate') && !standalone.value
+);
 const canConsole = computed(
   () => hasSingleSelection.value && hasCapability('VM.Console') && !isTemplate.value
 );
@@ -381,6 +385,10 @@ function hasCapability(capability: string) {
   const caps = session.caps as { vms?: Record<string, unknown> };
   return Boolean(caps.vms?.[capability]);
 }
+function hasNodeCapability(capability: string) {
+  const caps = session.caps as { nodes?: Record<string, unknown> };
+  return Boolean(caps.nodes?.[capability]);
+}
 
 function commandLabel(command?: VmPowerCommand) {
   if (command === 'start') return gettext('Start');
@@ -497,9 +505,13 @@ async function openStop() {
   try {
     const tasks = await getVmTaskHistory(vm.node, vm.vmid, { limit: 50 });
     const active = (tasks.data || []).some(
-      (task) => task.type === 'vzshutdown' && !task.endtime && task.status === undefined
+      (task) =>
+        task.type === 'vzshutdown' &&
+        !task.endtime &&
+        task.status === undefined &&
+        (hasNodeCapability('Sys.Modify') || task.user === session.userid)
     );
-    stopCanOverrule.value = Boolean(active && !vm.hastate);
+    stopCanOverrule.value = Boolean(active && vm.hastate !== 'unmanaged');
     stopOverrule.value = stopCanOverrule.value;
     stopVisible.value = true;
   } finally {
@@ -678,8 +690,8 @@ async function applyBackupDefaults(node: string, storage: string) {
   backupCompression.value = 'zstd';
   backupNotificationMode.value = 'notification-system';
   backupMailto.value = '';
-  backupNotesTemplate.value = '';
-  backupPbsChangeDetection.value = 'legacy';
+  backupNotesTemplate.value = '{{guestname}}';
+  backupPbsChangeDetection.value = '__default__';
   backupPruneEnabled.value = false;
   backupRetention.value = [];
   if (!storage) return;
@@ -689,10 +701,11 @@ async function applyBackupDefaults(node: string, storage: string) {
   if (['zstd', 'lzo', 'gzip', '0'].includes(String(defaults.compress)))
     backupCompression.value = defaults.compress as typeof backupCompression.value;
   backupMailto.value = textValue(defaults.mailto);
-  backupNotesTemplate.value = textValue(defaults['notes-template']);
+  backupNotesTemplate.value = textValue(defaults['notes-template']) || '{{guestname}}';
   backupRetention.value = parseBackupRetention(defaults['prune-backups']);
   backupNotificationMode.value =
-    textValue(defaults['notification-mode']) === 'legacy-sendmail'
+    textValue(defaults['notification-mode']) === 'legacy-sendmail' ||
+    (textValue(defaults['notification-mode']) === 'auto' && Boolean(backupMailto.value))
       ? 'legacy-sendmail'
       : 'notification-system';
 }
@@ -730,7 +743,7 @@ async function backupNow() {
 }
 
 function openTask(node: string, upid: string, title: string) {
-  taskNode.value = node;
+  taskNode.value = node || upid.match(/^UPID:([^:]+):/)?.[1] || '';
   taskUpid.value = upid;
   taskTitle.value = title;
   taskDialogVisible.value = true;
@@ -739,7 +752,11 @@ function openTask(node: string, upid: string, title: string) {
 async function reload() {
   loading.value = true;
   try {
-    const response = await getVmResources();
+    const [response, nodesResponse] = await Promise.all([
+      getVmResources(),
+      getNodes().catch(() => null),
+    ]);
+    standalone.value = (nodesResponse?.data || []).length < 2;
     resources.value = (response.data || [])
       .filter((row) => row.type === 'lxc')
       .map(mergeContainerDisplayName);
@@ -1279,7 +1296,7 @@ onMounted(() => {
             square
             emit-value
             map-options
-            :options="['legacy', 'data', 'metadata']"
+            :options="['__default__', 'data', 'metadata']"
             :label="gettext('Change detection mode')"
           />
         </div>
