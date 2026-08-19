@@ -70,6 +70,9 @@ const backupNotificationMode = shallowRef<'notification-system' | 'legacy-sendma
 const backupMailto = shallowRef('');
 const backupNotesTemplate = shallowRef('');
 const backupPbsChangeDetection = shallowRef<'legacy' | 'data' | 'metadata'>('legacy');
+const backupPruneEnabled = shallowRef(false);
+const backupRetention = shallowRef<Array<{ key: string; value: string }>>([]);
+const backupPruneAvailable = computed(() => backupRetention.value.length > 0);
 const createDialogVisible = shallowRef(false);
 const defaultVisibleColumns = ['vmid', 'name', 'status', 'node', 'cpu', 'memory', 'disk', 'uptime'];
 
@@ -395,6 +398,18 @@ function formatUptime(value: unknown) {
   if (hours) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
 }
+function parseBackupRetention(value: unknown) {
+  const entries = Object.fromEntries(
+    textValue(value)
+      .split(',')
+      .map((part) => part.trim().split('=', 2))
+      .filter(([key, item]) => Boolean(key) && item !== undefined)
+  );
+  if (entries['keep-all'] === '1') return [];
+  return ['keep-last', 'keep-hourly', 'keep-daily', 'keep-weekly', 'keep-monthly', 'keep-yearly']
+    .filter((key) => entries[key] && entries[key] !== '0')
+    .map((key) => ({ key, value: entries[key] }));
+}
 
 function onTreeSelection(key: string) {
   selectedTreeNode.value = selectedTreeNode.value === key ? '' : key;
@@ -646,6 +661,8 @@ async function applyBackupDefaults(node: string, storage: string) {
   backupMailto.value = '';
   backupNotesTemplate.value = '';
   backupPbsChangeDetection.value = 'legacy';
+  backupPruneEnabled.value = false;
+  backupRetention.value = [];
   if (!storage) return;
   const defaults = (await getVmBackupDefaults(node, storage)).data || {};
   if (['snapshot', 'suspend', 'stop'].includes(String(defaults.mode)))
@@ -654,6 +671,7 @@ async function applyBackupDefaults(node: string, storage: string) {
     backupCompression.value = defaults.compress as typeof backupCompression.value;
   backupMailto.value = textValue(defaults.mailto);
   backupNotesTemplate.value = textValue(defaults['notes-template']);
+  backupRetention.value = parseBackupRetention(defaults['prune-backups']);
   backupNotificationMode.value =
     textValue(defaults['notification-mode']) === 'legacy-sendmail'
       ? 'legacy-sendmail'
@@ -678,6 +696,7 @@ async function backupNow() {
       ...(backupStorageTypes.value[backupStorage.value] === 'pbs'
         ? { 'pbs-change-detection-mode': backupPbsChangeDetection.value }
         : {}),
+      remove: backupPruneAvailable.value && backupPruneEnabled.value ? 1 : 0,
     });
     backupVisible.value = false;
     if (response.data)
@@ -1216,6 +1235,23 @@ onMounted(() => {
             type="textarea"
             :label="gettext('Notes template')"
           />
+          <q-checkbox
+            v-if="backupPruneAvailable"
+            v-model="backupPruneEnabled"
+            dense
+            :label="gettext('Prune')"
+          />
+          <div
+            v-if="backupPruneAvailable"
+            class="text-caption text-grey-7"
+          >
+            <div
+              v-for="entry in backupRetention"
+              :key="entry.key"
+            >
+              {{ `${entry.key}: ${entry.value}` }}
+            </div>
+          </div>
           <q-select
             v-if="backupStorageTypes[backupStorage] === 'pbs'"
             v-model="backupPbsChangeDetection"
