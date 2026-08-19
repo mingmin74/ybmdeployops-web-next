@@ -213,6 +213,7 @@ export function cloneCt(
     full?: 0 | 1;
     storage?: string;
     pool?: string;
+    snapname?: string;
   }
 ) {
   return request<string>(
@@ -227,7 +228,9 @@ export function getCtCloneFeature(
   feature: 'copy' | 'clone',
   snapname?: string
 ) {
-  return request<{ nodes?: string[] }>(
+  // LXC feature endpoint may return only `hasFeature`; `nodes` is an optional
+  // allow-list and must not be treated as [] when absent.
+  return request<{ nodes?: string[]; hasFeature?: boolean }>(
     `/api2/json/nodes/${encodeURIComponent(node)}/lxc/${encodeURIComponent(String(vmid))}/feature`,
     {
       method: 'GET',

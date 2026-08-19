@@ -75,6 +75,13 @@ const backupPbsChangeDetection = shallowRef<'__default__' | 'data' | 'metadata'>
 const backupPruneEnabled = shallowRef(false);
 const backupRetention = shallowRef<Array<{ key: string; value: string }>>([]);
 const backupPruneAvailable = computed(() => backupRetention.value.length > 0);
+/**
+ * Mirrors PVE Backup.js `initialDefaults`: Mode / Notification / Mail / Notes
+ * defaults are applied only once per dialog session. Switching Storage later
+ * must not overwrite what the user already edited; only storage-dependent
+ * state (PBS change detection, compression, prune retention) is refreshed.
+ */
+const backupInitialDefaultsLoaded = shallowRef(false);
 const createDialogVisible = shallowRef(false);
 const defaultVisibleColumns = ['vmid', 'name', 'status', 'node', 'cpu', 'memory', 'disk', 'uptime'];
 
@@ -232,7 +239,16 @@ const canBulkShutdown = computed(
 );
 const bulkVisible = shallowRef(false);
 const bulkAction = shallowRef<'start' | 'shutdown'>('start');
-const bulkParallel = shallowRef(1);
+// PVE BulkAction: max-workers is optional (default "auto"), only submitted when
+// the user fills it in, and must be an integer in 1..64.
+const bulkParallel = shallowRef('');
+const bulkParallelValid = computed(
+  () =>
+    bulkParallel.value === '' ||
+    (/^\d+$/.test(bulkParallel.value) &&
+      Number(bulkParallel.value) >= 1 &&
+      Number(bulkParallel.value) <= 64)
+);
 const bulkForce = shallowRef(true);
 const bulkTimeout = shallowRef(180);
 const stopVisible = shallowRef(false);
@@ -530,13 +546,14 @@ async function confirmStop() {
 
 function bulkCommand(command: 'start' | 'shutdown') {
   bulkAction.value = command;
-  bulkParallel.value = 1;
+  bulkParallel.value = '';
   bulkForce.value = true;
   bulkTimeout.value = 180;
   bulkVisible.value = true;
 }
 async function submitBulkCommand() {
   const command = bulkAction.value;
+  if (!bulkParallelValid.value) return;
   const targets = selectedRows.value.filter(
     (row) =>
       !row.template &&
@@ -554,7 +571,7 @@ async function submitBulkCommand() {
   try {
     const response = await runVmBulkAction(command, {
       vms: targets.map((row) => row.vmid),
-      'max-workers': bulkParallel.value,
+      ...(bulkParallel.value !== '' ? { 'max-workers': Number(bulkParallel.value) } : {}),
       ...(command !== 'start'
         ? { 'force-stop': bulkForce.value ? 1 : 0, timeout: bulkTimeout.value }
         : {}),
@@ -671,6 +688,15 @@ async function openBackup() {
   if (!canBackup.value || !vm?.node) return;
   backupLoading.value = true;
   try {
+    backupInitialDefaultsLoaded.value = false;
+    backupMode.value = 'snapshot';
+    backupCompression.value = 'zstd';
+    backupNotificationMode.value = 'notification-system';
+    backupMailto.value = '';
+    backupNotesTemplate.value = '{{guestname}}';
+    backupPbsChangeDetection.value = '__default__';
+    backupPruneEnabled.value = false;
+    backupRetention.value = [];
     const response = await getNodeStorage(String(vm.node), 'backup');
     backupStorages.value = (response.data || [])
       .map((item) => textValue(item.storage))
@@ -687,27 +713,30 @@ async function openBackup() {
   }
 }
 async function applyBackupDefaults(node: string, storage: string) {
-  backupMode.value = 'snapshot';
-  backupCompression.value = 'zstd';
-  backupNotificationMode.value = 'notification-system';
-  backupMailto.value = '';
-  backupNotesTemplate.value = '{{guestname}}';
-  backupPbsChangeDetection.value = '__default__';
-  backupPruneEnabled.value = false;
-  backupRetention.value = [];
+  // storage-dependent state: PBS forces zstd compression and resets the
+  // change detection mode; non-PBS only re-enables compression (value kept)
+  if (backupStorageTypes.value[storage] === 'pbs') {
+    backupCompression.value = 'zstd';
+    backupPbsChangeDetection.value = '__default__';
+  }
   if (!storage) return;
   const defaults = (await getVmBackupDefaults(node, storage)).data || {};
-  if (['snapshot', 'suspend', 'stop'].includes(String(defaults.mode)))
-    backupMode.value = defaults.mode as typeof backupMode.value;
-  backupMailto.value = textValue(defaults.mailto);
-  backupNotesTemplate.value =
-    unEscapeNotesTemplate(textValue(defaults['notes-template'])) || '{{guestname}}';
+  // user-editable defaults are applied exactly once per dialog session
+  if (!backupInitialDefaultsLoaded.value) {
+    if (['snapshot', 'suspend', 'stop'].includes(String(defaults.mode)))
+      backupMode.value = defaults.mode as typeof backupMode.value;
+    backupMailto.value = textValue(defaults.mailto);
+    backupNotesTemplate.value =
+      unEscapeNotesTemplate(textValue(defaults['notes-template'])) || '{{guestname}}';
+    backupNotificationMode.value =
+      textValue(defaults['notification-mode']) === 'legacy-sendmail' ||
+      (textValue(defaults['notification-mode']) === 'auto' && Boolean(backupMailto.value))
+        ? 'legacy-sendmail'
+        : 'notification-system';
+    backupInitialDefaultsLoaded.value = true;
+  }
+  // always refresh storage-dependent prune retention
   backupRetention.value = parseBackupRetention(defaults['prune-backups']);
-  backupNotificationMode.value =
-    textValue(defaults['notification-mode']) === 'legacy-sendmail' ||
-    (textValue(defaults['notification-mode']) === 'auto' && Boolean(backupMailto.value))
-      ? 'legacy-sendmail'
-      : 'notification-system';
 }
 
 async function backupNow() {
@@ -1356,13 +1385,16 @@ onMounted(() => {
       >
         <div class="q-pa-md q-gutter-md">
           <q-input
-            v-model.number="bulkParallel"
+            v-model="bulkParallel"
             dense
             outlined
             type="number"
             min="1"
             max="64"
             :label="gettext('Parallel jobs')"
+            :placeholder="gettext('auto')"
+            :error="!bulkParallelValid"
+            :error-message="gettext('Value must be an integer between 1 and 64')"
           />
           <template v-if="bulkAction !== 'start'">
             <q-checkbox
@@ -1390,7 +1422,8 @@ onMounted(() => {
           <q-btn
             color="primary"
             :loading="commandLoading"
-            :label="gettext('Start')"
+            :disable="!bulkParallelValid"
+            :label="commandLabel(bulkAction)"
             @click="submitBulkCommand"
           />
         </template>

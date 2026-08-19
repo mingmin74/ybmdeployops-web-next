@@ -19,7 +19,7 @@ import { isDnsName } from '@/utils/pveValidation';
 
 type Operation = 'migrate' | 'clone' | 'template' | 'delete';
 const model = defineModel<boolean>({ required: true });
-const props = defineProps<{ operation?: Operation; vm?: VmResource }>();
+const props = defineProps<{ operation?: Operation; vm?: VmResource | undefined }>();
 const emit = defineEmits<{
   completed: [];
   task: [payload: { node: string; upid: string; title: string }];
@@ -40,6 +40,9 @@ const cloneStorage = shallowRef('');
 const clonePool = shallowRef('');
 const pools = shallowRef<string[]>([]);
 const allowedCloneNodes = shallowRef<string[]>([]);
+const cloneNodesRestricted = shallowRef(false);
+const cloneFeatureAllowed = shallowRef(true);
+const cloneFeatureMessage = shallowRef('');
 const snapshots = shallowRef<string[]>([]);
 const cloneSnapshot = shallowRef('current');
 const vmidAvailable = shallowRef(false);
@@ -64,7 +67,9 @@ const canSubmit = computed(() => {
     /^[0-9]+$/.test(String(newid.value)) &&
     vmidAvailable.value &&
     (!hostname.value || isDnsName(hostname.value)) &&
-    allowedCloneNodes.value.includes(target.value)
+    cloneFeatureAllowed.value &&
+    Boolean(target.value) &&
+    (!cloneNodesRestricted.value || allowedCloneNodes.value.includes(target.value))
   );
 });
 async function initialize() {
@@ -92,6 +97,10 @@ async function initialize() {
     migrationPossible.value = true;
     migrationMessage.value = '';
     if (props.operation === 'clone') {
+      cloneFeatureAllowed.value = true;
+      cloneFeatureMessage.value = '';
+      cloneNodesRestricted.value = false;
+      allowedCloneNodes.value = [];
       newid.value = (await getNextVmId()).data || '';
       snapshots.value =
         (await getVmSnapshots(props.vm.node!, props.vm.vmid, 'lxc')).data
@@ -111,10 +120,36 @@ async function initialize() {
 async function checkCloneFeature() {
   const vm = props.vm;
   if (!model.value || props.operation !== 'clone' || !vm?.node || vm.vmid === undefined) return;
-  const response = await getCtCloneFeature(vm.node, vm.vmid, cloneMode.value, cloneSnapshot.value);
-  allowedCloneNodes.value = response.data?.nodes || [];
-  if (!allowedCloneNodes.value.includes(target.value))
-    target.value = allowedCloneNodes.value[0] || '';
+  try {
+    const response = await getCtCloneFeature(
+      vm.node,
+      vm.vmid,
+      cloneMode.value,
+      cloneSnapshot.value
+    );
+    const data = response.data || {};
+    if (data.hasFeature === false) {
+      // feature capability says the clone is not possible (PVE disables submit)
+      cloneFeatureAllowed.value = false;
+      cloneFeatureMessage.value = gettext('Clone is not supported for this container.');
+      return;
+    }
+    cloneFeatureAllowed.value = true;
+    cloneFeatureMessage.value = '';
+    if (Array.isArray(data.nodes)) {
+      // an explicit allow-list from the feature API restricts the target node
+      allowedCloneNodes.value = data.nodes;
+      cloneNodesRestricted.value = true;
+      const first = data.nodes[0];
+      if (data.nodes.length && first && !data.nodes.includes(target.value)) target.value = first;
+    } else {
+      // nodes absent: no allow-list restriction, keep the current online nodes
+      cloneNodesRestricted.value = false;
+      allowedCloneNodes.value = [];
+    }
+  } catch {
+    // the global Notify already surfaced the error; keep the last known state
+  }
 }
 async function checkMigration() {
   const vm = props.vm;
@@ -316,6 +351,12 @@ watch(target, async (node) => {
               :options="pools"
               :label="gettext('Resource Pool')"
             />
+            <div
+              v-if="!cloneFeatureAllowed && cloneFeatureMessage"
+              class="text-negative text-caption"
+            >
+              {{ cloneFeatureMessage }}
+            </div>
           </template>
           <q-select
             v-if="operation === 'migrate' && vm?.status === 'running' && migrationHasLocalDisks"
