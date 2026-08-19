@@ -10,6 +10,7 @@ import {
   migrateCt,
 } from '@/api/vm';
 import { getNodes } from '@/api/resources';
+import { getNodeStorage } from '@/api/storageContent';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 
@@ -29,6 +30,8 @@ const confirm = shallowRef('');
 const purge = shallowRef(false);
 const destroyUnreferenced = shallowRef(false);
 const localDisks = shallowRef(false);
+const targetStorage = shallowRef('');
+const targetStorages = shallowRef<string[]>([]);
 const migrationPossible = shallowRef(true);
 const migrationMessage = shallowRef('');
 const label = computed(
@@ -65,6 +68,7 @@ async function initialize() {
     purge.value = false;
     destroyUnreferenced.value = false;
     localDisks.value = false;
+    targetStorage.value = '';
     migrationPossible.value = true;
     migrationMessage.value = '';
     if (props.operation === 'clone') newid.value = (await getNextVmId()).data || '';
@@ -110,6 +114,7 @@ async function submit() {
         target: target.value,
         ...(vm.status === 'running' ? { restart: 1 } : {}),
         ...(localDisks.value ? { 'with-local-disks': 1 } : {}),
+        ...(localDisks.value && targetStorage.value ? { targetstorage: targetStorage.value } : {}),
       });
     else if (props.operation === 'clone')
       response = await cloneCt(vm.node, vm.vmid, {
@@ -128,7 +133,7 @@ async function submit() {
     emit('completed');
     if (response.data)
       emit('task', {
-        node: props.operation === 'clone' || props.operation === 'migrate' ? target.value : vm.node,
+        node: '',
         upid: response.data,
         title: `${label.value}: ${vm.name || vm.vmid}`,
       });
@@ -141,6 +146,18 @@ watch(
   () => void initialize()
 );
 watch(target, () => void checkMigration());
+watch(target, async (node) => {
+  targetStorage.value = '';
+  targetStorages.value = node
+    ? ((await getNodeStorage(node, 'rootdir')).data || [])
+        .map((item) =>
+          typeof item.storage === 'string' || typeof item.storage === 'number'
+            ? String(item.storage)
+            : ''
+        )
+        .filter(Boolean)
+    : [];
+});
 </script>
 <template>
   <q-dialog
@@ -209,6 +226,15 @@ watch(target, () => void checkMigration());
             v-model="localDisks"
             dense
             :label="gettext('Migrate local disks')"
+          />
+          <q-select
+            v-if="operation === 'migrate' && localDisks"
+            v-model="targetStorage"
+            dense
+            outlined
+            clearable
+            :options="targetStorages"
+            :label="gettext('Target Storage')"
           />
           <div
             v-if="operation === 'migrate' && migrationMessage"

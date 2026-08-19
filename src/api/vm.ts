@@ -175,7 +175,7 @@ export function getVmCloneFeature(
 
 /** A cluster bulk action is one server-side task, rather than browser-managed per-VM requests. */
 export function runVmBulkAction(
-  action: 'start' | 'shutdown' | 'stop' | 'suspend' | 'migrate',
+  action: 'start' | 'shutdown' | 'suspend' | 'migrate',
   data: Record<string, unknown> & { vms: Array<number | string>; 'max-workers'?: number }
 ) {
   return request<string>(`/api2/extjs/cluster/bulk-action/guest/${action}`, {
@@ -188,7 +188,7 @@ export function runVmBulkAction(
 export function migrateCt(
   node: string,
   vmid: number | string,
-  data: { target: string; restart?: 1; 'with-local-disks'?: 1 }
+  data: { target: string; restart?: 1; 'with-local-disks'?: 1; targetstorage?: string }
 ) {
   return request<string>(
     `/api2/extjs/nodes/${encodeURIComponent(node)}/lxc/${encodeURIComponent(String(vmid))}/migrate`,
@@ -361,7 +361,7 @@ export function runVmBackup(
     'notification-mode'?: string;
     'notes-template'?: string;
     'prune-backups'?: string;
-    'pbs-change-detection-mode'?: 'legacy' | 'data' | 'metadata';
+    'pbs-change-detection-mode'?: '__default__' | 'data' | 'metadata';
   }
 ) {
   return request<string>(`/api2/json/nodes/${encodeURIComponent(node)}/vzdump`, {

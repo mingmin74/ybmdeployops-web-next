@@ -186,14 +186,14 @@ const canShutdown = computed(
   () =>
     hasSingleSelection.value &&
     canPowerManage.value &&
-    selectedContainer.value?.status !== 'stopped' &&
+    selectedContainer.value?.status === 'running' &&
     !isTemplate.value
 );
 const canReboot = computed(
   () =>
     hasSingleSelection.value &&
     canPowerManage.value &&
-    selectedContainer.value?.status === 'running' &&
+    selectedContainer.value?.status !== 'stopped' &&
     !isTemplate.value
 );
 const canBackup = computed(() => hasSingleSelection.value && hasCapability('VM.Backup'));
@@ -229,11 +229,6 @@ const canBulkShutdown = computed(
   () =>
     canPowerManage.value &&
     selectedRows.value.some((row) => !row.template && row.status === 'running')
-);
-const canBulkStop = computed(
-  () =>
-    canPowerManage.value &&
-    selectedRows.value.some((row) => !row.template && row.status !== 'stopped')
 );
 const bulkVisible = shallowRef(false);
 const bulkAction = shallowRef<'start' | 'shutdown' | 'stop'>('start');
@@ -423,6 +418,12 @@ function parseBackupRetention(value: unknown) {
     .filter((key) => entries[key] && entries[key] !== '0')
     .map((key) => ({ key, value: entries[key] }));
 }
+function escapeNotesTemplate(value: string) {
+  return value.replace(/(\\|[\n])/g, (match) => (match === '\\' ? '\\\\' : '\\n'));
+}
+function unEscapeNotesTemplate(value: string) {
+  return value.replace(/(\\\\|\\n)/g, (match) => (match === '\\\\' ? '\\' : '\n'));
+}
 
 function onTreeSelection(key: string) {
   selectedTreeNode.value = selectedTreeNode.value === key ? '' : key;
@@ -511,7 +512,7 @@ async function openStop() {
         task.status === undefined &&
         (hasNodeCapability('Sys.Modify') || task.user === session.userid)
     );
-    stopCanOverrule.value = Boolean(active && vm.hastate !== 'unmanaged');
+    stopCanOverrule.value = Boolean(active && !(vm.hastate && vm.hastate !== 'unmanaged'));
     stopOverrule.value = stopCanOverrule.value;
     stopVisible.value = true;
   } finally {
@@ -701,7 +702,8 @@ async function applyBackupDefaults(node: string, storage: string) {
   if (['zstd', 'lzo', 'gzip', '0'].includes(String(defaults.compress)))
     backupCompression.value = defaults.compress as typeof backupCompression.value;
   backupMailto.value = textValue(defaults.mailto);
-  backupNotesTemplate.value = textValue(defaults['notes-template']) || '{{guestname}}';
+  backupNotesTemplate.value =
+    unEscapeNotesTemplate(textValue(defaults['notes-template'])) || '{{guestname}}';
   backupRetention.value = parseBackupRetention(defaults['prune-backups']);
   backupNotificationMode.value =
     textValue(defaults['notification-mode']) === 'legacy-sendmail' ||
@@ -723,10 +725,12 @@ async function backupNow() {
       'notification-mode': backupNotificationMode.value,
       ...(backupMailto.value.trim() ? { mailto: backupMailto.value.trim() } : {}),
       ...(backupNotesTemplate.value.trim()
-        ? { 'notes-template': backupNotesTemplate.value.trim() }
+        ? { 'notes-template': escapeNotesTemplate(backupNotesTemplate.value.trim()) }
         : {}),
       ...(backupStorageTypes.value[backupStorage.value] === 'pbs'
-        ? { 'pbs-change-detection-mode': backupPbsChangeDetection.value }
+        ? backupPbsChangeDetection.value === '__default__'
+          ? {}
+          : { 'pbs-change-detection-mode': backupPbsChangeDetection.value }
         : {}),
       remove: backupPruneAvailable.value && backupPruneEnabled.value ? 1 : 0,
     });
@@ -939,14 +943,6 @@ onMounted(() => {
                         @click="bulkCommand('shutdown')"
                       >
                         <q-item-section>{{ gettext('Bulk Shutdown') }}</q-item-section>
-                      </q-item>
-                      <q-item
-                        v-close-popup
-                        clickable
-                        :disable="!canBulkStop"
-                        @click="bulkCommand('stop')"
-                      >
-                        <q-item-section>{{ gettext('Bulk Stop') }}</q-item-section>
                       </q-item>
                     </q-list>
                   </q-btn-dropdown>
