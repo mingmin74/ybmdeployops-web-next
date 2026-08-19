@@ -221,6 +221,13 @@ export function cloneCt(
   );
 }
 
+export function getCtCloneFeature(node: string, vmid: number | string, feature: 'copy' | 'clone') {
+  return request<{ nodes?: string[] }>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/lxc/${encodeURIComponent(String(vmid))}/feature`,
+    { method: 'GET', params: { feature }, notifyOnError: true }
+  );
+}
+
 export function convertCtToTemplate(node: string, vmid: number | string) {
   return request<string>(
     `/api2/extjs/nodes/${encodeURIComponent(node)}/lxc/${encodeURIComponent(String(vmid))}/template`,
