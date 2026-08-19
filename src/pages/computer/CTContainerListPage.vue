@@ -245,6 +245,11 @@ const haVisible = shallowRef(false);
 const haLoading = shallowRef(false);
 const haState = shallowRef<'started' | 'stopped'>('started');
 const haResourceExists = shallowRef(false);
+const haMaxRestart = shallowRef(1);
+const haMaxRelocate = shallowRef(1);
+const haFailback = shallowRef(true);
+const haAutoRebalance = shallowRef(true);
+const haComment = shallowRef('');
 
 const filteredRows = computed(() => {
   const keyword = search.value.trim().toLocaleLowerCase();
@@ -614,6 +619,11 @@ async function openHa() {
     const response = await getHaResource(`ct:${vm.vmid}`).catch(() => null);
     haResourceExists.value = Boolean(response?.data);
     haState.value = textValue(response?.data?.state) === 'stopped' ? 'stopped' : 'started';
+    haMaxRestart.value = Number(response?.data?.max_restart ?? 1);
+    haMaxRelocate.value = Number(response?.data?.max_relocate ?? 1);
+    haFailback.value = response?.data?.failback !== 0;
+    haAutoRebalance.value = response?.data?.['auto-rebalance'] !== 0;
+    haComment.value = textValue(response?.data?.comment);
     haVisible.value = true;
   } finally {
     haLoading.value = false;
@@ -625,7 +635,16 @@ async function saveHa() {
   haLoading.value = true;
   try {
     const id = `ct:${vm.vmid}`;
-    const data = { sid: id, type: 'ct', state: haState.value };
+    const data = {
+      sid: id,
+      type: 'ct',
+      state: haState.value,
+      max_restart: haMaxRestart.value,
+      max_relocate: haMaxRelocate.value,
+      failback: haFailback.value ? 1 : 0,
+      'auto-rebalance': haAutoRebalance.value ? 1 : 0,
+      comment: haComment.value,
+    };
     if (haResourceExists.value) await updateHaResource(id, data);
     else await createHaResource(data);
     haVisible.value = false;
@@ -1407,6 +1426,42 @@ onMounted(() => {
               { label: gettext('Stopped'), value: 'stopped' },
             ]"
             :label="gettext('Requested State')"
+          />
+          <div class="row q-col-gutter-sm q-mt-sm">
+            <q-input
+              v-model.number="haMaxRestart"
+              class="col"
+              dense
+              outlined
+              type="number"
+              min="0"
+              :label="gettext('Max Restart')"
+            />
+            <q-input
+              v-model.number="haMaxRelocate"
+              class="col"
+              dense
+              outlined
+              type="number"
+              min="0"
+              :label="gettext('Max Relocate')"
+            />
+          </div>
+          <q-checkbox
+            v-model="haFailback"
+            dense
+            :label="gettext('Failback')"
+          />
+          <q-checkbox
+            v-model="haAutoRebalance"
+            dense
+            :label="gettext('Auto Rebalance')"
+          />
+          <q-input
+            v-model="haComment"
+            dense
+            outlined
+            :label="gettext('Comment')"
           />
         </div>
         <template #foot>

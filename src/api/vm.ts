@@ -195,6 +195,13 @@ export function migrateCt(
   );
 }
 
+export function getCtMigrationPreconditions(node: string, vmid: number | string) {
+  return request<Record<string, unknown>>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/lxc/${encodeURIComponent(String(vmid))}/migrate`,
+    { method: 'GET', notifyOnError: true }
+  );
+}
+
 export function cloneCt(
   node: string,
   vmid: number | string,

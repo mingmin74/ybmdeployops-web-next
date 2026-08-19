@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from 'vue';
 import type { VmResource } from '@/api/vm';
-import { cloneCt, convertCtToTemplate, deleteCt, getNextVmId, migrateCt } from '@/api/vm';
+import {
+  cloneCt,
+  convertCtToTemplate,
+  deleteCt,
+  getCtMigrationPreconditions,
+  getNextVmId,
+  migrateCt,
+} from '@/api/vm';
 import { getNodes } from '@/api/resources';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
@@ -22,6 +29,8 @@ const confirm = shallowRef('');
 const purge = shallowRef(false);
 const destroyUnreferenced = shallowRef(false);
 const localDisks = shallowRef(false);
+const migrationPossible = shallowRef(true);
+const migrationMessage = shallowRef('');
 const label = computed(
   () =>
     ({
@@ -36,7 +45,7 @@ const canSubmit = computed(() => {
   if (!vm?.node || vm.vmid === undefined) return false;
   if (props.operation === 'delete') return confirm.value === String(vm.vmid);
   if (props.operation === 'template') return true;
-  if (props.operation === 'migrate') return Boolean(target.value);
+  if (props.operation === 'migrate') return Boolean(target.value && migrationPossible.value);
   return Boolean(target.value && newid.value && hostname.value);
 });
 async function initialize() {
@@ -53,9 +62,38 @@ async function initialize() {
     purge.value = false;
     destroyUnreferenced.value = false;
     localDisks.value = false;
+    migrationPossible.value = true;
+    migrationMessage.value = '';
     if (props.operation === 'clone') newid.value = (await getNextVmId()).data || '';
   } finally {
     loading.value = false;
+  }
+}
+async function checkMigration() {
+  const vm = props.vm;
+  if (
+    !model.value ||
+    props.operation !== 'migrate' ||
+    !vm?.node ||
+    vm.vmid === undefined ||
+    !target.value
+  )
+    return;
+  migrationPossible.value = false;
+  try {
+    const data = (await getCtMigrationPreconditions(vm.node, vm.vmid)).data || {};
+    const blocked = ((data['not-allowed-nodes'] || {}) as Record<string, Record<string, unknown>>)[
+      target.value
+    ]?.['blocking-ha-resources'] as Array<{ sid?: string }> | undefined;
+    migrationMessage.value = (blocked || [])
+      .map(
+        (item) =>
+          `${gettext('Cannot migrate container, because blocking HA resource')} ${item.sid || ''}.`
+      )
+      .join('\n');
+    migrationPossible.value = data.possible !== false && !(blocked || []).length;
+  } catch {
+    migrationMessage.value = gettext('Migration precondition check failed.');
   }
 }
 async function submit() {
@@ -99,6 +137,7 @@ watch(
   () => [model.value, props.operation, props.vm?.node, props.vm?.vmid],
   () => void initialize()
 );
+watch(target, () => void checkMigration());
 </script>
 <template>
   <q-dialog
@@ -168,6 +207,13 @@ watch(
             dense
             :label="gettext('Migrate local disks')"
           />
+          <div
+            v-if="operation === 'migrate' && migrationMessage"
+            class="text-negative text-caption"
+            style="white-space: pre-line"
+          >
+            {{ migrationMessage }}
+          </div>
         </template>
       </div>
       <template #foot>
