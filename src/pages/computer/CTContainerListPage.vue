@@ -231,7 +231,7 @@ const canBulkShutdown = computed(
     selectedRows.value.some((row) => !row.template && row.status === 'running')
 );
 const bulkVisible = shallowRef(false);
-const bulkAction = shallowRef<'start' | 'shutdown' | 'stop'>('start');
+const bulkAction = shallowRef<'start' | 'shutdown'>('start');
 const bulkParallel = shallowRef(1);
 const bulkForce = shallowRef(true);
 const bulkTimeout = shallowRef(180);
@@ -528,7 +528,7 @@ async function confirmStop() {
   stopVisible.value = false;
 }
 
-function bulkCommand(command: 'start' | 'shutdown' | 'stop') {
+function bulkCommand(command: 'start' | 'shutdown') {
   bulkAction.value = command;
   bulkParallel.value = 1;
   bulkForce.value = true;
@@ -699,8 +699,6 @@ async function applyBackupDefaults(node: string, storage: string) {
   const defaults = (await getVmBackupDefaults(node, storage)).data || {};
   if (['snapshot', 'suspend', 'stop'].includes(String(defaults.mode)))
     backupMode.value = defaults.mode as typeof backupMode.value;
-  if (['zstd', 'lzo', 'gzip', '0'].includes(String(defaults.compress)))
-    backupCompression.value = defaults.compress as typeof backupCompression.value;
   backupMailto.value = textValue(defaults.mailto);
   backupNotesTemplate.value =
     unEscapeNotesTemplate(textValue(defaults['notes-template'])) || '{{guestname}}';
@@ -725,7 +723,7 @@ async function backupNow() {
       'notification-mode': backupNotificationMode.value,
       ...(backupMailto.value.trim() ? { mailto: backupMailto.value.trim() } : {}),
       ...(backupNotesTemplate.value.trim()
-        ? { 'notes-template': escapeNotesTemplate(backupNotesTemplate.value.trim()) }
+        ? { 'notes-template': escapeNotesTemplate(backupNotesTemplate.value) }
         : {}),
       ...(backupStorageTypes.value[backupStorage.value] === 'pbs'
         ? backupPbsChangeDetection.value === '__default__'

@@ -11,9 +11,11 @@ import {
   migrateCt,
 } from '@/api/vm';
 import { getNodes, getPools } from '@/api/resources';
+import { getVmSnapshots } from '@/api/overview';
 import { getNodeStorage } from '@/api/storageContent';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
+import { isDnsName } from '@/utils/pveValidation';
 
 type Operation = 'migrate' | 'clone' | 'template' | 'delete';
 const model = defineModel<boolean>({ required: true });
@@ -30,7 +32,7 @@ const hostname = shallowRef('');
 const confirm = shallowRef('');
 const purge = shallowRef(false);
 const destroyUnreferenced = shallowRef(false);
-const localDisks = shallowRef(false);
+const migrationHasLocalDisks = shallowRef(false);
 const targetStorage = shallowRef('');
 const targetStorages = shallowRef<string[]>([]);
 const cloneMode = shallowRef<'copy' | 'clone'>('copy');
@@ -38,6 +40,9 @@ const cloneStorage = shallowRef('');
 const clonePool = shallowRef('');
 const pools = shallowRef<string[]>([]);
 const allowedCloneNodes = shallowRef<string[]>([]);
+const snapshots = shallowRef<string[]>([]);
+const cloneSnapshot = shallowRef('current');
+const vmidAvailable = shallowRef(false);
 const migrationPossible = shallowRef(true);
 const migrationMessage = shallowRef('');
 const label = computed(
@@ -55,7 +60,12 @@ const canSubmit = computed(() => {
   if (props.operation === 'delete') return confirm.value === String(vm.vmid);
   if (props.operation === 'template') return true;
   if (props.operation === 'migrate') return Boolean(target.value && migrationPossible.value);
-  return Boolean(newid.value && allowedCloneNodes.value.includes(target.value));
+  return Boolean(
+    /^[0-9]+$/.test(String(newid.value)) &&
+    vmidAvailable.value &&
+    (!hostname.value || isDnsName(hostname.value)) &&
+    allowedCloneNodes.value.includes(target.value)
+  );
 });
 async function initialize() {
   if (!model.value || !props.operation || !props.vm) return;
@@ -74,7 +84,7 @@ async function initialize() {
     confirm.value = '';
     purge.value = false;
     destroyUnreferenced.value = false;
-    localDisks.value = false;
+    migrationHasLocalDisks.value = false;
     targetStorage.value = '';
     cloneStorage.value = '';
     clonePool.value = '';
@@ -83,6 +93,15 @@ async function initialize() {
     migrationMessage.value = '';
     if (props.operation === 'clone') {
       newid.value = (await getNextVmId()).data || '';
+      snapshots.value =
+        (await getVmSnapshots(props.vm.node!, props.vm.vmid, 'lxc')).data
+          ?.map((item) =>
+            typeof item.name === 'string' || typeof item.name === 'number' ? String(item.name) : ''
+          )
+          .filter(Boolean) || [];
+      if (!snapshots.value.includes('current')) snapshots.value.unshift('current');
+      cloneSnapshot.value = 'current';
+      vmidAvailable.value = Boolean(newid.value);
       await checkCloneFeature();
     }
   } finally {
@@ -92,7 +111,7 @@ async function initialize() {
 async function checkCloneFeature() {
   const vm = props.vm;
   if (!model.value || props.operation !== 'clone' || !vm?.node || vm.vmid === undefined) return;
-  const response = await getCtCloneFeature(vm.node, vm.vmid, cloneMode.value);
+  const response = await getCtCloneFeature(vm.node, vm.vmid, cloneMode.value, cloneSnapshot.value);
   allowedCloneNodes.value = response.data?.nodes || [];
   if (!allowedCloneNodes.value.includes(target.value))
     target.value = allowedCloneNodes.value[0] || '';
@@ -110,6 +129,7 @@ async function checkMigration() {
   migrationPossible.value = false;
   try {
     const data = (await getCtMigrationPreconditions(vm.node, vm.vmid)).data || {};
+    migrationHasLocalDisks.value = Array.isArray(data.local_disks) && data.local_disks.length > 0;
     const blocked = ((data['not-allowed-nodes'] || {}) as Record<string, Record<string, unknown>>)[
       target.value
     ]?.['blocking-ha-resources'] as Array<{ sid?: string }> | undefined;
@@ -134,8 +154,10 @@ async function submit() {
       response = await migrateCt(vm.node, vm.vmid, {
         target: target.value,
         ...(vm.status === 'running' ? { restart: 1 } : {}),
-        ...(localDisks.value ? { 'with-local-disks': 1 } : {}),
-        ...(localDisks.value && targetStorage.value ? { targetstorage: targetStorage.value } : {}),
+        ...(migrationHasLocalDisks.value ? { 'with-local-disks': 1 } : {}),
+        ...(migrationHasLocalDisks.value && vm.status === 'running' && targetStorage.value
+          ? { targetstorage: targetStorage.value }
+          : {}),
       });
     else if (props.operation === 'clone')
       response = await cloneCt(vm.node, vm.vmid, {
@@ -147,6 +169,7 @@ async function submit() {
           ? { storage: cloneStorage.value }
           : {}),
         ...(clonePool.value ? { pool: clonePool.value } : {}),
+        ...(cloneSnapshot.value !== 'current' ? { snapname: cloneSnapshot.value } : {}),
       });
     else if (props.operation === 'template') response = await convertCtToTemplate(vm.node, vm.vmid);
     else
@@ -172,6 +195,15 @@ watch(
 );
 watch(target, () => void checkMigration());
 watch(cloneMode, () => void checkCloneFeature());
+watch(cloneSnapshot, () => void checkCloneFeature());
+watch(newid, async (value) => {
+  if (!model.value || props.operation !== 'clone' || !value) {
+    vmidAvailable.value = false;
+    return;
+  }
+  const response = await getNextVmId(value).catch(() => null);
+  vmidAvailable.value = String(response?.data) === String(value);
+});
 watch(target, async (node) => {
   targetStorage.value = '';
   targetStorages.value = node
@@ -247,6 +279,14 @@ watch(target, async (node) => {
               :label="gettext('Hostname')"
             />
             <q-select
+              v-if="snapshots.length > 1"
+              v-model="cloneSnapshot"
+              dense
+              outlined
+              :options="snapshots"
+              :label="gettext('Snapshot')"
+            />
+            <q-select
               v-if="vm?.template"
               v-model="cloneMode"
               dense
@@ -277,14 +317,8 @@ watch(target, async (node) => {
               :label="gettext('Resource Pool')"
             />
           </template>
-          <q-checkbox
-            v-if="operation === 'migrate'"
-            v-model="localDisks"
-            dense
-            :label="gettext('Migrate local disks')"
-          />
           <q-select
-            v-if="operation === 'migrate' && localDisks"
+            v-if="operation === 'migrate' && vm?.status === 'running' && migrationHasLocalDisks"
             v-model="targetStorage"
             dense
             outlined

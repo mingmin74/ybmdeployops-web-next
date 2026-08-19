@@ -221,10 +221,19 @@ export function cloneCt(
   );
 }
 
-export function getCtCloneFeature(node: string, vmid: number | string, feature: 'copy' | 'clone') {
+export function getCtCloneFeature(
+  node: string,
+  vmid: number | string,
+  feature: 'copy' | 'clone',
+  snapname?: string
+) {
   return request<{ nodes?: string[] }>(
     `/api2/json/nodes/${encodeURIComponent(node)}/lxc/${encodeURIComponent(String(vmid))}/feature`,
-    { method: 'GET', params: { feature }, notifyOnError: true }
+    {
+      method: 'GET',
+      params: { feature, ...(snapname && snapname !== 'current' ? { snapname } : {}) },
+      notifyOnError: true,
+    }
   );
 }
 
