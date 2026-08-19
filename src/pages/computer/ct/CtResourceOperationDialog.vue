@@ -43,6 +43,9 @@ const allowedCloneNodes = shallowRef<string[]>([]);
 const cloneNodesRestricted = shallowRef(false);
 const cloneFeatureAllowed = shallowRef(true);
 const cloneFeatureMessage = shallowRef('');
+// guards against stale /feature responses racing (PVE disables submit while
+// the feature check has not succeeded; a late response must not win)
+let cloneFeatureRequest = 0;
 const snapshots = shallowRef<string[]>([]);
 const cloneSnapshot = shallowRef('current');
 const vmidAvailable = shallowRef(false);
@@ -120,6 +123,11 @@ async function initialize() {
 async function checkCloneFeature() {
   const vm = props.vm;
   if (!model.value || props.operation !== 'clone' || !vm?.node || vm.vmid === undefined) return;
+  const request = ++cloneFeatureRequest;
+  // enter "unverified" state: PVE only re-enables submit after a successful
+  // feature check, so a pending or failed check must keep canSubmit=false
+  cloneFeatureAllowed.value = false;
+  cloneFeatureMessage.value = '';
   try {
     const response = await getCtCloneFeature(
       vm.node,
@@ -127,6 +135,7 @@ async function checkCloneFeature() {
       cloneMode.value,
       cloneSnapshot.value
     );
+    if (request !== cloneFeatureRequest) return; // a newer check is in flight
     const data = response.data || {};
     if (data.hasFeature === false) {
       // feature capability says the clone is not possible (PVE disables submit)
@@ -135,7 +144,6 @@ async function checkCloneFeature() {
       return;
     }
     cloneFeatureAllowed.value = true;
-    cloneFeatureMessage.value = '';
     if (Array.isArray(data.nodes)) {
       // an explicit allow-list from the feature API restricts the target node
       allowedCloneNodes.value = data.nodes;
@@ -148,7 +156,10 @@ async function checkCloneFeature() {
       allowedCloneNodes.value = [];
     }
   } catch {
-    // the global Notify already surfaced the error; keep the last known state
+    if (request !== cloneFeatureRequest) return; // stale failure must not clobber newer result
+    // PVE Clone.js disables submit when the /feature request fails
+    cloneFeatureAllowed.value = false;
+    cloneFeatureMessage.value = gettext('Clone feature check failed.');
   }
 }
 async function checkMigration() {
