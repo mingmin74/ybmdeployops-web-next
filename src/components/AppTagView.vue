@@ -44,7 +44,7 @@ const activePath = computed(() => tagKey(route));
 
 function permissionTabTitle(nextRoute: RouteLocationNormalizedLoaded) {
   const tab = resolveTab(nextRoute);
-  return gettext(permissionTabTitles[tab]);
+  return gettext(permissionTabTitles[tab] ?? tab);
 }
 
 function routeTitle(nextRoute: RouteLocationNormalizedLoaded) {

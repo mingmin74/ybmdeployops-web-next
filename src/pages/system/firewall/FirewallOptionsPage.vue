@@ -221,7 +221,7 @@ watch(
     if (nextRows.length === 0) return;
     const key = active.value.key;
     const current = key ? nextRows.find((row) => row.key === key) : nextRows[0];
-    openEdit(current || nextRows[0]);
+    openEdit((current ?? nextRows[0]) as PveRecord);
   },
   { immediate: true }
 );

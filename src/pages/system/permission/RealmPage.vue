@@ -17,6 +17,7 @@ import { gettext } from '@/locale';
 defineProps<{ embedded?: boolean }>();
 type AuthType = 'ldap' | 'ad' | 'openid' | 'pam' | 'pve';
 type Scalar = string | number | boolean;
+type FormScalar = string | number | boolean | null | undefined;
 const addTypes: { value: AuthType; label: string }[] = [
   { value: 'ldap', label: 'LDAP' },
   { value: 'ad', label: gettext('Active Directory') },
@@ -55,7 +56,7 @@ const rows = ref<PveRealm[]>([]),
 const action = ref<'add' | 'edit'>('add');
 const original = ref<Record<string, unknown>>({});
 const task = reactive({ visible: false, upid: '', node: '', title: '' });
-const form = reactive<Record<string, Scalar>>({});
+const form = reactive<Record<string, any>>({});
 const sync = reactive({ scope: '', enableNew: true, acl: false, entry: false, properties: false });
 const selectedRealm = computed(() => selected.value[0]);
 const syncable = computed(() => ['ldap', 'ad'].includes(selectedRealm.value?.type || ''));

@@ -22,7 +22,7 @@ const formatOptions = computed(() => {
   if (!storage) return [];
   const formats = storage.formats as { supported?: unknown; default?: unknown } | undefined;
   const supported = Array.isArray(formats?.supported)
-    ? formats.supported.map(textValue).filter(Boolean)
+    ? formats.supported.map((v: unknown) => textValue(v)).filter(Boolean)
     : textValue(storage.format).split(/[;,\s]+/).filter(Boolean);
   return [...new Set(supported)];
 });

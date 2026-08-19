@@ -431,11 +431,11 @@ async function save() {
                           map-options
                           clearable
                           :loading="
-                            matchValueConfig(item.key).optionsSource === 'prefixLists' &&
+                            (matchValueConfig(item.key) as Extract<MatchValueConfig, { kind: 'select' }>).optionsSource === 'prefixLists' &&
                             prefixListsLoading
                           "
                           :options="
-                            matchValueConfig(item.key).optionsSource === 'prefixLists'
+                            (matchValueConfig(item.key) as Extract<MatchValueConfig, { kind: 'select' }>).optionsSource === 'prefixLists'
                               ? prefixListOptions
                               : (
                                   matchValueConfig(item.key) as Extract<
