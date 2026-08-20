@@ -19,6 +19,7 @@ type NodeDetail = {
 defineProps<{
   node: NodeDetail;
   canPowerManage: boolean;
+  canAudit: boolean;
   canConsole: boolean;
   canUseNode: boolean;
   actionLoading: boolean;
@@ -27,6 +28,7 @@ defineProps<{
 defineEmits<{
   back: [];
   power: [command: 'reboot' | 'shutdown'];
+  packageVersions: [];
   shell: [consoleType: 'noVNC' | 'xterm.js'];
   spice: [];
 }>();
@@ -71,6 +73,17 @@ const modules = [
       />
       <q-space />
       <div class="row q-gutter-sm no-wrap">
+        <q-btn
+          v-if="canAudit"
+          no-caps
+          outline
+          dense
+          size="12px"
+          color="primary"
+          class="node-detail__action"
+          :label="gettext('Package versions')"
+          @click="$emit('packageVersions')"
+        />
         <q-btn
           v-if="canPowerManage"
           no-caps

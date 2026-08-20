@@ -31,6 +31,7 @@ const props = withDefaults(
     unitType?: UnitType;
     powerOfTwo?: boolean;
     height?: number;
+    tooltipFormatter?: (dataIndex: number) => string;
   }>(),
   {
     yUnit: '',
@@ -116,6 +117,12 @@ async function updateChart() {
       confine: true,
       axisPointer: {
         type: 'line',
+      },
+      formatter: (params: unknown) => {
+        const item = Array.isArray(params) ? (params[0] as { dataIndex?: number } | undefined) : undefined;
+        const formatted = item?.dataIndex === undefined ? '' : props.tooltipFormatter?.(item.dataIndex);
+        if (formatted) return formatted;
+        return undefined;
       },
       valueFormatter: (value: unknown) => {
         const numericValue = Number(value);

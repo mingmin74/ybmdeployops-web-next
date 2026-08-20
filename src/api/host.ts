@@ -28,12 +28,26 @@ export type PveNodeTask = {
 
 export type PveNodeDns = { search?: string; dns1?: string; dns2?: string; dns3?: string };
 export type PveNodeTime = { timezone?: string; time?: number };
+export type PveNodePackageVersion = {
+  Package?: string;
+  OldVersion?: string;
+  CurrentState?: string;
+  RunningKernel?: string;
+  ManagerVersion?: string;
+};
 
 export function getNodes() {
   return request<PveNode[]>('/api2/json/nodes', {
     method: 'GET',
     notifyOnError: true,
   });
+}
+
+export function getNodePackageVersions(node: string) {
+  return request<PveNodePackageVersion[]>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/apt/versions`,
+    { method: 'GET', notifyOnError: true },
+  );
 }
 
 export function rebootNode(node: string) {
