@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-const { node } = defineProps<{ node: string }>();
+const { node, enabled = true } = defineProps<{ node: string; enabled?: boolean }>();
 
 const shellUrl = computed(() => {
-  if (!node) return '';
-  const params = new URLSearchParams({ console: 'shell', node, xtermjs: '1', vmid: '0' });
+  if (!node || !enabled) return '';
+  // Mirrors PVE.noVncConsole: shell console, node, vmid 0, xterm.js and default scaling.
+  const params = new URLSearchParams({
+    console: 'shell',
+    vmid: '0',
+    node,
+    resize: 'scale',
+    xtermjs: '1',
+  });
   return `/?${params.toString()}`;
 });
 </script>

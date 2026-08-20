@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, shallowRef } from 'vue';
+import { computed, shallowRef, watch } from 'vue';
 import ResourceOverviewPanel from '@/components/ResourceOverviewPanel.vue';
 import { gettext } from '@/locale';
 import NodeShellPanel from './NodeShellPanel.vue';
@@ -39,7 +39,9 @@ const activeTab = shallowRef('summary');
 const modules = computed(() => [
   { name: 'summary', label: gettext('Summary'), icon: 'dashboard' },
   ...(props.canAudit ? [{ name: 'notes', label: gettext('Notes'), icon: 'sticky_note_2' }] : []),
-  { name: 'shell', label: 'Shell', icon: 'terminal' },
+  ...(props.canConsole
+    ? [{ name: 'shell', label: 'Shell', icon: 'terminal', disable: !props.canUseNode }]
+    : []),
   { name: 'system', label: gettext('System'), icon: 'settings' },
   { name: 'disks', label: gettext('Disks'), icon: 'storage' },
   { name: 'ceph', label: 'Ceph', icon: 'cloud_queue' },
@@ -47,6 +49,13 @@ const modules = computed(() => [
   { name: 'firewall', label: gettext('Firewall'), icon: 'security' },
   { name: 'task-history', label: gettext('Task History'), icon: 'history' },
 ]);
+
+watch(
+  () => [props.canConsole, props.canUseNode],
+  ([canConsole, canUseNode]) => {
+    if (activeTab.value === 'shell' && (!canConsole || !canUseNode)) activeTab.value = 'summary';
+  }
+);
 </script>
 
 <template>
@@ -63,9 +72,15 @@ const modules = computed(() => [
         :aria-label="gettext('Back')"
         @click="$emit('back')"
       />
-      <q-icon name="dns" size="21px" color="primary" class="q-mr-sm" />
+      <q-icon
+        name="dns"
+        size="21px"
+        color="primary"
+        class="q-mr-sm"
+      />
       <div class="node-detail__title">
-        {{ gettext('Node Details') }}<span class="node-detail__title-name">{{ node.node }}</span>
+        {{ gettext('Node Details') }}
+        <span class="node-detail__title-name">{{ node.node }}</span>
       </div>
       <q-badge
         class="q-ml-sm"
@@ -123,15 +138,27 @@ const modules = computed(() => [
           :label="gettext('Console')"
         >
           <q-list dense>
-            <q-item v-close-popup clickable @click="$emit('shell', 'noVNC')"
-              ><q-item-section>noVNC</q-item-section></q-item
+            <q-item
+              v-close-popup
+              clickable
+              @click="$emit('shell', 'noVNC')"
             >
-            <q-item v-close-popup clickable @click="$emit('spice')"
-              ><q-item-section>SPICE</q-item-section></q-item
+              <q-item-section>noVNC</q-item-section>
+            </q-item>
+            <q-item
+              v-close-popup
+              clickable
+              @click="$emit('spice')"
             >
-            <q-item v-close-popup clickable @click="$emit('shell', 'xterm.js')"
-              ><q-item-section>xterm.js</q-item-section></q-item
+              <q-item-section>SPICE</q-item-section>
+            </q-item>
+            <q-item
+              v-close-popup
+              clickable
+              @click="$emit('shell', 'xterm.js')"
             >
+              <q-item-section>xterm.js</q-item-section>
+            </q-item>
           </q-list>
         </q-btn-dropdown>
       </div>
@@ -151,33 +178,83 @@ const modules = computed(() => [
         :name="module.name"
         :icon="module.icon"
         :label="module.label"
+        :disable="module.disable"
       />
     </q-tabs>
 
     <q-separator />
 
-    <q-tab-panels v-model="activeTab" class="node-detail__content">
-      <q-tab-panel v-if="activeTab === 'summary'" name="summary" class="q-pa-none">
-        <ResourceOverviewPanel mode="host" :node="node.node" hide-node-selector />
+    <q-tab-panels
+      v-model="activeTab"
+      class="node-detail__content"
+    >
+      <q-tab-panel
+        v-if="activeTab === 'summary'"
+        name="summary"
+        class="q-pa-none"
+      >
+        <ResourceOverviewPanel
+          mode="host"
+          :node="node.node"
+          hide-node-selector
+        />
       </q-tab-panel>
-      <q-tab-panel v-if="canAudit" name="notes" class="q-pa-md"
-        ><NodeNotesPanel :node="node.node" :can-edit="canModify"
-      /></q-tab-panel>
-      <q-tab-panel name="shell" class="q-pa-none"><NodeShellPanel :node="node.node" /></q-tab-panel>
-      <q-tab-panel name="system" class="q-pa-none">
+      <q-tab-panel
+        v-if="canAudit"
+        name="notes"
+        class="q-pa-md"
+      >
+        <NodeNotesPanel
+          :node="node.node"
+          :can-edit="canModify"
+        />
+      </q-tab-panel>
+      <q-tab-panel
+        v-if="canConsole && canUseNode"
+        name="shell"
+        class="q-pa-none"
+      >
+        <NodeShellPanel
+          :node="node.node"
+          :enabled="canUseNode"
+        />
+      </q-tab-panel>
+      <q-tab-panel
+        name="system"
+        class="q-pa-none"
+      >
         <NodeSystemPanel :node="node.node" />
       </q-tab-panel>
-      <q-tab-panel name="disks" class="q-pa-none"><NodeDiskPanel :node="node.node" /></q-tab-panel>
-      <q-tab-panel name="ceph" class="q-pa-none"><NodeCephPanel :node="node.node" /></q-tab-panel>
-      <q-tab-panel name="replication" class="q-pa-none"
-        ><NodeReplicationPanel :node="node.node"
-      /></q-tab-panel>
-      <q-tab-panel name="firewall" class="q-pa-none">
+      <q-tab-panel
+        name="disks"
+        class="q-pa-none"
+      >
+        <NodeDiskPanel :node="node.node" />
+      </q-tab-panel>
+      <q-tab-panel
+        name="ceph"
+        class="q-pa-none"
+      >
+        <NodeCephPanel :node="node.node" />
+      </q-tab-panel>
+      <q-tab-panel
+        name="replication"
+        class="q-pa-none"
+      >
+        <NodeReplicationPanel :node="node.node" />
+      </q-tab-panel>
+      <q-tab-panel
+        name="firewall"
+        class="q-pa-none"
+      >
         <NodeFirewallPanel :node="node.node" />
       </q-tab-panel>
-      <q-tab-panel name="task-history" class="q-pa-md"
-        ><NodeTaskHistoryPanel :node="node.node"
-      /></q-tab-panel>
+      <q-tab-panel
+        name="task-history"
+        class="q-pa-md"
+      >
+        <NodeTaskHistoryPanel :node="node.node" />
+      </q-tab-panel>
     </q-tab-panels>
   </section>
 </template>
