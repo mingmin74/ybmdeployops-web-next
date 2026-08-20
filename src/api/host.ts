@@ -10,6 +10,8 @@ export type PveService = {
   service?: string;
   state?: string;
   desc?: string;
+  'unit-state'?: string;
+  'active-state'?: string;
 };
 
 export type JournalRecord = {
@@ -102,6 +104,13 @@ export function restartNodeService(node: string, serviceName: string) {
   });
 }
 
+export function reloadNodeService(node: string, serviceName: string) {
+  return request<string>(`/api2/extjs/nodes/${node}/services/${serviceName}/reload`, {
+    method: 'POST',
+    notifyOnError: true,
+  });
+}
+
 export function getNodeJournal(
   node: string,
   params: {
@@ -110,7 +119,7 @@ export function getNodeJournal(
     limit: number;
     since: string;
     until: string;
-  },
+  }
 ) {
   return request<JournalRecord[]>(`/api2/extjs/nodes/${node}/journal`, {
     method: 'GET',
