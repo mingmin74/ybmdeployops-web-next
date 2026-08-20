@@ -9,6 +9,7 @@ import NodeTaskHistoryPanel from './NodeTaskHistoryPanel.vue';
 import NodeFirewallPanel from './NodeFirewallPanel.vue';
 import NodeCephPanel from './NodeCephPanel.vue';
 import NodeReplicationPanel from './NodeReplicationPanel.vue';
+import NodeNotesPanel from './NodeNotesPanel.vue';
 
 type NodeDetail = {
   node: string;
@@ -34,6 +35,7 @@ const activeTab = shallowRef('summary');
 
 const modules = [
   { name: 'summary', label: gettext('Summary'), icon: 'dashboard' },
+  { name: 'notes', label: gettext('Notes'), icon: 'sticky_note_2' },
   { name: 'shell', label: 'Shell', icon: 'terminal' },
   { name: 'system', label: gettext('System'), icon: 'settings' },
   { name: 'disks', label: gettext('Disks'), icon: 'storage' },
@@ -144,6 +146,7 @@ const modules = [
       <q-tab-panel v-if="activeTab === 'summary'" name="summary" class="q-pa-none">
         <ResourceOverviewPanel mode="host" :node="node.node" hide-node-selector />
       </q-tab-panel>
+      <q-tab-panel name="notes" class="q-pa-md"><NodeNotesPanel :node="node.node" /></q-tab-panel>
       <q-tab-panel name="shell" class="q-pa-none"><NodeShellPanel :node="node.node" /></q-tab-panel>
       <q-tab-panel name="system" class="q-pa-none">
         <NodeSystemPanel :node="node.node" />
