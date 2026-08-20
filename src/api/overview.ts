@@ -207,6 +207,13 @@ export function getNodeRrd(node: string, timeframe = 'hour', cf = 'AVERAGE') {
   });
 }
 
+export function getNodePackageVersions(node: string) {
+  return request<PveRecord[]>(`/api2/json/nodes/${encodeURIComponent(node)}/apt/versions`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
+}
+
 export function getStorageRrd(node: string, storage: string, timeframe = 'hour', cf = 'AVERAGE') {
   return request<PveRecord[]>(`/api2/json/nodes/${node}/storage/${storage}/rrddata`, {
     method: 'GET',

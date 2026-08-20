@@ -8,7 +8,14 @@ import NodeSelectTable from '@/components/NodeSelectTable.vue';
 import UsageProgress from '@/components/UsageProgress.vue';
 import type { PveRecord } from '@/api/resources';
 import { getClusterResources } from '@/api/resources';
-import { getNodeRrd, getNodeStatus, getStorageRrd, getVmCurrent, getVmRrd } from '@/api/overview';
+import {
+  getNodePackageVersions,
+  getNodeRrd,
+  getNodeStatus,
+  getStorageRrd,
+  getVmCurrent,
+  getVmRrd,
+} from '@/api/overview';
 import { gettext } from '@/locale';
 import { formatBytes, textValue, usedPercent } from '@/utils/pveFormat';
 import { resourceProgressColor } from '@/utils/format';
@@ -27,6 +34,9 @@ const current = shallowRef<PveRecord>({});
 const rrdRows = shallowRef<PveRecord[]>([]);
 const rrdTimeframe = shallowRef<'hour' | 'day' | 'week' | 'month' | 'year'>('hour');
 const rrdConsolidation = shallowRef<'AVERAGE' | 'MAX'>('AVERAGE');
+const versionDialogVisible = shallowRef(false);
+const versionLoading = shallowRef(false);
+const packageVersions = shallowRef<PveRecord[]>([]);
 
 const modeType = computed(() =>
   props.mode === 'computer' ? 'vm' : props.mode === 'host' ? 'node' : 'storage',
@@ -273,15 +283,20 @@ const hostMemorySeries = computed(() => [
     data: rrdRows.value.map((item) => Number(item.memused || item.mem || 0)),
     color: '#2e7d32',
   },
+  {
+    name: gettext('ZFS ARC'),
+    data: rrdRows.value.map((item) => Number(item.arcsize || 0)),
+    color: '#24ad9a',
+  },
 ]);
 const hostNetworkSeries = computed(() => [
   {
-    name: gettext('NetIn'),
+    name: gettext('Incoming'),
     data: rrdRows.value.map((item) => Number(item.netin || 0)),
     color: '#00838f',
   },
   {
-    name: gettext('NetOut'),
+    name: gettext('Outgoing'),
     data: rrdRows.value.map((item) => Number(item.netout || 0)),
     color: '#1976d2',
   },
@@ -376,6 +391,35 @@ function timestampToMinute(value: number) {
   const date = new Date(value);
   const pad = (part: number) => String(part).padStart(2, '0');
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+async function showVersionInformation() {
+  const node = textValue(selectedResource.value.node);
+  if (!node) return;
+
+  versionDialogVisible.value = true;
+  versionLoading.value = true;
+  packageVersions.value = [];
+  try {
+    const response = await getNodePackageVersions(node);
+    packageVersions.value = response.data || [];
+  } finally {
+    versionLoading.value = false;
+  }
+}
+
+function packageVersionText(record: PveRecord) {
+  const packageName = textValue(record.Package, '-');
+  const installed = textValue(record.CurrentState) === 'Installed';
+  const version = installed && record.OldVersion ? textValue(record.OldVersion) : gettext('not correctly installed');
+  const runningKernel = textValue(record.RunningKernel);
+  const managerVersion = textValue(record.ManagerVersion);
+  const running = runningKernel
+    ? ` (${gettext('running kernel')}: ${runningKernel})`
+    : managerVersion
+      ? ` (${gettext('running version')}: ${managerVersion})`
+      : '';
+  return `${packageName}: ${version}${running}`;
 }
 
 async function loadResources() {
@@ -487,6 +531,15 @@ onMounted(loadResources);
         :loading="loading"
         :label="gettext('Refresh')"
         @click="loadResources"
+      />
+      <q-btn
+        no-caps
+        outline
+        size="12px"
+        color="primary"
+        class="u-button"
+        :label="gettext('Version Information')"
+        @click="showVersionInformation"
       />
     </div>
 
@@ -654,8 +707,37 @@ onMounted(loadResources);
               unit-type="percent"
               :height="260" /></q-card-section
         ></q-card>
-      </div>
     </div>
+    </div>
+
+    <q-dialog v-model="versionDialogVisible" transition-show="scale" transition-hide="scale">
+      <q-card class="version-dialog no-shadow no-border-radius">
+        <q-card-section class="version-dialog-header">
+          <strong>{{ gettext('Version Information') }}</strong>
+        </q-card-section>
+        <q-separator />
+        <q-card-section class="version-dialog-content" :class="{ 'is-loading': versionLoading }">
+          <div class="version-summary">
+            <div>
+              <span>{{ gettext('PVE Manager version') }}</span>
+              <strong>{{ textValue(current.pveversion, '-') }}</strong>
+            </div>
+            <div>
+              <span>{{ gettext('Kernel version') }}</span>
+              <strong>{{ hostKernelVersion }}</strong>
+            </div>
+          </div>
+          <q-inner-loading :showing="versionLoading" color="primary" />
+          <pre v-if="!versionLoading" class="version-package-list">{{
+            packageVersions.map(packageVersionText).join('\n') || gettext('No Data')
+          }}</pre>
+        </q-card-section>
+        <q-separator />
+        <q-card-actions align="right" class="version-dialog-actions">
+          <q-btn v-close-popup no-caps flat color="primary" :label="gettext('OK')" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
     <q-inner-loading :showing="loading" />
   </div>
 
@@ -1085,6 +1167,71 @@ onMounted(loadResources);
   margin-top: 2px;
 }
 
+.version-dialog {
+  border: 1px solid #dfe1e6;
+  min-width: min(92vw, 620px);
+}
+
+.version-dialog-header {
+  background: #f2f5fc;
+  color: #174f86;
+  font-size: 13px;
+  padding: 11px 14px;
+}
+
+.version-dialog-content {
+  min-height: 280px;
+  padding: 0;
+  position: relative;
+}
+
+.version-summary {
+  border-bottom: 1px solid #eef1f6;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 12px 14px;
+}
+
+.version-summary div {
+  min-width: 0;
+}
+
+.version-summary span,
+.version-summary strong {
+  display: block;
+}
+
+.version-summary span {
+  color: #667788;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.version-summary strong {
+  color: #27384d;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-package-list {
+  color: #344054;
+  font: 12px/1.6 Consolas, 'Courier New', monospace;
+  margin: 0;
+  max-height: 360px;
+  min-height: 188px;
+  overflow: auto;
+  padding: 12px 14px;
+  white-space: pre-wrap;
+}
+
+.version-dialog-actions {
+  min-height: 46px;
+  padding: 6px 12px;
+}
+
 @media (max-width: 1280px) {
   .host-top-grid {
     grid-template-columns: 1fr;
@@ -1107,6 +1254,10 @@ onMounted(loadResources);
 
   .resource-card {
     flex-basis: calc((100% - 8px) / 2);
+  }
+
+  .version-summary {
+    grid-template-columns: 1fr;
   }
 }
 
