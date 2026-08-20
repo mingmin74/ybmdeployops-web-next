@@ -24,10 +24,10 @@ let refreshTimer: number | undefined;
 
 const selectedNode = computed(() => selected.value[0]);
 const dcCaps = computed(
-  () => (session.caps as unknown as { dc?: Record<string, unknown> }).dc || {},
+  () => (session.caps as unknown as { dc?: Record<string, unknown> }).dc || {}
 );
 const nodeCaps = computed(
-  () => (session.caps as unknown as { nodes?: Record<string, unknown> }).nodes || {},
+  () => (session.caps as unknown as { nodes?: Record<string, unknown> }).nodes || {}
 );
 const canAudit = computed(() => Boolean(dcCaps.value['Sys.Audit']));
 const canPowerManage = computed(() => Boolean(nodeCaps.value['Sys.PowerMgmt']));
@@ -80,7 +80,7 @@ async function loadNodes() {
   try {
     const response = await getNodes();
     nodes.value = [...(response.data || [])].sort((left, right) =>
-      left.node.localeCompare(right.node),
+      left.node.localeCompare(right.node)
     );
     const currentName = selectedNode.value?.node;
     selected.value = currentName ? nodes.value.filter((node) => node.node === currentName) : [];
@@ -141,12 +141,7 @@ function openShell(consoleType: 'noVNC' | 'xterm.js') {
     return;
   }
 
-  params.set('xtermjs', '1');
-  window.open(
-    `?${params.toString()}`,
-    '_blank',
-    'toolbar=no,location=no,status=no,menubar=no,resizable=yes,width=1024,height=600',
-  );
+  void router.push({ name: 'node-shell', query: { node: node.node } });
 }
 
 async function downloadSpiceShell() {
@@ -179,7 +174,7 @@ function openNodeAction(
     | 'taskHistory'
     | 'subscription'
     | 'packageversion'
-    | 'systemreport',
+    | 'systemreport'
 ) {
   const node = selectedNode.value;
   if (!node || node.status === 'offline') return;
@@ -266,15 +261,30 @@ onBeforeUnmount(() => {
               :label="gettext('Console')"
             >
               <q-list>
-                <q-item v-close-popup dense clickable @click="openShell('noVNC')"
-                  ><q-item-section><q-item-label>noVNC</q-item-label></q-item-section></q-item
+                <q-item
+                  v-close-popup
+                  dense
+                  clickable
+                  @click="openShell('noVNC')"
                 >
-                <q-item v-close-popup dense clickable @click="downloadSpiceShell"
-                  ><q-item-section><q-item-label>SPICE</q-item-label></q-item-section></q-item
+                  <q-item-section><q-item-label>noVNC</q-item-label></q-item-section>
+                </q-item>
+                <q-item
+                  v-close-popup
+                  dense
+                  clickable
+                  @click="downloadSpiceShell"
                 >
-                <q-item v-close-popup dense clickable @click="openShell('xterm.js')"
-                  ><q-item-section><q-item-label>xterm.js</q-item-label></q-item-section></q-item
+                  <q-item-section><q-item-label>SPICE</q-item-label></q-item-section>
+                </q-item>
+                <q-item
+                  v-close-popup
+                  dense
+                  clickable
+                  @click="openShell('xterm.js')"
                 >
+                  <q-item-section><q-item-label>xterm.js</q-item-label></q-item-section>
+                </q-item>
               </q-list>
             </q-btn-dropdown>
             <q-btn-dropdown
@@ -293,36 +303,59 @@ onBeforeUnmount(() => {
                   dense
                   clickable
                   @click="openNodeAction('network')"
-                  ><q-item-section>{{ gettext('Network') }}</q-item-section></q-item
                 >
+                  <q-item-section>{{ gettext('Network') }}</q-item-section>
+                </q-item>
                 <q-item
                   v-if="canAudit"
                   v-close-popup
                   dense
                   clickable
                   @click="openNodeAction('setting')"
-                  ><q-item-section>{{ gettext('Setting') }}</q-item-section></q-item
                 >
+                  <q-item-section>{{ gettext('Setting') }}</q-item-section>
+                </q-item>
                 <q-item
                   v-if="canAudit"
                   v-close-popup
                   dense
                   clickable
                   @click="openNodeAction('firewall')"
-                  ><q-item-section>{{ gettext('Firewall') }}</q-item-section></q-item
                 >
-                <q-item v-close-popup dense clickable @click="openNodeAction('taskHistory')"
-                  ><q-item-section>{{ gettext('Task History') }}</q-item-section></q-item
+                  <q-item-section>{{ gettext('Firewall') }}</q-item-section>
+                </q-item>
+                <q-item
+                  v-close-popup
+                  dense
+                  clickable
+                  @click="openNodeAction('taskHistory')"
                 >
-                <q-item v-close-popup dense clickable @click="openNodeAction('subscription')"
-                  ><q-item-section>{{ gettext('Subscription') }}</q-item-section></q-item
+                  <q-item-section>{{ gettext('Task History') }}</q-item-section>
+                </q-item>
+                <q-item
+                  v-close-popup
+                  dense
+                  clickable
+                  @click="openNodeAction('subscription')"
                 >
-                <q-item v-close-popup dense clickable @click="openNodeAction('packageversion')"
-                  ><q-item-section>{{ gettext('PackageVersion') }}</q-item-section></q-item
+                  <q-item-section>{{ gettext('Subscription') }}</q-item-section>
+                </q-item>
+                <q-item
+                  v-close-popup
+                  dense
+                  clickable
+                  @click="openNodeAction('packageversion')"
                 >
-                <q-item v-close-popup dense clickable @click="openNodeAction('systemreport')"
-                  ><q-item-section>{{ gettext('SystemReport') }}</q-item-section></q-item
+                  <q-item-section>{{ gettext('PackageVersion') }}</q-item-section>
+                </q-item>
+                <q-item
+                  v-close-popup
+                  dense
+                  clickable
+                  @click="openNodeAction('systemreport')"
                 >
+                  <q-item-section>{{ gettext('SystemReport') }}</q-item-section>
+                </q-item>
               </q-list>
             </q-btn-dropdown>
             <q-btn
@@ -337,24 +370,32 @@ onBeforeUnmount(() => {
             />
           </div>
           <q-space />
-          <q-input v-model="filter" borderless dense debounce="300" :placeholder="gettext('Search')"
-            ><template #append><q-icon name="search" /></template
-          ></q-input>
+          <q-input
+            v-model="filter"
+            borderless
+            dense
+            debounce="300"
+            :placeholder="gettext('Search')"
+          >
+            <template #append><q-icon name="search" /></template>
+          </q-input>
         </template>
-        <template #body-cell-status="props"
-          ><q-td :props="props"
-            ><q-badge
+        <template #body-cell-status="props">
+          <q-td :props="props">
+            <q-badge
               :color="
                 props.value === 'online' ? 'green' : props.value === 'offline' ? 'red' : 'grey'
               "
-              :label="props.value || '-'" /></q-td
-        ></template>
-        <template #body-cell-disk="props"
-          ><q-td :props="props"><UsageProgress :percent="props.value" /></q-td
-        ></template>
-        <template #body-cell-memory="props"
-          ><q-td :props="props"><UsageProgress :percent="props.value" /></q-td
-        ></template>
+              :label="props.value || '-'"
+            />
+          </q-td>
+        </template>
+        <template #body-cell-disk="props">
+          <q-td :props="props"><UsageProgress :percent="props.value" /></q-td>
+        </template>
+        <template #body-cell-memory="props">
+          <q-td :props="props"><UsageProgress :percent="props.value" /></q-td>
+        </template>
       </q-table>
     </div>
   </div>

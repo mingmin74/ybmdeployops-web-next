@@ -16,7 +16,7 @@ const actionLoading = shallowRef(false);
 const nodeName = computed(() => String(route.params.node || ''));
 const node = shallowRef<PveNode>({ node: '' });
 const nodeCaps = computed(
-  () => (session.caps as unknown as { nodes?: Record<string, unknown> }).nodes || {},
+  () => (session.caps as unknown as { nodes?: Record<string, unknown> }).nodes || {}
 );
 const canPowerManage = computed(() => Boolean(nodeCaps.value['Sys.PowerMgmt']));
 const canConsole = computed(() => Boolean(nodeCaps.value['Sys.Console']));
@@ -76,12 +76,7 @@ function openShell(consoleType: 'noVNC' | 'xterm.js') {
     window.open(`?${params.toString()}`, '_blank', 'innerWidth=745,innerheight=427');
     return;
   }
-  params.set('xtermjs', '1');
-  window.open(
-    `?${params.toString()}`,
-    '_blank',
-    'toolbar=no,location=no,status=no,menubar=no,resizable=yes,width=1024,height=600',
-  );
+  void router.push({ name: 'node-shell', query: { node: node.value.node } });
 }
 
 async function downloadSpiceShell() {
@@ -109,7 +104,7 @@ watch(
   () => {
     void loadNode();
   },
-  { immediate: true },
+  { immediate: true }
 );
 </script>
 

@@ -316,6 +316,12 @@ const routes: RouteRecordRaw[] = [
         meta: { auth: true, title: 'Logs' },
       },
       {
+        path: 'shell',
+        name: 'node-shell',
+        component: () => import('@/pages/shell/PlaceholderPage.vue'),
+        meta: { auth: true, title: 'Shell' },
+      },
+      {
         path: ':section/:page',
         name: 'shell-placeholder',
         component: () => import('@/pages/shell/PlaceholderPage.vue'),
