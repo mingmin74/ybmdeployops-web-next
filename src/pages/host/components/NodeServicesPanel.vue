@@ -8,19 +8,52 @@ import {
   stopNodeService,
   type PveService,
 } from '@/api/host';
+import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 import { gettext } from '@/locale';
+import { useSessionStore } from '@/stores/session';
 
 const { node } = defineProps<{ node: string }>();
+const session = useSessionStore();
 const loading = shallowRef(false);
 const actionLoading = shallowRef(false);
 const rows = shallowRef<PveService[]>([]);
 const selected = shallowRef<PveService[]>([]);
+const taskVisible = shallowRef(false);
+const taskUpid = shallowRef('');
+const taskTitle = shallowRef('');
 const selectedService = computed(() => selected.value[0]);
+const nodeCaps = computed(
+  () => (session.caps as unknown as { nodes?: Record<string, unknown> }).nodes || {},
+);
+const canModifyServices = computed(() => Boolean(nodeCaps.value['Sys.Modify']));
 const columns: QTableColumn<PveService>[] = [
   { name: 'name', label: gettext('Name'), align: 'left', field: (row) => row.service || row.name },
   { name: 'state', label: gettext('Status'), align: 'left', field: 'state' },
   { name: 'desc', label: gettext('Description'), align: 'left', field: 'desc' },
 ];
+
+function serviceId(service?: PveService) {
+  return service?.service || service?.name || '';
+}
+
+function statusLabel(state?: string) {
+  const normalized = state || 'unknown';
+  const labels: Record<string, string> = {
+    running: gettext('Running'),
+    stopped: gettext('Stopped'),
+    failed: gettext('Failed'),
+    unknown: gettext('Unknown'),
+  };
+
+  return labels[normalized] || gettext('Unknown');
+}
+
+function statusColor(state?: string) {
+  if (state === 'running') return 'green';
+  if (state === 'stopped') return 'red';
+  if (state === 'failed') return 'negative';
+  return 'grey';
+}
 
 async function loadServices() {
   if (!node) return;
@@ -28,22 +61,27 @@ async function loadServices() {
   try {
     const response = await getNodeServices(node);
     rows.value = response.data || [];
-    const name = selectedService.value?.service || selectedService.value?.name;
-    selected.value = name ? rows.value.filter((row) => (row.service || row.name) === name) : [];
+    const name = serviceId(selectedService.value);
+    selected.value = name ? rows.value.filter((row) => serviceId(row) === name) : [];
   } finally {
     loading.value = false;
   }
 }
 
 async function changeService(action: 'start' | 'stop' | 'restart') {
-  const service = selectedService.value?.service || selectedService.value?.name;
-  if (!service) return;
+  const service = serviceId(selectedService.value);
+  if (!service || !canModifyServices.value) return;
   actionLoading.value = true;
   try {
-    if (action === 'start') await startNodeService(node, service);
-    else if (action === 'stop') await stopNodeService(node, service);
-    else await restartNodeService(node, service);
-    await loadServices();
+    const response =
+      action === 'start'
+        ? await startNodeService(node, service)
+        : action === 'stop'
+          ? await stopNodeService(node, service)
+          : await restartNodeService(node, service);
+    taskUpid.value = response.data || '';
+    taskTitle.value = `${service}: ${gettext(action === 'restart' ? 'Restart' : action === 'start' ? 'Start' : 'Stop')}`;
+    taskVisible.value = Boolean(taskUpid.value);
   } finally {
     actionLoading.value = false;
   }
@@ -51,7 +89,7 @@ async function changeService(action: 'start' | 'stop' | 'restart') {
 
 function selectRow(_event: Event, row: PveService) {
   selected.value =
-    (selectedService.value?.service || selectedService.value?.name) === (row.service || row.name)
+    serviceId(selectedService.value) === serviceId(row)
       ? []
       : [row];
 }
@@ -68,7 +106,7 @@ watch(
 <template>
   <q-table
     flat
-    row-key="name"
+    row-key="service"
     selection="single"
     hide-selected-banner
     table-header-class="u-table-header"
@@ -88,8 +126,8 @@ watch(
           outline
           size="12px"
           class="u-button"
-          :color="selectedService ? 'primary' : 'grey'"
-          :disable="!selectedService"
+          :color="selectedService && canModifyServices ? 'primary' : 'grey'"
+          :disable="!selectedService || !canModifyServices"
           :loading="actionLoading"
           :label="gettext('Start')"
           @click="changeService('start')"
@@ -99,8 +137,8 @@ watch(
           outline
           size="12px"
           class="u-button"
-          :color="selectedService ? 'red' : 'grey'"
-          :disable="!selectedService"
+          :color="selectedService && canModifyServices ? 'red' : 'grey'"
+          :disable="!selectedService || !canModifyServices"
           :loading="actionLoading"
           :label="gettext('Stop')"
           @click="changeService('stop')"
@@ -110,8 +148,8 @@ watch(
           outline
           size="12px"
           class="u-button"
-          :color="selectedService ? 'primary' : 'grey'"
-          :disable="!selectedService"
+          :color="selectedService && canModifyServices ? 'primary' : 'grey'"
+          :disable="!selectedService || !canModifyServices"
           :loading="actionLoading"
           :label="gettext('Restart')"
           @click="changeService('restart')"
@@ -130,8 +168,15 @@ watch(
     <template #body-cell-state="props"
       ><q-td :props="props"
         ><q-badge
-          :color="props.value === 'running' ? 'green' : 'red'"
-          :label="props.value || '-'" /></q-td
+          :color="statusColor(props.value)"
+          :label="statusLabel(props.value)" /></q-td
     ></template>
   </q-table>
+  <TaskOutputDialog
+    v-model="taskVisible"
+    :node="node"
+    :upid="taskUpid"
+    :title="taskTitle"
+    @finished="loadServices"
+  />
 </template>
