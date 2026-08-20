@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { shallowRef } from 'vue';
+import { computed, shallowRef } from 'vue';
 import ResourceOverviewPanel from '@/components/ResourceOverviewPanel.vue';
 import { gettext } from '@/locale';
 import NodeShellPanel from './NodeShellPanel.vue';
@@ -16,10 +16,11 @@ type NodeDetail = {
   status?: string;
 };
 
-defineProps<{
+const props = defineProps<{
   node: NodeDetail;
   canPowerManage: boolean;
   canAudit: boolean;
+  canModify: boolean;
   canConsole: boolean;
   canUseNode: boolean;
   actionLoading: boolean;
@@ -35,9 +36,9 @@ defineEmits<{
 
 const activeTab = shallowRef('summary');
 
-const modules = [
+const modules = computed(() => [
   { name: 'summary', label: gettext('Summary'), icon: 'dashboard' },
-  { name: 'notes', label: gettext('Notes'), icon: 'sticky_note_2' },
+  ...(props.canAudit ? [{ name: 'notes', label: gettext('Notes'), icon: 'sticky_note_2' }] : []),
   { name: 'shell', label: 'Shell', icon: 'terminal' },
   { name: 'system', label: gettext('System'), icon: 'settings' },
   { name: 'disks', label: gettext('Disks'), icon: 'storage' },
@@ -45,7 +46,7 @@ const modules = [
   { name: 'replication', label: gettext('Replication'), icon: 'cached' },
   { name: 'firewall', label: gettext('Firewall'), icon: 'security' },
   { name: 'task-history', label: gettext('Task History'), icon: 'history' },
-];
+]);
 </script>
 
 <template>
@@ -159,7 +160,9 @@ const modules = [
       <q-tab-panel v-if="activeTab === 'summary'" name="summary" class="q-pa-none">
         <ResourceOverviewPanel mode="host" :node="node.node" hide-node-selector />
       </q-tab-panel>
-      <q-tab-panel name="notes" class="q-pa-md"><NodeNotesPanel :node="node.node" /></q-tab-panel>
+      <q-tab-panel v-if="canAudit" name="notes" class="q-pa-md"
+        ><NodeNotesPanel :node="node.node" :can-edit="canModify"
+      /></q-tab-panel>
       <q-tab-panel name="shell" class="q-pa-none"><NodeShellPanel :node="node.node" /></q-tab-panel>
       <q-tab-panel name="system" class="q-pa-none">
         <NodeSystemPanel :node="node.node" />

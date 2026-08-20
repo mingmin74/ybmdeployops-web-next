@@ -29,10 +29,8 @@ const node = shallowRef<PveNode>({ node: '' });
 const nodeCaps = computed(
   () => (session.caps as unknown as { nodes?: Record<string, unknown> }).nodes || {}
 );
-const dcCaps = computed(
-  () => (session.caps as unknown as { dc?: Record<string, unknown> }).dc || {}
-);
-const canAudit = computed(() => Boolean(dcCaps.value['Sys.Audit']));
+const canAudit = computed(() => Boolean(nodeCaps.value['Sys.Audit']));
+const canModify = computed(() => Boolean(nodeCaps.value['Sys.Modify']));
 const canPowerManage = computed(() => Boolean(nodeCaps.value['Sys.PowerMgmt']));
 const canConsole = computed(() => Boolean(nodeCaps.value['Sys.Console']));
 const canUseNode = computed(() => node.value.status === 'online');
@@ -156,6 +154,7 @@ watch(
       :node="node"
       :can-power-manage="canPowerManage"
       :can-audit="canAudit"
+      :can-modify="canModify"
       :can-console="canConsole"
       :can-use-node="canUseNode"
       :action-loading="actionLoading"

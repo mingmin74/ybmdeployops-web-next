@@ -4,22 +4,16 @@ import { getNodeConfig } from '@/api/overview';
 import { request } from '@/api/request';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
-import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
 
-const { node = '' } = defineProps<{ node?: string }>();
-const session = useSessionStore();
+const { node = '', canEdit = false } = defineProps<{ node?: string; canEdit?: boolean }>();
 const loading = shallowRef(false);
 const editorVisible = shallowRef(false);
 const description = shallowRef('');
 const digest = shallowRef('');
 const draft = shallowRef('');
 
-const nodeCaps = computed(
-  () => (session.caps as unknown as { nodes?: Record<string, unknown> }).nodes || {},
-);
-const canEdit = computed(() => Boolean(nodeCaps.value['Sys.Modify']));
-const canSave = computed(() => canEdit.value && draft.value.length <= 64 * 1024 && !loading.value);
+const canSave = computed(() => canEdit && draft.value.length <= 64 * 1024 && !loading.value);
 
 async function loadNotes() {
   if (!node) {
@@ -38,8 +32,9 @@ async function loadNotes() {
   }
 }
 
-function openEditor() {
-  if (!canEdit.value) return;
+async function openEditor() {
+  if (!canEdit || !node) return;
+  await loadNotes();
   draft.value = description.value;
   editorVisible.value = true;
 }

@@ -118,12 +118,16 @@ async function updateChart() {
       axisPointer: {
         type: 'line',
       },
-      formatter: (params: unknown) => {
-        const item = Array.isArray(params) ? (params[0] as { dataIndex?: number } | undefined) : undefined;
-        const formatted = item?.dataIndex === undefined ? '' : props.tooltipFormatter?.(item.dataIndex);
-        if (formatted) return formatted;
-        return undefined;
-      },
+      ...(props.tooltipFormatter
+        ? {
+            formatter: (params: unknown) => {
+              const item = Array.isArray(params)
+                ? (params[0] as { dataIndex?: number } | undefined)
+                : undefined;
+              return item?.dataIndex === undefined ? '' : props.tooltipFormatter!(item.dataIndex);
+            },
+          }
+        : {}),
       valueFormatter: (value: unknown) => {
         const numericValue = Number(value);
         if (!Number.isFinite(numericValue)) return '';
