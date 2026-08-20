@@ -6,6 +6,7 @@ import DiskPage from '@/pages/storage/disks/DiskPage.vue';
 import LVMPage from '@/pages/storage/disks/LVMPage.vue';
 import LVMThinPage from '@/pages/storage/disks/LVMThinPage.vue';
 import ZFSPage from '@/pages/storage/disks/ZFSPage.vue';
+import ZfsOverIscsiPage from '@/pages/storage/disks/ZfsOverIscsiPage.vue';
 
 defineProps<{
   node: string;
@@ -19,6 +20,7 @@ const tabs = [
   { name: 'lvmthin', label: 'LVM-Thin', icon: 'layers' },
   { name: 'directory', label: gettext('Directory'), icon: 'folder' },
   { name: 'zfs', label: 'ZFS', icon: 'view_module' },
+  { name: 'zfsiscsi', label: 'ZFS-over-iSCSI', icon: 'cloud_done' },
 ];
 </script>
 
@@ -50,6 +52,9 @@ const tabs = [
           ><DirectoryPage embedded :node="node"
         /></q-tab-panel>
         <q-tab-panel name="zfs" class="q-pa-none"><ZFSPage embedded :node="node" /></q-tab-panel>
+        <q-tab-panel name="zfsiscsi" class="q-pa-none"
+          ><ZfsOverIscsiPage embedded :node="node"
+        /></q-tab-panel>
       </q-tab-panels>
     </template>
   </q-splitter>

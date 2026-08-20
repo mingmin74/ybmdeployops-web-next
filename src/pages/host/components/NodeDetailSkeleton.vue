@@ -4,9 +4,11 @@ import ResourceOverviewPanel from '@/components/ResourceOverviewPanel.vue';
 import { gettext } from '@/locale';
 import NodeShellPanel from './NodeShellPanel.vue';
 import NodeDiskPanel from './NodeDiskPanel.vue';
-import FirewallResourcePanel from '@/pages/system/firewall/FirewallResourcePanel.vue';
 import NodeSystemPanel from './NodeSystemPanel.vue';
 import NodeTaskHistoryPanel from './NodeTaskHistoryPanel.vue';
+import NodeFirewallPanel from './NodeFirewallPanel.vue';
+import NodeCephPanel from './NodeCephPanel.vue';
+import NodeReplicationPanel from './NodeReplicationPanel.vue';
 
 type NodeDetail = {
   node: string;
@@ -28,16 +30,16 @@ defineEmits<{
   spice: [];
 }>();
 
-const activeTab = shallowRef('overview');
+const activeTab = shallowRef('summary');
 
 const modules = [
-  { name: 'overview', label: gettext('Overview'), icon: 'dashboard' },
+  { name: 'summary', label: gettext('Summary'), icon: 'dashboard' },
   { name: 'shell', label: 'Shell', icon: 'terminal' },
   { name: 'system', label: gettext('System'), icon: 'settings' },
+  { name: 'disks', label: gettext('Disks'), icon: 'storage' },
+  { name: 'ceph', label: 'Ceph', icon: 'cloud_queue' },
+  { name: 'replication', label: gettext('Replication'), icon: 'cached' },
   { name: 'firewall', label: gettext('Firewall'), icon: 'security' },
-  { name: 'disk', label: gettext('Disk'), icon: 'storage' },
-  { name: 'vm', label: gettext('Virtual Machine'), icon: 'computer' },
-  { name: 'ct', label: gettext('CT Container'), icon: 'layers' },
   { name: 'task-history', label: gettext('Task History'), icon: 'history' },
 ];
 </script>
@@ -139,52 +141,24 @@ const modules = [
     <q-separator />
 
     <q-tab-panels v-model="activeTab" class="node-detail__content">
-      <q-tab-panel v-if="activeTab === 'overview'" name="overview" class="q-pa-none">
+      <q-tab-panel v-if="activeTab === 'summary'" name="summary" class="q-pa-none">
         <ResourceOverviewPanel mode="host" :node="node.node" hide-node-selector />
       </q-tab-panel>
       <q-tab-panel name="shell" class="q-pa-none"><NodeShellPanel :node="node.node" /></q-tab-panel>
-      <q-tab-panel name="system" class="q-pa-none"
-        ><NodeSystemPanel :node="node.node"
+      <q-tab-panel name="system" class="q-pa-none">
+        <NodeSystemPanel :node="node.node" />
+      </q-tab-panel>
+      <q-tab-panel name="disks" class="q-pa-none"><NodeDiskPanel :node="node.node" /></q-tab-panel>
+      <q-tab-panel name="ceph" class="q-pa-none"><NodeCephPanel :node="node.node" /></q-tab-panel>
+      <q-tab-panel name="replication" class="q-pa-none"
+        ><NodeReplicationPanel :node="node.node"
       /></q-tab-panel>
-      <q-tab-panel name="disk" class="q-pa-none"><NodeDiskPanel :node="node.node" /></q-tab-panel>
+      <q-tab-panel name="firewall" class="q-pa-none">
+        <NodeFirewallPanel :node="node.node" />
+      </q-tab-panel>
       <q-tab-panel name="task-history" class="q-pa-md"
         ><NodeTaskHistoryPanel :node="node.node"
       /></q-tab-panel>
-      <q-tab-panel name="firewall" class="q-pa-none">
-        <FirewallResourcePanel
-          :base-path="`/nodes/${encodeURIComponent(node.node)}/firewall`"
-          firewall-type="node"
-          allow-iface
-        />
-      </q-tab-panel>
-      <q-tab-panel
-        v-for="module in modules.filter(
-          (item) =>
-            !['overview', 'shell', 'system', 'firewall', 'disk', 'task-history'].includes(
-              item.name,
-            ),
-        )"
-        :key="module.name"
-        :name="module.name"
-        class="q-pa-md"
-      >
-        <div class="node-detail__module-title row items-center q-mb-md">
-          <q-icon :name="module.icon" color="primary" size="18px" class="q-mr-sm" />
-          <span>{{ module.label }}</span>
-        </div>
-        <div class="node-detail__placeholder row q-col-gutter-md">
-          <div class="col-12 col-md-4">
-            <q-skeleton type="text" width="42%" /><q-skeleton type="rect" height="74px" />
-          </div>
-          <div class="col-12 col-md-4">
-            <q-skeleton type="text" width="52%" /><q-skeleton type="rect" height="74px" />
-          </div>
-          <div class="col-12 col-md-4">
-            <q-skeleton type="text" width="38%" /><q-skeleton type="rect" height="74px" />
-          </div>
-        </div>
-        <q-skeleton class="q-mt-lg" type="rect" height="180px" />
-      </q-tab-panel>
     </q-tab-panels>
   </section>
 </template>
@@ -264,51 +238,5 @@ const modules = [
 .node-detail__content {
   min-height: calc(100vh - 248px);
   background: #fff;
-}
-.node-detail__module-splitter {
-  min-height: calc(100vh - 272px);
-}
-.node-detail__module-splitter :deep(.q-splitter__before) {
-  background: #f7f9fc;
-  border-right: 1px solid #e6ebf2;
-}
-.node-detail__side-tabs {
-  padding: 10px 8px;
-}
-.node-detail__side-tabs :deep(.q-tab) {
-  min-height: 36px;
-  justify-content: flex-start;
-  margin: 0 0 3px;
-  padding: 0 10px 0 9px;
-  border-left: 3px solid transparent;
-  border-radius: 0 5px 5px 0;
-  color: #5e6b7c;
-}
-.node-detail__side-tabs :deep(.q-tab--active) {
-  border-left-color: #1976d2;
-  font-weight: 600;
-}
-.node-detail__side-tabs :deep(.q-tab__label) {
-  margin-left: 7px;
-  font-size: 13px;
-}
-.node-detail__side-tabs :deep(.q-tab__icon) {
-  width: 14px;
-  height: 14px;
-  font-size: 14px;
-}
-.node-detail__side-tabs :deep(.q-tab__indicator) {
-  display: none;
-}
-.node-detail__side-tabs :deep(.q-tab:hover:not(.q-tab--active)) {
-  background: #edf1f6;
-  color: #334155;
-}
-.node-detail__module-title {
-  font-size: 14px;
-  color: #333;
-}
-.node-detail__placeholder :deep(.q-skeleton) {
-  border-radius: 0;
 }
 </style>
