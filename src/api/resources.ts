@@ -231,6 +231,46 @@ export function getNodeZfs(node: string) {
   });
 }
 
+export function initializeNodeDiskGpt(node: string, disk: string) {
+  return request<string>(`/api2/json/nodes/${node}/disks/initgpt`, {
+    method: 'POST', params: { disk }, notifyOnError: true,
+  });
+}
+
+export function wipeNodeDisk(node: string, disk: string) {
+  return request<string>(`/api2/json/nodes/${node}/disks/wipe`, {
+    method: 'POST', params: { disk }, notifyOnError: true,
+  });
+}
+
+export function createNodeLvm(node: string, params: PveRecord) {
+  return request<string>(`/api2/json/nodes/${node}/disks/lvm`, { method: 'POST', params, notifyOnError: true });
+}
+
+export function deleteNodeLvm(node: string, volumeGroup: string) {
+  return request<string>(`/api2/json/nodes/${node}/disks/lvm/${encodeURIComponent(volumeGroup)}`, { method: 'DELETE', notifyOnError: true });
+}
+
+export function createNodeLvmThin(node: string, params: PveRecord) {
+  return request<string>(`/api2/json/nodes/${node}/disks/lvmthin`, { method: 'POST', params, notifyOnError: true });
+}
+
+export function deleteNodeLvmThin(node: string, volumeGroup: string, thinpool: string) {
+  return request<string>(`/api2/json/nodes/${node}/disks/lvmthin/${encodeURIComponent(volumeGroup)}/${encodeURIComponent(thinpool)}`, { method: 'DELETE', notifyOnError: true });
+}
+
+export function createNodeDirectory(node: string, params: PveRecord) {
+  return request<string>(`/api2/json/nodes/${node}/disks/directory`, { method: 'POST', params, notifyOnError: true });
+}
+
+export function createNodeZfs(node: string, params: PveRecord) {
+  return request<string>(`/api2/json/nodes/${node}/disks/zfs`, { method: 'POST', params, notifyOnError: true });
+}
+
+export function deleteNodeZfs(node: string, name: string) {
+  return request<string>(`/api2/json/nodes/${node}/disks/zfs/${encodeURIComponent(name)}`, { method: 'DELETE', notifyOnError: true });
+}
+
 export function getClusterConfig() {
   return request<PveRecord>('/api2/extjs/cluster/config', { method: 'GET', notifyOnError: true });
 }

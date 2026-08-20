@@ -1,9 +1,16 @@
 <script setup lang="ts">
 import type { QTableColumn } from 'quasar';
-import { ref, shallowRef, watch } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
 import NodeSelectTable from '@/components/NodeSelectTable.vue';
 import type { PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
+
+export interface NodeDiskTableAction {
+  name: string;
+  label: string;
+  color?: string;
+  requiresSelection?: boolean;
+}
 
 const props = defineProps<{
   columns: QTableColumn<PveRecord>[];
@@ -12,12 +19,16 @@ const props = defineProps<{
   visibleColumns?: string[];
   embedded?: boolean;
   node?: string | undefined;
+  actions?: NodeDiskTableAction[];
 }>();
+const emit = defineEmits<{ action: [name: string, row?: PveRecord]; selection: [row?: PveRecord] }>();
 
 const loading = ref(false);
 const filter = ref('');
 const selectedNode = ref(props.node || '');
 const rows = shallowRef<PveRecord[]>([]);
+const selected = shallowRef<PveRecord[]>([]);
+const selectedRow = computed(() => selected.value[0]);
 
 async function reload() {
   if (!selectedNode.value) {
@@ -32,6 +43,17 @@ async function reload() {
     loading.value = false;
   }
 }
+
+function setSelection(value: PveRecord[]) {
+  selected.value = [...value];
+  emit('selection', selectedRow.value);
+}
+
+function rowClick(_: Event, row: PveRecord) {
+  setSelection(selected.value[0] === row ? [] : [row]);
+}
+
+defineExpose({ reload });
 
 watch(
   () => props.node,
@@ -67,11 +89,28 @@ watch(
         :rows-per-page-options="[10]"
         :pagination="{ page: 1, rowsPerPage: 10 }"
         :loading="loading"
+        selection="single"
+        :selected="selected"
         :no-data-label="gettext('no record can be found')"
+      >
+        @row-click="rowClick"
+        @update:selected="setSelection"
       >
         <template #top>
           <div class="row q-gutter-sm items-center">
             <NodeSelectTable v-if="!props.node" v-model="selectedNode" />
+            <q-btn
+              v-for="action in props.actions"
+              :key="action.name"
+              no-caps
+              outline
+              size="12px"
+              :color="action.color || 'primary'"
+              class="u-button"
+              :disable="action.requiresSelection && !selectedRow"
+              :label="action.label"
+              @click="emit('action', action.name, selectedRow)"
+            />
             <q-btn
               no-caps
               outline

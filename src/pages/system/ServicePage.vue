@@ -8,7 +8,7 @@
         hide-selected-banner
         row-key="name"
         table-header-class="u-table-header"
-        :rows="serviceRows"
+        :rows="visibleServiceRows"
         :columns="serviceColumns"
         :visible-columns="serviceVisibleColumns"
         :rows-per-page-options="[0]"
@@ -19,9 +19,15 @@
         <template #body-cell-state="props">
           <q-td :props="props">
             <q-badge
-              :color="props.row.state === 'running' ? 'green' : 'red'"
-              :label="serviceStatusText(props.row.state)"
+              :color="serviceStatusColor(props.row)"
+              :label="serviceStatusText(props.row)"
             />
+            <div
+              class="service-state-details"
+              :title="serviceStateDetails(props.row)"
+            >
+              {{ serviceStateDetails(props.row) }}
+            </div>
           </q-td>
         </template>
 
@@ -71,6 +77,11 @@
             @click="openLogs"
           />
           <q-space />
+          <q-checkbox
+            v-model="showInstalledOnly"
+            dense
+            :label="gettext('Show only installed services')"
+          />
           <NodeSelectTable
             v-model="selectedNode"
             disable-offline
@@ -242,7 +253,7 @@
 <script setup lang="ts">
 import { Dialog } from 'quasar';
 import type { QTableColumn } from 'quasar';
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue';
 import NodeSelectTable from '@/components/NodeSelectTable.vue';
 import {
   getNodeJournal,
@@ -267,6 +278,7 @@ const loading = shallowRef(false);
 const buttonRunning = shallowRef(false);
 const logsLoading = shallowRef(false);
 const firstLoad = shallowRef(true);
+const showInstalledOnly = shallowRef(true);
 const selectedNode = shallowRef('');
 const selectedServices = shallowRef<PveService[]>([]);
 const serviceRows = shallowRef<PveService[]>([]);
@@ -283,11 +295,14 @@ const logs = shallowRef<string[]>([]);
 let refreshHandler: ReturnType<typeof setInterval> | undefined;
 
 const selectedService = computed(() => selectedServices.value[0]);
-const canStart = computed(() =>
-  Boolean(selectedService.value && selectedService.value.state !== 'running')
+const visibleServiceRows = computed(() =>
+  showInstalledOnly.value
+    ? serviceRows.value.filter((service) => service['unit-state'] !== 'not-found')
+    : serviceRows.value
 );
-const canStop = computed(() => selectedService.value?.state === 'running');
-const canRestart = computed(() => selectedService.value?.state === 'running');
+const canStart = computed(() => canRunServiceAction(selectedService.value, 'start'));
+const canStop = computed(() => canRunServiceAction(selectedService.value, 'stop'));
+const canRestart = computed(() => canRunServiceAction(selectedService.value, 'restart'));
 const logOutput = computed(() => logs.value.join('\n'));
 
 function getCurrentDate(offsetDays = 0) {
@@ -300,16 +315,63 @@ function getCurrentDate(offsetDays = 0) {
   return `${year}-${month}-${day}`;
 }
 
-function serviceStatusText(status?: string) {
-  const normalized = status || 'unknown';
+function serviceSubState(service: PveService) {
+  return service['sub-state'] || service.state || 'unknown';
+}
+
+function serviceStatusText(service: PveService) {
+  const unitState = service['unit-state'];
+  if (unitState === 'masked') return gettext('Disabled');
+  if (unitState === 'not-found') return gettext('Not installed');
+
+  const normalized = serviceSubState(service);
   const statusMap: Record<string, string> = {
     running: gettext('Running'),
-    dead: gettext('Dead'),
+    dead: gettext('Stopped'),
     failed: gettext('Failed'),
+    enabled: gettext('Enabled'),
+    disabled: gettext('Disabled'),
+    static: gettext('Static'),
+    masked: gettext('Masked'),
+    'not-found': gettext('Not installed'),
     unknown: gettext('Unknown'),
   };
 
   return statusMap[normalized] || gettext(normalized);
+}
+
+function serviceStatusColor(service: PveService) {
+  const unitState = service['unit-state'];
+  const state = serviceSubState(service);
+  if (unitState === 'masked' || unitState === 'not-found' || state === 'failed') return 'negative';
+  if (state === 'running') return 'green';
+  if (state === 'dead') return 'grey';
+  return 'primary';
+}
+
+function serviceStateDetails(service: PveService) {
+  return [
+    `sub-state: ${serviceSubState(service)}`,
+    `active-state: ${service['active-state'] || 'unknown'}`,
+    `unit-state: ${service['unit-state'] || 'unknown'}`,
+  ].join(' · ');
+}
+
+function canRunServiceAction(
+  service: PveService | undefined,
+  action: 'start' | 'stop' | 'restart'
+) {
+  if (!service) return false;
+
+  const unitState = service['unit-state'];
+  if (unitState === 'masked' || unitState === 'unknown' || unitState === 'not-found') {
+    return false;
+  }
+
+  const subState = service['sub-state'] || service.state;
+  const isRunning = subState ? subState === 'running' : service['active-state'] === 'active';
+  if (action === 'start') return !isRunning;
+  return isRunning;
 }
 
 function rowClick(_: Event, row: PveService) {
@@ -332,7 +394,7 @@ async function loadServices(showLoading = false) {
     const response = await getNodeServices(selectedNode.value);
     serviceRows.value = sortByName(response.data || []);
     selectedServices.value = selectedService.value
-      ? serviceRows.value.filter((row) => row.name === selectedService.value?.name)
+      ? visibleServiceRows.value.filter((row) => row.name === selectedService.value?.name)
       : [];
   } finally {
     loading.value = false;
@@ -429,6 +491,15 @@ function openLogs() {
   void loadLogs();
 }
 
+watch(showInstalledOnly, () => {
+  if (!selectedService.value) return;
+  selectedServices.value = visibleServiceRows.value.some(
+    (row) => row.name === selectedService.value?.name
+  )
+    ? selectedServices.value
+    : [];
+});
+
 onMounted(() => {
   void loadInitialData();
   refreshHandler = setInterval(() => {
@@ -488,5 +559,12 @@ onBeforeUnmount(() => {
   white-space: pre-wrap;
   line-height: 18px;
   width: 760px;
+}
+
+.service-state-details {
+  margin-top: 2px;
+  color: #7a8494;
+  font-size: 11px;
+  line-height: 14px;
 }
 </style>

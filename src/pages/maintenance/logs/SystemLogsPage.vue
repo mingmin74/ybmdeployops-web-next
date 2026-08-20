@@ -5,8 +5,13 @@ import NodeSelectTable from '@/components/NodeSelectTable.vue';
 import { getSystemJournal } from '@/api/maintenance';
 import { gettext } from '@/locale';
 
+const { node: fixedNode = '', showNodeSelector = true } = defineProps<{
+  node?: string;
+  showNodeSelector?: boolean;
+}>();
+
 const loading = ref(false);
-const node = ref('');
+const selectedNode = ref('');
 const liveMode = ref(true);
 const since = ref('');
 const until = ref('');
@@ -19,6 +24,7 @@ const untilDatePopup = useTemplateRef<{ show: () => void }>('untilDatePopup');
 let timer: ReturnType<typeof setInterval> | undefined;
 
 const output = computed(() => lines.value.join('\n'));
+const currentNode = computed(() => fixedNode || selectedNode.value);
 const modeOptions = computed(() => [
   { label: gettext('Live Mode'), value: true },
   { label: gettext('Select Timespan'), value: false },
@@ -58,10 +64,12 @@ function buildParams(isPolling: boolean) {
 
 async function loadLogs(isPolling = false) {
   const params = buildParams(isPolling);
-  if (!node.value || !params) return;
+  const nodeName = currentNode.value;
+  if (!nodeName || !params) return;
   if (!isPolling) loading.value = true;
   try {
-    const response = await getSystemJournal(node.value, params);
+    const response = await getSystemJournal(nodeName, params);
+    if (nodeName !== currentNode.value) return;
     const data = Array.isArray(response.data) ? [...response.data] : [];
     const nextEnd = data.shift();
     const nextStart = data.pop();
@@ -118,9 +126,9 @@ watch(liveMode, (enabled) => {
   }
 });
 
-watch(node, () => {
+watch(currentNode, () => {
   resetAndLoad();
-});
+}, { immediate: true });
 
 initDates();
 
@@ -195,7 +203,7 @@ onBeforeUnmount(() => {
           @click="resetAndLoad"
         />
         <q-space />
-        <NodeSelectTable v-model="node" />
+        <NodeSelectTable v-if="showNodeSelector" v-model="selectedNode" />
       </div>
     </div>
     <div ref="logRef" class="system-log-box">

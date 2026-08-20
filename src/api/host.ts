@@ -12,6 +12,7 @@ export type PveService = {
   desc?: string;
   'unit-state'?: string;
   'active-state'?: string;
+  'sub-state'?: string;
 };
 
 export type JournalRecord = {
@@ -29,7 +30,17 @@ export type PveNodeTask = {
 };
 
 export type PveNodeDns = { search?: string; dns1?: string; dns2?: string; dns3?: string };
+export type PveNodeHosts = { data?: string; digest?: string };
 export type PveNodeTime = { timezone?: string; time?: number };
+export type PveNodeNetwork = Record<string, unknown> & {
+  iface?: string;
+  type?: string;
+  active?: boolean | number;
+};
+export type PveNodeNetworkResponse = {
+  data?: PveNodeNetwork[];
+  changes?: string;
+};
 export type PveNodePackageVersion = {
   Package?: string;
   OldVersion?: string;
@@ -137,10 +148,40 @@ export function getNodeTasks(node: string, params: Record<string, unknown>) {
 }
 
 export function getNodeNetwork(node: string, params?: Record<string, unknown>) {
-  return request<Record<string, unknown>[]>(
-    `/api2/extjs/nodes/${encodeURIComponent(node)}/network`,
-    { method: 'GET', notifyOnError: true, ...(params ? { params } : {}) },
+  return request<PveNodeNetwork[]>(`/api2/extjs/nodes/${encodeURIComponent(node)}/network`, {
+    method: 'GET',
+    notifyOnError: true,
+    ...(params ? { params } : {}),
+  }) as Promise<PveNodeNetworkResponse>;
+}
+
+export function createNodeNetwork(node: string, data: Record<string, unknown>) {
+  return request<string>(`/api2/extjs/nodes/${encodeURIComponent(node)}/network`, {
+    method: 'POST',
+    data,
+  });
+}
+
+export function updateNodeNetwork(node: string, iface: string, data: Record<string, unknown>) {
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/network/${encodeURIComponent(iface)}`,
+    { method: 'PUT', data }
   );
+}
+
+export function deleteNodeNetwork(node: string, iface: string) {
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/network/${encodeURIComponent(iface)}`,
+    { method: 'DELETE' }
+  );
+}
+
+/** Applies pending /etc/network/interfaces changes through PVE's network reload task. */
+export function applyNodeNetwork(node: string) {
+  return request<string>(`/api2/extjs/nodes/${encodeURIComponent(node)}/network`, {
+    method: 'PUT',
+    data: {},
+  });
 }
 
 export function getNodeUsbDevices(node: string) {
@@ -171,16 +212,38 @@ export function getNodeDns(node: string) {
   });
 }
 
+export function updateNodeDns(node: string, data: Record<string, unknown>) {
+  return request<null>(`/api2/extjs/nodes/${encodeURIComponent(node)}/dns`, {
+    method: 'PUT',
+    data,
+  });
+}
+
 export function getNodeHosts(node: string) {
-  return request<{ data?: string }>(`/api2/json/nodes/${encodeURIComponent(node)}/hosts`, {
+  return request<PveNodeHosts>(`/api2/json/nodes/${encodeURIComponent(node)}/hosts`, {
     method: 'GET',
     notifyOnError: true,
+  });
+}
+
+export function updateNodeHosts(node: string, data: string, digest?: string) {
+  return request<null>(`/api2/extjs/nodes/${encodeURIComponent(node)}/hosts`, {
+    method: 'POST',
+    data: { data, ...(digest ? { digest } : {}) },
   });
 }
 
 export function getNodeTime(node: string) {
   return request<PveNodeTime>(`/api2/json/nodes/${encodeURIComponent(node)}/time`, {
     method: 'GET',
+    notifyOnError: true,
+  });
+}
+
+export function updateNodeTime(node: string, data: Pick<PveNodeTime, 'timezone'>) {
+  return request<null>(`/api2/json/nodes/${encodeURIComponent(node)}/time`, {
+    method: 'PUT',
+    data,
     notifyOnError: true,
   });
 }

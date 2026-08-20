@@ -12,6 +12,6 @@
     "/quasar.config.js.temporary.*": true
   },
   "[vue]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "octref.vetur"
   }
 }
