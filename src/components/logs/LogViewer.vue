@@ -19,10 +19,12 @@ const {
   source,
   node: fixedNode = '',
   showNodeSelector = true,
+  service = '',
 } = defineProps<{
   source: LogSource;
   node?: string;
   showNodeSelector?: boolean;
+  service?: string;
 }>();
 
 const loading = ref(false);
@@ -105,13 +107,14 @@ function normalizeCephRows(value: unknown) {
 async function loadLogs(isPolling = false) {
   const params = buildParams(isPolling);
   const nodeName = currentNode.value;
+  const serviceName = service;
   if (!nodeName || !params || requestRunning.value) return;
   if (!isPolling) loading.value = true;
   requestRunning.value = true;
   let reloadLatest = false;
   try {
-    const response = await getLogs({ node: nodeName, source, params });
-    if (nodeName !== currentNode.value) return;
+    const response = await getLogs({ node: nodeName, source, params, service });
+    if (nodeName !== currentNode.value || serviceName !== service) return;
 
     if (!isSystemLog.value) {
       lines.value = normalizeCephRows(response.data);
@@ -199,7 +202,7 @@ watch(liveMode, (enabled) => {
 });
 
 watch(
-  currentNode,
+  [currentNode, () => service],
   () => {
     resetAndLoad();
   },
@@ -356,7 +359,8 @@ onBeforeUnmount(() => {
 .log-box--system {
   height: 700px;
 }
-.log-box--ceph {
+.log-box--ceph,
+.log-box--service {
   height: 520px;
   font-family: Consolas, 'Courier New', monospace;
   overflow-wrap: anywhere;

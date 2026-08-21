@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { QTableColumn } from 'quasar';
-import { computed, onMounted, ref, shallowRef } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
 import type { PveRecord } from '@/api/resources';
 import { getClusterNodes } from '@/api/resources';
 import {
@@ -10,11 +10,11 @@ import {
   getCephManagers,
   getCephMonitors,
   getCephServiceSafety,
-  getCephServiceSyslog,
   restartCephServices,
 } from '@/api/ceph';
 import { gettext } from '@/locale';
 import UWindow from '@/components/UWindow.vue';
+import CephServiceSyslogDialog from './CephServiceSyslogDialog.vue';
 import { textValue } from '@/utils/pveFormat';
 
 type ServiceType = 'mon' | 'mgr';
@@ -32,8 +32,9 @@ const createType = ref<ServiceType>('mon');
 const createNode = ref('localhost');
 const confirmAction = ref<ConfirmAction | null>(null);
 const syslogVisible = ref(false);
-const syslogTitle = ref('');
-const syslogText = ref('');
+const syslogNode = ref('');
+const syslogService = ref('');
+const { node = 'localhost' } = defineProps<{ node?: string }>();
 
 const nodeOptions = computed(() =>
   nodes.value.map((node) => textValue(node.node || node.name)).filter(Boolean),
@@ -111,8 +112,8 @@ async function refreshData() {
   loading.value = true;
   try {
     const [monResponse, mgrResponse, nodesResponse] = await Promise.allSettled([
-      getCephMonitors(),
-      getCephManagers(),
+      getCephMonitors(node),
+      getCephManagers(node),
       getClusterNodes(),
     ]);
     if (monResponse.status === 'fulfilled') mons.value = normalizeRows(monResponse.value.data);
@@ -189,7 +190,7 @@ function requestBulkRestart(type: ServiceType) {
 
 function openCreate(type: ServiceType) {
   createType.value = type;
-  createNode.value = nodeOptions.value[0] || 'localhost';
+  createNode.value = node;
   createVisible.value = true;
 }
 async function createService() {
@@ -197,20 +198,12 @@ async function createService() {
   await runAfterAction(() => createCephService(createNode.value, createType.value));
   createVisible.value = false;
 }
-async function openSyslog(type: ServiceType) {
+function openSyslog(type: ServiceType) {
   const row = selectedRow(type);
   if (!row) return;
-  actionLoading.value = true;
-  try {
-    const response = await getCephServiceSyslog(serviceHost(row), type, serviceName(row));
-    syslogTitle.value = `${gettext('Syslog')}: ceph-${type}@${serviceName(row)}`;
-    syslogText.value = Array.isArray(response.data)
-      ? response.data.join('\n')
-      : String(response.data || '');
-    syslogVisible.value = true;
-  } finally {
-    actionLoading.value = false;
-  }
+  syslogNode.value = serviceHost(row);
+  syslogService.value = `ceph-${type}@${serviceName(row)}`;
+  syslogVisible.value = true;
 }
 async function executeConfirmed() {
   const action = confirmAction.value;
@@ -218,9 +211,11 @@ async function executeConfirmed() {
   if (action) await action.execute();
 }
 
-onMounted(() => {
-  void refreshData();
-});
+watch(
+  () => node,
+  () => void refreshData(),
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -477,27 +472,13 @@ onMounted(() => {
             :label="gettext('Confirm')"
             @click="executeConfirmed" /></template></UWindow
     ></q-dialog>
-    <q-dialog v-model="syslogVisible" maximized
-      ><q-card
-        ><q-card-section class="row items-center"
-          ><div class="text-subtitle1">{{ syslogTitle }}</div>
-          <q-space /><q-btn flat round dense icon="close" v-close-popup /></q-card-section
-        ><q-separator /><q-card-section>
-          <pre class="syslog-output">{{ syslogText || '-' }}</pre>
-        </q-card-section></q-card
-      ></q-dialog
-    >
+    <CephServiceSyslogDialog
+      v-model:visible="syslogVisible"
+      :node="syslogNode"
+      :service="syslogService"
+    />
   </div>
 </template>
 
 <style scoped>
-.service-dialog {
-  min-width: 360px;
-}
-.syslog-output {
-  margin: 0;
-  max-height: calc(100vh - 130px);
-  overflow: auto;
-  white-space: pre-wrap;
-}
 </style>

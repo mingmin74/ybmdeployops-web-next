@@ -34,7 +34,7 @@ const { node = 'localhost' } = defineProps<{ node?: string }>();
     <q-separator />
     <q-tab-panels v-model="tab" animated>
       <q-tab-panel name="summary" class="q-pa-none"><CephSummaryPage /></q-tab-panel>
-      <q-tab-panel name="monitor"><CephMonitorPage /></q-tab-panel>
+      <q-tab-panel name="monitor"><CephMonitorPage :node="node" /></q-tab-panel>
       <q-tab-panel name="osd"><CephOsdPage /></q-tab-panel>
       <q-tab-panel name="cephfs"><CephFilesystemPage /></q-tab-panel>
       <q-tab-panel name="pools"><CephStoragePoolsPage /></q-tab-panel>
