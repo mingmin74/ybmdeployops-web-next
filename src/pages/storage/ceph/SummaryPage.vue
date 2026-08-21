@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, shallowRef } from 'vue';
+import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue';
 import LineMetricChart from '@/components/LineMetricChart.vue';
 import LegacyRingChart from '@/pages/dashboard/components/LegacyRingChart.vue';
 import type { PveRecord } from '@/api/resources';
@@ -30,14 +30,15 @@ type PerformancePoint = {
 const status = shallowRef<PveRecord>({});
 const metadata = shallowRef<PveRecord>({});
 const performanceHistory = shallowRef<PerformancePoint[]>([]);
+const { node = 'localhost' } = defineProps<{ node?: string }>();
 let statusTimer: ReturnType<typeof setInterval> | undefined;
 let metadataTimer: ReturnType<typeof setInterval> | undefined;
 
 const health = computed(() =>
   textValue(
     (status.value.health as PveRecord | undefined)?.status || status.value.health,
-    'UNKNOWN',
-  ),
+    'UNKNOWN'
+  )
 );
 const healthColor = computed(() => statusColor(health.value));
 const pgmap = computed(() => (status.value.pgmap || {}) as PveRecord);
@@ -45,16 +46,16 @@ const osdmap = computed(
   () =>
     ((status.value.osdmap as PveRecord | undefined)?.osdmap ||
       status.value.osdmap ||
-      {}) as PveRecord,
+      {}) as PveRecord
 );
 const usage = computed(() =>
-  usedPercent(Number(pgmap.value.bytes_used), Number(pgmap.value.bytes_total)),
+  usedPercent(Number(pgmap.value.bytes_used), Number(pgmap.value.bytes_total))
 );
 const cephVersion = computed(() => {
   const nodes = (metadata.value.node || {}) as PveRecord;
   return Object.values(nodes).reduce((latest, node) => {
     const version = textValue(
-      (node as PveRecord)?.version && ((node as PveRecord).version as PveRecord).str,
+      (node as PveRecord)?.version && ((node as PveRecord).version as PveRecord).str
     );
     return version > (latest as string) ? version : latest;
   }, '');
@@ -104,7 +105,7 @@ const pgSummary = computed(() =>
         .reduce((sum, item) => sum + item.count, 0),
       color: pgCategory(label.toLowerCase()).color,
     }))
-    .filter((item) => item.count > 0),
+    .filter((item) => item.count > 0)
 );
 type RingData = {
   cls: 'faded' | 'good' | 'warning' | 'critical';
@@ -123,7 +124,7 @@ const pgChartData = computed<RingData[]>(() =>
           : item.color === 'negative'
             ? 'critical'
             : 'faded',
-  })),
+  }))
 );
 const chartXAxis = computed(() => performanceHistory.value.map((item) => item.time));
 const bandwidthSeries = computed(() => [
@@ -161,12 +162,36 @@ const osdStatus = computed(() => {
   const down = total - up;
   const downInCount = Number(downIn);
   const upIn = Math.max(0, inside - downInCount);
+  const osdMetadata = Array.isArray(metadata.value.osd) ? metadata.value.osd : [];
+  const installedVersions = Object.fromEntries(
+    Object.entries((metadata.value.node || {}) as PveRecord).map(([host, value]) => [
+      host,
+      textValue(((value as PveRecord).version as PveRecord | undefined)?.str),
+    ])
+  );
+  const oldOSDs: { id: string; version: string }[] = [];
+  const ghostOSDs: { id: string }[] = [];
+  osdMetadata.forEach((entry) => {
+    const osd = entry as PveRecord;
+    const id = textValue(osd.id ?? osd.osd);
+    const version = textValue(osd.ceph_version_short || osd.version);
+    const host = textValue(osd.hostname || osd.host);
+    if (!id) return;
+    if (!version) {
+      if (Object.keys(osd).length > 1) ghostOSDs.push({ id });
+      return;
+    }
+    if (installedVersions[host] && version !== installedVersions[host])
+      oldOSDs.push({ id, version });
+  });
   return {
     total,
     upIn,
     upOut: Math.max(0, up - upIn),
     downIn: downInCount,
     downOut: Math.max(0, down - downInCount),
+    oldOSDs,
+    ghostOSDs,
   };
 });
 const services = computed<ServiceRow[]>(() =>
@@ -194,16 +219,17 @@ const services = computed<ServiceRow[]>(() =>
           type === 'mgr' &&
           Array.isArray((status.value.mgrmap as PveRecord | undefined)?.standbys) &&
           ((status.value.mgrmap as PveRecord).standbys as PveRecord[]).some(
-            (mgr) => textValue(mgr.name) === name,
+            (mgr) => textValue(mgr.name) === name
           );
         const address = textValue(service.addr || service.addrs, gettext('Unknown'));
-        const metadataNode = ((metadata.value.node as PveRecord | undefined)?.[host] || {}) as PveRecord;
+        const metadataNode = ((metadata.value.node as PveRecord | undefined)?.[host] ||
+          {}) as PveRecord;
         const version = cephVersionText(
           service.version ||
             service.ceph_version ||
             metadataNode.version ||
             (metadata.value.version as PveRecord | undefined)?.[host],
-          '-',
+          '-'
         );
         const health = serviceHealth(type, name, service, version, address, active, standby);
         return {
@@ -218,7 +244,7 @@ const services = computed<ServiceRow[]>(() =>
         };
       });
     })
-    .sort((a, b) => a.type.localeCompare(b.type) || a.host.localeCompare(b.host)),
+    .sort((a, b) => a.type.localeCompare(b.type) || a.host.localeCompare(b.host))
 );
 const serviceGroups = computed(() =>
   [
@@ -228,12 +254,12 @@ const serviceGroups = computed(() =>
   ].map((group) => ({
     ...group,
     items: services.value.filter((service) => service.type === group.type),
-  })),
+  }))
 );
 const recovery = computed(() => {
   const total =
     Number(
-      pgmap.value.misplaced_total || pgmap.value.unfound_total || pgmap.value.degraded_total,
+      pgmap.value.misplaced_total || pgmap.value.unfound_total || pgmap.value.degraded_total
     ) || 0;
   const unhealthy =
     Number(pgmap.value.degraded_objects || 0) +
@@ -245,6 +271,10 @@ const recovery = computed(() => {
         recovered: Math.max(0, total - unhealthy),
         percent: Math.max(0, Math.min(100, ((total - unhealthy) / total) * 100)),
         speed: Number(pgmap.value.recovering_bytes_per_sec) || 0,
+        remainingSeconds:
+          Number(pgmap.value.recovering_bytes_per_sec) > 0
+            ? unhealthy / (Number(pgmap.value.recovering_bytes_per_sec) / (4 * 1024 * 1024))
+            : 0,
       }
     : null;
 });
@@ -259,6 +289,23 @@ function statusColor(value: string) {
   return 'grey-7';
 }
 
+function formatDuration(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '-';
+  const value = Math.round(seconds);
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  const remaining = value % 60;
+  return [hours && `${hours}h`, minutes && `${minutes}m`, `${remaining}s`]
+    .filter(Boolean)
+    .join(' ');
+}
+
+async function copyWarning(warning: WarningRow) {
+  await navigator.clipboard.writeText(
+    `${warning.severity}: ${warning.summary}${warning.detail ? `\n${warning.detail}` : ''}`
+  );
+}
+
 function serviceIcon(color: string) {
   if (color === 'positive') return 'check_circle';
   if (color === 'warning') return 'warning';
@@ -269,7 +316,10 @@ function serviceIcon(color: string) {
 function cephVersionText(value: unknown, fallback: string) {
   if (!value || typeof value !== 'object') return textValue(value, fallback);
   const version = value as PveRecord;
-  return textValue(version.str || version.version || version.ceph_version || version.ceph_version_short, fallback);
+  return textValue(
+    version.str || version.version || version.ceph_version || version.ceph_version_short,
+    fallback
+  );
 }
 
 function serviceHealth(
@@ -279,10 +329,13 @@ function serviceHealth(
   version: string,
   address: string,
   active: boolean,
-  standby: boolean,
+  standby: boolean
 ) {
   const unknownAddress = gettext('Unknown');
-  if ((textValue(service.service) && version === '-') || (version === '-' && address === unknownAddress)) {
+  if (
+    (textValue(service.service) && version === '-') ||
+    (version === '-' && address === unknownAddress)
+  ) {
     return { status: gettext('Unknown'), color: 'grey-7' };
   }
 
@@ -295,7 +348,9 @@ function serviceHealth(
       const details = (value as PveRecord).detail;
       if (
         Array.isArray(details) &&
-        details.some((detail) => new RegExp(`mon\\.${name}(?:\\b|$)`).test(textValue((detail as PveRecord).message)))
+        details.some((detail) =>
+          new RegExp(`mon\\.${name}(?:\\b|$)`).test(textValue((detail as PveRecord).message))
+        )
       ) {
         const warningColor = statusColor(textValue((value as PveRecord).severity));
         if (warningColor === 'negative' || (warningColor === 'warning' && color === 'positive')) {
@@ -329,7 +384,7 @@ function pgCategory(state: string) {
         'recovery_unfound',
         'snaptrim_error',
         'stale',
-      ].includes(item),
+      ].includes(item)
     )
   )
     return { label: 'Critical', color: 'negative' };
@@ -354,7 +409,7 @@ function pgCategory(state: string) {
         'scrubbing',
         'snaptrim',
         'snaptrim_wait',
-      ].includes(item),
+      ].includes(item)
     )
   )
     return { label: 'Busy', color: 'info' };
@@ -364,7 +419,7 @@ function pgCategory(state: string) {
 }
 
 async function refreshStatus() {
-  const response = await getCephStatus();
+  const response = await getCephStatus(node);
   status.value = response.data || {};
   const latestPgmap = (status.value.pgmap || {}) as PveRecord;
   const now = new Date();
@@ -381,7 +436,7 @@ async function refreshStatus() {
   ].slice(-30);
 }
 async function refreshMetadata() {
-  const response = await getCephMetadata();
+  const response = await getCephMetadata(node);
   metadata.value = response.data || {};
 }
 async function refreshData() {
@@ -393,6 +448,13 @@ onMounted(() => {
   statusTimer = setInterval(() => void refreshStatus(), 5000);
   metadataTimer = setInterval(() => void refreshMetadata(), 15000);
 });
+watch(
+  () => node,
+  () => {
+    performanceHistory.value = [];
+    void refreshData();
+  }
+);
 onUnmounted(() => {
   if (statusTimer) clearInterval(statusTimer);
   if (metadataTimer) clearInterval(metadataTimer);
@@ -403,19 +465,31 @@ onUnmounted(() => {
   <div class="ceph-summary column q-gutter-md">
     <div class="row q-col-gutter-sm">
       <div class="col-12 col-lg-6">
-        <q-card class="summary-panel no-shadow no-border-radius full-height"
-          ><q-card-section class="panel-section"
-            ><div class="panel-header">{{ gettext('Health') }}</div>
+        <q-card class="summary-panel no-shadow no-border-radius full-height">
+          <q-card-section class="panel-section">
+            <div class="panel-header">{{ gettext('Health') }}</div>
             <div class="panel-content row q-col-gutter-lg items-center">
               <div class="col-12 col-sm-4 text-center">
-                <q-icon name="health_and_safety" :color="healthColor" size="54px" />
-                <div class="text-h6 q-mt-sm" :class="`text-${healthColor}`">{{ health }}</div>
+                <q-icon
+                  name="health_and_safety"
+                  :color="healthColor"
+                  size="54px"
+                />
+                <div
+                  class="text-h6 q-mt-sm"
+                  :class="`text-${healthColor}`"
+                >
+                  {{ health }}
+                </div>
                 <div class="text-caption text-grey-7 q-mt-sm">
                   {{ gettext('Ceph Version') }}: {{ cephVersion || '-' }}
                 </div>
               </div>
               <div class="col-12 col-sm-8">
-                <div v-if="warnings.length" class="column q-gutter-sm">
+                <div
+                  v-if="warnings.length"
+                  class="column q-gutter-sm"
+                >
                   <q-expansion-item
                     v-for="warning in warnings"
                     :key="warning.id"
@@ -423,37 +497,56 @@ onUnmounted(() => {
                     dense-toggle
                     expand-separator
                     header-class="warning-row"
-                    ><template #header
-                      ><q-item-section avatar
-                        ><q-icon
+                  >
+                    <template #header>
+                      <q-item-section avatar>
+                        <q-icon
                           name="error"
-                          :color="statusColor(warning.severity)" /></q-item-section
-                      ><q-item-section
-                        ><div>{{ warning.summary }}</div>
+                          :color="statusColor(warning.severity)"
+                        />
+                      </q-item-section>
+                      <q-item-section>
+                        <div>{{ warning.summary }}</div>
                         <div class="text-caption text-grey-7">
                           {{ warning.severity }}
-                        </div></q-item-section
-                      ></template
-                    >
+                        </div>
+                      </q-item-section>
+                      <q-item-section side>
+                        <q-btn
+                          flat
+                          round
+                          dense
+                          icon="content_copy"
+                          :aria-label="gettext('Copy to Clipboard')"
+                          @click.stop="copyWarning(warning)"
+                        />
+                      </q-item-section>
+                    </template>
                     <div class="warning-detail">
                       {{ warning.detail || gettext('no additional data') }}
-                    </div></q-expansion-item
-                  >
+                    </div>
+                  </q-expansion-item>
                 </div>
-                <div v-else class="text-positive text-center q-pa-md">
-                  <q-icon name="check_circle" size="22px" class="q-mr-sm" />{{
-                    gettext('No Warnings/Errors')
-                  }}
+                <div
+                  v-else
+                  class="text-positive text-center q-pa-md"
+                >
+                  <q-icon
+                    name="check_circle"
+                    size="22px"
+                    class="q-mr-sm"
+                  />
+                  {{ gettext('No Warnings/Errors') }}
                 </div>
               </div>
-            </div></q-card-section
-          ></q-card
-        >
+            </div>
+          </q-card-section>
+        </q-card>
       </div>
       <div class="col-12 col-lg-6">
-        <q-card class="summary-panel no-shadow no-border-radius full-height"
-          ><q-card-section class="panel-section"
-            ><div class="panel-header">{{ gettext('Status') }}</div>
+        <q-card class="summary-panel no-shadow no-border-radius full-height">
+          <q-card-section class="panel-section">
+            <div class="panel-header">{{ gettext('Status') }}</div>
             <div class="panel-content row q-col-gutter-lg">
               <div class="col-12 col-sm-5">
                 <div class="text-subtitle2 text-center q-mb-sm">{{ gettext('OSDs') }}</div>
@@ -479,6 +572,38 @@ onUnmounted(() => {
                   </tbody>
                 </table>
                 <div class="text-center q-mt-sm">{{ gettext('Total') }}: {{ osdStatus.total }}</div>
+                <div
+                  v-if="osdStatus.oldOSDs.length"
+                  class="osd-warning q-mt-sm"
+                >
+                  <q-icon
+                    name="refresh"
+                    color="warning"
+                  />
+                  {{ gettext('Outdated OSDs') }}
+                  <div
+                    v-for="osd in osdStatus.oldOSDs"
+                    :key="`old-${osd.id}`"
+                  >
+                    osd.{{ osd.id }}: {{ osd.version }}
+                  </div>
+                </div>
+                <div
+                  v-if="osdStatus.ghostOSDs.length"
+                  class="osd-warning q-mt-sm"
+                >
+                  <q-icon
+                    name="help"
+                    color="warning"
+                  />
+                  {{ gettext('Ghost OSDs') }}
+                  <div
+                    v-for="osd in osdStatus.ghostOSDs"
+                    :key="`ghost-${osd.id}`"
+                  >
+                    osd.{{ osd.id }}
+                  </div>
+                </div>
               </div>
               <div class="col-12 col-sm-7">
                 <div class="text-subtitle2 text-center q-mb-sm">{{ gettext('PGs') }}</div>
@@ -490,53 +615,88 @@ onUnmounted(() => {
                       :chart-option="{ radius: ['46%', '74%'] }"
                     />
                     <div class="pg-chart-center">
-                      <strong>{{ pgmap.num_pgs || 0 }}</strong
-                      ><span>{{ gettext('PGs') }}</span>
+                      <strong>{{ pgmap.num_pgs || 0 }}</strong>
+                      <span>{{ gettext('PGs') }}</span>
                     </div>
                   </div>
-                  <div v-if="pgStates.length" class="pg-state-list">
-                    <div v-for="state in pgStates" :key="state.state_name" class="row items-center">
-                      <q-icon name="circle" :color="state.color" size="10px" class="q-mr-sm" /><span
-                        class="col"
-                        >{{ state.state_name }}</span
-                      ><span>{{ state.count }}</span>
+                  <div
+                    v-if="pgStates.length"
+                    class="pg-state-list"
+                  >
+                    <div
+                      v-for="state in pgStates"
+                      :key="state.state_name"
+                      class="row items-center"
+                    >
+                      <q-icon
+                        name="circle"
+                        :color="state.color"
+                        size="10px"
+                        class="q-mr-sm"
+                      />
+                      <span class="col">{{ state.state_name }}</span>
+                      <span>{{ state.count }}</span>
                     </div>
                   </div>
-                  <div v-else class="text-grey-7">-</div>
+                  <div
+                    v-else
+                    class="text-grey-7"
+                  >
+                    -
+                  </div>
                 </div>
               </div>
-            </div></q-card-section
-          ></q-card
-        >
+            </div>
+          </q-card-section>
+        </q-card>
       </div>
     </div>
-    <q-card class="summary-panel no-shadow no-border-radius"
-      ><q-card-section class="panel-section"
-        ><div class="panel-header">{{ gettext('Services') }}</div>
+    <q-card class="summary-panel no-shadow no-border-radius">
+      <q-card-section class="panel-section">
+        <div class="panel-header">{{ gettext('Services') }}</div>
         <div class="service-grid">
-          <section v-for="group in serviceGroups" :key="group.type" class="service-group">
+          <section
+            v-for="group in serviceGroups"
+            :key="group.type"
+            class="service-group"
+          >
             <div class="service-group-title">{{ group.title }}</div>
-            <div v-if="group.items.length" class="service-list">
-              <div v-for="service in group.items" :key="service.id" class="service-widget">
-                <q-icon :name="serviceIcon(service.color)" :color="service.color" size="18px" /><span
-                  >{{ service.name }}</span
-                ><q-tooltip
-                  class="service-tooltip"
-                  ><div>{{ gettext('Host') }}: {{ service.host }}</div>
+            <div
+              v-if="group.items.length"
+              class="service-list"
+            >
+              <div
+                v-for="service in group.items"
+                :key="service.id"
+                class="service-widget"
+              >
+                <q-icon
+                  :name="serviceIcon(service.color)"
+                  :color="service.color"
+                  size="18px"
+                />
+                <span>{{ service.name }}</span>
+                <q-tooltip class="service-tooltip">
+                  <div>{{ gettext('Host') }}: {{ service.host }}</div>
                   <div>{{ gettext('Address') }}: {{ service.address }}</div>
                   <div>{{ gettext('Version') }}: {{ service.version }}</div>
-                  <div>{{ gettext('Status') }}: {{ service.status }}</div></q-tooltip
-                >
+                  <div>{{ gettext('Status') }}: {{ service.status }}</div>
+                </q-tooltip>
               </div>
             </div>
-            <div v-else class="service-empty">-</div>
+            <div
+              v-else
+              class="service-empty"
+            >
+              -
+            </div>
           </section>
-        </div></q-card-section
-      ></q-card
-    >
-    <q-card class="summary-panel no-shadow no-border-radius"
-      ><q-card-section class="panel-section"
-        ><div class="panel-header">{{ gettext('Performance') }}</div>
+        </div>
+      </q-card-section>
+    </q-card>
+    <q-card class="summary-panel no-shadow no-border-radius">
+      <q-card-section class="panel-section">
+        <div class="panel-header">{{ gettext('Performance') }}</div>
         <div class="performance-layout">
           <div class="usage-ring-panel">
             <div class="metric-label">{{ gettext('Usage') }}</div>
@@ -548,16 +708,32 @@ onUnmounted(() => {
               :value="usage"
               color="primary"
               track-color="blue-grey-1"
-              >{{ usage.toFixed(0) }}%</q-circular-progress
             >
+              {{ usage.toFixed(0) }}%
+            </q-circular-progress>
             <div class="usage-ring-value">
               {{ formatBytes(pgmap.bytes_used as number) }} {{ gettext('of') }}
               {{ formatBytes(pgmap.bytes_total as number) }}
             </div>
-            <div v-if="recovery" class="recovery-summary">
-              <span>{{ gettext('Recovery') }} / {{ gettext('Rebalance') }}</span
-              ><strong>{{ recovery.recovered }} / {{ recovery.total }}</strong
-              ><q-linear-progress rounded size="8px" :value="recovery.percent / 100" color="info" />
+            <div
+              v-if="recovery"
+              class="recovery-summary"
+            >
+              <span>{{ gettext('Recovery') }} / {{ gettext('Rebalance') }}</span>
+              <strong>{{ recovery.recovered }} / {{ recovery.total }}</strong>
+              <span
+                v-if="recovery.speed"
+                class="text-caption"
+              >
+                {{ formatBytes(recovery.speed) }}/s -
+                {{ formatDuration(recovery.remainingSeconds) }} {{ gettext('left') }}
+              </span>
+              <q-linear-progress
+                rounded
+                size="8px"
+                :value="recovery.percent / 100"
+                color="info"
+              />
             </div>
           </div>
           <div class="performance-charts">
@@ -584,8 +760,10 @@ onUnmounted(() => {
                 :height="210"
               />
             </div>
-          </div></div></q-card-section
-    ></q-card>
+          </div>
+        </div>
+      </q-card-section>
+    </q-card>
   </div>
 </template>
 

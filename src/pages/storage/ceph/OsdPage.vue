@@ -1,19 +1,23 @@
 <script setup lang="ts">
 import type { QTableColumn } from 'quasar';
-import { computed, onMounted, ref, shallowRef } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
 import type { PveRecord } from '@/api/resources';
-import { getClusterNodes } from '@/api/resources';
+import { getClusterNodes, getNodeDisks } from '@/api/resources';
 import {
   changeCephOsdService,
   createCephOsd,
   destroyCephOsd,
+  getCephCrush,
   getCephOsdFlags,
   getCephOsds,
-  restartCephOsds,
+  getCephStatus,
   runCephOsdCommand,
   setCephOsdFlags,
 } from '@/api/ceph';
 import { gettext } from '@/locale';
+import CephOsdDetailsDialog from './CephOsdDetailsDialog.vue';
+import CephBulkRestartOsdsDialog from './CephBulkRestartOsdsDialog.vue';
+import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 import { formatBytes, textValue } from '@/utils/pveFormat';
 
 const loading = ref(false);
@@ -25,32 +29,46 @@ const selected = ref<PveRecord[]>([]);
 const createVisible = ref(false);
 const flagsVisible = ref(false);
 const detailVisible = ref(false);
+const destroyVisible = ref(false);
+const cleanupDisks = ref(true);
+const destroyWarnings = ref<string[]>([]);
 const confirmVisible = ref(false);
 const confirmMessage = ref('');
 const pendingAction = ref<(() => Promise<void>) | null>(null);
 const createForm = ref({
-  node: 'localhost',
+  node: '',
   dev: '',
   db_dev: '',
+  db_dev_size: '',
   wal_dev: '',
+  wal_dev_size: '',
   encrypted: false,
   'crush-device-class': '',
 });
+const unusedDiskOptions = shallowRef<string[]>([]);
+const journalDiskOptions = shallowRef<string[]>([]);
+const crushClassOptions = shallowRef(['hdd', 'ssd', 'nvme']);
 const flags = ref<PveRecord>({});
-const flagNames = [
-  'noout',
-  'nobackfill',
-  'norebalance',
-  'norecover',
-  'noscrub',
-  'nodeep-scrub',
-  'pause',
-];
+const flagRows = shallowRef<{ name: string; description: string; value: number }[]>([]);
+const bulkRestartVisible = ref(false);
+const taskVisible = ref(false);
+const taskUpid = ref('');
+const taskNode = ref('');
+const taskTitle = ref('');
 
 const nodeOptions = computed(() =>
-  nodes.value.map((node) => textValue(node.node || node.name)).filter(Boolean),
+  nodes.value.map((node) => textValue(node.node || node.name)).filter(Boolean)
 );
 const current = computed(() => selected.value[0]);
+const osdsByHost = computed<Record<string, number>>(() =>
+  rows.value
+    .filter((row) => row.type === 'osd')
+    .reduce<Record<string, number>>((counts, row) => {
+      const host = textValue(row.host);
+      if (host) counts[host] = (counts[host] || 0) + 1;
+      return counts;
+    }, {})
+);
 const visibleRows = computed(() =>
   rows.value.filter((row) => {
     let parentKey = textValue(row._parentKey);
@@ -62,14 +80,23 @@ const visibleRows = computed(() =>
       parentKey = textValue(parent._parentKey);
     }
     return true;
-  }),
+  })
 );
 const isOsd = computed(() =>
-  Boolean(current.value && (current.value.type === 'osd' || current.value.id !== undefined)),
+  Boolean(
+    current.value &&
+    current.value.type === 'osd' &&
+    textValue(current.value.host) &&
+    Number.isInteger(Number(current.value.id)) &&
+    Number(current.value.id) >= 0
+  )
 );
 const osdId = computed(() => textValue(current.value?.id ?? current.value?.osd));
 const osdHost = computed(() => textValue(current.value?.host));
-const isUp = computed(() => textValue(current.value?.status).toLowerCase().includes('up'));
+const isUp = computed(() =>
+  Boolean(isOsd.value && textValue(current.value?.status).toLowerCase() !== 'down')
+);
+const { node = 'localhost' } = defineProps<{ node?: string }>();
 const isIn = computed(() => Boolean(current.value?.in));
 const columns: QTableColumn<PveRecord>[] = [
   {
@@ -156,7 +183,7 @@ async function refreshData() {
   loading.value = true;
   try {
     const [osdResponse, nodesResponse] = await Promise.allSettled([
-      getCephOsds(),
+      getCephOsds(node),
       getClusterNodes(),
     ]);
     console.log(osdResponse, 'osdResponse');
@@ -167,7 +194,7 @@ async function refreshData() {
       expandedKeys.value = Object.fromEntries(
         rows.value
           .filter((row) => Boolean(row._hasChildren))
-          .map((row) => [textValue(row._treeKey), true]),
+          .map((row) => [textValue(row._treeKey), true])
       );
     }
     if (nodesResponse.status === 'fulfilled') nodes.value = normalizeRows(nodesResponse.value.data);
@@ -175,11 +202,21 @@ async function refreshData() {
     loading.value = false;
   }
 }
-async function run(action: () => Promise<unknown>) {
+function showTask(upid: string, fallbackNode: string, title: string) {
+  taskUpid.value = upid;
+  taskNode.value = upid.split(':')[1] || fallbackNode;
+  taskTitle.value = title;
+  taskVisible.value = Boolean(upid);
+}
+async function run(
+  action: () => Promise<{ data?: string }>,
+  fallbackNode = node,
+  title = gettext('Task')
+) {
   actionLoading.value = true;
   try {
-    await action();
-    await refreshData();
+    const response = await action();
+    showTask(textValue(response.data), fallbackNode, title);
   } finally {
     actionLoading.value = false;
   }
@@ -198,7 +235,11 @@ async function confirm() {
 function serviceAction(action: 'start' | 'stop' | 'restart') {
   if (!isOsd.value) return;
   withConfirmation(`${action} osd.${osdId.value}?`, () =>
-    run(() => changeCephOsdService(osdHost.value, osdId.value, action)),
+    run(
+      () => changeCephOsdService(osdHost.value, osdId.value, action),
+      osdHost.value,
+      `${gettext(action)}: osd.${osdId.value}`
+    )
   );
 }
 function osdAction(action: 'in' | 'out' | 'scrub', deep = false) {
@@ -208,7 +249,11 @@ function osdAction(action: 'in' | 'out' | 'scrub', deep = false) {
       ? `${deep ? gettext('Deep Scrub') : gettext('Scrub')} osd.${osdId.value}?`
       : `${action} osd.${osdId.value}?`;
   withConfirmation(message, () =>
-    run(() => runCephOsdCommand(osdHost.value, osdId.value, action, deep ? { deep: 1 } : {})),
+    run(
+      () => runCephOsdCommand(osdHost.value, osdId.value, action, deep ? { deep: 1 } : {}),
+      osdHost.value,
+      `${gettext(action)}: osd.${osdId.value}`
+    )
   );
 }
 function treeIcon(type: unknown) {
@@ -232,10 +277,12 @@ function statusInfo(row: PveRecord) {
 }
 function openCreate() {
   createForm.value = {
-    node: nodeOptions.value[0] || 'localhost',
+    node: nodeOptions.value.includes(node) ? node : nodeOptions.value[0] || '',
     dev: '',
     db_dev: '',
+    db_dev_size: '',
     wal_dev: '',
+    wal_dev_size: '',
     encrypted: false,
     'crush-device-class': '',
   };
@@ -244,27 +291,101 @@ function openCreate() {
 async function create() {
   if (!createForm.value.dev) return;
   const { node, ...data } = createForm.value;
-  await run(() => createCephOsd(node, data));
+  const payload = Object.fromEntries(Object.entries(data).filter(([, value]) => value !== ''));
+  await run(() => createCephOsd(node, payload), node, `${gettext('Create')}: OSD`);
   createVisible.value = false;
 }
 async function openFlags() {
   const response = await getCephOsdFlags();
   flags.value = response.data || {};
+  const values = Array.isArray(response.data)
+    ? response.data
+    : Object.entries(response.data || {}).map(([name, value]) => ({ name, value }));
+  flagRows.value = values.map((entry) => {
+    const flag = entry as PveRecord;
+    return {
+      name: textValue(flag.name),
+      description: textValue(flag.description),
+      value: Number(flag.value) || 0,
+    };
+  });
   flagsVisible.value = true;
 }
 async function saveFlags() {
-  await run(() => setCephOsdFlags(flags.value));
+  const payload = Object.fromEntries(flagRows.value.map((flag) => [flag.name, flag.value ? 1 : 0]));
+  await run(() => setCephOsdFlags(payload), node, gettext('Manage Global OSD Flags'));
   flagsVisible.value = false;
 }
 function destroy() {
   if (!isOsd.value) return;
-  withConfirmation(`${gettext('Destroy')} osd.${osdId.value}?`, () =>
-    run(() => destroyCephOsd(osdHost.value, osdId.value)),
-  );
+  cleanupDisks.value = true;
+  destroyWarnings.value = [];
+  destroyVisible.value = true;
+  void openDestroy();
 }
-onMounted(() => {
-  void refreshData();
+async function openDestroy() {
+  const [flagsResponse, statusResponse] = await Promise.allSettled([
+    getCephOsdFlags(),
+    getCephStatus(osdHost.value),
+  ]);
+  const warnings: string[] = [];
+  if (
+    flagsResponse.status === 'fulfilled' &&
+    Object.values(flagsResponse.value.data || {}).some(Boolean)
+  )
+    warnings.push(gettext('Global flags limiting the self healing of Ceph are enabled.'));
+  const health =
+    statusResponse.status === 'fulfilled'
+      ? (statusResponse.value.data?.health as PveRecord | undefined)
+      : undefined;
+  if (textValue(health?.status) && textValue(health?.status) !== 'HEALTH_OK')
+    warnings.push(gettext('Objects are degraded. Consider waiting until the cluster is healthy.'));
+  destroyWarnings.value = warnings;
+}
+async function confirmDestroy() {
+  await run(
+    () => destroyCephOsd(osdHost.value, osdId.value, { cleanup: cleanupDisks.value ? 1 : 0 }),
+    osdHost.value,
+    `${gettext('Destroy')}: osd.${osdId.value}`
+  );
+  destroyVisible.value = false;
+}
+async function loadCreateOptions() {
+  const host = createForm.value.node;
+  if (!host) return;
+  const [unusedResponse, journalResponse, crushResponse] = await Promise.allSettled([
+    getNodeDisks(host, { type: 'unused' }),
+    getNodeDisks(host, { type: 'journal_disks' }),
+    getCephCrush(host),
+  ]);
+  const paths = (value: unknown) =>
+    Array.isArray(value)
+      ? value
+          .map((disk) => textValue((disk as PveRecord).devpath || (disk as PveRecord).name))
+          .filter(Boolean)
+      : [];
+  if (unusedResponse.status === 'fulfilled')
+    unusedDiskOptions.value = paths(unusedResponse.value.data);
+  if (journalResponse.status === 'fulfilled')
+    journalDiskOptions.value = paths(journalResponse.value.data);
+  if (crushResponse.status === 'fulfilled') {
+    const crushData: unknown = crushResponse.value.data;
+    const text = typeof crushData === 'string' ? crushData : '';
+    const custom = Array.from(
+      text.matchAll(/^device\s+\d+\s+osd\.\d+\s+class\s+(.+)$/gim),
+      (match) => match[1]?.trim()
+    ).filter(Boolean) as string[];
+    crushClassOptions.value = [...new Set(['hdd', 'ssd', 'nvme', ...custom])];
+  }
+}
+watch([createVisible, () => createForm.value.node], ([visible]) => {
+  if (visible) void loadCreateOptions();
 });
+watch(
+  () => node,
+  () => void refreshData(),
+  { immediate: true }
+);
 </script>
 
 <template>
@@ -275,7 +396,6 @@ onMounted(() => {
       row-key="_treeKey"
       selection="single"
       table-header-class="u-table-header"
-      :title="gettext('OSDs')"
       :rows="visibleRows"
       :columns="columns"
       :loading="loading"
@@ -283,29 +403,32 @@ onMounted(() => {
       :rows-per-page-options="[15]"
       @row-dblclick="detailVisible = isOsd"
     >
-      <template #top
-        ><div class="text-subtitle2">{{ gettext('OSDs') }}</div>
-        <q-space />
-        <div class="row q-gutter-sm">
+      <template #top>
+        <div class="row no-wrap items-center full-width osd-toolbar">
           <q-btn
             no-caps
             outline
             size="12px"
             color="primary"
             class="u-button"
-            icon="refresh"
-            :label="gettext('Reload')"
+            :label="gettext('Reload OSD')"
             @click="refreshData"
-          /><q-btn
+          />
+          <q-separator
+            vertical
+            inset
+            class="q-mx-sm"
+          />
+          <q-btn
             no-caps
             outline
             size="12px"
             color="primary"
             class="u-button"
-            icon="add"
             :label="gettext('Create') + ': OSD'"
             @click="openCreate"
-          /><q-btn
+          />
+          <q-btn
             no-caps
             outline
             size="12px"
@@ -313,97 +436,119 @@ onMounted(() => {
             class="u-button"
             :label="gettext('Manage Global Flags')"
             @click="openFlags"
-          /><q-btn
+          />
+          <q-btn
             no-caps
             outline
             size="12px"
             color="primary"
             class="u-button"
             :label="gettext('Bulk Restart OSDs')"
-            @click="
-              withConfirmation(gettext('Restart all OSDs across the cluster?'), () =>
-                run(restartCephOsds),
-              )
-            "
-          /><q-btn
+            @click="bulkRestartVisible = true"
+          />
+          <q-space />
+          <span class="text-caption q-mx-sm">
+            {{ isOsd ? `osd.${osdId}:` : gettext('No OSD selected') }}
+          </span>
+          <q-btn
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="isOsd ? 'primary' : 'grey-6'"
             class="u-button"
             :disable="!isOsd"
             :label="gettext('Details')"
             @click="detailVisible = true"
-          /><q-btn
+          />
+          <q-btn
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="isOsd && !isUp ? 'primary' : 'grey-6'"
             class="u-button"
             :disable="!isOsd || isUp"
             :label="gettext('Start')"
             @click="serviceAction('start')"
-          /><q-btn
+          />
+          <q-btn
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="isOsd && isUp ? 'primary' : 'grey-6'"
             class="u-button"
             :disable="!isOsd || !isUp"
             :label="gettext('Stop')"
             @click="serviceAction('stop')"
-          /><q-btn
+          />
+          <q-btn
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="isOsd && isUp ? 'primary' : 'grey-6'"
             class="u-button"
             :disable="!isOsd || !isUp"
             :label="gettext('Restart')"
             @click="serviceAction('restart')"
-          /><q-btn
+          />
+          <q-btn
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="isOsd && isIn ? 'primary' : 'grey-6'"
             class="u-button"
             :disable="!isOsd || !isIn"
             label="Out"
             @click="osdAction('out')"
-          /><q-btn
+          />
+          <q-btn
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="isOsd && !isIn ? 'primary' : 'grey-6'"
             class="u-button"
             :disable="!isOsd || isIn"
             label="In"
             @click="osdAction('in')"
-          /><q-btn-dropdown
+          />
+          <q-btn-dropdown
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="isOsd ? 'primary' : 'grey-6'"
             class="u-button"
             :disable="!isOsd"
             :label="gettext('More')"
-            ><q-list dense
-              ><q-item clickable v-close-popup @click="osdAction('scrub')"
-                ><q-item-section>{{ gettext('Scrub') }}</q-item-section></q-item
-              ><q-item clickable v-close-popup @click="osdAction('scrub', true)"
-                ><q-item-section>{{ gettext('Deep Scrub') }}</q-item-section></q-item
-              ><q-item clickable v-close-popup :disable="isUp" @click="destroy"
-                ><q-item-section class="text-negative">{{
-                  gettext('Destroy')
-                }}</q-item-section></q-item
-              ></q-list
-            ></q-btn-dropdown
           >
-        </div></template
-      >
-      <template #body-cell-name="props"
-        ><q-td :props="props"
-          ><div
+            <q-list dense>
+              <q-item
+                clickable
+                v-close-popup
+                @click="osdAction('scrub')"
+              >
+                <q-item-section>{{ gettext('Scrub') }}</q-item-section>
+              </q-item>
+              <q-item
+                clickable
+                v-close-popup
+                @click="osdAction('scrub', true)"
+              >
+                <q-item-section>{{ gettext('Deep Scrub') }}</q-item-section>
+              </q-item>
+              <q-item
+                clickable
+                v-close-popup
+                :disable="!isOsd || isUp"
+                @click="destroy"
+              >
+                <q-item-section class="text-negative">{{ gettext('Destroy') }}</q-item-section>
+              </q-item>
+            </q-list>
+          </q-btn-dropdown>
+        </div>
+      </template>
+      <template #body-cell-name="props">
+        <q-td :props="props">
+          <div
             class="osd-tree-name"
             :style="{ paddingLeft: `${Number(props.row._depth || 0) * 22}px` }"
           >
@@ -415,75 +560,136 @@ onMounted(() => {
               size="sm"
               :icon="expandedKeys[textValue(props.row._treeKey)] ? 'expand_more' : 'chevron_right'"
               @click.stop="toggleRow(props.row)"
-            /><span v-else class="osd-tree-spacer" /><q-icon
+            />
+            <span
+              v-else
+              class="osd-tree-spacer"
+            />
+            <q-icon
               :name="treeIcon(props.row.type)"
               size="16px"
               class="q-mr-xs"
-            /><span>{{ props.value }}</span>
-          </div></q-td
-        ></template
-      >
-      <template #body-cell-status="props"
-        ><q-td :props="props"
-          ><div v-if="statusInfo(props.row)" class="osd-status">
-            <span>{{ statusInfo(props.row)?.status }}</span
-            ><q-icon
+            />
+            <span>{{ props.value }}</span>
+          </div>
+        </q-td>
+      </template>
+      <template #body-cell-status="props">
+        <q-td :props="props">
+          <div
+            v-if="statusInfo(props.row)"
+            class="osd-status"
+          >
+            <span>{{ statusInfo(props.row)?.status }}</span>
+            <q-icon
               :name="statusInfo(props.row)?.upIcon"
               :color="statusInfo(props.row)?.upColor"
               size="17px"
-            /><span>/ {{ statusInfo(props.row)?.inOut }}</span
-            ><q-icon
+            />
+            <span>/ {{ statusInfo(props.row)?.inOut }}</span>
+            <q-icon
               :name="statusInfo(props.row)?.inIcon"
               :color="statusInfo(props.row)?.inColor"
               size="15px"
             />
           </div>
-          <span v-else>-</span></q-td
-        ></template
-      >
+          <span v-else>-</span>
+        </q-td>
+      </template>
     </q-table>
-    <q-dialog v-model="createVisible" persistent transition-show="scale" transition-hide="scale"
-      ><q-card class="osd-dialog"
-        ><q-card-section class="text-subtitle1">{{ gettext('Create') }}: OSD</q-card-section
-        ><q-card-section class="column q-gutter-md"
-          ><q-select
+    <q-dialog
+      v-model="createVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <q-card class="osd-dialog">
+        <q-card-section class="text-subtitle1">{{ gettext('Create') }}: OSD</q-card-section>
+        <q-card-section class="column q-gutter-md">
+          <q-select
             v-model="createForm.node"
             dense
             options-dense
             class="q-field--with-bottom"
             :label="gettext('Host')"
-            :options="nodeOptions" /><q-input
+            :options="nodeOptions"
+          />
+          <q-select
             v-model="createForm.dev"
             dense
+            options-dense
             class="q-field--with-bottom"
             :label="gettext('Disk')"
-            hint="/dev/sdX" /><q-input
+            :options="unusedDiskOptions"
+          />
+          <q-select
             v-model="createForm.db_dev"
             dense
+            options-dense
             class="q-field--with-bottom"
-            :label="gettext('DB Disk')" /><q-input
+            clearable
+            :label="gettext('DB Disk')"
+            :options="journalDiskOptions"
+          />
+          <q-input
+            v-model="createForm.db_dev_size"
+            dense
+            type="number"
+            min="1"
+            max="131072"
+            step="0.01"
+            class="q-field--with-bottom"
+            :disable="!createForm.db_dev"
+            :label="`${gettext('DB size')} (${gettext('GiB')})`"
+          />
+          <q-select
             v-model="createForm.wal_dev"
             dense
+            options-dense
             class="q-field--with-bottom"
-            :label="gettext('WAL Disk')" /><q-select
+            clearable
+            :label="gettext('WAL Disk')"
+            :options="journalDiskOptions"
+          />
+          <q-input
+            v-model="createForm.wal_dev_size"
+            dense
+            type="number"
+            min="0.5"
+            max="131072"
+            step="0.01"
+            class="q-field--with-bottom"
+            :disable="!createForm.wal_dev"
+            :label="`${gettext('WAL size')} (${gettext('GiB')})`"
+          />
+          <q-select
             v-model="createForm['crush-device-class']"
             dense
             options-dense
             class="q-field--with-bottom"
             clearable
             :label="gettext('Device Class')"
-            :options="['hdd', 'ssd', 'nvme']" /><q-toggle
+            :options="crushClassOptions"
+          />
+          <q-checkbox
             v-model="createForm.encrypted"
-            :label="gettext('Encrypt OSD')" /></q-card-section
-        ><q-card-actions align="right"
-          ><q-btn
+            dense
+            right-label
+            color="primary"
+            :label="gettext('Encrypt OSD')"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn
             no-caps
             outline
             size="12px"
             color="primary"
             class="u-button"
             :label="gettext('Cancel')"
-            v-close-popup /><q-btn
+            v-close-popup
+          />
+          <q-btn
             flat
             no-caps
             size="12px"
@@ -491,67 +697,173 @@ onMounted(() => {
             :disable="!createForm.dev"
             :loading="actionLoading"
             :label="gettext('Create')"
-            @click="create" /></q-card-actions></q-card
-    ></q-dialog>
-    <q-dialog v-model="flagsVisible" persistent transition-show="scale" transition-hide="scale"
-      ><q-card class="osd-dialog"
-        ><q-card-section class="text-subtitle1">{{
-          gettext('Manage Global OSD Flags')
-        }}</q-card-section
-        ><q-card-section class="column q-gutter-sm"
-          ><q-toggle
-            v-for="flag in flagNames"
-            :key="flag"
-            v-model="flags[flag]"
-            :true-value="1"
-            :false-value="0"
-            :label="flag" /></q-card-section
-        ><q-card-actions align="right"
-          ><q-btn
+            @click="create"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+    <q-dialog
+      v-model="flagsVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <q-card class="osd-dialog">
+        <q-card-section class="text-subtitle1">
+          {{ gettext('Manage Global OSD Flags') }}
+        </q-card-section>
+        <q-card-section class="q-pa-none">
+          <q-table
+            flat
+            dense
+            hide-bottom
+            row-key="name"
+            table-header-class="u-table-header"
+            :rows="flagRows"
+            :columns="[
+              { name: 'value', label: gettext('Enable'), field: 'value', align: 'center' },
+              { name: 'name', label: gettext('Name'), field: 'name', align: 'left' },
+              {
+                name: 'description',
+                label: gettext('Description'),
+                field: 'description',
+                align: 'left',
+              },
+            ]"
+            :pagination="{ rowsPerPage: 0 }"
+          >
+            <template #body-cell-value="props">
+              <q-td :props="props">
+                <q-checkbox
+                  v-model="props.row.value"
+                  dense
+                  color="primary"
+                  :true-value="1"
+                  :false-value="0"
+                />
+              </q-td>
+            </template>
+          </q-table>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn
             no-caps
             outline
             size="12px"
             color="primary"
             class="u-button"
             :label="gettext('Cancel')"
-            v-close-popup /><q-btn
+            v-close-popup
+          />
+          <q-btn
             flat
             no-caps
             size="12px"
             class="bg-primary text-grey-1 u-button"
             :loading="actionLoading"
             :label="gettext('Apply')"
-            @click="saveFlags" /></q-card-actions></q-card
-    ></q-dialog>
-    <q-dialog v-model="detailVisible" persistent transition-show="scale" transition-hide="scale"
-      ><q-card class="osd-dialog"
-        ><q-card-section class="text-subtitle1">osd.{{ osdId }}</q-card-section
-        ><q-card-section>
-          <pre class="detail-output">{{ JSON.stringify(current || {}, null, 2) }}</pre>
-        </q-card-section></q-card
-      ></q-dialog
+            @click="saveFlags"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+    <CephOsdDetailsDialog
+      v-model:visible="detailVisible"
+      :node="osdHost"
+      :osd-id="osdId"
+    />
+    <CephBulkRestartOsdsDialog
+      v-model="bulkRestartVisible"
+      :node="node"
+      :osds-by-host="osdsByHost"
+      @started="(upid, taskNode) => showTask(upid, taskNode, gettext('Bulk Restart OSDs'))"
+    />
+    <TaskOutputDialog
+      v-model="taskVisible"
+      :node="taskNode"
+      :upid="taskUpid"
+      :title="taskTitle"
+      @finished="refreshData"
+    />
+    <q-dialog
+      v-model="destroyVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
     >
-    <q-dialog v-model="confirmVisible" persistent transition-show="scale" transition-hide="scale"
-      ><q-card class="osd-dialog"
-        ><q-card-section class="text-subtitle1">{{ gettext('Confirm') }}</q-card-section
-        ><q-card-section>{{ confirmMessage }}</q-card-section
-        ><q-card-actions align="right"
-          ><q-btn
+      <q-card class="osd-dialog">
+        <q-card-section class="text-subtitle1">
+          {{ gettext('Destroy') }}: osd.{{ osdId }}
+        </q-card-section>
+        <q-card-section class="column q-gutter-sm">
+          <q-checkbox
+            v-model="cleanupDisks"
+            dense
+            right-label
+            color="primary"
+            :label="gettext('Cleanup Disks')"
+          />
+          <div
+            v-for="warning in destroyWarnings"
+            :key="warning"
+            class="warning"
+          >
+            {{ warning }}
+          </div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn
             no-caps
             outline
             size="12px"
             color="primary"
             class="u-button"
             :label="gettext('Cancel')"
-            v-close-popup /><q-btn
+            v-close-popup
+          />
+          <q-btn
+            flat
+            no-caps
+            size="12px"
+            class="bg-negative text-grey-1 u-button"
+            :loading="actionLoading"
+            :label="gettext('Destroy')"
+            @click="confirmDestroy"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+    <q-dialog
+      v-model="confirmVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <q-card class="osd-dialog">
+        <q-card-section class="text-subtitle1">{{ gettext('Confirm') }}</q-card-section>
+        <q-card-section>{{ confirmMessage }}</q-card-section>
+        <q-card-actions align="right">
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Cancel')"
+            v-close-popup
+          />
+          <q-btn
             flat
             no-caps
             size="12px"
             class="bg-primary text-grey-1 u-button"
             :loading="actionLoading"
             :label="gettext('Confirm')"
-            @click="confirm" /></q-card-actions></q-card
-    ></q-dialog>
+            @click="confirm"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 
@@ -559,11 +871,18 @@ onMounted(() => {
 .osd-dialog {
   min-width: 420px;
 }
-.detail-output {
-  margin: 0;
-  max-height: 60vh;
-  overflow: auto;
-  white-space: pre-wrap;
+.osd-toolbar {
+  gap: 8px;
+  overflow-x: auto;
+}
+.osd-toolbar > * {
+  flex: 0 0 auto;
+}
+.osd-toolbar :deep(.q-space) {
+  flex: 1 0 16px;
+}
+.warning {
+  color: #cf4c35;
 }
 .osd-tree-name {
   align-items: center;

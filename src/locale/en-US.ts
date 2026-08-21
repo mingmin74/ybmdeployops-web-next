@@ -316,6 +316,7 @@ export default {
   Stop: 'Stop',
   Restart: 'Restart',
   Reload: 'Reload',
+  'Reload OSD': 'Reload',
   'Show only installed services': 'Show only installed services',
   Static: 'Static',
   Masked: 'Masked',

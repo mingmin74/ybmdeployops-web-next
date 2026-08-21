@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import type { QTableColumn } from 'quasar';
-import { onMounted, ref, shallowRef } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
 import type { PveRecord } from '@/api/resources';
 import { getCephCrush, getCephRules } from '@/api/ceph';
 import { gettext } from '@/locale';
 
 const loading = ref(false);
 const rules = shallowRef<PveRecord[]>([]);
-const crush = shallowRef<PveRecord>({});
+const crush = shallowRef<unknown>('');
+const { node = 'localhost' } = defineProps<{ node?: string }>();
+const crushText = computed(() =>
+  typeof crush.value === 'string' ? crush.value : JSON.stringify(crush.value || {}, null, 2)
+);
 const columns: QTableColumn<PveRecord>[] = [
   {
     name: 'name',
@@ -51,8 +55,8 @@ async function refreshData() {
   loading.value = true;
   try {
     const [rulesResponse, crushResponse] = await Promise.allSettled([
-      getCephRules(),
-      getCephCrush(),
+      getCephRules(node),
+      getCephCrush(node),
     ]);
     if (rulesResponse.status === 'fulfilled') rules.value = rulesResponse.value.data || [];
     if (crushResponse.status === 'fulfilled') crush.value = crushResponse.value.data || {};
@@ -61,7 +65,11 @@ async function refreshData() {
   }
 }
 
-onMounted(refreshData);
+watch(
+  () => node,
+  () => void refreshData(),
+  { immediate: true }
+);
 </script>
 
 <template>
@@ -77,9 +85,10 @@ onMounted(refreshData);
       :pagination="{ page: 1, rowsPerPage: 10 }"
       :rows-per-page-options="[10]"
     >
-      <template #top
-        ><div class="text-subtitle2">{{ gettext('Crush Rule') }}</div>
-        <q-space /><q-btn
+      <template #top>
+        <div class="text-subtitle2">{{ gettext('Crush Rule') }}</div>
+        <q-space />
+        <q-btn
           no-caps
           outline
           size="12px"
@@ -87,12 +96,16 @@ onMounted(refreshData);
           class="u-button"
           :label="gettext('Refresh')"
           @click="refreshData"
-      /></template>
+        />
+      </template>
     </q-table>
-    <q-card flat bordered>
+    <q-card
+      flat
+      bordered
+    >
       <q-card-section>
         <div class="text-subtitle2 q-mb-sm">CRUSH</div>
-        <pre class="ceph-pre">{{ JSON.stringify(crush, null, 2) }}</pre>
+        <pre class="ceph-pre">{{ crushText }}</pre>
       </q-card-section>
     </q-card>
   </div>

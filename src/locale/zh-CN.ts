@@ -321,6 +321,7 @@ export default {
   Stop: '停止',
   Restart: '重启',
   Reload: '重新加载',
+  'Reload OSD': '重载',
   'Show only installed services': '仅显示已安装服务',
   Static: '静态',
   Masked: '已屏蔽',

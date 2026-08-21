@@ -9,8 +9,14 @@ const { node, service } = defineProps<{ node: string; service: string }>();
 
 <template>
   <q-dialog v-model="visible" persistent>
-    <UWindow width="1000px" :title="`${gettext('Syslog')}: ${service}`">
+    <UWindow width="800px" height="400px" :title="`${gettext('Syslog')}: ${service}`">
       <LogViewer source="service" :node="node" :service="service" :show-node-selector="false" />
     </UWindow>
   </q-dialog>
 </template>
+
+<style scoped>
+:deep(.log-box--service) {
+  height: 330px;
+}
+</style>

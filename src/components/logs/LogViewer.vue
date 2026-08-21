@@ -85,13 +85,28 @@ function buildParams(isPolling: boolean) {
 }
 
 function normalizeCephRows(value: unknown) {
+  function textFromLogValue(item: unknown): string {
+    const directValue = textValue(item);
+    if (directValue) return directValue;
+    if (Array.isArray(item)) return item.map((value) => textFromLogValue(value)).filter(Boolean).join(' ');
+    if (item && typeof item === 'object') {
+      const record = item as Record<string, unknown>;
+      for (const key of ['t', 'msg', 'message', 'text', 'line']) {
+        const value = textFromLogValue(record[key]);
+        if (value) return value;
+      }
+      return JSON.stringify(item);
+    }
+    return '';
+  }
+
   if (!Array.isArray(value)) return [];
   return value
     .map((item, index) => {
       const record = item as Record<string, unknown>;
       return {
         index,
-        line: typeof item === 'string' ? item : textValue(record.t || record.msg),
+        line: textFromLogValue(record.t ?? record.msg ?? record.message ?? item),
         number: Number(record.n),
       };
     })
