@@ -52,6 +52,12 @@ function diskUsage(value: unknown) {
   return ({ bios: gettext('BIOS boot'), zfsreserved: gettext('ZFS reserved'), efi: 'EFI', lvm: 'LVM', zfs: 'ZFS' } as Record<string, string>)[String(value)] || String(value || '-');
 }
 
+function formatSmartValue(key: string, value: unknown) {
+  if (key === 'temperature' && Number.isFinite(Number(value))) return `${value} °C`;
+  if (['passed', 'health'].includes(key)) return Number(value) === 1 || value === true || String(value).toLowerCase() === 'passed' ? gettext('Passed') : gettext('Failed');
+  return String(value ?? '-');
+}
+
 async function loadRows(node: string) {
   const response = await getNodeDisks(node);
   const normalize = (items: PveRecord[], prefix = ''): PveRecord[] => items.map((item, index) => ({
@@ -106,7 +112,7 @@ function handleAction(name: string, row?: PveRecord) {
   <q-dialog v-model="smartVisible" persistent transition-show="scale" transition-hide="scale">
     <UWindow :title="gettext('S.M.A.R.T. values')" width="620px" :loading="smartLoading">
       <q-list dense separator class="q-pa-sm">
-        <q-item v-for="(value, key) in smartValues" :key="String(key)"><q-item-section>{{ key }}</q-item-section><q-item-section side>{{ value }}</q-item-section></q-item>
+        <q-item v-for="(value, key) in smartValues" :key="String(key)"><q-item-section>{{ key }}</q-item-section><q-item-section side>{{ formatSmartValue(String(key), value) }}</q-item-section></q-item>
         <q-item v-if="!smartLoading && !Object.keys(smartValues).length"><q-item-section>{{ gettext('no record can be found') }}</q-item-section></q-item>
       </q-list>
       <template #foot><q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Close')" /></template>
