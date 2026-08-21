@@ -7,7 +7,7 @@ import UWindow from '@/components/UWindow.vue';
 import NodeDiskTablePage from '@/components/NodeDiskTablePage.vue';
 import NodeDiskFormDialog, { type NodeDiskFormField } from './NodeDiskFormDialog.vue';
 import NodeDiskDestroyDialog from './NodeDiskDestroyDialog.vue';
-import { createNodeZfs, deleteNodeZfs, getNodeDisks, getNodeZfs, getNodeZfsDetail, type PveRecord } from '@/api/resources';
+import { createNodeZfs, deleteNodeZfs, getNodeUnusedDisks, getNodeZfs, getNodeZfsDetail, type PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
 import { formatBytes } from '@/utils/format';
 
@@ -78,7 +78,7 @@ function validPoolName(value: unknown) { const name = String(value || ''); retur
 async function create(values: Record<string, unknown>) { if (!props.node) return; const ashift = Number(values.ashift); const draid = String(values.raidlevel || '').startsWith('draid'); const data = Number(values.draidData); const spares = Number(values.draidSpares); const devices = Array.isArray(values.devices) ? values.devices : []; const raid = String(values.raidlevel || ''); const minimumDisks: Record<string, number> = { mirror: 2, raid10: 4, raidz: 3, raidz2: 6, raidz3: 7 }; const invalidCount = (minimumDisks[raid] && devices.length < minimumDisks[raid]) || (raid === 'raid10' && devices.length % 2 !== 0); if (!validPoolName(values.name) || !Number.isInteger(ashift) || ashift < 9 || ashift > 16 || !devices.length || invalidCount || (draid && (!Number.isInteger(data) || data < 1 || !Number.isInteger(spares) || spares < 0))) { Notify.create({ type: 'negative', message: gettext('Invalid ZFS configuration') }); return; } const payload = { ...values }; if (draid) payload['draid-config'] = `data=${data},spares=${spares}`; delete payload.draidData; delete payload.draidSpares; saving.value = true; try { const result = await createNodeZfs(props.node, payload); createVisible.value = false; openTask(result.data); } finally { saving.value = false; } }
 function destroy(row?: PveRecord) { destroyPool.value = String(row?.name || ''); destroyVisible.value = Boolean(props.node && destroyPool.value); }
 async function confirmDestroy(params: PveRecord) { if (!props.node || !destroyPool.value) return; destroying.value = true; try { const result = await deleteNodeZfs(props.node, destroyPool.value, params); destroyVisible.value = false; openTask(result.data); } finally { destroying.value = false; } }
-async function action(name: string, row?: PveRecord) { if (name === 'create' && props.node) { const result = await getNodeDisks(props.node); diskOptions.value = (result.data || []).filter((disk) => disk.used === 'unused').map((disk) => ({ label: String(disk.devpath || disk.name), value: String(disk.devpath || disk.name) })); createVisible.value = true; } else if (name === 'detail') void showDetail(row); else if (name === 'destroy') destroy(row); }
+async function action(name: string, row?: PveRecord) { if (name === 'create' && props.node) { const result = await getNodeUnusedDisks(props.node); diskOptions.value = (result.data || []).map((disk) => ({ label: String(disk.devpath || disk.name), value: String(disk.devpath || disk.name) })); createVisible.value = true; } else if (name === 'detail') void showDetail(row); else if (name === 'destroy') destroy(row); }
 function healthClass(value: unknown) { const health = String(value || '').toUpperCase(); return health === 'ONLINE' ? 'good' : health === 'DEGRADED' ? 'warning' : health === 'FAULTED' || health === 'UNAVAIL' ? 'critical' : 'faded'; }
 </script>
 
