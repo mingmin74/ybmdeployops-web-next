@@ -146,7 +146,7 @@ export async function request<T = unknown>(url: string, options: RequestOptions 
 
   try {
     const response = await fetch(
-      resolveUrl(url, method === 'GET' ? options.params : undefined),
+      resolveUrl(url, method === 'GET' || method === 'DELETE' ? options.params : undefined),
       requestInit
     );
     const payload = parseResponseText(await response.text());

@@ -20,15 +20,29 @@ const props = defineProps<{
   embedded?: boolean;
   node?: string | undefined;
   actions?: NodeDiskTableAction[];
+  tree?: boolean;
 }>();
-const emit = defineEmits<{ action: [name: string, row?: PveRecord]; selection: [row?: PveRecord] }>();
+const emit = defineEmits<{ action: [name: string, row?: PveRecord]; selection: [row?: PveRecord]; rowDblclick: [row: PveRecord] }>();
 
 const loading = ref(false);
 const filter = ref('');
 const selectedNode = ref(props.node || '');
 const rows = shallowRef<PveRecord[]>([]);
 const selected = shallowRef<PveRecord[]>([]);
+const expanded = shallowRef<Set<string>>(new Set());
 const selectedRow = computed(() => selected.value[0]);
+const displayRows = computed(() => {
+  if (!props.tree) return rows.value;
+  const result: PveRecord[] = [];
+  const append = (items: PveRecord[], level: number) => items.forEach((item) => {
+    const key = String(item[props.rowKey]);
+    const children = Array.isArray(item.children) ? item.children as PveRecord[] : [];
+    result.push({ ...item, __treeLevel: level, __treeChildren: children.length });
+    if (children.length && expanded.value.has(key)) append(children, level + 1);
+  });
+  append(rows.value, 0);
+  return result;
+});
 
 async function reload() {
   if (!selectedNode.value) {
@@ -39,18 +53,33 @@ async function reload() {
   loading.value = true;
   try {
     rows.value = await props.loadRows(selectedNode.value);
+    expanded.value = new Set(rows.value.map((item) => String(item[props.rowKey])));
+    selected.value = [];
+    emit('selection');
   } finally {
     loading.value = false;
   }
 }
 
-function setSelection(value: PveRecord[]) {
+function setSelection(value: readonly PveRecord[]) {
   selected.value = [...value];
   emit('selection', selectedRow.value);
 }
 
 function rowClick(_: Event, row: PveRecord) {
   setSelection(selected.value[0] === row ? [] : [row]);
+}
+
+function rowDblclick(_: Event, row: PveRecord) {
+  setSelection([row]);
+  emit('rowDblclick', row);
+}
+
+function toggleTree(row: PveRecord) {
+  const key = String(row[props.rowKey]);
+  const next = new Set(expanded.value);
+  if (next.has(key)) next.delete(key); else next.add(key);
+  expanded.value = next;
 }
 
 defineExpose({ reload });
@@ -82,18 +111,18 @@ watch(
         flat
         :row-key="rowKey"
         table-header-class="u-table-header"
-        :rows="rows"
+        :rows="displayRows"
         :columns="columns"
         :visible-columns="visibleColumns"
         :filter="filter"
-        :rows-per-page-options="[10]"
-        :pagination="{ page: 1, rowsPerPage: 10 }"
+        :rows-per-page-options="[0]"
+        :pagination="{ page: 1, rowsPerPage: 0 }"
         :loading="loading"
         selection="single"
         :selected="selected"
         :no-data-label="gettext('no record can be found')"
-      >
         @row-click="rowClick"
+        @row-dblclick="rowDblclick"
         @update:selected="setSelection"
       >
         <template #top>
@@ -140,7 +169,21 @@ watch(
             <span class="text-grey-6">{{ message }}</span>
           </div>
         </template>
+        <template v-if="props.tree" #body-cell-name="scope">
+          <q-td :props="scope">
+            <div class="row items-center no-wrap" :style="{ paddingLeft: `${Number(scope.row.__treeLevel || 0) * 18}px` }">
+              <q-btn v-if="Number(scope.row.__treeChildren || 0)" flat dense round size="sm" :icon="expanded.has(String(scope.row[rowKey])) ? 'expand_more' : 'chevron_right'" @click.stop="toggleTree(scope.row)" />
+              <span v-else class="node-disk-tree-spacer" />
+              {{ scope.value }}
+            </div>
+          </q-td>
+        </template>
+        <template #body-cell-usage="scope"><slot name="body-cell-usage" v-bind="scope"><q-td :props="scope">{{ scope.value }}</q-td></slot></template>
       </q-table>
     </q-card-section>
   </q-card>
 </template>
+
+<style scoped>
+.node-disk-tree-spacer { width: 28px; }
+</style>

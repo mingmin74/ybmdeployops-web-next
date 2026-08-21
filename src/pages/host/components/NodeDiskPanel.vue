@@ -1,18 +1,23 @@
 <script setup lang="ts">
-import { shallowRef } from 'vue';
+import { computed, shallowRef } from 'vue';
 import { gettext } from '@/locale';
 import DirectoryPage from '@/pages/storage/disks/DirectoryPage.vue';
 import DiskPage from '@/pages/storage/disks/DiskPage.vue';
 import LVMPage from '@/pages/storage/disks/LVMPage.vue';
 import LVMThinPage from '@/pages/storage/disks/LVMThinPage.vue';
 import ZFSPage from '@/pages/storage/disks/ZFSPage.vue';
-import ZfsOverIscsiPage from '@/pages/storage/disks/ZfsOverIscsiPage.vue';
+import { useSessionStore } from '@/stores/session';
 
 defineProps<{
   node: string;
 }>();
 
+const session = useSessionStore();
 const activeTab = shallowRef('disk');
+const nodeCaps = computed(
+  () => (session.caps as unknown as { nodes?: Record<string, unknown> }).nodes || {},
+);
+const canAudit = computed(() => Boolean(nodeCaps.value['Sys.Audit']));
 
 const tabs = [
   { name: 'disk', label: gettext('Disks'), icon: 'storage' },
@@ -20,12 +25,11 @@ const tabs = [
   { name: 'lvmthin', label: 'LVM-Thin', icon: 'layers' },
   { name: 'directory', label: gettext('Directory'), icon: 'folder' },
   { name: 'zfs', label: 'ZFS', icon: 'view_module' },
-  { name: 'zfsiscsi', label: 'ZFS-over-iSCSI', icon: 'cloud_done' },
 ];
 </script>
 
 <template>
-  <q-splitter :model-value="146" unit="px" disable class="node-disk-panel full-height">
+  <q-splitter v-if="canAudit" :model-value="146" unit="px" disable class="node-disk-panel full-height">
     <template #before>
       <q-tabs
         v-model="activeTab"
@@ -52,9 +56,6 @@ const tabs = [
           ><DirectoryPage embedded :node="node"
         /></q-tab-panel>
         <q-tab-panel name="zfs" class="q-pa-none"><ZFSPage embedded :node="node" /></q-tab-panel>
-        <q-tab-panel name="zfsiscsi" class="q-pa-none"
-          ><ZfsOverIscsiPage embedded :node="node"
-        /></q-tab-panel>
       </q-tab-panels>
     </template>
   </q-splitter>
