@@ -11,6 +11,8 @@ import { getClusterResources } from '@/api/resources';
 import {
   getNodeRrd,
   getNodeStatus,
+  getNodeRepositories,
+  getNodeSubscription,
   getStorageRrd,
   getVmCurrent,
   getVmRrd,
@@ -31,18 +33,20 @@ const selectedId = shallowRef('');
 const resources = shallowRef<PveRecord[]>([]);
 const current = shallowRef<PveRecord>({});
 const rrdRows = shallowRef<PveRecord[]>([]);
+const standardRepositories = shallowRef<PveRecord[]>([]);
+const subscriptionActive = shallowRef<boolean | undefined>(undefined);
 const rrdTimeframe = shallowRef<'hour' | 'day' | 'week' | 'month' | 'year'>('hour');
 const rrdConsolidation = shallowRef<'AVERAGE' | 'MAX'>('AVERAGE');
 
 const modeType = computed(() =>
-  props.mode === 'computer' ? 'vm' : props.mode === 'host' ? 'node' : 'storage',
+  props.mode === 'computer' ? 'vm' : props.mode === 'host' ? 'node' : 'storage'
 );
 const title = computed(() =>
   props.mode === 'computer'
     ? gettext('Computer')
     : props.mode === 'host'
-      ? gettext('Host')
-      : gettext('Storage'),
+    ? gettext('Host')
+    : gettext('Storage')
 );
 
 const options = computed(() =>
@@ -52,7 +56,7 @@ const options = computed(() =>
         ? `${textValue(item.vmid)} / ${textValue(item.name || item.type, '-')}`
         : textValue(item.node || item.storage || item.id),
     value: resourceId(item),
-  })),
+  }))
 );
 
 const selectedResource = computed(() => {
@@ -95,7 +99,7 @@ const statRows = computed(() => [
         selectedResource.value.node ||
         selectedResource.value.storage ||
         selectedResource.value.id,
-      '-',
+      '-'
     ),
   },
   {
@@ -111,13 +115,13 @@ const statRows = computed(() => [
   {
     label: gettext('Memory Usage'),
     value: `${formatBytes(current.value.mem as number)} / ${formatBytes(
-      (current.value.maxmem || selectedResource.value.maxmem) as number,
+      (current.value.maxmem || selectedResource.value.maxmem) as number
     )}`,
   },
   {
     label: gettext('Disk Usage'),
     value: `${formatBytes(
-      (current.value.disk || selectedResource.value.disk) as number,
+      (current.value.disk || selectedResource.value.disk) as number
     )} / ${formatBytes((current.value.maxdisk || selectedResource.value.maxdisk) as number)}`,
   },
 ]);
@@ -125,10 +129,10 @@ const statRows = computed(() => [
 const cpuValues = computed(() => rrdRows.value.map((item) => Number(item.cpu || 0) * 100));
 const memoryValues = computed(() => rrdRows.value.map((item) => item.mem as number));
 const networkValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.netin || 0) + Number(item.netout || 0)),
+  rrdRows.value.map((item) => Number(item.netin || 0) + Number(item.netout || 0))
 );
 const diskValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.diskread || 0) + Number(item.diskwrite || 0)),
+  rrdRows.value.map((item) => Number(item.diskread || 0) + Number(item.diskwrite || 0))
 );
 const hostMemory = computed(() => (current.value.memory || {}) as PveRecord);
 const hostRootfs = computed(() => (current.value.rootfs || {}) as PveRecord);
@@ -137,13 +141,13 @@ const hostCpuInfo = computed(() => (current.value.cpuinfo || {}) as PveRecord);
 const hostCpuPercent = computed(() => usedPercent(Number(current.value.cpu), 1));
 const hostIoDelayPercent = computed(() => usedPercent(Number(current.value.wait), 1));
 const hostMemoryPercent = computed(() =>
-  usedPercent(Number(hostMemory.value.used), Number(hostMemory.value.total)),
+  usedPercent(Number(hostMemory.value.used), Number(hostMemory.value.total))
 );
 const hostDiskPercent = computed(() =>
-  usedPercent(Number(hostRootfs.value.used), Number(hostRootfs.value.total)),
+  usedPercent(Number(hostRootfs.value.used), Number(hostRootfs.value.total))
 );
 const hostSwapPercent = computed(() =>
-  usedPercent(Number(hostSwap.value.used), Number(hostSwap.value.total)),
+  usedPercent(Number(hostSwap.value.used), Number(hostSwap.value.total))
 );
 const hostCpuDescription = computed(() => {
   const cpus = textValue(hostCpuInfo.value.cpus, textValue(selectedResource.value.maxcpu, '-'));
@@ -166,7 +170,49 @@ const hostBootMode = computed(() => {
     return bootInfo.secureboot ? `${gettext('EFI')} (${gettext('Secure Boot')})` : gettext('EFI');
   return '-';
 });
-const hostInfoRows = computed(() => [
+const repositoryStatus = computed(() => {
+  if (subscriptionActive.value === undefined || !standardRepositories.value.length)
+    return 'unknown';
+
+  const getRepositoryStatus = (handle: string) =>
+    Boolean(standardRepositories.value.find((repository) => repository.handle === handle)?.status);
+  const enterpriseRepository = getRepositoryStatus('enterprise');
+  const noSubscriptionRepository = getRepositoryStatus('no-subscription');
+  const testRepository = getRepositoryStatus('test');
+
+  if (noSubscriptionRepository || testRepository) return 'non-production';
+  if (subscriptionActive.value && enterpriseRepository) return 'ok';
+  if (!subscriptionActive.value && enterpriseRepository) return 'no-subscription';
+  if (!enterpriseRepository || !noSubscriptionRepository || !testRepository) return 'no-repository';
+  return 'unknown';
+});
+const repositoryStatusInfo = computed(() => {
+  switch (repositoryStatus.value) {
+    case 'ok':
+      return {
+        value: gettext('Production-ready Enterprise repository enabled'),
+        className: 'good',
+      };
+    case 'no-subscription':
+      return {
+        value: gettext('Enterprise repository needs valid subscription'),
+        className: 'warning',
+      };
+    case 'non-production':
+      return {
+        value: gettext('Non production-ready repository enabled!'),
+        className: 'warning',
+      };
+    case 'no-repository':
+      return {
+        value: gettext('No Proxmox VE repository enabled!'),
+        className: 'critical',
+      };
+    default:
+      return { value: '-', className: 'faded' };
+  }
+});
+const hostInfoRows = computed<Array<{ label: string; value: string; className?: string }>>(() => [
   { label: gettext('CPU(s)'), value: hostCpuDescription.value },
   { label: gettext('Kernel Version'), value: hostKernelVersion.value },
   { label: gettext('Boot Mode'), value: hostBootMode.value },
@@ -181,15 +227,20 @@ const hostInfoRows = computed(() => [
     label: gettext('KSM Sharing'),
     value: formatBytes(Number((current.value.ksm as PveRecord | undefined)?.shared || 0)),
   },
+  /* {
+    label: gettext('Repository Status'),
+    value: repositoryStatusInfo.value.value,
+    className: repositoryStatusInfo.value.className,
+  }, */
 ]);
 const hostBasicTitle = computed(
   () =>
     `${textValue(selectedResource.value.node || selectedResource.value.name, '-')} (${formatUptime(
-      current.value.uptime,
-    )})`,
+      current.value.uptime
+    )})`
 );
 const nodeStatus = computed(() =>
-  textValue(current.value.status || selectedResource.value.status, 'unknown').toLowerCase(),
+  textValue(current.value.status || selectedResource.value.status, 'unknown').toLowerCase()
 );
 const nodeStatusLabel = computed(() => {
   if (nodeStatus.value === 'online') return gettext('Online');
@@ -210,7 +261,7 @@ const hostResourceCards = computed(() => [
     value: `${hostCpuPercent.value.toFixed(2)}%`,
     meta: `${textValue(
       hostCpuInfo.value.cpus,
-      textValue(selectedResource.value.maxcpu, '-'),
+      textValue(selectedResource.value.maxcpu, '-')
     )} CPU(s)`,
     percent: hostCpuPercent.value,
   },
@@ -218,7 +269,7 @@ const hostResourceCards = computed(() => [
     title: gettext('Memory Usage'),
     value: `${hostMemoryPercent.value.toFixed(2)}%`,
     meta: `${formatBytes(Number(hostMemory.value.used))} / ${formatBytes(
-      Number(hostMemory.value.total),
+      Number(hostMemory.value.total)
     )}`,
     percent: hostMemoryPercent.value,
   },
@@ -226,7 +277,7 @@ const hostResourceCards = computed(() => [
     title: gettext('HD Space'),
     value: `${hostDiskPercent.value.toFixed(2)}%`,
     meta: `${formatBytes(Number(hostRootfs.value.used))} / ${formatBytes(
-      Number(hostRootfs.value.total),
+      Number(hostRootfs.value.total)
     )}`,
     percent: hostDiskPercent.value,
   },
@@ -234,7 +285,7 @@ const hostResourceCards = computed(() => [
     title: gettext('SWAP Usage'),
     value: `${hostSwapPercent.value.toFixed(2)}%`,
     meta: `${formatBytes(Number(hostSwap.value.used))} / ${formatBytes(
-      Number(hostSwap.value.total),
+      Number(hostSwap.value.total)
     )}`,
     percent: hostSwapPercent.value,
   },
@@ -247,7 +298,7 @@ const hostResourceCards = computed(() => [
   { title: gettext('Load Average'), loadValues: hostLoadAverageValues.value },
 ]);
 const hostChartXAxis = computed(() =>
-  rrdRows.value.map((item) => (item.time ? timestampToMinute(Number(item.time) * 1000) : '')),
+  rrdRows.value.map((item) => (item.time ? timestampToMinute(Number(item.time) * 1000) : ''))
 );
 const hostCpuSeries = computed(() => [
   {
@@ -374,7 +425,7 @@ const tableColumns = computed<QTableColumn<PveRecord>[]>(() => {
 
 function resourceId(row: PveRecord) {
   const fallback = `${textValue(row.node)}:${textValue(
-    row.vmid || row.storage || row.node || row.name,
+    row.vmid || row.storage || row.node || row.name
   )}`;
   return textValue(row.id, fallback);
 }
@@ -401,12 +452,31 @@ function hostMemoryTooltip(index: number) {
   const used = Number(row.memused || 0);
   const arc = Number(row.arcsize || 0);
   const available = Number(row.memavailable || 0);
-  const withoutArc = arc > 1024 * 1024 ? ` (${gettext('Without ZFS ARC')}: ${formatBytes(used - arc)})` : '';
+  const withoutArc =
+    arc > 1024 * 1024 ? ` (${gettext('Without ZFS ARC')}: ${formatBytes(used - arc)})` : '';
   const availableText = available ? ` (${gettext('Available')}: ${formatBytes(available)})` : '';
   return [
     `${gettext('Total')}: ${formatBytes(total)}${availableText}`,
     `${gettext('Used')}: ${formatBytes(used)}${withoutArc}`,
   ].join('<br>');
+}
+
+async function loadRepositoryStatus(node: string) {
+  standardRepositories.value = [];
+  subscriptionActive.value = undefined;
+
+  const [repositoriesResult, subscriptionResult] = await Promise.allSettled([
+    getNodeRepositories(node),
+    getNodeSubscription(node),
+  ]);
+  if (repositoriesResult.status === 'fulfilled') {
+    const repositories = repositoriesResult.value.data?.['standard-repos'];
+    standardRepositories.value = Array.isArray(repositories) ? (repositories as PveRecord[]) : [];
+  }
+  if (subscriptionResult.status === 'fulfilled') {
+    subscriptionActive.value =
+      textValue(subscriptionResult.value.data?.status).toLowerCase() === 'active';
+  }
 }
 
 async function loadResources() {
@@ -446,18 +516,21 @@ async function loadSelected() {
       current.value = statusResponse.data || {};
       rrdRows.value = rrdResponse.data || [];
     } else if (props.mode === 'host') {
+      const node = textValue(row.node);
+      const repositoryStatusPromise = loadRepositoryStatus(node);
       const [statusResponse, rrdResponse] = await Promise.all([
-        getNodeStatus(textValue(row.node)),
-        getNodeRrd(textValue(row.node), rrdTimeframe.value, rrdConsolidation.value),
+        getNodeStatus(node),
+        getNodeRrd(node, rrdTimeframe.value, rrdConsolidation.value),
       ]);
       current.value = statusResponse.data || {};
       rrdRows.value = rrdResponse.data || [];
+      await repositoryStatusPromise;
     } else {
       const rrdResponse = await getStorageRrd(
         textValue(row.node, 'localhost'),
         textValue(row.storage),
         'hour',
-        'AVERAGE',
+        'AVERAGE'
       );
       current.value = row;
       rrdRows.value = rrdResponse.data || [];
@@ -475,16 +548,22 @@ watch(
   () => props.node,
   () => {
     if (props.mode === 'host') void loadResources();
-  },
+  }
 );
 
 onMounted(loadResources);
 </script>
 
 <template>
-  <div v-if="props.mode === 'host'" class="q-ma-md host-overview">
+  <div
+    v-if="props.mode === 'host'"
+    class="q-ma-md host-overview"
+  >
     <div class="overview-toolbar">
-      <NodeSelectTable v-if="!props.hideNodeSelector" v-model="hostSelectedNode" />
+      <NodeSelectTable
+        v-if="!props.hideNodeSelector"
+        v-model="hostSelectedNode"
+      />
       <q-select
         v-model="rrdTimeframe"
         square
@@ -525,21 +604,34 @@ onMounted(loadResources);
       <q-card class="overview-panel no-shadow no-border-radius no-margin">
         <q-card-section class="panel-section">
           <div class="panel-header">
-            <span class="host-basic-title"
-              ><i class="host-status-dot" :class="`is-${nodeStatus}`"
-                ><q-tooltip>{{ nodeStatusLabel }}</q-tooltip></i
-              >{{ hostBasicTitle }}</span
-            >
+            <span class="host-basic-title">
+              <i
+                class="host-status-dot"
+                :class="`is-${nodeStatus}`"
+              >
+                <q-tooltip>{{ nodeStatusLabel }}</q-tooltip>
+              </i>
+              {{ hostBasicTitle }}
+            </span>
             <q-space />
           </div>
           <div class="host-basic-content">
             <div class="host-illustration-column">
-              <div class="host-illustration"><img :src="hostOverviewIllustration" alt="" /></div>
+              <div class="host-illustration">
+                <img
+                  :src="hostOverviewIllustration"
+                  alt=""
+                />
+              </div>
             </div>
             <div class="info-list">
-              <div v-for="item in hostInfoRows" :key="item.label" class="info-row">
+              <div
+                v-for="item in hostInfoRows"
+                :key="item.label"
+                class="info-row"
+              >
                 <span class="info-row-label">{{ item.label }}</span>
-                <strong>{{ item.value }}</strong>
+                <strong :class="item.className">{{ item.value }}</strong>
               </div>
             </div>
           </div>
@@ -564,17 +656,20 @@ onMounted(loadResources);
               <div class="resource-card-title">{{ card.title }}</div>
               <template v-if="card.loadValues">
                 <div class="load-average-values">
-                  <div v-for="value in card.loadValues" :key="value.label">
-                    <strong>{{ value.value }}</strong
-                    ><span>{{ value.label }}</span>
+                  <div
+                    v-for="value in card.loadValues"
+                    :key="value.label"
+                  >
+                    <strong>{{ value.value }}</strong>
+                    <span>{{ value.label }}</span>
                   </div>
                 </div>
               </template>
               <template v-else>
                 <strong>{{ card.value }}</strong>
                 <div class="resource-card-meta">
-                  <span>{{ gettext('Used') }}</span
-                  ><span>{{ card.meta }}</span>
+                  <span>{{ gettext('Used') }}</span>
+                  <span>{{ card.meta }}</span>
                 </div>
                 <q-circular-progress
                   show-value
@@ -596,34 +691,38 @@ onMounted(loadResources);
 
     <div class="row q-col-gutter-sm chart-grid">
       <div class="col-12 col-md-6">
-        <q-card class="chart-panel no-shadow no-border-radius"
-          ><q-card-section class="chart-card-section"
-            ><div class="chart-header">
+        <q-card class="chart-panel no-shadow no-border-radius">
+          <q-card-section class="chart-card-section">
+            <div class="chart-header">
               <strong>{{ gettext('CPU Usage') }}</strong>
             </div>
             <LineMetricChart
               :x-data="hostChartXAxis"
               :series="hostCpuSeries"
               unit-type="percent"
-              :height="260" /></q-card-section
-        ></q-card>
+              :height="260"
+            />
+          </q-card-section>
+        </q-card>
       </div>
       <div class="col-12 col-md-6">
-        <q-card class="chart-panel no-shadow no-border-radius"
-          ><q-card-section class="chart-card-section"
-            ><div class="chart-header">
+        <q-card class="chart-panel no-shadow no-border-radius">
+          <q-card-section class="chart-card-section">
+            <div class="chart-header">
               <strong>{{ gettext('Server Load') }}</strong>
             </div>
             <LineMetricChart
               :x-data="hostChartXAxis"
               :series="hostLoadSeries"
-              :height="260" /></q-card-section
-        ></q-card>
+              :height="260"
+            />
+          </q-card-section>
+        </q-card>
       </div>
       <div class="col-12 col-md-6">
-        <q-card class="chart-panel no-shadow no-border-radius"
-          ><q-card-section class="chart-card-section"
-            ><div class="chart-header">
+        <q-card class="chart-panel no-shadow no-border-radius">
+          <q-card-section class="chart-card-section">
+            <div class="chart-header">
               <strong>{{ gettext('Memory Usage') }}</strong>
             </div>
             <LineMetricChart
@@ -632,67 +731,80 @@ onMounted(loadResources);
               :tooltip-formatter="hostMemoryTooltip"
               unit-type="bytes"
               power-of-two
-              :height="260" /></q-card-section
-        ></q-card>
+              :height="260"
+            />
+          </q-card-section>
+        </q-card>
       </div>
       <div class="col-12 col-md-6">
-        <q-card class="chart-panel no-shadow no-border-radius"
-          ><q-card-section class="chart-card-section"
-            ><div class="chart-header">
+        <q-card class="chart-panel no-shadow no-border-radius">
+          <q-card-section class="chart-card-section">
+            <div class="chart-header">
               <strong>{{ gettext('Network Traffic') }}</strong>
             </div>
             <LineMetricChart
               :x-data="hostChartXAxis"
               :series="hostNetworkSeries"
               unit-type="bytespersecond"
-              :height="260" /></q-card-section
-        ></q-card>
+              :height="260"
+            />
+          </q-card-section>
+        </q-card>
       </div>
       <div class="col-12 col-md-6">
-        <q-card class="chart-panel no-shadow no-border-radius"
-          ><q-card-section class="chart-card-section"
-            ><div class="chart-header">
+        <q-card class="chart-panel no-shadow no-border-radius">
+          <q-card-section class="chart-card-section">
+            <div class="chart-header">
               <strong>{{ gettext('CPU Pressure Stall') }}</strong>
             </div>
             <LineMetricChart
               :x-data="hostChartXAxis"
               :series="hostCpuPressureSeries"
               unit-type="percent"
-              :height="260" /></q-card-section
-        ></q-card>
+              :height="260"
+            />
+          </q-card-section>
+        </q-card>
       </div>
       <div class="col-12 col-md-6">
-        <q-card class="chart-panel no-shadow no-border-radius"
-          ><q-card-section class="chart-card-section"
-            ><div class="chart-header">
+        <q-card class="chart-panel no-shadow no-border-radius">
+          <q-card-section class="chart-card-section">
+            <div class="chart-header">
               <strong>{{ gettext('IO Pressure Stall') }}</strong>
             </div>
             <LineMetricChart
               :x-data="hostChartXAxis"
               :series="hostIoPressureSeries"
               unit-type="percent"
-              :height="260" /></q-card-section
-        ></q-card>
+              :height="260"
+            />
+          </q-card-section>
+        </q-card>
       </div>
       <div class="col-12 col-md-6">
-        <q-card class="chart-panel no-shadow no-border-radius"
-          ><q-card-section class="chart-card-section"
-            ><div class="chart-header">
+        <q-card class="chart-panel no-shadow no-border-radius">
+          <q-card-section class="chart-card-section">
+            <div class="chart-header">
               <strong>{{ gettext('Memory Pressure Stall') }}</strong>
             </div>
             <LineMetricChart
               :x-data="hostChartXAxis"
               :series="hostMemoryPressureSeries"
               unit-type="percent"
-              :height="260" /></q-card-section
-        ></q-card>
-    </div>
+              :height="260"
+            />
+          </q-card-section>
+        </q-card>
+      </div>
     </div>
 
     <q-inner-loading :showing="loading" />
   </div>
 
-  <div v-else class="q-ma-md">
+  <div
+    v-else
+    class="q-ma-md"
+  >
     <div class="bg-white q-pa-sm row items-center q-gutter-sm">
       <q-select
         v-model="selectedId"
@@ -720,10 +832,18 @@ onMounted(loadResources);
 
     <div class="row q-col-gutter-md q-mt-sm">
       <div class="col-12 col-md-4">
-        <q-card flat bordered class="overview-card">
+        <q-card
+          flat
+          bordered
+          class="overview-card"
+        >
           <q-card-section>
             <div class="text-subtitle2 q-mb-sm">{{ gettext('Status') }}</div>
-            <div v-for="item in statRows" :key="item.label" class="row q-py-xs">
+            <div
+              v-for="item in statRows"
+              :key="item.label"
+              class="row q-py-xs"
+            >
               <div class="col text-grey-7">{{ item.label }}</div>
               <div class="col text-right text-grey-9">{{ item.value }}</div>
             </div>
@@ -753,7 +873,7 @@ onMounted(loadResources);
                 :percent="
                   usedPercent(
                     Number(scope.row.mem || scope.row.disk),
-                    Number(scope.row.maxmem || scope.row.maxdisk),
+                    Number(scope.row.maxmem || scope.row.maxdisk)
                   )
                 "
               />
@@ -765,34 +885,59 @@ onMounted(loadResources);
 
     <div class="row q-col-gutter-md q-mt-sm">
       <div class="col-12 col-md-6">
-        <q-card flat bordered
-          ><q-card-section
-            ><div class="text-subtitle2 q-mb-sm">{{ gettext('CPU Usage') }}</div>
-            <MetricSparkline :values="cpuValues" /></q-card-section
-        ></q-card>
+        <q-card
+          flat
+          bordered
+        >
+          <q-card-section>
+            <div class="text-subtitle2 q-mb-sm">{{ gettext('CPU Usage') }}</div>
+            <MetricSparkline :values="cpuValues" />
+          </q-card-section>
+        </q-card>
       </div>
       <div class="col-12 col-md-6">
-        <q-card flat bordered
-          ><q-card-section
-            ><div class="text-subtitle2 q-mb-sm">{{ gettext('Memory Usage') }}</div>
-            <MetricSparkline :values="memoryValues" color="#2e7d32" /></q-card-section
-        ></q-card>
+        <q-card
+          flat
+          bordered
+        >
+          <q-card-section>
+            <div class="text-subtitle2 q-mb-sm">{{ gettext('Memory Usage') }}</div>
+            <MetricSparkline
+              :values="memoryValues"
+              color="#2e7d32"
+            />
+          </q-card-section>
+        </q-card>
       </div>
       <div class="col-12 col-md-6">
-        <q-card flat bordered
-          ><q-card-section
-            ><div class="text-subtitle2 q-mb-sm">{{ gettext('Network Traffic') }}</div>
-            <MetricSparkline :values="networkValues" color="#00838f" /></q-card-section
-        ></q-card>
+        <q-card
+          flat
+          bordered
+        >
+          <q-card-section>
+            <div class="text-subtitle2 q-mb-sm">{{ gettext('Network Traffic') }}</div>
+            <MetricSparkline
+              :values="networkValues"
+              color="#00838f"
+            />
+          </q-card-section>
+        </q-card>
       </div>
       <div class="col-12 col-md-6">
-        <q-card flat bordered
-          ><q-card-section
-            ><div class="text-subtitle2 q-mb-sm">
+        <q-card
+          flat
+          bordered
+        >
+          <q-card-section>
+            <div class="text-subtitle2 q-mb-sm">
               {{ props.mode === 'storage' ? gettext('Disk Usage') : gettext('Disk IO') }}
             </div>
-            <MetricSparkline :values="diskValues" color="#ef6c00" /></q-card-section
-        ></q-card>
+            <MetricSparkline
+              :values="diskValues"
+              color="#ef6c00"
+            />
+          </q-card-section>
+        </q-card>
       </div>
     </div>
     <q-inner-loading :showing="loading" />
@@ -1118,7 +1263,6 @@ onMounted(loadResources);
   margin-top: 2px;
 }
 
-
 @media (max-width: 1280px) {
   .host-top-grid {
     grid-template-columns: 1fr;
@@ -1142,7 +1286,6 @@ onMounted(loadResources);
   .resource-card {
     flex-basis: calc((100% - 8px) / 2);
   }
-
 }
 
 .overview-card {

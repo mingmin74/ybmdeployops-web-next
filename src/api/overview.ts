@@ -214,6 +214,20 @@ export function getNodePackageVersions(node: string) {
   });
 }
 
+export function getNodeRepositories(node: string) {
+  return request<PveRecord>(`/api2/json/nodes/${encodeURIComponent(node)}/apt/repositories`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
+}
+
+export function getNodeSubscription(node: string) {
+  return request<PveRecord>(`/api2/json/nodes/${encodeURIComponent(node)}/subscription`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
+}
+
 export function getStorageRrd(node: string, storage: string, timeframe = 'hour', cf = 'AVERAGE') {
   return request<PveRecord[]>(`/api2/json/nodes/${node}/storage/${storage}/rrddata`, {
     method: 'GET',
