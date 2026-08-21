@@ -21,6 +21,7 @@ const fields = computed<NodeDiskFormField[]>(() => [{ name: 'device', label: get
 
 const columns: QTableColumn<PveRecord>[] = [
   { name: 'lv', label: gettext('Name'), field: 'lv', align: 'left', sortable: true },
+  { name: 'vg', label: gettext('Volume Group'), field: 'vg', align: 'left', sortable: true },
   { name: 'node', label: gettext('Node'), field: 'node', align: 'left', sortable: true },
   { name: 'usage', label: gettext('Usage'), field: (row) => formatPercent(Number(row.used) / Number(row.lv_size) * 100), align: 'left', sortable: true },
   {

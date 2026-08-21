@@ -54,11 +54,13 @@ function diskUsage(value: unknown) {
 
 async function loadRows(node: string) {
   const response = await getNodeDisks(node);
-  return (response.data || []).map((item, index) => ({
+  const normalize = (items: PveRecord[], prefix = ''): PveRecord[] => items.map((item, index) => ({
     ...item,
     node,
-    devpath: item.devpath || item.path || item.device || `${node}-${index}`,
+    devpath: item.devpath || item.path || item.device || `${node}-${prefix}${index}`,
+    children: Array.isArray(item.children) ? normalize(item.children as PveRecord[], `${prefix}${index}-`) : [],
   }));
+  return normalize(response.data || []);
 }
 
 function diskName(row?: PveRecord) { return String(row?.devpath || row?.name || row?.device || ''); }
@@ -96,6 +98,7 @@ function handleAction(name: string, row?: PveRecord) {
     row-key="devpath"
     :embedded="embedded"
     :node="node"
+    tree
     :actions="actions"
     @action="handleAction"
     @row-dblclick="showSmart"

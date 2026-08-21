@@ -76,6 +76,7 @@ async function create(values: Record<string, unknown>) { if (!props.node) return
 function destroy(row?: PveRecord) { destroyPool.value = String(row?.name || ''); destroyVisible.value = Boolean(props.node && destroyPool.value); }
 async function confirmDestroy(params: PveRecord) { if (!props.node || !destroyPool.value) return; destroying.value = true; try { const result = await deleteNodeZfs(props.node, destroyPool.value, params); destroyVisible.value = false; openTask(result.data); } finally { destroying.value = false; } }
 async function action(name: string, row?: PveRecord) { if (name === 'create' && props.node) { const result = await getNodeDisks(props.node); diskOptions.value = (result.data || []).filter((disk) => disk.used === 'unused').map((disk) => ({ label: String(disk.devpath || disk.name), value: String(disk.devpath || disk.name) })); createVisible.value = true; } else if (name === 'detail') void showDetail(row); else if (name === 'destroy') destroy(row); }
+function healthClass(value: unknown) { const health = String(value || '').toUpperCase(); return health === 'ONLINE' ? 'good' : health === 'DEGRADED' ? 'warning' : health === 'FAULTED' || health === 'UNAVAIL' ? 'critical' : 'faded'; }
 </script>
 
 <template>
@@ -89,7 +90,7 @@ async function action(name: string, row?: PveRecord) { if (name === 'create' && 
     :actions="actions"
     @action="action"
     @row-dblclick="showDetail"
-  />
+  ><template #body-cell-health="scope"><q-td :props="scope"><span :class="healthClass(scope.value)">{{ scope.value }}</span></q-td></template></NodeDiskTablePage>
   <q-dialog v-model="detailVisible" persistent transition-show="scale" transition-hide="scale">
     <UWindow :title="gettext('ZFS Status')" width="760px" :loading="detailLoading">
       <q-list dense separator class="q-pa-sm">
