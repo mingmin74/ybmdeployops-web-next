@@ -128,11 +128,12 @@ export function getNodeJournal(
     service: string;
     start: number;
     limit: number;
-    since: string;
-    until: string;
+    since?: string;
+    until?: string;
   }
 ) {
-  return request<JournalRecord[]>(`/api2/extjs/nodes/${node}/journal`, {
+  // PVE ServiceView opens the service journal through the node syslog endpoint.
+  return request<JournalRecord[]>(`/api2/extjs/nodes/${node}/syslog`, {
     method: 'GET',
     params,
     notifyOnError: true,
@@ -155,6 +156,13 @@ export function getNodeNetwork(node: string, params?: Record<string, unknown>) {
   }) as Promise<PveNodeNetworkResponse>;
 }
 
+export function getNodeNetworkDevice(node: string, iface: string) {
+  return request<PveNodeNetwork>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/network/${encodeURIComponent(iface)}`,
+    { method: 'GET', notifyOnError: true }
+  );
+}
+
 export function createNodeNetwork(node: string, data: Record<string, unknown>) {
   return request<string>(`/api2/extjs/nodes/${encodeURIComponent(node)}/network`, {
     method: 'POST',
@@ -174,6 +182,14 @@ export function deleteNodeNetwork(node: string, iface: string) {
     `/api2/extjs/nodes/${encodeURIComponent(node)}/network/${encodeURIComponent(iface)}`,
     { method: 'DELETE' }
   );
+}
+
+/** Discards pending /etc/network/interfaces.new changes. */
+export function revertNodeNetwork(node: string) {
+  return request<string>(`/api2/extjs/nodes/${encodeURIComponent(node)}/network`, {
+    method: 'DELETE',
+    data: {},
+  });
 }
 
 /** Applies pending /etc/network/interfaces changes through PVE's network reload task. */

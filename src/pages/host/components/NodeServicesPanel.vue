@@ -5,7 +5,6 @@ import {
   getNodeJournal,
   getNodeServices,
   reloadNodeService,
-  restartNodeService,
   startNodeService,
   stopNodeService,
   type PveService,
@@ -29,21 +28,16 @@ const logVisible = shallowRef(false);
 const logLoading = shallowRef(false);
 const logService = shallowRef('');
 const logLines = shallowRef<string[]>([]);
-const filter = shallowRef('');
+const showInstalledOnly = shallowRef(true);
 const selectedService = computed(() => selected.value[0]);
+const startOnlyServices = new Set(['pveproxy', 'pvedaemon', 'pve-cluster']);
 const nodeCaps = computed(
   () => (session.caps as unknown as { nodes?: Record<string, unknown> }).nodes || {}
 );
 const canModifyServices = computed(() => Boolean(nodeCaps.value['Sys.Modify']));
 const filteredRows = computed(() => {
-  const search = filter.value.trim().toLocaleLowerCase();
-  if (!search) return rows.value;
-
-  return rows.value.filter((service) =>
-    [service.service, service.name, service.desc]
-      .filter(Boolean)
-      .some((value) => String(value).toLocaleLowerCase().includes(search))
-  );
+  if (!showInstalledOnly.value) return rows.value;
+  return rows.value.filter((service) => service['unit-state'] !== 'not-found');
 });
 const columns: QTableColumn<PveService>[] = [
   { name: 'name', label: gettext('Name'), align: 'left', field: (row) => row.service || row.name },
@@ -53,6 +47,21 @@ const columns: QTableColumn<PveService>[] = [
 
 function serviceId(service?: PveService) {
   return service?.service || service?.name || '';
+}
+
+function canChangeService(action: 'start' | 'stop' | 'restart') {
+  const service = selectedService.value;
+  if (!service || !canModifyServices.value) return false;
+
+  const unitState = service['unit-state'];
+  if (unitState === 'masked' || unitState === 'unknown' || unitState === 'not-found') {
+    return false;
+  }
+
+  const isRunning = displayedServiceState(service) === 'running' || displayedServiceState(service) === 'active';
+  if (!isRunning) return action === 'start';
+  if (action === 'start') return false;
+  return action !== 'stop' || !startOnlyServices.has(serviceId(service));
 }
 
 function statusLabel(state?: string) {
@@ -148,16 +157,16 @@ async function loadServices() {
   }
 }
 
-async function changeService(action: 'start' | 'stop' | 'restart' | 'reload') {
+async function changeService(action: 'start' | 'stop' | 'restart') {
   const service = serviceId(selectedService.value);
-  if (!service || !canModifyServices.value) return;
+  if (!service || !canChangeService(action)) return;
   actionLoading.value = true;
   try {
     const actions = {
       start: startNodeService,
       stop: stopNodeService,
-      restart: restartNodeService,
-      reload: reloadNodeService,
+      // PVE configures ServiceView with restartCommand: 'reload' for nodes.
+      restart: reloadNodeService,
     };
     const response = await actions[action](node, service);
     taskUpid.value = response.data || '';
@@ -178,8 +187,6 @@ async function loadServiceLog() {
       service: logService.value,
       start: 0,
       limit: 500,
-      since: '',
-      until: '',
     });
     logLines.value = (response.data || []).map((record) => String(record.t || '')).filter(Boolean);
   } finally {
@@ -209,6 +216,10 @@ watch(
   { immediate: true }
 );
 
+watch(showInstalledOnly, () => {
+  if (selectedService.value?.['unit-state'] === 'not-found') selected.value = [];
+});
+
 onBeforeUnmount(stopTaskTracking);
 </script>
 
@@ -229,14 +240,14 @@ onBeforeUnmount(stopTaskTracking);
     @update:selected="selected = [...$event]"
   >
     <template #top>
-      <div class="row q-gutter-sm">
+      <div class="row full-width q-gutter-sm">
         <q-btn
           no-caps
           outline
           size="12px"
           class="u-button"
-          :color="selectedService && canModifyServices ? 'primary' : 'grey'"
-          :disable="!selectedService || !canModifyServices"
+          :color="canChangeService('start') ? 'primary' : 'grey'"
+          :disable="!canChangeService('start')"
           :loading="actionLoading"
           :label="gettext('Start')"
           @click="changeService('start')"
@@ -246,8 +257,8 @@ onBeforeUnmount(stopTaskTracking);
           outline
           size="12px"
           class="u-button"
-          :color="selectedService && canModifyServices ? 'red' : 'grey'"
-          :disable="!selectedService || !canModifyServices"
+          :color="canChangeService('stop') ? 'red' : 'grey'"
+          :disable="!canChangeService('stop')"
           :loading="actionLoading"
           :label="gettext('Stop')"
           @click="changeService('stop')"
@@ -257,8 +268,8 @@ onBeforeUnmount(stopTaskTracking);
           outline
           size="12px"
           class="u-button"
-          :color="selectedService && canModifyServices ? 'primary' : 'grey'"
-          :disable="!selectedService || !canModifyServices"
+          :color="canChangeService('restart') ? 'primary' : 'grey'"
+          :disable="!canChangeService('restart')"
           :loading="actionLoading"
           :label="gettext('Restart')"
           @click="changeService('restart')"
@@ -268,47 +279,18 @@ onBeforeUnmount(stopTaskTracking);
           outline
           size="12px"
           class="u-button"
-          :color="selectedService && canModifyServices ? 'primary' : 'grey'"
-          :disable="!selectedService || !canModifyServices"
-          :loading="actionLoading"
-          :label="gettext('Reload')"
-          @click="changeService('reload')"
-        />
-        <q-btn
-          no-caps
-          outline
-          size="12px"
-          class="u-button"
           :color="selectedService ? 'primary' : 'grey'"
           :disable="!selectedService"
-          :label="gettext('Log')"
+          :label="gettext('Service System Log')"
           @click="openServiceLog"
         />
         <q-space />
-        <q-input
-          v-model="filter"
+        <q-checkbox
+          v-model="showInstalledOnly"
           dense
-          outlined
-          clearable
-          class="node-services-filter"
-          :placeholder="gettext('Search')"
-        >
-          <template #prepend>
-            <q-icon
-              name="search"
-              size="16px"
-            />
-          </template>
-        </q-input>
-        <q-btn
-          no-caps
-          outline
-          size="12px"
+          right-label
           color="primary"
-          class="u-button"
-          :loading="loading"
-          :label="gettext('Refresh')"
-          @click="loadServices"
+          :label="gettext('Show only installed services')"
         />
       </div>
     </template>
@@ -369,10 +351,6 @@ onBeforeUnmount(stopTaskTracking);
 </template>
 
 <style scoped>
-.node-services-filter {
-  min-width: 220px;
-}
-
 .service-log-toolbar {
   min-height: 44px;
   padding: 8px 12px;
