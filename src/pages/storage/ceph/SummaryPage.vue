@@ -51,6 +51,18 @@ const osdmap = computed(
 const usage = computed(() =>
   usedPercent(Number(pgmap.value.bytes_used), Number(pgmap.value.bytes_total)),
 );
+const capacity = computed(() => {
+  const total = Number(pgmap.value.bytes_total) || 0;
+  const used = Number(pgmap.value.bytes_used) || 0;
+  const reportedAvailable = Number(pgmap.value.bytes_avail);
+  return {
+    total,
+    used,
+    available: Number.isFinite(reportedAvailable)
+      ? Math.max(0, reportedAvailable)
+      : Math.max(0, total - used),
+  };
+});
 const cephVersion = computed(() => {
   const nodes = (metadata.value.node || {}) as PveRecord;
   return Object.values(nodes).reduce((latest, node) => {
@@ -508,9 +520,26 @@ onUnmounted(() => {
               >{{ usage.toFixed(0) }}%</q-circular-progress
             >
             <div class="usage-ring-value">
-              {{ formatBytes(pgmap.bytes_used as number) }} {{ gettext('of') }}
-              {{ formatBytes(pgmap.bytes_total as number) }}
+              {{ formatBytes(capacity.used) }} {{ gettext('of') }} {{ formatBytes(capacity.total) }}
             </div>
+            <dl class="capacity-summary">
+              <div>
+                <dt>{{ gettext('Total') }}</dt>
+                <dd>{{ formatBytes(capacity.total) }}</dd>
+              </div>
+              <div>
+                <dt>{{ gettext('Used') }}</dt>
+                <dd>{{ formatBytes(capacity.used) }}</dd>
+              </div>
+              <div>
+                <dt>{{ gettext('Available') }}</dt>
+                <dd>{{ formatBytes(capacity.available) }}</dd>
+              </div>
+              <div>
+                <dt>{{ gettext('Usage') }}</dt>
+                <dd>{{ usage.toFixed(0) }}%</dd>
+              </div>
+            </dl>
             <div v-if="recovery" class="recovery-summary">
               <span>{{ gettext('Recovery') }} / {{ gettext('Rebalance') }}</span
               ><strong>{{ recovery.recovered }} / {{ recovery.total }}</strong
@@ -695,6 +724,30 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 600;
   line-height: 18px;
+}
+.capacity-summary {
+  align-self: stretch;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 12px 0 0;
+  text-align: left;
+}
+.capacity-summary div {
+  min-width: 0;
+}
+.capacity-summary dt {
+  color: #666;
+  font-size: 12px;
+}
+.capacity-summary dd {
+  color: #333;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 2px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .recovery-summary {
   align-self: stretch;

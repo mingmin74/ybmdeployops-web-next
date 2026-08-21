@@ -5,7 +5,7 @@ import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 import NodeDiskTablePage from '@/components/NodeDiskTablePage.vue';
 import NodeDiskFormDialog, { type NodeDiskFormField } from './NodeDiskFormDialog.vue';
 import NodeDiskDestroyDialog from './NodeDiskDestroyDialog.vue';
-import { createNodeDirectory, deleteNodeDirectory, getNodeDirectories, getNodeDisks, type PveRecord } from '@/api/resources';
+import { createNodeDirectory, deleteNodeDirectory, getNodeDirectories, getNodeUnusedDisks, type PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
 
 const props = defineProps<{
@@ -43,7 +43,7 @@ function openTask(upid: unknown) { taskUpid.value = String(upid || ''); taskVisi
 async function create(values: Record<string, unknown>) { if (!props.node) return; saving.value = true; try { const result = await createNodeDirectory(props.node, values); createVisible.value = false; openTask(result.data); } finally { saving.value = false; } }
 function destroy(row?: PveRecord) { destroyName.value = String(row?.path || ''); destroyVisible.value = Boolean(props.node && destroyName.value); }
 async function confirmDestroy(params: PveRecord) { if (!props.node || !destroyName.value) return; destroying.value = true; try { const result = await deleteNodeDirectory(props.node, destroyName.value, params); destroyVisible.value = false; openTask(result.data); } finally { destroying.value = false; } }
-async function action(name: string, row?: PveRecord) { if (name === 'create' && props.node) { const result = await getNodeDisks(props.node); diskOptions.value = (result.data || []).filter((disk) => disk.used === 'unused').map((disk) => ({ label: String(disk.devpath || disk.name), value: String(disk.devpath || disk.name) })); createVisible.value = true; } else if (name === 'destroy') destroy(row); }
+async function action(name: string, row?: PveRecord) { if (name === 'create' && props.node) { const result = await getNodeUnusedDisks(props.node); diskOptions.value = (result.data || []).map((disk) => ({ label: String(disk.devpath || disk.name), value: String(disk.devpath || disk.name) })); createVisible.value = true; } else if (name === 'destroy') destroy(row); }
 </script>
 
 <template>
