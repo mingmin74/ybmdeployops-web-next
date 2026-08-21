@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { QTableColumn } from 'quasar';
-import { computed, onMounted, ref, shallowRef } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
 import type { PveRecord } from '@/api/resources';
 import { getCephConfig, getCephConfigDb, getCephCrush } from '@/api/ceph';
 import { gettext } from '@/locale';
@@ -11,37 +11,46 @@ const rawCrush = ref('');
 const dbRows = shallowRef<PveRecord[]>([]);
 const mainSplitter = ref(50);
 const configSplitter = ref(50);
-const columns: QTableColumn<PveRecord>[] = [
-  {
-    name: 'section',
-    label: gettext('Section'),
-    align: 'left',
-    field: (row) => row.section || '-',
-    sortable: true,
-  },
-  {
-    name: 'name',
-    required: true,
-    label: gettext('Name'),
-    align: 'left',
-    field: (row) => row.name || '-',
-    sortable: true,
-  },
-  {
-    name: 'value',
-    label: gettext('Value'),
-    align: 'left',
-    field: (row) => row.value || '-',
-    sortable: true,
-  },
-  {
-    name: 'level',
-    label: gettext('Level'),
-    align: 'left',
-    field: (row) => row.level || '-',
-    sortable: true,
-  },
-];
+const { node = 'localhost' } = defineProps<{ node?: string }>();
+
+const dbColumns = computed<QTableColumn<PveRecord>[]>(() => {
+  const columns: QTableColumn<PveRecord>[] = [
+    {
+      name: 'section',
+      label: gettext('WHO'),
+      align: 'left',
+      field: (row) => row.section || '-',
+      sortable: true,
+    },
+    {
+      name: 'name',
+      required: true,
+      label: gettext('OPTION'),
+      align: 'left',
+      field: (row) => row.name || '-',
+      sortable: true,
+    },
+    {
+      name: 'value',
+      label: gettext('VALUE'),
+      align: 'left',
+      field: (row) => row.value || '-',
+      sortable: true,
+    },
+  ];
+
+  if (dbRows.value.some((row) => row.mask)) {
+    columns.splice(1, 0, {
+      name: 'mask',
+      label: gettext('MASK'),
+      align: 'left',
+      field: (row) => row.mask || '-',
+      sortable: true,
+    });
+  }
+
+  return columns;
+});
 
 const configText = computed(() => rawConfig.value || gettext('no record can be found'));
 const crushText = computed(() => rawCrush.value || gettext('no record can be found'));
@@ -54,9 +63,9 @@ async function refreshData() {
   loading.value = true;
   try {
     const [rawResponse, crushResponse, dbResponse] = await Promise.allSettled([
-      getCephConfig(),
-      getCephCrush(),
-      getCephConfigDb(),
+      getCephConfig(node),
+      getCephCrush(node),
+      getCephConfigDb(node),
     ]);
     if (rawResponse.status === 'fulfilled') {
       rawConfig.value = formatRawResponse(rawResponse.value.data);
@@ -69,7 +78,11 @@ async function refreshData() {
   }
 }
 
-onMounted(refreshData);
+watch(
+  () => node,
+  () => refreshData(),
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -114,10 +127,10 @@ onMounted(refreshData);
                 row-key="name"
                 table-header-class="u-table-header"
                 :rows="dbRows"
-                :columns="columns"
+                :columns="dbColumns"
                 :loading="loading"
-                :pagination="{ page: 1, rowsPerPage: 10 }"
-                :rows-per-page-options="[10]"
+                :pagination="{ page: 1, rowsPerPage: 0 }"
+                :rows-per-page-options="[0]"
               /></section
           ></template> </q-splitter
       ></template>
