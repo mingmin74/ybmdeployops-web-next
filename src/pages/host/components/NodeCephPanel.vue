@@ -5,5 +5,5 @@ defineProps<{ node: string }>();
 </script>
 
 <template>
-  <CephPage />
+  <CephPage :node="node" />
 </template>

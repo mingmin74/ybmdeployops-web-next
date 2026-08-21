@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue';
+import { computed, onMounted, onUnmounted, shallowRef } from 'vue';
 import LineMetricChart from '@/components/LineMetricChart.vue';
 import LegacyRingChart from '@/pages/dashboard/components/LegacyRingChart.vue';
 import type { PveRecord } from '@/api/resources';
@@ -27,7 +27,6 @@ type PerformancePoint = {
   writeIops: number;
 };
 
-const loading = ref(false);
 const status = shallowRef<PveRecord>({});
 const metadata = shallowRef<PveRecord>({});
 const performanceHistory = shallowRef<PerformancePoint[]>([]);
@@ -51,18 +50,6 @@ const osdmap = computed(
 const usage = computed(() =>
   usedPercent(Number(pgmap.value.bytes_used), Number(pgmap.value.bytes_total)),
 );
-const capacity = computed(() => {
-  const total = Number(pgmap.value.bytes_total) || 0;
-  const used = Number(pgmap.value.bytes_used) || 0;
-  const reportedAvailable = Number(pgmap.value.bytes_avail);
-  return {
-    total,
-    used,
-    available: Number.isFinite(reportedAvailable)
-      ? Math.max(0, reportedAvailable)
-      : Math.max(0, total - used),
-  };
-});
 const cephVersion = computed(() => {
   const nodes = (metadata.value.node || {}) as PveRecord;
   return Object.values(nodes).reduce((latest, node) => {
@@ -209,23 +196,25 @@ const services = computed<ServiceRow[]>(() =>
           ((status.value.mgrmap as PveRecord).standbys as PveRecord[]).some(
             (mgr) => textValue(mgr.name) === name,
           );
-        const state = active
-          ? gettext('active')
-          : standby
-            ? gettext('standby')
-            : textValue(service.status || service.state || service.service, gettext('Unknown'));
+        const address = textValue(service.addr || service.addrs, gettext('Unknown'));
+        const metadataNode = ((metadata.value.node as PveRecord | undefined)?.[host] || {}) as PveRecord;
+        const version = cephVersionText(
+          service.version ||
+            service.ceph_version ||
+            metadataNode.version ||
+            (metadata.value.version as PveRecord | undefined)?.[host],
+          '-',
+        );
+        const health = serviceHealth(type, name, service, version, address, active, standby);
         return {
           id: `${type}-${id}`,
           type,
           name,
           host,
-          address: textValue(service.addr || service.addrs, gettext('Unknown')),
-          version: textValue(
-            service.version || (metadata.value.version as PveRecord | undefined)?.[host],
-            '-',
-          ),
-          status: state,
-          color: statusColor(state),
+          address,
+          version,
+          status: health.status,
+          color: health.color,
         };
       });
     })
@@ -268,6 +257,62 @@ function statusColor(value: string) {
     return 'warning';
   if (normalized.includes('OK') || normalized === 'ACTIVE') return 'positive';
   return 'grey-7';
+}
+
+function serviceIcon(color: string) {
+  if (color === 'positive') return 'check_circle';
+  if (color === 'warning') return 'warning';
+  if (color === 'negative') return 'error';
+  return 'help';
+}
+
+function cephVersionText(value: unknown, fallback: string) {
+  if (!value || typeof value !== 'object') return textValue(value, fallback);
+  const version = value as PveRecord;
+  return textValue(version.str || version.version || version.ceph_version || version.ceph_version_short, fallback);
+}
+
+function serviceHealth(
+  type: string,
+  name: string,
+  service: PveRecord,
+  version: string,
+  address: string,
+  active: boolean,
+  standby: boolean,
+) {
+  const unknownAddress = gettext('Unknown');
+  if ((textValue(service.service) && version === '-') || (version === '-' && address === unknownAddress)) {
+    return { status: gettext('Unknown'), color: 'grey-7' };
+  }
+
+  if (type === 'mon') {
+    const quorumNames = status.value.quorum_names;
+    let color = Array.isArray(quorumNames) && !quorumNames.includes(name) ? 'negative' : 'positive';
+    const checks = ((status.value.health as PveRecord | undefined)?.checks || {}) as PveRecord;
+    Object.entries(checks).forEach(([id, value]) => {
+      if (!id.startsWith('MON_')) return;
+      const details = (value as PveRecord).detail;
+      if (
+        Array.isArray(details) &&
+        details.some((detail) => new RegExp(`mon\\.${name}(?:\\b|$)`).test(textValue((detail as PveRecord).message)))
+      ) {
+        const warningColor = statusColor(textValue((value as PveRecord).severity));
+        if (warningColor === 'negative' || (warningColor === 'warning' && color === 'positive')) {
+          color = warningColor;
+        }
+      }
+    });
+    return { status: color === 'positive' ? gettext('active') : gettext('Unknown'), color };
+  }
+
+  if (type === 'mgr') {
+    if (active) return { status: gettext('active'), color: 'positive' };
+    if (standby) return { status: gettext('standby'), color: 'positive' };
+    if (status.value.mgrmap) return { status: gettext('Unknown'), color: 'warning' };
+  }
+
+  return { status: gettext('active'), color: 'positive' };
 }
 
 function pgCategory(state: string) {
@@ -340,12 +385,7 @@ async function refreshMetadata() {
   metadata.value = response.data || {};
 }
 async function refreshData() {
-  loading.value = true;
-  try {
-    await Promise.allSettled([refreshStatus(), refreshMetadata()]);
-  } finally {
-    loading.value = false;
-  }
+  await Promise.allSettled([refreshStatus(), refreshMetadata()]);
 }
 
 onMounted(() => {
@@ -361,18 +401,6 @@ onUnmounted(() => {
 
 <template>
   <div class="ceph-summary column q-gutter-md">
-    <div class="row justify-end">
-      <q-btn
-        no-caps
-        outline
-        size="12px"
-        color="primary"
-        class="u-button"
-        :loading="loading"
-        :label="gettext('Refresh')"
-        @click="refreshData"
-      />
-    </div>
     <div class="row q-col-gutter-sm">
       <div class="col-12 col-lg-6">
         <q-card class="summary-panel no-shadow no-border-radius full-height"
@@ -453,27 +481,29 @@ onUnmounted(() => {
                 <div class="text-center q-mt-sm">{{ gettext('Total') }}: {{ osdStatus.total }}</div>
               </div>
               <div class="col-12 col-sm-7">
-                <div class="text-subtitle2 q-mb-sm">{{ gettext('PGs') }}</div>
-                <div class="pg-chart-wrap">
-                  <LegacyRingChart
-                    v-if="pgChartData.length"
-                    :chart-data="pgChartData"
-                    :chart-option="{ radius: ['46%', '74%'] }"
-                  />
-                  <div class="pg-chart-center">
-                    <strong>{{ pgmap.num_pgs || 0 }}</strong
-                    ><span>{{ gettext('PGs') }}</span>
+                <div class="text-subtitle2 text-center q-mb-sm">{{ gettext('PGs') }}</div>
+                <div class="pg-layout">
+                  <div class="pg-chart-wrap">
+                    <LegacyRingChart
+                      v-if="pgChartData.length"
+                      :chart-data="pgChartData"
+                      :chart-option="{ radius: ['46%', '74%'] }"
+                    />
+                    <div class="pg-chart-center">
+                      <strong>{{ pgmap.num_pgs || 0 }}</strong
+                      ><span>{{ gettext('PGs') }}</span>
+                    </div>
                   </div>
-                </div>
-                <div v-if="pgStates.length" class="pg-state-list">
-                  <div v-for="state in pgStates" :key="state.state_name" class="row items-center">
-                    <q-icon name="circle" :color="state.color" size="10px" class="q-mr-sm" /><span
-                      class="col"
-                      >{{ state.state_name }}</span
-                    ><span>{{ state.count }}</span>
+                  <div v-if="pgStates.length" class="pg-state-list">
+                    <div v-for="state in pgStates" :key="state.state_name" class="row items-center">
+                      <q-icon name="circle" :color="state.color" size="10px" class="q-mr-sm" /><span
+                        class="col"
+                        >{{ state.state_name }}</span
+                      ><span>{{ state.count }}</span>
+                    </div>
                   </div>
+                  <div v-else class="text-grey-7">-</div>
                 </div>
-                <div v-else class="text-grey-7">-</div>
               </div>
             </div></q-card-section
           ></q-card
@@ -488,8 +518,9 @@ onUnmounted(() => {
             <div class="service-group-title">{{ group.title }}</div>
             <div v-if="group.items.length" class="service-list">
               <div v-for="service in group.items" :key="service.id" class="service-widget">
-                <span>{{ service.name }}</span
-                ><q-icon name="circle" :color="service.color" size="12px" /><q-tooltip
+                <q-icon :name="serviceIcon(service.color)" :color="service.color" size="18px" /><span
+                  >{{ service.name }}</span
+                ><q-tooltip
                   class="service-tooltip"
                   ><div>{{ gettext('Host') }}: {{ service.host }}</div>
                   <div>{{ gettext('Address') }}: {{ service.address }}</div>
@@ -520,26 +551,9 @@ onUnmounted(() => {
               >{{ usage.toFixed(0) }}%</q-circular-progress
             >
             <div class="usage-ring-value">
-              {{ formatBytes(capacity.used) }} {{ gettext('of') }} {{ formatBytes(capacity.total) }}
+              {{ formatBytes(pgmap.bytes_used as number) }} {{ gettext('of') }}
+              {{ formatBytes(pgmap.bytes_total as number) }}
             </div>
-            <dl class="capacity-summary">
-              <div>
-                <dt>{{ gettext('Total') }}</dt>
-                <dd>{{ formatBytes(capacity.total) }}</dd>
-              </div>
-              <div>
-                <dt>{{ gettext('Used') }}</dt>
-                <dd>{{ formatBytes(capacity.used) }}</dd>
-              </div>
-              <div>
-                <dt>{{ gettext('Available') }}</dt>
-                <dd>{{ formatBytes(capacity.available) }}</dd>
-              </div>
-              <div>
-                <dt>{{ gettext('Usage') }}</dt>
-                <dd>{{ usage.toFixed(0) }}%</dd>
-              </div>
-            </dl>
             <div v-if="recovery" class="recovery-summary">
               <span>{{ gettext('Recovery') }} / {{ gettext('Rebalance') }}</span
               ><strong>{{ recovery.recovered }} / {{ recovery.total }}</strong
@@ -577,7 +591,7 @@ onUnmounted(() => {
 
 <style scoped>
 .ceph-summary {
-  padding: 16px;
+  padding: 0;
 }
 .summary-panel {
   background: #fff;
@@ -625,6 +639,12 @@ onUnmounted(() => {
 .pg-chart-wrap {
   height: 148px;
   position: relative;
+  width: 148px;
+}
+.pg-layout {
+  align-items: center;
+  display: flex;
+  gap: 14px;
 }
 .pg-chart-center {
   align-items: center;
@@ -645,10 +665,10 @@ onUnmounted(() => {
   font-size: 12px;
 }
 .pg-state-list {
-  display: grid;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   gap: 4px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-top: 10px;
 }
 .service-grid {
   display: grid;
@@ -725,30 +745,6 @@ onUnmounted(() => {
   font-weight: 600;
   line-height: 18px;
 }
-.capacity-summary {
-  align-self: stretch;
-  display: grid;
-  gap: 6px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 12px 0 0;
-  text-align: left;
-}
-.capacity-summary div {
-  min-width: 0;
-}
-.capacity-summary dt {
-  color: #666;
-  font-size: 12px;
-}
-.capacity-summary dd {
-  color: #333;
-  font-size: 12px;
-  font-weight: 600;
-  margin: 2px 0 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .recovery-summary {
   align-self: stretch;
   display: grid;
@@ -799,7 +795,6 @@ onUnmounted(() => {
   }
 }
 @media (max-width: 760px) {
-  .pg-state-list,
   .performance-charts,
   .service-grid {
     grid-template-columns: 1fr;

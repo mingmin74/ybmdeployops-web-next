@@ -10,6 +10,7 @@ import CephSummaryPage from './ceph/SummaryPage.vue';
 import { gettext } from '@/locale';
 
 const tab = ref('summary');
+const { node = 'localhost' } = defineProps<{ node?: string }>();
 </script>
 
 <template>
@@ -32,13 +33,13 @@ const tab = ref('summary');
     </q-tabs>
     <q-separator />
     <q-tab-panels v-model="tab" animated>
-      <q-tab-panel name="summary"><CephSummaryPage /></q-tab-panel>
+      <q-tab-panel name="summary" class="q-pa-none"><CephSummaryPage /></q-tab-panel>
       <q-tab-panel name="monitor"><CephMonitorPage /></q-tab-panel>
       <q-tab-panel name="osd"><CephOsdPage /></q-tab-panel>
       <q-tab-panel name="cephfs"><CephFilesystemPage /></q-tab-panel>
       <q-tab-panel name="pools"><CephStoragePoolsPage /></q-tab-panel>
       <q-tab-panel name="config"><CephConfigurationPage /></q-tab-panel>
-      <q-tab-panel name="logs"><CephLogsPage /></q-tab-panel>
+      <q-tab-panel name="logs"><CephLogsPage :node="node" /></q-tab-panel>
     </q-tab-panels>
   </div>
 </template>
