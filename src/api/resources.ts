@@ -195,12 +195,16 @@ export function getClusterResources(params?: PveRecord) {
   });
 }
 
-export function getNodeDisks(node: string) {
+export function getNodeDisks(node: string, params: PveRecord = {}) {
   return request<PveRecord[]>(`/api2/json/nodes/${node}/disks/list`, {
     method: 'GET',
-    params: { 'include-partitions': 1 },
+    params: { 'include-partitions': 1, ...params },
     notifyOnError: true,
   });
+}
+
+export function getNodeUnusedDisks(node: string) {
+  return getNodeDisks(node, { type: 'unused' });
 }
 
 export function getNodeDirectories(node: string) {

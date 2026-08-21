@@ -82,11 +82,11 @@ async function showSmart(row?: PveRecord) {
   finally { smartLoading.value = false; }
 }
 function initializeGpt(row?: PveRecord) {
-  const disk = diskName(row); if (!props.node || !disk || String(row?.used) !== 'unused') return;
+  const disk = diskName(row); if (!props.node || !disk || row?.parent || (row?.used && row.used !== 'unused')) return;
   Dialog.create({ title: gettext('Initialize Disk with GPT'), message: `${gettext('Initialize Disk with GPT')}: ${disk}`, cancel: true, persistent: true }).onOk(() => void initializeNodeDiskGpt(props.node!, disk).then((result) => openTask(result.data, gettext('Initialize Disk with GPT'))));
 }
 function wipe(row?: PveRecord) {
-  const disk = diskName(row); if (!props.node || !disk || String(row?.used) !== 'unused') return;
+  const disk = diskName(row); if (!props.node || !disk || row?.parent) return;
   Dialog.create({ title: gettext('Wipe Disk'), message: `${gettext('All data on the device will be lost!')}<br><br>${disk}<br>${gettext('Usage')}: ${diskUsage(row?.used)}<br>${gettext('Size')}: ${formatBytes(row?.size)}<br>${gettext('Serial')}: ${row?.serial || '-'}`, html: true, cancel: true, persistent: true }).onOk(() => void wipeNodeDisk(props.node!, disk).then((result) => openTask(result.data, gettext('Wipe Disk'))));
 }
 function handleAction(name: string, row?: PveRecord) {

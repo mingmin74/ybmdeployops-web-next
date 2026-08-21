@@ -5,7 +5,7 @@ import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 import NodeDiskTablePage from '@/components/NodeDiskTablePage.vue';
 import NodeDiskFormDialog, { type NodeDiskFormField } from './NodeDiskFormDialog.vue';
 import NodeDiskDestroyDialog from './NodeDiskDestroyDialog.vue';
-import { createNodeLvmThin, deleteNodeLvmThin, getNodeDisks, getNodeLvmThin, type PveRecord } from '@/api/resources';
+import { createNodeLvmThin, deleteNodeLvmThin, getNodeUnusedDisks, getNodeLvmThin, type PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
 import { formatBytes, formatPercent } from '@/utils/format';
 
@@ -73,7 +73,7 @@ function openTask(upid: unknown) { taskUpid.value = String(upid || ''); taskVisi
 async function create(values: Record<string, unknown>) { if (!props.node) return; saving.value = true; try { const result = await createNodeLvmThin(props.node, values); createVisible.value = false; openTask(result.data); } finally { saving.value = false; } }
 function destroy(row?: PveRecord) { destroyPool.value = String(row?.lv || ''); destroyVg.value = String(row?.vg || row?.['volume-group'] || ''); destroyVisible.value = Boolean(props.node && destroyPool.value && destroyVg.value); }
 async function confirmDestroy(params: PveRecord) { if (!props.node || !destroyPool.value || !destroyVg.value) return; destroying.value = true; try { const result = await deleteNodeLvmThin(props.node, destroyVg.value, destroyPool.value, params); destroyVisible.value = false; openTask(result.data); } finally { destroying.value = false; } }
-async function action(name: string, row?: PveRecord) { if (name === 'create' && props.node) { const result = await getNodeDisks(props.node); diskOptions.value = (result.data || []).filter((disk) => disk.used === 'unused').map((disk) => ({ label: String(disk.devpath || disk.name), value: String(disk.devpath || disk.name) })); createVisible.value = true; } else if (name === 'destroy') destroy(row); }
+async function action(name: string, row?: PveRecord) { if (name === 'create' && props.node) { const result = await getNodeUnusedDisks(props.node); diskOptions.value = (result.data || []).map((disk) => ({ label: String(disk.devpath || disk.name), value: String(disk.devpath || disk.name) })); createVisible.value = true; } else if (name === 'destroy') destroy(row); }
 </script>
 
 <template>

@@ -6,7 +6,7 @@ import UsageProgress from '@/components/UsageProgress.vue';
 import NodeDiskTablePage from '@/components/NodeDiskTablePage.vue';
 import NodeDiskFormDialog, { type NodeDiskFormField } from './NodeDiskFormDialog.vue';
 import NodeDiskDestroyDialog from './NodeDiskDestroyDialog.vue';
-import { createNodeLvm, deleteNodeLvm, getNodeDisks, getNodeLvm, type PveRecord } from '@/api/resources';
+import { createNodeLvm, deleteNodeLvm, getNodeUnusedDisks, getNodeLvm, type PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
 import { formatBytes, usagePercent } from '@/utils/format';
 
@@ -63,7 +63,7 @@ function openTask(upid: unknown) { taskUpid.value = String(upid || ''); taskVisi
 async function create(values: Record<string, unknown>) { if (!props.node) return; saving.value = true; try { const result = await createNodeLvm(props.node, values); createVisible.value = false; openTask(result.data); } finally { saving.value = false; } }
 function destroy(row?: PveRecord) { destroyName.value = String(row?.name || ''); destroyVisible.value = Boolean(props.node && destroyName.value); }
 async function confirmDestroy(params: PveRecord) { if (!props.node || !destroyName.value) return; destroying.value = true; try { const result = await deleteNodeLvm(props.node, destroyName.value, params); destroyVisible.value = false; openTask(result.data); } finally { destroying.value = false; } }
-async function action(name: string, row?: PveRecord) { if (name === 'create' && props.node) { const result = await getNodeDisks(props.node); diskOptions.value = (result.data || []).filter((disk) => disk.used === 'unused').map((disk) => ({ label: String(disk.devpath || disk.name), value: String(disk.devpath || disk.name) })); createVisible.value = true; } else if (name === 'destroy') destroy(row); }
+async function action(name: string, row?: PveRecord) { if (name === 'create' && props.node) { const result = await getNodeUnusedDisks(props.node); diskOptions.value = (result.data || []).map((disk) => ({ label: String(disk.devpath || disk.name), value: String(disk.devpath || disk.name) })); createVisible.value = true; } else if (name === 'destroy') destroy(row); }
 </script>
 
 <template>
@@ -77,7 +77,11 @@ async function action(name: string, row?: PveRecord) { if (name === 'create' && 
     :actions="actions"
     tree
     @action="action"
-  ><template #body-cell-usage="scope"><q-td :props="scope"><UsageProgress :percent="Number(scope.value)" /></q-td></template></NodeDiskTablePage>
+  >
+    <template #body-cell-lvcount="scope"><q-td :props="scope">{{ Number(scope.row.__treeLevel || 0) ? '-' : scope.value }}</q-td></template>
+    <template #body-cell-free="scope"><q-td :props="scope">{{ Number(scope.row.__treeLevel || 0) ? '-' : scope.value }}</q-td></template>
+    <template #body-cell-usage="scope"><q-td :props="scope"><UsageProgress v-if="Number(scope.row.__treeLevel || 0) || scope.value !== '-'" :percent="Number(scope.value)" /><span v-else>-</span></q-td></template>
+  </NodeDiskTablePage>
   <NodeDiskFormDialog v-model="createVisible" :title="`${gettext('Create')}: ${gettext('Volume Group')}`" :fields="fields" :defaults="{ add_storage: true }" :loading="saving" @submit="create" />
   <NodeDiskDestroyDialog v-model="destroyVisible" :item="destroyName" :loading="destroying" @submit="confirmDestroy" />
   <TaskOutputDialog v-model="taskVisible" :node="node || ''" :upid="taskUpid" :title="gettext('Create')" @finished="table?.reload()" />

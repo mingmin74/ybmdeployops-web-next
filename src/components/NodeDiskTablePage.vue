@@ -180,6 +180,8 @@ watch(
         </template>
         <template #body-cell-usage="scope"><slot name="body-cell-usage" v-bind="scope"><q-td :props="scope">{{ scope.value }}</q-td></slot></template>
         <template #body-cell-health="scope"><slot name="body-cell-health" v-bind="scope"><q-td :props="scope">{{ scope.value }}</q-td></slot></template>
+        <template #body-cell-lvcount="scope"><slot name="body-cell-lvcount" v-bind="scope"><q-td :props="scope">{{ scope.value }}</q-td></slot></template>
+        <template #body-cell-free="scope"><slot name="body-cell-free" v-bind="scope"><q-td :props="scope">{{ scope.value }}</q-td></slot></template>
       </q-table>
     </q-card-section>
   </q-card>
