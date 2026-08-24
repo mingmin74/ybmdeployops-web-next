@@ -232,12 +232,6 @@ const routes: RouteRecordRaw[] = [
         meta: { auth: true, title: 'Storage Services' },
       },
       {
-        path: 'computer/iso',
-        name: 'computer-iso',
-        component: () => import('@/pages/computer/IsoPage.vue'),
-        meta: { auth: true, title: 'ISO Image' },
-      },
-      {
         path: 'computer/overview',
         name: 'computer-overview',
         component: () => import('@/pages/computer/OverviewPage.vue'),
@@ -268,10 +262,10 @@ const routes: RouteRecordRaw[] = [
         meta: { auth: true, title: 'Ct Container' },
       },
       {
-        path: 'computer/images',
-        name: 'computer-images',
-        component: () => import('@/pages/computer/ImagesPage.vue'),
-        meta: { auth: true, title: 'Disk Image' },
+        path: 'computer/network',
+        name: 'computer-network',
+        component: () => import('@/pages/computer/NetworkPage.vue'),
+        meta: { auth: true, title: 'Network' },
       },
       {
         path: 'computer/ha',

@@ -46,6 +46,23 @@ export function getHaRules() {
   });
 }
 
+export function getHaRule(id: string) {
+  return request<PveRecord>(`/api2/extjs/cluster/ha/rules/${encodeURIComponent(id)}`, {
+    method: 'GET',
+  });
+}
+
+export function createHaRule(data: PveRecord) {
+  return request('/api2/extjs/cluster/ha/rules', { method: 'POST', data });
+}
+
+export function updateHaRule(id: string, data: PveRecord) {
+  return request(`/api2/extjs/cluster/ha/rules/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    data,
+  });
+}
+
 export function deleteHaRule(id: string) {
   return request(`/api2/extjs/cluster/ha/rules/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }

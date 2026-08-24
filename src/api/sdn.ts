@@ -18,7 +18,7 @@ export function getSdnFabrics() {
       method: 'GET',
       params: { pending: 1 },
       notifyOnError: true,
-    },
+    }
   );
 }
 
@@ -46,14 +46,14 @@ export function deleteSdnFabric(id: string) {
 export function getSdnFabricNode(fabricId: string, nodeId: string) {
   return request<PveRecord>(
     `/api2/json/cluster/sdn/fabrics/node/${encodeURIComponent(fabricId)}/${encodeURIComponent(nodeId)}`,
-    { method: 'GET', notifyOnError: true },
+    { method: 'GET', notifyOnError: true }
   );
 }
 
 export function getSdnFabricNodes(fabricId: string) {
   return request<PveRecord[]>(
     `/api2/json/cluster/sdn/fabrics/node/${encodeURIComponent(fabricId)}`,
-    { method: 'GET', notifyOnError: true },
+    { method: 'GET', notifyOnError: true }
   );
 }
 
@@ -67,7 +67,7 @@ export function saveSdnFabricNode(fabricId: string, nodeId: string | undefined, 
 export function deleteSdnFabricNode(fabricId: string, nodeId: string) {
   return request(
     `/api2/json/cluster/sdn/fabrics/node/${encodeURIComponent(fabricId)}/${encodeURIComponent(nodeId)}`,
-    { method: 'DELETE', notifyOnError: true },
+    { method: 'DELETE', notifyOnError: true }
   );
 }
 
@@ -88,6 +88,27 @@ export function getSdnZone(zone: string) {
     method: 'GET',
     notifyOnError: true,
   });
+}
+
+export function getSdnZoneContent(node: string, zone: string) {
+  if (zone === 'localnetwork') {
+    return request<PveRecord[]>(`/api2/json/nodes/${encodeURIComponent(node)}/network`, {
+      method: 'GET',
+      params: { type: 'any_local_bridge' },
+      notifyOnError: true,
+    });
+  }
+  return request<PveRecord[]>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/sdn/zones/${encodeURIComponent(zone)}/content`,
+    { method: 'GET', notifyOnError: true }
+  );
+}
+
+export function getSdnZoneBridges(node: string, zone: string) {
+  return request<PveRecord[]>(
+    `/api2/json/nodes/${encodeURIComponent(node)}/sdn/zones/${encodeURIComponent(zone)}/bridges`,
+    { method: 'GET', notifyOnError: true }
+  );
 }
 
 export function saveSdnZone(zone: string | undefined, data: PveRecord) {
@@ -147,7 +168,7 @@ export function getSdnVnetSubnet(vnet: string, subnet: string) {
     {
       method: 'GET',
       notifyOnError: true,
-    },
+    }
   );
 }
 
@@ -164,7 +185,7 @@ export function deleteSdnVnetSubnet(vnet: string, subnet: string) {
     {
       method: 'DELETE',
       notifyOnError: true,
-    },
+    }
   );
 }
 
@@ -252,14 +273,14 @@ export function getSdnRouteMaps() {
 export function getSdnRouteMapEntry(routeMapId: string, order: string | number) {
   return request<PveRecord>(
     `/api2/json/cluster/sdn/route-maps/entries/${encodeURIComponent(routeMapId)}/entry/${encodeURIComponent(String(order))}`,
-    { method: 'GET', notifyOnError: true },
+    { method: 'GET', notifyOnError: true }
   );
 }
 
 export function saveSdnRouteMapEntry(
   routeMapId: string | undefined,
   order: string | number | undefined,
-  data: PveRecord,
+  data: PveRecord
 ) {
   const editing = routeMapId !== undefined && order !== undefined;
   const url = editing
@@ -271,7 +292,7 @@ export function saveSdnRouteMapEntry(
 export function deleteSdnRouteMapEntry(routeMapId: string, order: string | number) {
   return request(
     `/api2/json/cluster/sdn/route-maps/entries/${encodeURIComponent(routeMapId)}/entry/${encodeURIComponent(String(order))}`,
-    { method: 'DELETE', notifyOnError: true },
+    { method: 'DELETE', notifyOnError: true }
   );
 }
 
@@ -307,14 +328,14 @@ export function deleteSdnPrefixList(id: string) {
 export function getSdnPrefixListEntries(prefixListId: string) {
   return request<PveRecord[]>(
     `/api2/json/cluster/sdn/prefix-lists/${encodeURIComponent(prefixListId)}/entries`,
-    { method: 'GET', notifyOnError: true },
+    { method: 'GET', notifyOnError: true }
   );
 }
 
 export function saveSdnPrefixListEntry(
   prefixListId: string,
   seq: string | number | undefined,
-  data: PveRecord,
+  data: PveRecord
 ) {
   const url =
     seq !== undefined
@@ -326,7 +347,7 @@ export function saveSdnPrefixListEntry(
 export function deleteSdnPrefixListEntry(prefixListId: string, seq: string | number) {
   return request(
     `/api2/json/cluster/sdn/prefix-lists/${encodeURIComponent(prefixListId)}/entries/${encodeURIComponent(String(seq))}`,
-    { method: 'DELETE', notifyOnError: true },
+    { method: 'DELETE', notifyOnError: true }
   );
 }
 
@@ -377,7 +398,7 @@ export function updateSdnIpamMapping(vnet: string, data: PveRecord) {
 
 export function deleteSdnIpamMapping(
   vnet: string,
-  data: { zone: string; mac: string; ip: string },
+  data: { zone: string; mac: string; ip: string }
 ) {
   return request(`/api2/extjs/cluster/sdn/vnets/${encodeURIComponent(vnet)}/ips`, {
     method: 'DELETE',
