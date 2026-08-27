@@ -350,6 +350,11 @@ body {
   background: #e6f1fc;
 }
 
+// QSelect passes its listbox role to the QMenu popup container.
+.q-menu[role='listbox'] {
+  max-height: 280px !important;
+}
+
 .u-dense .q-select__dropdown-icon {
   margin-top: -4px;
 }
@@ -372,6 +377,57 @@ body {
 
 .q-dialog__inner > div {
   border-radius: 0;
+}
+
+// Search fields share the same compact icon size throughout the application.
+.q-input .q-field__append .q-icon,
+.q-input .q-field__prepend .q-icon {
+  font-size: 16px;
+}
+
+// Match the vertically centered date-picker icon treatment used by LogViewer.
+.q-input .q-field__append,
+.q-input .q-field__prepend {
+  align-self: center;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+// Keep plugin-based confirmation dialogs aligned with the project's compact window baseline.
+.q-dialog-plugin {
+  min-width: 360px;
+  border: 1px solid #cccccc;
+  border-radius: 0;
+  box-shadow: 0 8px 24px rgba(31, 41, 55, 0.22);
+}
+
+.q-dialog-plugin__title {
+  padding: 9px 14px;
+  background: #1976d2;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.q-dialog-plugin__message {
+  padding: 18px 16px;
+  color: #333333;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.q-dialog-plugin__buttons {
+  min-height: 46px;
+  padding: 8px 12px;
+  border-top: 1px solid #dfe1e6;
+  background: #f2f5fc;
+}
+
+.q-dialog-plugin__buttons .q-btn {
+  min-height: 28px;
+  border-radius: 0;
+  font-size: 12px;
 }
 
 // Ceph follows the same dense table and dialog language as the rest of the management UI.

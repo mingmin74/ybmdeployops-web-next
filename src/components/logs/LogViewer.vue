@@ -88,7 +88,11 @@ function normalizeCephRows(value: unknown) {
   function textFromLogValue(item: unknown): string {
     const directValue = textValue(item);
     if (directValue) return directValue;
-    if (Array.isArray(item)) return item.map((value) => textFromLogValue(value)).filter(Boolean).join(' ');
+    if (Array.isArray(item))
+      return item
+        .map((value) => textFromLogValue(value))
+        .filter(Boolean)
+        .join(' ');
     if (item && typeof item === 'object') {
       const record = item as Record<string, unknown>;
       for (const key of ['t', 'msg', 'message', 'text', 'line']) {

@@ -3,5 +3,12 @@ import FirewallResourcePanel from './firewall/FirewallResourcePanel.vue';
 </script>
 
 <template>
-  <div class="q-ma-md"><FirewallResourcePanel show-groups show-aliases show-ipset /></div>
+  <div class="q-ma-md">
+    <FirewallResourcePanel
+      allow-iface
+      show-groups
+      show-aliases
+      show-ipset
+    />
+  </div>
 </template>

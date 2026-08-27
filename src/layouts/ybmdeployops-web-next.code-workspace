@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "C:/Users/depuser05/Desktop/work/pve"
+		}
+	],
+	"settings": {
+		"js/ts.tsdk.path": "node_modules/typescript/lib"
+	}
+}

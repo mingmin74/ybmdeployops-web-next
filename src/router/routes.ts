@@ -21,12 +21,6 @@ const routes: RouteRecordRaw[] = [
       },
 
       {
-        path: 'system/service',
-        name: 'system-service',
-        component: () => import('@/pages/system/ServicePage.vue'),
-        meta: { auth: true, title: 'Service' },
-      },
-      {
         path: 'system/users',
         name: 'system-users',
         redirect: { name: 'system-permissions', query: { tab: 'users' } },

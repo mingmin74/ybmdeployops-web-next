@@ -9,7 +9,7 @@ import RealmPage from './permission/RealmPage.vue';
 import RolesPage from './permission/RolesPage.vue';
 import RulesPage from './permission/RulesPage.vue';
 import TwoFactorPage from './permission/TwoFactorPage.vue';
-import UsersPage from './UsersPage.vue';
+import UsersPage from './permission/UsersPage.vue';
 import PoolsPage from './PoolsPage.vue';
 
 const route = useRoute();

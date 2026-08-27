@@ -3,6 +3,7 @@ import { Dialog, Notify, type QTableColumn } from 'quasar';
 import { computed, onMounted, reactive, ref, shallowRef } from 'vue';
 import { getApiTokens, type PveRecord } from '@/api/resources';
 import { createApiToken, getUsers, removeApiToken, updateApiToken } from '@/api/users';
+import SelectTable from '@/components/SelectTable.vue';
 import UWindow from '@/components/UWindow.vue';
 import GrantedPermissionsDialog from './GrantedPermissionsDialog.vue';
 import { gettext } from '@/locale';
@@ -31,7 +32,6 @@ const secret = shallowRef('');
 const permissionsVisible = shallowRef(false);
 const fullTokenId = shallowRef('');
 const userOptions = shallowRef<UserOption[]>([]);
-const filteredUserOptions = shallowRef<UserOption[]>([]);
 const form = reactive({ userid: '', tokenid: '', privsep: true, expire: '', comment: '' });
 const selectedRow = computed(() => selected.value[0]);
 const canModify = computed(() =>
@@ -73,6 +73,12 @@ const columns: QTableColumn<TokenRow>[] = [
     align: 'left',
   },
 ];
+const userRows = computed<PveRecord[]>(() => userOptions.value.map((user) => ({ ...user })));
+const userColumns: QTableColumn<PveRecord>[] = [
+  { name: 'value', label: gettext('User'), field: 'value', align: 'left', sortable: true },
+  { name: 'name', label: gettext('Name'), field: 'name', align: 'left' },
+  { name: 'comment', label: gettext('Comment'), field: 'comment', align: 'left' },
+];
 function resetForm() {
   Object.assign(form, {
     userid: session.userid,
@@ -110,7 +116,7 @@ async function reload() {
               userid: String(user.userid),
               tokenid: String(token.tokenid),
               expire: Number(token.expire) || 0,
-              comment: String(token.comment || ''),
+              comment: typeof token.comment === 'string' ? token.comment : '',
               privsep: Number(token.privsep) === 1,
             }))
           : []
@@ -133,17 +139,6 @@ async function loadUserOptions() {
   if (session.userid && !users.some((user) => user.value === session.userid))
     users.unshift({ label: session.userid, value: session.userid, name: '', comment: '' });
   userOptions.value = users;
-  filteredUserOptions.value = users;
-}
-function filterUserOptions(value: string, update: (callback: () => void) => void) {
-  update(() => {
-    const keyword = value.trim().toLowerCase();
-    filteredUserOptions.value = !keyword
-      ? userOptions.value
-      : userOptions.value.filter((user) =>
-          [user.value, user.name, user.comment].join(' ').toLowerCase().includes(keyword)
-        );
-  });
 }
 async function openAdd() {
   resetForm();
@@ -321,33 +316,18 @@ defineExpose({ reload });
         :title="`${gettext(editing ? 'Edit' : 'Add')}: ${gettext('API Token')}`"
       >
         <div class="u-border q-ma-sm q-pa-md u-dense">
-          <q-select
+          <SelectTable
             v-if="!editing"
             v-model="form.userid"
-            dense
-            options-dense
-            use-input
-            fill-input
-            hide-selected
-            emit-value
-            map-options
-            :options="filteredUserOptions"
             :label="`${gettext('User')} *`"
             class="q-field--with-bottom"
-            @filter="filterUserOptions"
-          >
-            <template #option="scope">
-              <q-item v-bind="scope.itemProps">
-                <q-item-section>
-                  <q-item-label>{{ scope.opt.value }}</q-item-label>
-                  <q-item-label caption>
-                    {{ scope.opt.name || gettext('None') }} ·
-                    {{ scope.opt.comment || gettext('None') }}
-                  </q-item-label>
-                </q-item-section>
-              </q-item>
-            </template>
-          </q-select>
+            row-key="value"
+            field-style="standard"
+            :rows="userRows"
+            :columns="userColumns"
+            :display-value="form.userid"
+            :get-row-value="(row) => String(row.value || '')"
+          />
           <q-input
             v-else
             v-model="form.userid"
@@ -369,6 +349,7 @@ defineExpose({ reload });
             dense
             right-label
             color="primary"
+            class="q-field--with-bottom"
             :label="gettext('Privilege Separation')"
           />
           <q-input

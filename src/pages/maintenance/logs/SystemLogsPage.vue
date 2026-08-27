@@ -8,5 +8,9 @@ const { node = '', showNodeSelector = true } = defineProps<{
 </script>
 
 <template>
-  <LogViewer source="system" :node="node" :show-node-selector="showNodeSelector" />
+  <LogViewer
+    source="system"
+    :node="node"
+    :show-node-selector="showNodeSelector"
+  />
 </template>

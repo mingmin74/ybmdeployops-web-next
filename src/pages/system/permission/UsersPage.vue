@@ -19,7 +19,8 @@ import {
   type PveUser,
 } from '@/api/users';
 import { gettext } from '@/locale';
-import GrantedPermissionsDialog from './permission/GrantedPermissionsDialog.vue';
+import SelectTable from '@/components/SelectTable.vue';
+import GrantedPermissionsDialog from './GrantedPermissionsDialog.vue';
 
 defineProps<{
   embedded?: boolean;
@@ -69,12 +70,12 @@ const groupOptions = ref<PveGroup[]>([]);
 const realmOptions = ref<RealmOption[]>([]);
 
 const createDialogTitle = computed(
-  () => `${gettext(formData.action === 'add' ? 'Add' : 'Edit')}: ${gettext('User')}`,
+  () => `${gettext(formData.action === 'add' ? 'Add' : 'Edit')}: ${gettext('User')}`
 );
 const canModifyUsers = computed(() => {
   const access = session.caps.access;
   return Boolean(
-    access && typeof access === 'object' && (access as Record<string, unknown>)['User.Modify'],
+    access && typeof access === 'object' && (access as Record<string, unknown>)['User.Modify']
   );
 });
 const selectedUser = computed(() => selectedUsers.value[0]);
@@ -84,14 +85,21 @@ const canChangePassword = computed(() => {
   return ['ad', 'ldap', 'pam', 'pve'].includes(selectedUser.value?.['realm-type'] || '');
 });
 const canRemove = computed(
-  () => canModifyUsers.value && selectedUsers.value.length === 1 && selectedUser.value?.userid !== 'root@pam',
+  () =>
+    canModifyUsers.value &&
+    selectedUsers.value.length === 1 &&
+    selectedUser.value?.userid !== 'root@pam'
 );
 const isTfaLocked = computed(() => {
   const user = selectedUser.value;
   return Boolean(user?.['totp-locked'] || user?.['tfa-locked-until']);
 });
-const canUnlockTfa = computed(() => canModifyUsers.value && selectedUsers.value.length === 1 && isTfaLocked.value);
-const legacyKeysLocked = computed(() => ['x', 'x!oath', 'x!u2f', 'x!yubico'].includes(formData.keys));
+const canUnlockTfa = computed(
+  () => canModifyUsers.value && selectedUsers.value.length === 1 && isTfaLocked.value
+);
+const legacyKeysLocked = computed(() =>
+  ['x', 'x!oath', 'x!u2f', 'x!yubico'].includes(formData.keys)
+);
 const filteredUsers = computed(() => {
   const keyword = filter.value.trim().toLowerCase();
   if (!keyword) return users.value;
@@ -167,7 +175,13 @@ const tableColumns: QTableColumn<UserRow>[] = [
     field: 'fullName',
     sortable: true,
   },
-  { name: 'tfa', label: gettext('TFA'), align: 'left', field: (row) => formatUserTfa(row), sortable: true },
+  {
+    name: 'tfa',
+    label: gettext('TFA'),
+    align: 'left',
+    field: (row) => formatUserTfa(row),
+    sortable: true,
+  },
   { name: 'groups', label: gettext('Groups'), align: 'left', field: (row) => row.groups || '' },
   {
     name: 'comment',
@@ -177,6 +191,12 @@ const tableColumns: QTableColumn<UserRow>[] = [
   },
 ];
 const visibleColumns = ['userid', 'realm', 'enable', 'expire', 'name', 'tfa', 'groups', 'comment'];
+const groupRows = computed(() => groupOptions.value.map((group) => ({ ...group })));
+const groupColumns: QTableColumn<PveGroup>[] = [
+  { name: 'groupid', label: gettext('Group'), field: 'groupid', align: 'left', sortable: true },
+  { name: 'comment', label: gettext('Comment'), field: 'comment', align: 'left' },
+  { name: 'users', label: gettext('Users'), field: 'users', align: 'left' },
+];
 
 function createDefaultForm(): UserFormModel {
   return {
@@ -264,9 +284,7 @@ function formatRealmOption(realm: PveRealm): RealmOption {
 }
 
 function usernameRules(value: string) {
-  return formData.action !== 'add' || value.trim()
-    ? true
-    : gettext('This field is required');
+  return formData.action !== 'add' || value.trim() ? true : gettext('This field is required');
 }
 
 function emailRules(value: string) {
@@ -348,7 +366,7 @@ async function loadDialogOptions() {
   const realms = (realmsResponse.data || []).map(formatRealmOption);
   realmOptions.value = realms.sort((left, right) => left.value.localeCompare(right.value));
   groupOptions.value = [...(groupsResponse.data || [])].sort((left, right) =>
-    left.groupid.localeCompare(right.groupid),
+    left.groupid.localeCompare(right.groupid)
   );
   if (!formData.realm) {
     formData.realm =
@@ -375,8 +393,8 @@ async function openCreateDialog(action: UserFormAction) {
       formData.groups = Array.isArray(user.groups)
         ? user.groups
         : user.groups
-          ? user.groups.split(',').filter(Boolean)
-          : [];
+        ? user.groups.split(',').filter(Boolean)
+        : [];
       formData.email = user.email || '';
       formData.enable = Boolean(user.enable);
       formData.comment = user.comment || '';
@@ -402,7 +420,7 @@ async function submitUserForm() {
       await createUser(payload);
     } else if (selectedUser.value) {
       const updatePayload = Object.fromEntries(
-        Object.entries(payload).filter(([key]) => key !== 'userid'),
+        Object.entries(payload).filter(([key]) => key !== 'userid')
       ) as Omit<EditUserPayload, 'userid'>;
       await updateUser(selectedUser.value.userid, updatePayload);
     }
@@ -431,7 +449,7 @@ async function submitPassword() {
     await updateUserPassword(
       selectedUser.value.userid,
       passwordForm.password,
-      session.userid === 'root@pam' ? undefined : passwordForm.currentPassword,
+      session.userid === 'root@pam' ? undefined : passwordForm.currentPassword
     );
     passwordDialogVisible.value = false;
   } finally {
@@ -482,7 +500,9 @@ function confirmUnlockSelectedUserTfa() {
   if (!user || !canUnlockTfa.value) return;
   Dialog.create({
     title: gettext('Unlock TFA authentication for {0}').replace('{0}', user.userid),
-    message: gettext("Locked 2nd factors can happen if the user's password was leaked. Are you sure you want to unlock the user?"),
+    message: gettext(
+      "Locked 2nd factors can happen if the user's password was leaked. Are you sure you want to unlock the user?"
+    ),
     cancel: { flat: true, label: gettext('Cancel') },
     ok: { flat: true, label: gettext('Confirm'), color: 'primary' },
     persistent: true,
@@ -563,7 +583,16 @@ defineExpose({ reload: loadUsersData });
               :label="gettext('Password')"
               @click="openPasswordDialog"
             />
-            <q-btn no-caps outline size="12px" class="u-button" :color="selectedUser ? 'primary' : 'grey'" :disable="!selectedUser" :label="gettext('Permissions')" @click="openGrantedPermissions" />
+            <q-btn
+              no-caps
+              outline
+              size="12px"
+              class="u-button"
+              :color="selectedUser ? 'primary' : 'grey'"
+              :disable="!selectedUser"
+              :label="gettext('Permissions')"
+              @click="openGrantedPermissions"
+            />
             <q-btn
               v-if="canModifyUsers"
               no-caps
@@ -603,7 +632,10 @@ defineExpose({ reload: loadUsersData });
 
         <template #body-cell-comment="props">
           <q-td :props="props">
-            <div class="users-comment text-overflow" :title="props.value">
+            <div
+              class="users-comment text-overflow"
+              :title="props.value"
+            >
               {{ props.value }}
             </div>
           </q-td>
@@ -634,10 +666,20 @@ defineExpose({ reload: loadUsersData });
     >
       <q-card class="u-window-card users-dialog-card">
         <q-card-section class="row items-center bg-blue-8 text-grey-1 shadow-down-10 q-pa-sm">
-          <q-spinner-bars size="14px" color="white" />
+          <q-spinner-bars
+            size="14px"
+            color="white"
+          />
           <div class="text-weight-bold q-mx-sm text-overflow">{{ createDialogTitle }}</div>
           <q-space />
-          <q-btn v-close-popup class="bg-negative" icon="close" size="sm" flat dense />
+          <q-btn
+            v-close-popup
+            class="bg-negative"
+            icon="close"
+            size="sm"
+            flat
+            dense
+          />
         </q-card-section>
         <q-card-section class="q-pa-none u-hidden-error">
           <div class="u-border q-ma-sm q-pa-md dialog-body">
@@ -717,40 +759,19 @@ defineExpose({ reload: loadUsersData });
 
             <div class="row q-gutter-md">
               <div class="col">
-                <q-select
+                <SelectTable
                   v-model="formData.groups"
                   multiple
-                  dense
                   clearable
-                  option-value="groupid"
-                  option-label="groupid"
-                  map-options
-                  emit-value
                   :label="gettext('Group')"
-                  :options="groupOptions"
                   class="q-field--with-bottom"
-                >
-                  <template #before-options>
-                    <div class="row bg-grey-3 text-grey-10 u-border-bottom q-pa-sm q-pl-md">
-                      <div class="col text-overflow">{{ gettext('Group') }}</div>
-                      <div class="col text-overflow">{{ gettext('Comment') }}</div>
-                    </div>
-                  </template>
-                  <template #option="scope">
-                    <q-item v-bind="scope.itemProps" dense class="u-border-bottom">
-                      <q-item-section>
-                        <div class="row">
-                          <div class="col text-overflow">
-                            {{ scope.opt.groupid }}
-                          </div>
-                          <div class="col text-overflow">
-                            {{ scope.opt.comment }}
-                          </div>
-                        </div>
-                      </q-item-section>
-                    </q-item>
-                  </template>
-                </q-select>
+                  row-key="groupid"
+                  field-style="standard"
+                  :rows="groupRows"
+                  :columns="groupColumns"
+                  :display-value="formData.groups.join(', ')"
+                  :get-row-value="(row) => String(row.groupid || '')"
+                />
               </div>
               <div class="col">
                 <q-input
@@ -774,9 +795,19 @@ defineExpose({ reload: loadUsersData });
                   :label="gettext('Expire')"
                 >
                   <template #append>
-                    <q-icon name="event" class="cursor-pointer">
-                      <q-popup-proxy transition-show="scale" transition-hide="scale">
-                        <q-date v-model="formData.expire" minimal mask="YYYY-MM-DD" />
+                    <q-icon
+                      name="event"
+                      class="cursor-pointer"
+                    >
+                      <q-popup-proxy
+                        transition-show="scale"
+                        transition-hide="scale"
+                      >
+                        <q-date
+                          v-model="formData.expire"
+                          minimal
+                          mask="YYYY-MM-DD"
+                        />
                       </q-popup-proxy>
                     </q-icon>
                   </template>
@@ -815,7 +846,10 @@ defineExpose({ reload: loadUsersData });
             <q-inner-loading :showing="dialogLoading" />
           </div>
         </q-card-section>
-        <q-card-actions align="right" class="bg-grey-2 overflow-hidden">
+        <q-card-actions
+          align="right"
+          class="bg-grey-2 overflow-hidden"
+        >
           <q-btn
             no-caps
             flat
@@ -839,12 +873,22 @@ defineExpose({ reload: loadUsersData });
     >
       <q-card class="u-window-card users-password-dialog">
         <q-card-section class="row items-center bg-blue-8 text-grey-1 shadow-down-10 q-pa-sm">
-          <q-spinner-bars size="14px" color="white" />
+          <q-spinner-bars
+            size="14px"
+            color="white"
+          />
           <div class="text-weight-bold q-mx-sm text-overflow">
             {{ gettext('Setting') }}: {{ gettext('Password') }}
           </div>
           <q-space />
-          <q-btn v-close-popup class="bg-negative" icon="close" size="sm" flat dense />
+          <q-btn
+            v-close-popup
+            class="bg-negative"
+            icon="close"
+            size="sm"
+            flat
+            dense
+          />
         </q-card-section>
         <q-card-section class="q-pa-none u-hidden-error">
           <div class="u-border q-ma-sm q-pa-md">
@@ -857,7 +901,10 @@ defineExpose({ reload: loadUsersData });
               :label="`${gettext('Your Current Password')} *`"
               :rules="[(value: string) => value ? true : gettext('This field is required')]"
             />
-            <div v-if="selectedUser?.['realm-type'] === 'pam'" class="text-caption text-grey-7 q-mb-sm">
+            <div
+              v-if="selectedUser?.['realm-type'] === 'pam'"
+              class="text-caption text-grey-7 q-mb-sm"
+            >
               {{ gettext('For the PAM realm, this applies only to the connected node.') }}
             </div>
             <q-input
@@ -882,7 +929,10 @@ defineExpose({ reload: loadUsersData });
             <q-inner-loading :showing="dialogLoading" />
           </div>
         </q-card-section>
-        <q-card-actions align="right" class="bg-grey-2 overflow-hidden">
+        <q-card-actions
+          align="right"
+          class="bg-grey-2 overflow-hidden"
+        >
           <q-btn
             no-caps
             flat
@@ -897,7 +947,10 @@ defineExpose({ reload: loadUsersData });
         </q-card-actions>
       </q-card>
     </q-dialog>
-    <GrantedPermissionsDialog v-model="permissionsDialogVisible" :userid="selectedUser?.userid || ''" />
+    <GrantedPermissionsDialog
+      v-model="permissionsDialogVisible"
+      :userid="selectedUser?.userid || ''"
+    />
   </q-card>
 </template>
 

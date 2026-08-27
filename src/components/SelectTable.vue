@@ -4,7 +4,7 @@ import { shallowRef, useTemplateRef } from 'vue';
 import type { PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
 
-const model = defineModel<string>({ default: '' });
+const model = defineModel<string | string[]>({ default: '' });
 
 const props = withDefaults(
   defineProps<{
@@ -23,6 +23,7 @@ const props = withDefaults(
     fixedLayout?: boolean;
     clearable?: boolean;
     editable?: boolean;
+    multiple?: boolean;
     getRowValue?: (row: PveRecord) => string;
     canSelect?: (row: PveRecord) => boolean;
   }>(),
@@ -38,6 +39,7 @@ const props = withDefaults(
     fixedLayout: false,
     clearable: false,
     editable: false,
+    multiple: false,
   },
 );
 
@@ -68,10 +70,19 @@ function isSelectable(row: PveRecord) {
 
 function selectRow(_: Event, row: PveRecord) {
   if (!isSelectable(row)) return;
-  model.value = rowValue(row);
+  const value = rowValue(row);
+  if (props.multiple) {
+    const selected = Array.isArray(model.value) ? [...model.value] : [];
+    const index = selected.indexOf(value);
+    if (index === -1) selected.push(value);
+    else selected.splice(index, 1);
+    model.value = selected;
+  } else {
+    model.value = value;
+  }
   filter.value = '';
   emit('selected', row);
-  popupRef.value?.hide();
+  if (!props.multiple) popupRef.value?.hide();
 }
 </script>
 
@@ -102,9 +113,10 @@ function selectRow(_: Event, row: PveRecord) {
       :error="error"
       :error-message="errorMessage"
       :clearable="clearable"
+      :multiple="multiple"
       :use-input="editable"
       :input-debounce="0"
-      @clear="model = ''"
+      @clear="model = multiple ? [] : ''"
       @input-value="editable && (model = $event)"
     >
       <template #selected>
@@ -125,7 +137,7 @@ function selectRow(_: Event, row: PveRecord) {
             :placeholder="gettext('Search')"
           >
             <template #append>
-              <q-icon name="search" size="20px" class="text-grey" />
+              <q-icon name="search" class="text-grey" />
             </template>
           </q-input>
         </div>

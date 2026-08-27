@@ -1,6 +1,12 @@
 <template>
-  <q-layout view="hHh Lpr lFf" class="app-shell">
-    <q-header elevated class="app-header">
+  <q-layout
+    view="hHh Lpr lFf"
+    class="app-shell"
+  >
+    <q-header
+      elevated
+      class="app-header"
+    >
       <q-toolbar class="app-toolbar">
         <q-btn
           flat
@@ -27,7 +33,11 @@
             @keydown.down.prevent="moveResourceSelection(1)"
             @keydown.esc.prevent="resourceSearchOpen = false"
           >
-            <template #prepend><q-icon name="search" size="18px" /></template>
+            <template #prepend>
+              <q-icon
+                name="search"
+              />
+            </template>
           </q-input>
           <q-menu
             v-model="resourceSearchOpen"
@@ -71,6 +81,17 @@
             </q-table>
           </q-menu>
         </div>
+        <q-btn
+          flat
+          round
+          dense
+          icon="article"
+          color="white"
+          :aria-label="gettext('Logs')"
+          @click="logsPanelOpen = !logsPanelOpen"
+        >
+          <q-tooltip>{{ gettext('Logs') }}</q-tooltip>
+        </q-btn>
         <q-btn-dropdown
           flat
           dense
@@ -78,7 +99,10 @@
           icon="account_circle"
           :label="session.userid || session.username"
         >
-          <q-list dense class="user-menu">
+          <q-list
+            dense
+            class="user-menu"
+          >
             <q-item>
               <q-item-section>
                 <q-item-label>{{ session.userid }}</q-item-label>
@@ -86,7 +110,11 @@
               </q-item-section>
             </q-item>
             <q-separator />
-            <q-item clickable v-close-popup @click="logout">
+            <q-item
+              clickable
+              v-close-popup
+              @click="logout"
+            >
               <q-item-section avatar><q-icon name="logout" /></q-item-section>
               <q-item-section>{{ gettext('Logout') }}</q-item-section>
             </q-item>
@@ -106,7 +134,10 @@
     >
       <q-scroll-area class="fit">
         <q-list padding>
-          <template v-for="item in menuItems" :key="item.titleKey">
+          <template
+            v-for="item in menuItems"
+            :key="item.titleKey"
+          >
             <q-item
               v-if="!item.children"
               clickable
@@ -126,9 +157,12 @@
               :to="item.path"
               expand-separator
             >
-              <template v-for="child in item.children" :key="child.path || child.titleKey">
+              <template
+                v-for="child in item.children"
+                :key="child.path || child.titleKey"
+              >
                 <q-item
-                v-if="canShowMenuItem(child) && !child.children"
+                  v-if="canShowMenuItem(child) && !child.children"
                   clickable
                   class="menu-child"
                   :active="isActive(child.path)"
@@ -140,7 +174,7 @@
                 </q-item>
 
                 <q-expansion-item
-                v-else-if="canShowMenuItem(child)"
+                  v-else-if="canShowMenuItem(child)"
                   header-class="menu-child"
                   :default-opened="isGroupOpen(child)"
                   :icon="child.icon"
@@ -172,6 +206,38 @@
       <AppTagView v-if="route.name !== 'dashboard'" />
       <router-view />
     </q-page-container>
+
+    <Teleport to="body">
+      <q-splitter
+        v-if="logsPanelOpen"
+        v-model="logsPanelHeight"
+        horizontal
+        reverse
+        unit="px"
+        emit-immediately
+        :limits="[180, 1600]"
+        class="logs-overlay-splitter"
+      >
+        <template #before><div class="logs-overlay-splitter__backdrop" /></template>
+        <template #after>
+          <section class="logs-overlay-panel">
+            <OverlayLogsPanel />
+          </section>
+        </template>
+      </q-splitter>
+      <q-btn
+        v-if="logsPanelOpen"
+        class="logs-overlay-close"
+        icon="close"
+        size="sm"
+        flat
+        dense
+        color="grey-7"
+        :aria-label="gettext('Close')"
+        :style="{ bottom: `${logsPanelHeight - 34}px` }"
+        @click="logsPanelOpen = false"
+      />
+    </Teleport>
   </q-layout>
 </template>
 
@@ -184,6 +250,7 @@ import { getClusterResources, type PveRecord } from '@/api/resources';
 import { appConfig } from '@/config/app';
 import { menuItems, type MenuItem } from '@/config/menu';
 import { gettext } from '@/locale';
+import OverlayLogsPanel from '@/components/logs/OverlayLogsPanel.vue';
 import { useSessionStore } from '@/stores/session';
 import { useUiStore } from '@/stores/ui';
 import { textValue } from '@/utils/pveFormat';
@@ -197,8 +264,10 @@ const resourcesLoading = shallowRef(false);
 const resourceSearch = shallowRef('');
 const resourceSearchOpen = shallowRef(false);
 const selectedResourceRows = shallowRef<PveRecord[]>([]);
+const logsPanelOpen = shallowRef(false);
+const logsPanelHeight = shallowRef(320);
 const resourceSearchInput = useTemplateRef<{ focus: () => void; blur: () => void }>(
-  'resourceSearchInput',
+  'resourceSearchInput'
 );
 let refreshHandler: ReturnType<typeof setInterval> | undefined;
 
@@ -263,14 +332,16 @@ function canShowMenuItem(item: MenuItem) {
 
 function isGroupOpen(item: MenuItem): boolean {
   return Boolean(
-    item.children?.some((child) => (child.path ? route.path === child.path : isGroupOpen(child))),
+    item.children?.some((child) => (child.path ? route.path === child.path : isGroupOpen(child)))
   );
 }
 
 function resourceId(row: PveRecord) {
   const id = textValue(row.id);
   if (id) return id;
-  return `${textValue(row.type)}/${textValue(row.node)}/${textValue(row.vmid) || textValue(row.storage) || textValue(row.name) || ''}`;
+  return `${textValue(row.type)}/${textValue(row.node)}/${
+    textValue(row.vmid) || textValue(row.storage) || textValue(row.name) || ''
+  }`;
 }
 
 function resourceName(row: PveRecord) {
@@ -359,7 +430,7 @@ function moveResourceSelection(direction: number) {
   const rows = filteredResources.value;
   if (rows.length === 0) return;
   const currentIndex = rows.findIndex(
-    (row) => resourceId(row) === resourceId(selectedResourceRows.value[0] || {}),
+    (row) => resourceId(row) === resourceId(selectedResourceRows.value[0] || {})
   );
   const nextIndex = Math.min(Math.max(currentIndex + direction, 0), rows.length - 1);
   const nextRow = rows[nextIndex];
@@ -427,6 +498,57 @@ onBeforeUnmount(() => {
   transition:
     background-color 0.2s ease,
     border-color 0.2s ease;
+}
+
+.page-container {
+  min-height: 0;
+}
+
+.logs-overlay-splitter {
+  position: fixed;
+  z-index: 3000;
+  top: 54px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.logs-overlay-splitter :deep(.q-splitter__before) {
+  pointer-events: none;
+}
+
+.logs-overlay-splitter :deep(.q-splitter__separator) {
+  z-index: 1;
+  height: 7px;
+  background: #dfe1e6;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.18);
+  cursor: ns-resize;
+  pointer-events: auto;
+}
+
+.logs-overlay-splitter :deep(.q-splitter__after) {
+  overflow: hidden;
+  border-top: 1px solid #cccccc;
+  background: #fff;
+  box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.2);
+  pointer-events: auto;
+}
+
+.logs-overlay-panel {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+.logs-overlay-close {
+  position: fixed;
+  z-index: 3002;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .header-resource-search:focus-within {

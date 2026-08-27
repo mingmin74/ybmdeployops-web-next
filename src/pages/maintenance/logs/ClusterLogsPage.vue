@@ -38,7 +38,7 @@ async function reload() {
   try {
     const response = await getClusterLogs();
     rows.value = [...(response.data || [])].sort(
-      (left, right) => Number(right.time || 0) - Number(left.time || 0),
+      (left, right) => Number(right.time || 0) - Number(left.time || 0)
     );
   } finally {
     loading.value = false;
@@ -58,7 +58,7 @@ function exportData() {
           gettext(severityMap[Number(item.pri)] || textValue(item.pri)),
         ]
           .map((value) => `[${textValue(value)}]`)
-          .join('') + textValue(item.msg),
+          .join('') + textValue(item.msg)
     )
     .join('\n');
   const blob = new Blob([data], { type: 'text/plain;charset=utf-8' });
@@ -99,7 +99,13 @@ onMounted(() => {
           @click="exportData"
         />
         <q-space />
-        <q-input v-model="filter" borderless dense debounce="300" :placeholder="gettext('Search')">
+        <q-input
+          v-model="filter"
+          borderless
+          dense
+          debounce="300"
+          :placeholder="gettext('Search')"
+        >
           <template #append><q-icon name="search" /></template>
         </q-input>
       </template>

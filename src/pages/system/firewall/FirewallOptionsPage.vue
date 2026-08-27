@@ -107,16 +107,15 @@ const rateLimit = ref({ enable: 1, rate: 1, unit: 'second', burst: 5 });
 const optionDefinitions = computed(() => definitions[fwtype]);
 
 function optionIcon(key: string, value?: unknown) {
-  if (key === 'enable')
-    return Number(value) ? 'mdi/toggle-switch' : 'mdi/toggle-switch-off-outline';
-  if (key === 'nftables' || key === 'ebtables') return 'mdi-lan-connect';
-  if (key === 'nosmurfs' || key === 'tcpflags') return 'mdi-shield-alert';
-  if (key.startsWith('policy_')) return 'mdi-shield-check-outline';
-  if (key.startsWith('log_level_') || key.endsWith('_log_level')) return 'mdi-format-list-text';
-  if (key === 'log_ratelimit') return 'mdi-speedometer';
-  if (key.startsWith('nf_conntrack')) return 'mdi-sync';
-  if (['dhcp', 'ndp', 'radv', 'macfilter', 'ipfilter'].includes(key)) return 'mdi-router-network';
-  return 'mdi-cog-outline';
+  if (key === 'enable') return Number(value) ? 'toggle_on' : 'toggle_off';
+  if (key === 'nftables' || key === 'ebtables') return 'lan';
+  if (key === 'nosmurfs' || key === 'tcpflags') return 'security';
+  if (key.startsWith('policy_')) return 'policy';
+  if (key.startsWith('log_level_') || key.endsWith('_log_level')) return 'format_list_bulleted';
+  if (key === 'log_ratelimit') return 'speed';
+  if (key.startsWith('nf_conntrack')) return 'sync';
+  if (['dhcp', 'ndp', 'radv', 'macfilter', 'ipfilter'].includes(key)) return 'router';
+  return 'settings';
 }
 const activeDefinition = computed(() => optionDefinitions.value[textValue(active.value.key)]);
 const activeValue = computed<string | number | undefined>({

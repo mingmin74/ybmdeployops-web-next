@@ -31,9 +31,19 @@ export function formatBytes(value?: number | string) {
 export function formatStorageType(type?: unknown, monhost?: unknown, statusView = false) {
   const value = textValue(type);
   const labels: Record<string, string> = {
-    dir: 'Directory', lvm: 'LVM', lvmthin: 'LVM-Thin', btrfs: 'BTRFS', nfs: 'NFS',
-    cifs: 'SMB/CIFS', iscsi: 'iSCSI', cephfs: 'CephFS', rbd: 'RBD',
-    zfs: 'ZFS over iSCSI', zfspool: 'ZFS', pbs: 'Proxmox Backup Server', esxi: 'ESXi',
+    dir: 'Directory',
+    lvm: 'LVM',
+    lvmthin: 'LVM-Thin',
+    btrfs: 'BTRFS',
+    nfs: 'NFS',
+    cifs: 'SMB/CIFS',
+    iscsi: 'iSCSI',
+    cephfs: 'CephFS',
+    rbd: 'RBD',
+    zfs: 'ZFS over iSCSI',
+    zfspool: 'ZFS',
+    pbs: 'Proxmox Backup Server',
+    esxi: 'ESXi',
   };
   const label = labels[value] || value;
   return !statusView && (value === 'rbd' || value === 'cephfs') && !textValue(monhost)
@@ -49,7 +59,8 @@ export function formatStorageContent(value?: unknown) {
 }
 
 export function formatContentSize(row: Record<string, unknown>) {
-  if (row.size !== undefined && row.size !== null && row.size !== '') return formatBytes(row.size as number);
+  if (row.size !== undefined && row.size !== null && row.size !== '')
+    return formatBytes(row.size as number);
   if (row['approximate-size'] !== undefined && row['approximate-size'] !== null) {
     return `~${formatBytes(row['approximate-size'] as number)}`;
   }
@@ -99,10 +110,141 @@ export function objectToText(value: unknown) {
     .join(',');
 }
 
+type TaskDescription = [subject: string, action: string];
+
+// Mirrors Proxmox.Utils.format_task_description for the task types exposed by
+// the cluster task API. Keep the raw type/id as the fallback for new types.
+const taskDescriptions: Record<string, TaskDescription> = {
+  acmedeactivate: ['ACME Account', gettext('Deactivate')],
+  acmenewcert: ['SRV', gettext('Order Certificate')],
+  acmerefresh: ['ACME Account', gettext('Refresh')],
+  acmeregister: ['ACME Account', gettext('Register')],
+  acmerenew: ['SRV', gettext('Renew Certificate')],
+  acmerevoke: ['SRV', gettext('Revoke Certificate')],
+  acmeupdate: ['ACME Account', gettext('Update')],
+  'auth-realm-sync': [gettext('Realm'), gettext('Sync')],
+  'auth-realm-sync-test': [gettext('Realm'), gettext('Sync Preview')],
+  'bulk-migrate': ['', gettext('Bulk migrate VMs and Containers')],
+  'bulk-shutdown': ['', gettext('Bulk shutdown VMs and Containers')],
+  'bulk-start': ['', gettext('Bulk start VMs and Containers')],
+  'bulk-suspend': ['', gettext('Bulk shutdown VMs and Containers')],
+  cephcreatemds: ['Ceph Metadata Server', gettext('Create')],
+  cephcreatemgr: ['Ceph Manager', gettext('Create')],
+  cephcreatemon: ['Ceph Monitor', gettext('Create')],
+  cephcreateosd: ['Ceph OSD', gettext('Create')],
+  cephcreatepool: ['Ceph Pool', gettext('Create')],
+  cephdestroymds: ['Ceph Metadata Server', gettext('Destroy')],
+  cephdestroymgr: ['Ceph Manager', gettext('Destroy')],
+  cephdestroymon: ['Ceph Monitor', gettext('Destroy')],
+  cephdestroyosd: ['Ceph OSD', gettext('Destroy')],
+  cephdestroyfs: ['CephFS', gettext('Destroy')],
+  cephdestroypool: ['Ceph Pool', gettext('Destroy')],
+  cephfscreate: ['CephFS', gettext('Create')],
+  cephsetflags: ['', gettext('Change global Ceph flags')],
+  cephsetpool: ['Ceph Pool', gettext('Edit')],
+  clustercreate: ['', gettext('Create Cluster')],
+  clusterjoin: ['', gettext('Join Cluster')],
+  dircreate: [gettext('Directory Storage'), gettext('Create')],
+  dirremove: [gettext('Directory'), gettext('Remove')],
+  download: [gettext('File'), gettext('Download')],
+  hamigrate: ['HA', gettext('Migrate')],
+  hashutdown: ['HA', gettext('Shutdown')],
+  hastart: ['HA', gettext('Start')],
+  hastop: ['HA', gettext('Stop')],
+  imgcopy: ['', gettext('Copy data')],
+  imgdel: ['', gettext('Erase data')],
+  lvmcreate: [gettext('LVM Storage'), gettext('Create')],
+  lvmremove: ['Volume Group', gettext('Remove')],
+  lvmthincreate: ['LVM-Thin Storage', gettext('Create')],
+  lvmthinremove: ['Thinpool', gettext('Remove')],
+  migrateall: ['', gettext('Bulk migrate VMs and Containers')],
+  move_volume: ['CT', gettext('Move Volume')],
+  'pbs-download': ['VM/CT', gettext('File Restore Download')],
+  pull_file: ['CT', gettext('Pull file')],
+  push_file: ['CT', gettext('Push file')],
+  qmclone: ['VM', gettext('Clone')],
+  qmconfig: ['VM', gettext('Configure')],
+  qmcreate: ['VM', gettext('Create')],
+  qmdelsnapshot: ['VM', gettext('Delete Snapshot')],
+  qmdestroy: ['VM', gettext('Destroy')],
+  qmigrate: ['VM', gettext('Migrate')],
+  qmmove: ['VM', gettext('Move disk')],
+  qmpause: ['VM', gettext('Pause')],
+  qmreboot: ['VM', gettext('Reboot')],
+  qmreset: ['VM', gettext('Reset')],
+  qmrestore: ['VM', gettext('Restore')],
+  qmresume: ['VM', gettext('Resume')],
+  qmrollback: ['VM', gettext('Rollback')],
+  qmshutdown: ['VM', gettext('Shutdown')],
+  qmsnapshot: ['VM', gettext('Snapshot')],
+  qmstart: ['VM', gettext('Start')],
+  qmstop: ['VM', gettext('Stop')],
+  qmsuspend: ['VM', gettext('Hibernate')],
+  qmtemplate: ['VM', gettext('Convert to template')],
+  reloadnetworkall: ['', gettext('Reload network configuration on all nodes')],
+  resize: ['VM/CT', gettext('Resize')],
+  spiceproxy: ['VM/CT', `${gettext('Console')} (Spice)`],
+  spiceshell: ['', `${gettext('Shell')} (Spice)`],
+  srvreload: ['', gettext('Reload')],
+  srvrestart: ['', gettext('Restart')],
+  srvstart: ['', gettext('Start')],
+  srvstop: ['', gettext('Stop')],
+  startall: ['', gettext('Bulk start VMs and Containers')],
+  stopall: ['', gettext('Bulk shutdown VMs and Containers')],
+  suspendall: ['', gettext('Suspend all VMs')],
+  termproxy: ['', `${gettext('Console')} (xterm.js)`],
+  unknownimgdel: ['', gettext('Destroy image from unknown guest')],
+  vncproxy: ['VM/CT', gettext('Console')],
+  vncshell: ['', gettext('Shell')],
+  vzclone: ['CT', gettext('Clone')],
+  vzcreate: ['CT', gettext('Create')],
+  vzdelsnapshot: ['CT', gettext('Delete Snapshot')],
+  vzdestroy: ['CT', gettext('Destroy')],
+  vzmigrate: ['CT', gettext('Migrate')],
+  vzmount: ['CT', gettext('Mount')],
+  vzreboot: ['CT', gettext('Reboot')],
+  vzrestore: ['CT', gettext('Restore')],
+  vzresume: ['CT', gettext('Resume')],
+  vzrollback: ['CT', gettext('Rollback')],
+  vzshutdown: ['CT', gettext('Shutdown')],
+  vzsnapshot: ['CT', gettext('Snapshot')],
+  vzstart: ['CT', gettext('Start')],
+  vzstop: ['CT', gettext('Stop')],
+  vzsuspend: ['CT', gettext('Suspend')],
+  vztemplate: ['CT', gettext('Convert to template')],
+  vzumount: ['CT', gettext('Unmount')],
+  wipedisk: ['Device', gettext('Wipe Disk')],
+  zfscreate: [gettext('ZFS Storage'), gettext('Create')],
+  zfsremove: ['ZFS Pool', gettext('Remove')],
+};
+
 export function formatTaskDescription(type?: unknown, id?: unknown) {
-  const typeText = textValue(type, '-');
-  const idText = id === undefined || id === null || id === '' ? '' : ` ${textValue(id)}`;
-  return `${typeText}${idText}`;
+  const typeText = textValue(type);
+  const idText = textValue(id);
+  if (typeText === 'vzdump')
+    return idText ? `VM/CT ${idText} - ${gettext('Backup')}` : gettext('Backup Job');
+  const description = taskDescriptions[typeText];
+  if (description) {
+    const [subject, action] = description;
+    return subject ? `${subject}${idText ? ` ${idText}` : ''} - ${action}` : action;
+  }
+  return [typeText, idText].filter(Boolean).join(' ') || '-';
+}
+
+export function formatTaskStatus(status?: unknown) {
+  const value = textValue(status);
+  if (value === 'unknown') return gettext('unknown');
+  if (value.startsWith('WARNINGS:')) return value.replace('WARNINGS', gettext('Warnings'));
+  if (value && value !== 'OK') return `${gettext('Error')}: ${value}`;
+  return value || '-';
+}
+
+export function taskStatusColor(status?: unknown) {
+  const value = textValue(status);
+  if (value === 'OK') return 'text-positive';
+  if (value === 'unknown') return 'text-grey';
+  if (value.startsWith('WARNINGS:')) return 'text-warning';
+  return 'text-negative';
 }
 
 export const severityMap: Record<number, string> = {

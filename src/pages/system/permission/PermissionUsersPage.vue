@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import UsersPage from '@/pages/system/UsersPage.vue';
+import UsersPage from '@/pages/system/permission/UsersPage.vue';
 </script>
 
 <template>

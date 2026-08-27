@@ -174,7 +174,7 @@ const columns = computed<QTableColumn<PveRecord>[]>(() => {
     { name: 'pos', label: '', align: 'left', field: (row) => row.pos, sortable: false },
     {
       name: 'enable',
-      label: gettext('On'),
+      label: gettext('Enable/Disable'),
       align: 'left',
       field: (row) => Boolean(row.enable),
       sortable: false,
@@ -548,6 +548,7 @@ watch(
           @dragstart="dragStart(scope.row.pos)"
           @dragover.prevent
           @drop.prevent="dropRule(scope.row, $event)"
+          @click="selected = [scope.row]"
           @dblclick="
             selected = [scope.row];
             openDialog('edit');
@@ -604,11 +605,12 @@ watch(
         :loading="loading"
       >
         <div class="u-border q-ma-sm q-pa-md u-dense">
-          <div class="row q-col-gutter-md u-hidden-error">
+          <div class="row q-col-gutter-x-md u-hidden-error">
             <template v-if="isGroupEditor">
               <q-select
                 v-model="form.action"
-                class="col-12"
+                class="col-12 q-field--with-bottom"
+                dense
                 options-dense
                 emit-value
                 map-options
@@ -622,20 +624,23 @@ watch(
               />
               <q-input
                 v-model="form.comment"
-                class="col-12"
+                class="col-12 q-field--with-bottom"
+                dense
                 :label="gettext('Comment')"
               />
               <q-input
                 v-if="allowIface"
                 v-model="form.iface"
-                class="col-12"
+                class="col-12 q-field--with-bottom"
+                dense
                 :label="gettext('Interface')"
               />
             </template>
             <template v-else>
               <q-select
                 v-model="form.type"
-                class="col-6"
+                class="col-6 q-field--with-bottom"
+                dense
                 options-dense
                 emit-value
                 map-options
@@ -645,14 +650,16 @@ watch(
               />
               <q-select
                 v-model="form.action"
-                class="col-6"
+                class="col-6 q-field--with-bottom"
+                dense
                 options-dense
                 :label="gettext('Action')"
                 :options="allowedActions"
               />
               <q-select
                 v-model="form.macro"
-                class="col-6"
+                class="col-6 q-field--with-bottom"
+                dense
                 options-dense
                 clearable
                 emit-value
@@ -666,7 +673,8 @@ watch(
               />
               <q-select
                 v-model="form.proto"
-                class="col-6"
+                class="col-6 q-field--with-bottom"
+                dense
                 options-dense
                 clearable
                 use-input
@@ -679,7 +687,8 @@ watch(
               />
               <q-select
                 v-model="form.source"
-                class="col-6"
+                class="col-6 q-field--with-bottom"
+                dense
                 options-dense
                 clearable
                 use-input
@@ -693,7 +702,8 @@ watch(
               />
               <q-select
                 v-model="form.dest"
-                class="col-6"
+                class="col-6 q-field--with-bottom"
+                dense
                 options-dense
                 clearable
                 use-input
@@ -707,21 +717,24 @@ watch(
               />
               <q-input
                 v-model="form.sport"
-                class="col-4"
+                class="col-4 q-field--with-bottom"
+                dense
                 :disable="hasMacro"
                 :label="gettext('Source port')"
               />
               <q-input
                 v-if="!isIcmp"
                 v-model="form.dport"
-                class="col-4"
+                class="col-4 q-field--with-bottom"
+                dense
                 :disable="hasMacro"
                 :label="gettext('Dest. port')"
               />
               <q-select
                 v-if="isIcmp"
                 v-model="form['icmp-type']"
-                class="col-4"
+                class="col-4 q-field--with-bottom"
+                dense
                 options-dense
                 clearable
                 :options="isIcmpV4 ? icmpV4Types : icmpV6Types"
@@ -729,14 +742,16 @@ watch(
               />
               <q-select
                 v-model="form.log"
-                class="col-4"
+                class="col-4 q-field--with-bottom"
+                dense
                 options-dense
                 :label="gettext('Log level')"
                 :options="logLevels"
               />
               <q-input
                 v-model="form.comment"
-                class="col-12"
+                class="col-12 q-field--with-bottom"
+                dense
                 :label="gettext('Comment')"
               />
               <div
@@ -752,7 +767,7 @@ watch(
             </template>
             <q-checkbox
               v-model="form.enable"
-              class="col-12"
+              class="col-12 q-field--with-bottom"
               dense
               right-label
               color="primary"

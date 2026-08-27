@@ -22,12 +22,12 @@
               :color="serviceStatusColor(props.row)"
               :label="serviceStatusText(props.row)"
             />
-            <div
+            <!-- <div
               class="service-state-details"
               :title="serviceStateDetails(props.row)"
             >
               {{ serviceStateDetails(props.row) }}
-            </div>
+            </div> -->
           </q-td>
         </template>
 
@@ -443,7 +443,9 @@ function stopService() {
 
   Dialog.create({
     title: gettext('Confirm'),
-    message: `${gettext('Are you sure you want to stop')}: ${selectedNode.value} ${selectedService.value.name} ?`,
+    message: `${gettext('Are you sure you want to stop')}: ${selectedNode.value} ${
+      selectedService.value.name
+    } ?`,
     cancel: { flat: true, label: gettext('Cancel') },
     ok: { flat: true, label: gettext('Confirm'), color: 'primary' },
     persistent: true,

@@ -12,6 +12,7 @@ import {
   type PveTfaUser,
 } from '@/api/users';
 import { getClusterConfig, getClusterNodes, type PveRecord } from '@/api/resources';
+import SelectTable from '@/components/SelectTable.vue';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
@@ -41,7 +42,6 @@ const recoveryVisible = shallowRef(false);
 const recoveryKeysVisible = shallowRef(false);
 const submitting = shallowRef(false);
 const userOptions = shallowRef<UserOption[]>([]);
-const filteredUserOptions = shallowRef<UserOption[]>([]);
 const qrDataUrl = shallowRef('');
 const recoveryKeys = shallowRef<string[]>([]);
 const recoveryExists = shallowRef(false);
@@ -80,6 +80,12 @@ const columns: QTableColumn<TfaRow>[] = [
     align: 'left',
     sortable: true,
   },
+];
+const userRows = computed<PveRecord[]>(() => userOptions.value.map((user) => ({ ...user })));
+const userColumns: QTableColumn<PveRecord>[] = [
+  { name: 'value', label: gettext('User'), field: 'value', align: 'left', sortable: true },
+  { name: 'name', label: gettext('Name'), field: 'name', align: 'left' },
+  { name: 'comment', label: gettext('Comment'), field: 'comment', align: 'left' },
 ];
 
 const filteredRows = computed(() => {
@@ -136,18 +142,6 @@ async function loadUserOptions() {
     users.unshift({ label: session.userid, value: session.userid, name: '', comment: '' });
   }
   userOptions.value = users;
-  filteredUserOptions.value = users;
-}
-
-function filterUserOptions(value: string, update: (callback: () => void) => void) {
-  update(() => {
-    const keyword = value.trim().toLowerCase();
-    filteredUserOptions.value = !keyword
-      ? userOptions.value
-      : userOptions.value.filter((user) =>
-          [user.value, user.name, user.comment].join(' ').toLowerCase().includes(keyword)
-        );
-  });
 }
 
 function resetTotpForm() {
@@ -474,8 +468,8 @@ async function loadRows() {
           enabledText: isLocked(user, entry.type)
             ? gettext('Locked')
             : entry.enable === false
-              ? gettext('Disabled')
-              : gettext('Enabled'),
+            ? gettext('Disabled')
+            : gettext('Enabled'),
         }))
       )
       .sort(
@@ -604,7 +598,7 @@ defineExpose({ reload: loadRows });
             size="12px"
             color="primary"
             class="u-button"
-            :label="gettext('Reload')"
+            :label="gettext('Reload TFA')"
             :loading="loading"
             @click="loadRows"
           />
@@ -757,32 +751,17 @@ defineExpose({ reload: loadRows });
         :title="gettext('Add a TOTP login factor')"
       >
         <div class="u-border q-ma-sm q-pa-md u-dense">
-          <q-select
+          <SelectTable
             v-model="totpForm.userid"
-            dense
-            options-dense
-            use-input
-            fill-input
-            hide-selected
-            emit-value
-            map-options
-            :options="filteredUserOptions"
             :label="`${gettext('User')} *`"
             class="q-field--with-bottom"
-            @filter="filterUserOptions"
-          >
-            <template #option="scope">
-              <q-item v-bind="scope.itemProps">
-                <q-item-section>
-                  <q-item-label>{{ scope.opt.value }}</q-item-label>
-                  <q-item-label caption>
-                    {{ scope.opt.name || gettext('None') }} ·
-                    {{ scope.opt.comment || gettext('None') }}
-                  </q-item-label>
-                </q-item-section>
-              </q-item>
-            </template>
-          </q-select>
+            row-key="value"
+            field-style="standard"
+            :rows="userRows"
+            :columns="userColumns"
+            :display-value="totpForm.userid"
+            :get-row-value="(row) => String(row.value || '')"
+          />
           <q-input
             v-model="totpForm.description"
             dense
@@ -803,7 +782,7 @@ defineExpose({ reload: loadRows });
               outline
               size="12px"
               color="primary"
-              class="u-button self-end"
+              class="u-button self-end q-mb-md"
               :label="gettext('Randomize')"
               @click="totpForm.secret = randomBase32Secret()"
             />
@@ -874,32 +853,17 @@ defineExpose({ reload: loadRows });
         :title="gettext('Add: TFA recovery keys')"
       >
         <div class="u-border q-ma-sm q-pa-md u-dense">
-          <q-select
+          <SelectTable
             v-model="recoveryForm.userid"
-            dense
-            options-dense
-            use-input
-            fill-input
-            hide-selected
-            emit-value
-            map-options
-            :options="filteredUserOptions"
             :label="`${gettext('User')} *`"
             class="q-field--with-bottom"
-            @filter="filterUserOptions"
-          >
-            <template #option="scope">
-              <q-item v-bind="scope.itemProps">
-                <q-item-section>
-                  <q-item-label>{{ scope.opt.value }}</q-item-label>
-                  <q-item-label caption>
-                    {{ scope.opt.name || gettext('None') }} ·
-                    {{ scope.opt.comment || gettext('None') }}
-                  </q-item-label>
-                </q-item-section>
-              </q-item>
-            </template>
-          </q-select>
+            row-key="value"
+            field-style="standard"
+            :rows="userRows"
+            :columns="userColumns"
+            :display-value="recoveryForm.userid"
+            :get-row-value="(row) => String(row.value || '')"
+          />
           <div
             v-if="recoveryExists"
             class="text-negative q-mb-sm"
@@ -948,32 +912,17 @@ defineExpose({ reload: loadRows });
         :title="gettext('Add a Webauthn login token')"
       >
         <div class="u-border q-ma-sm q-pa-md u-dense">
-          <q-select
+          <SelectTable
             v-model="webauthnForm.userid"
-            dense
-            options-dense
-            use-input
-            fill-input
-            hide-selected
-            emit-value
-            map-options
-            :options="filteredUserOptions"
             :label="`${gettext('User')} *`"
             class="q-field--with-bottom"
-            @filter="filterUserOptions"
-          >
-            <template #option="scope">
-              <q-item v-bind="scope.itemProps">
-                <q-item-section>
-                  <q-item-label>{{ scope.opt.value }}</q-item-label>
-                  <q-item-label caption>
-                    {{ scope.opt.name || gettext('None') }} ·
-                    {{ scope.opt.comment || gettext('None') }}
-                  </q-item-label>
-                </q-item-section>
-              </q-item>
-            </template>
-          </q-select>
+            row-key="value"
+            field-style="standard"
+            :rows="userRows"
+            :columns="userColumns"
+            :display-value="webauthnForm.userid"
+            :get-row-value="(row) => String(row.value || '')"
+          />
           <q-input
             v-model="webauthnForm.description"
             dense
@@ -1022,32 +971,17 @@ defineExpose({ reload: loadRows });
         :title="gettext('Add a Yubico OTP key')"
       >
         <div class="u-border q-ma-sm q-pa-md u-dense">
-          <q-select
+          <SelectTable
             v-model="yubicoForm.userid"
-            dense
-            options-dense
-            use-input
-            fill-input
-            hide-selected
-            emit-value
-            map-options
-            :options="filteredUserOptions"
             :label="`${gettext('User')} *`"
             class="q-field--with-bottom"
-            @filter="filterUserOptions"
-          >
-            <template #option="scope">
-              <q-item v-bind="scope.itemProps">
-                <q-item-section>
-                  <q-item-label>{{ scope.opt.value }}</q-item-label>
-                  <q-item-label caption>
-                    {{ scope.opt.name || gettext('None') }} ·
-                    {{ scope.opt.comment || gettext('None') }}
-                  </q-item-label>
-                </q-item-section>
-              </q-item>
-            </template>
-          </q-select>
+            row-key="value"
+            field-style="standard"
+            :rows="userRows"
+            :columns="userColumns"
+            :display-value="yubicoForm.userid"
+            :get-row-value="(row) => String(row.value || '')"
+          />
           <q-input
             v-model="yubicoForm.description"
             dense
@@ -1072,7 +1006,7 @@ defineExpose({ reload: loadRows });
             :label="`${gettext('Verify Password')} *`"
             class="q-field--with-bottom"
           />
-          <div class="text-sm text-warning q-mt-xs">
+          <div class="tfa-form-hint q-mt-md">
             <span class="text-weight-medium">{{ gettext('Tip:') }}</span>
             {{ gettext('YubiKeys also support WebAuthn, which is often a better alternative.') }}
           </div>
@@ -1153,3 +1087,14 @@ defineExpose({ reload: loadRows });
     </q-dialog>
   </q-card>
 </template>
+
+<style scoped>
+.tfa-form-hint {
+  padding: 16px;
+  border: 1px dotted #e0b11c;
+  background: #fff8df;
+  color: #6f5810;
+  font-size: 12px;
+  line-height: 20px;
+}
+</style>

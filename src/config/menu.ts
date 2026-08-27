@@ -49,7 +49,6 @@ export const menuItems: MenuItem[] = [
         icon: 'admin_panel_settings',
         requiresDcCap: 'Sys.Audit',
       },
-      { titleKey: 'Service', path: '/system/service', icon: 'miscellaneous_services' },
       { titleKey: 'Firewall', path: '/system/firewall', icon: 'security' },
       {
         titleKey: 'SDN',

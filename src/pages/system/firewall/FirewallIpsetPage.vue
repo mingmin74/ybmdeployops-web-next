@@ -392,11 +392,15 @@ onMounted(() => {
         <div class="u-border q-ma-sm q-pa-md u-dense">
           <q-input
             v-model="ipsetForm.name"
+            dense
+            class="q-field--with-bottom"
             :label="gettext('Name')"
             :rules="[(value) => !!value || gettext('This field is required')]"
           />
           <q-input
             v-model="ipsetForm.comment"
+            dense
+            class="q-field--with-bottom"
             :label="gettext('Comment')"
           />
         </div>
@@ -436,6 +440,8 @@ onMounted(() => {
           <q-select
             v-if="!editingEntry"
             v-model="entryForm.cidr"
+            dense
+            class="q-field--with-bottom"
             options-dense
             use-input
             clearable
@@ -449,11 +455,14 @@ onMounted(() => {
           <q-input
             v-else
             v-model="entryForm.cidr"
+            dense
+            class="q-field--with-bottom"
             readonly
             label="CIDR"
           />
           <q-checkbox
             v-model="entryForm.nomatch"
+            class="q-field--with-bottom"
             dense
             right-label
             color="primary"
@@ -463,6 +472,8 @@ onMounted(() => {
           />
           <q-input
             v-model="entryForm.comment"
+            dense
+            class="q-field--with-bottom"
             :label="gettext('Comment')"
           />
         </div>

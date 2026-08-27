@@ -19,12 +19,27 @@ const activeTab = shallowRef('operation');
         align="left"
         narrow-indicator
       >
-        <q-tab no-caps name="operation" :label="gettext('Operation Logs')" />
-        <q-tab no-caps name="system" :label="gettext('System Logs')" />
-        <q-tab no-caps name="cluster" :label="gettext('Cluster Logs')" />
+        <q-tab
+          no-caps
+          name="operation"
+          :label="gettext('Operation Logs')"
+        />
+        <q-tab
+          no-caps
+          name="system"
+          :label="gettext('System Logs')"
+        />
+        <q-tab
+          no-caps
+          name="cluster"
+          :label="gettext('Cluster Logs')"
+        />
       </q-tabs>
       <q-separator />
-      <q-tab-panels v-model="activeTab" animated>
+      <q-tab-panels
+        v-model="activeTab"
+        animated
+      >
         <q-tab-panel name="operation"><OperationLogsPage /></q-tab-panel>
         <q-tab-panel name="system"><SystemLogsPage :show-node-selector="true" /></q-tab-panel>
         <q-tab-panel name="cluster"><ClusterLogsPage /></q-tab-panel>

@@ -5,7 +5,13 @@ import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 import { getTaskLogs } from '@/api/maintenance';
 import type { PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
-import { formatTaskDescription, textValue, timestampToTime } from '@/utils/pveFormat';
+import {
+  formatTaskDescription,
+  formatTaskStatus,
+  taskStatusColor,
+  textValue,
+  timestampToTime,
+} from '@/utils/pveFormat';
 
 const loading = ref(false);
 const filter = ref('');
@@ -46,7 +52,7 @@ const columns: QTableColumn<PveRecord>[] = [
 async function reload() {
   const response = await getTaskLogs();
   rows.value = [...(response.data || [])].sort(
-    (left, right) => Number(right.starttime || 0) - Number(left.starttime || 0),
+    (left, right) => Number(right.starttime || 0) - Number(left.starttime || 0)
   );
 }
 
@@ -74,7 +80,7 @@ function exportData() {
         `[${textValue(item.user)}]`,
         `[${formatTaskDescription(item.type, item.id)}]`,
         textValue(item.status),
-      ].join(''),
+      ].join('')
     )
     .join('\n');
   const blob = new Blob([data], { type: 'text/plain;charset=utf-8' });
@@ -141,15 +147,28 @@ onBeforeUnmount(() => {
           />
         </div>
         <q-space />
-        <q-input v-model="filter" borderless dense debounce="300" :placeholder="gettext('Search')">
+        <q-input
+          v-model="filter"
+          borderless
+          dense
+          debounce="300"
+          :placeholder="gettext('Search')"
+        >
           <template #append><q-icon name="search" /></template>
         </q-input>
       </template>
       <template #body-cell-status="scope">
         <q-td :props="scope">
-          <span :class="scope.value === 'OK' ? 'text-green' : 'text-red'">{{
-            scope.value || '-'
-          }}</span>
+          <q-spinner
+            v-if="scope.row.pid && scope.row.type !== 'vncproxy'"
+            size="18px"
+          />
+          <span
+            v-else
+            :class="taskStatusColor(scope.value)"
+          >
+            {{ formatTaskStatus(scope.value) }}
+          </span>
         </q-td>
       </template>
       <template #body-cell-index="scope">

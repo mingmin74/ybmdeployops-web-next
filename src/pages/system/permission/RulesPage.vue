@@ -11,6 +11,7 @@ import {
 import { getApiTokens, getRoles, type PveRecord, type PveRole } from '@/api/resources';
 import { getGroups, type PveGroup, type PveUser } from '@/api/users';
 import UWindow from '@/components/UWindow.vue';
+import SelectTable from '@/components/SelectTable.vue';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 
@@ -30,18 +31,13 @@ const formVisible = ref(false);
 const pathOptions = shallowRef<string[]>([]);
 const filteredPathOptions = shallowRef<string[]>([]);
 const userOptions = shallowRef<PveUser[]>([]);
-const filteredUserOptions = shallowRef<PveUser[]>([]);
 const groupOptions = shallowRef<PveGroup[]>([]);
-const filteredGroupOptions = shallowRef<PveGroup[]>([]);
 const tokenOptions = shallowRef<{ value: string; comment: string }[]>([]);
 const filteredTokenOptions = shallowRef<{ value: string; comment: string }[]>([]);
 const roleOptions = shallowRef<PveRole[]>([]);
-const filteredRoleOptions = shallowRef<PveRole[]>([]);
+const roleError = shallowRef('');
 const pathRef = ref();
-const groupRef = ref();
-const userRef = ref();
 const tokenRef = ref();
-const roleRef = ref();
 const form = reactive({
   path: '',
   type: 'user',
@@ -57,6 +53,36 @@ const isFixedPath = computed(() => Boolean(props.resourcePath));
 const isVnetAcl = computed(() => Boolean(props.vnetAcl && props.resourcePath));
 const selectedRule = computed(() => selectedRules.value[0]);
 const canRemove = computed(() => selectedRules.value.length === 1);
+const roleRows = computed<PveRecord[]>(() => roleOptions.value.map((role) => ({ ...role })));
+const selectedRoleLabel = computed(
+  () => roleRows.value.find((role) => textValue(role.roleid) === form.role)?.roleid || form.role
+);
+const roleColumns: QTableColumn<PveRecord>[] = [
+  { name: 'roleid', label: gettext('Role'), field: 'roleid', align: 'left', sortable: true },
+  {
+    name: 'privileges',
+    label: gettext('Privileges'),
+    field: (row) => formatPrivileges(textValue(row.privs)),
+    align: 'left',
+  },
+];
+const userRows = computed<PveRecord[]>(() => userOptions.value.map((user) => ({ ...user })));
+const groupRows = computed<PveRecord[]>(() => groupOptions.value.map((group) => ({ ...group })));
+const userColumns: QTableColumn<PveRecord>[] = [
+  { name: 'userid', label: gettext('User'), field: 'userid', align: 'left', sortable: true },
+  {
+    name: 'name',
+    label: gettext('Name'),
+    field: (row) => [textValue(row.firstname), textValue(row.lastname)].filter(Boolean).join(' '),
+    align: 'left',
+  },
+  { name: 'comment', label: gettext('Comment'), field: 'comment', align: 'left' },
+];
+const groupColumns: QTableColumn<PveRecord>[] = [
+  { name: 'groupid', label: gettext('Group'), field: 'groupid', align: 'left', sortable: true },
+  { name: 'comment', label: gettext('Comment'), field: 'comment', align: 'left' },
+  { name: 'users', label: gettext('Users'), field: 'users', align: 'left' },
+];
 const filteredRules = computed(() => {
   const query = filter.value.trim().toLowerCase();
   return rules.value
@@ -137,6 +163,7 @@ function ruleVlan(rule: AccessRule) {
   return /^\/\d+$/.test(suffix) ? suffix.slice(1) : gettext('All');
 }
 function resetForm(type: AclType = 'user') {
+  roleError.value = '';
   Object.assign(form, {
     path: props.resourcePath,
     type,
@@ -207,24 +234,6 @@ function filterPaths(value: string, done: SelectFilterDone) {
     (option) => option
   );
 }
-function filterUsers(value: string, done: SelectFilterDone) {
-  filterOptions(
-    value,
-    done,
-    userOptions.value,
-    (options) => (filteredUserOptions.value = options),
-    (option) => [option.userid, option.firstname, option.lastname, option.comment].join(' ')
-  );
-}
-function filterGroups(value: string, done: SelectFilterDone) {
-  filterOptions(
-    value,
-    done,
-    groupOptions.value,
-    (options) => (filteredGroupOptions.value = options),
-    (option) => [option.groupid, option.comment, option.users].join(' ')
-  );
-}
 function filterTokens(value: string, done: SelectFilterDone) {
   filterOptions(
     value,
@@ -232,15 +241,6 @@ function filterTokens(value: string, done: SelectFilterDone) {
     tokenOptions.value,
     (options) => (filteredTokenOptions.value = options),
     (option) => [option.value, option.comment].join(' ')
-  );
-}
-function filterRoles(value: string, done: SelectFilterDone) {
-  filterOptions(
-    value,
-    done,
-    roleOptions.value,
-    (options) => (filteredRoleOptions.value = options),
-    (option) => [option.roleid, option.privs].join(' ')
   );
 }
 function addPath(
@@ -289,19 +289,16 @@ async function openForm(type: AclType = 'user') {
     roleOptions.value = ([...(roles.data || [])] as PveRole[]).sort((a, b) =>
       a.roleid.localeCompare(b.roleid)
     );
-    filteredRoleOptions.value = roleOptions.value;
     if (type === 'group') {
       const groups = await getGroups();
       groupOptions.value = ([...(groups.data || [])] as PveGroup[]).sort((a, b) =>
         a.groupid.localeCompare(b.groupid)
       );
-      filteredGroupOptions.value = groupOptions.value;
     } else if (type === 'user') {
       const users = await getEnabledAccessUsers();
       userOptions.value = ([...(users.data || [])] as PveUser[]).sort((a, b) =>
         a.userid.localeCompare(b.userid)
       );
-      filteredUserOptions.value = userOptions.value;
     } else {
       const tokens = await getApiTokens();
       tokenOptions.value = (tokens.data || [])
@@ -321,14 +318,17 @@ async function openForm(type: AclType = 'user') {
   }
 }
 async function saveRule() {
-  const subjectRef =
-    form.type === 'user' ? userRef.value : form.type === 'group' ? groupRef.value : tokenRef.value;
   if (
     dialogLoading.value ||
     (!isFixedPath.value && pathRef.value?.validate?.() === false) ||
-    subjectRef?.validate?.() === false ||
-    roleRef.value?.validate?.() === false
+    tokenRef.value?.validate?.() === false ||
+    (form.type === 'user' && !form.user) ||
+    (form.type === 'group' && !form.group)
   ) {
+    return;
+  }
+  if (!form.role) {
+    roleError.value = gettext('This field is required');
     return;
   }
   dialogLoading.value = true;
@@ -493,67 +493,30 @@ defineExpose({ reload });
           @new-value="addPath"
           :options="filteredPathOptions"
         />
-        <q-select
+        <SelectTable
           v-if="form.type === 'group'"
-          ref="groupRef"
           v-model="form.group"
-          dense
-          options-dense
-          emit-value
-          map-options
-          option-value="groupid"
-          option-label="groupid"
           :label="requiredLabel(gettext('Group'))"
-          use-input
-          input-debounce="0"
-          @filter="filterGroups"
-          :options="filteredGroupOptions"
-          :rules="[requiredFieldRule]"
-        >
-          <template #option="scope">
-            <q-item v-bind="scope.itemProps">
-              <q-item-section>
-                <q-item-label>{{ scope.opt.groupid }}</q-item-label>
-                <q-item-label caption>{{ scope.opt.comment }}</q-item-label>
-                <q-item-label
-                  v-if="scope.opt.users"
-                  caption
-                >
-                  {{ gettext('Users') }}: {{ scope.opt.users }}
-                </q-item-label>
-              </q-item-section>
-            </q-item>
-          </template>
-        </q-select>
-        <q-select
+          class="q-field--with-bottom"
+          row-key="groupid"
+          field-style="standard"
+          :rows="groupRows"
+          :columns="groupColumns"
+          :display-value="form.group"
+          :get-row-value="(row) => textValue(row.groupid)"
+        />
+        <SelectTable
           v-if="form.type === 'user'"
-          ref="userRef"
           v-model="form.user"
-          dense
-          options-dense
-          emit-value
-          map-options
-          option-value="userid"
-          option-label="userid"
           :label="requiredLabel(gettext('User'))"
-          use-input
-          input-debounce="0"
-          @filter="filterUsers"
-          :options="filteredUserOptions"
-          :rules="[requiredFieldRule]"
-        >
-          <template #option="scope">
-            <q-item v-bind="scope.itemProps">
-              <q-item-section>
-                <q-item-label>{{ scope.opt.userid }}</q-item-label>
-                <q-item-label caption>
-                  {{ [scope.opt.firstname, scope.opt.lastname].filter(Boolean).join(' ')
-                  }}{{ scope.opt.comment ? ` · ${scope.opt.comment}` : '' }}
-                </q-item-label>
-              </q-item-section>
-            </q-item>
-          </template>
-        </q-select>
+          class="q-field--with-bottom"
+          row-key="userid"
+          field-style="standard"
+          :rows="userRows"
+          :columns="userColumns"
+          :display-value="form.user"
+          :get-row-value="(row) => textValue(row.userid)"
+        />
         <q-select
           v-if="form.type === 'apitoken'"
           ref="tokenRef"
@@ -580,31 +543,22 @@ defineExpose({ reload });
             </q-item>
           </template>
         </q-select>
-        <q-select
-          ref="roleRef"
+        <SelectTable
           v-model="form.role"
-          dense
-          options-dense
-          emit-value
-          map-options
-          option-value="roleid"
-          option-label="roleid"
+          class="q-field--with-bottom"
+          row-key="roleid"
+          field-style="standard"
+          width="560px"
+          :rows="roleRows"
+          :columns="roleColumns"
+          :display-value="selectedRoleLabel"
           :label="requiredLabel(gettext('Role'))"
-          use-input
-          input-debounce="0"
-          @filter="filterRoles"
-          :options="filteredRoleOptions"
-          :rules="[requiredFieldRule]"
-        >
-          <template #option="scope">
-            <q-item v-bind="scope.itemProps">
-              <q-item-section>
-                <q-item-label>{{ scope.opt.roleid }}</q-item-label>
-                <q-item-label caption>{{ formatPrivileges(scope.opt.privs) }}</q-item-label>
-              </q-item-section>
-            </q-item>
-          </template>
-        </q-select>
+          show-error
+          :error="Boolean(roleError)"
+          :error-message="roleError"
+          :get-row-value="(row) => textValue(row.roleid)"
+          @update:model-value="roleError = ''"
+        />
         <q-input
           v-if="isVnetAcl"
           v-model="form.vlan"

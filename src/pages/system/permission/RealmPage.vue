@@ -11,13 +11,13 @@ import {
   type PveRealm,
 } from '@/api/resources';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
+import UWindow from '@/components/UWindow.vue';
 import RealmSyncJobsPage from '@/pages/system/RealmSyncJobsPage.vue';
 import { gettext } from '@/locale';
 
 defineProps<{ embedded?: boolean }>();
 type AuthType = 'ldap' | 'ad' | 'openid' | 'pam' | 'pve';
 type Scalar = string | number | boolean;
-type FormScalar = string | number | boolean | null | undefined;
 const addTypes: { value: AuthType; label: string }[] = [
   { value: 'ldap', label: 'LDAP' },
   { value: 'ad', label: gettext('Active Directory') },
@@ -56,7 +56,7 @@ const rows = ref<PveRealm[]>([]),
 const action = ref<'add' | 'edit'>('add');
 const original = ref<Record<string, unknown>>({});
 const task = reactive({ visible: false, upid: '', node: '', title: '' });
-const form = reactive<Record<string, any>>({});
+const form = reactive<Record<string, Scalar | null | undefined>>({});
 const sync = reactive({ scope: '', enableNew: true, acl: false, entry: false, properties: false });
 const selectedRealm = computed(() => selected.value[0]);
 const syncable = computed(() => ['ldap', 'ad'].includes(selectedRealm.value?.type || ''));
@@ -426,7 +426,7 @@ defineExpose({ reload });
               class="u-button"
               :label="gettext('Add')"
             >
-              <q-list>
+              <q-list dense>
                 <q-item
                   v-for="type in addTypes"
                   :key="type.value"
@@ -443,6 +443,7 @@ defineExpose({ reload });
               outline
               size="12px"
               class="u-button"
+              :color="selectedRealm ? 'primary' : 'grey'"
               :disable="!selectedRealm"
               :label="gettext('Edit')"
               @click="open('edit')"
@@ -462,6 +463,7 @@ defineExpose({ reload });
               outline
               size="12px"
               class="u-button"
+              :color="syncable ? 'primary' : 'grey'"
               :disable="!syncable"
               :label="gettext('Sync')"
               @click="openSync"
@@ -484,38 +486,38 @@ defineExpose({ reload });
     <q-dialog
       v-model="dialog"
       persistent
+      transition-show="scale"
+      transition-hide="scale"
     >
-      <q-card class="realm-dialog">
-        <q-card-section class="row items-center bg-blue-8 text-grey-1 q-pa-sm">
-          <div class="text-weight-bold">
-            {{ gettext(action === 'add' ? 'Add' : 'Edit') }}: {{ form.type }}
-          </div>
-          <q-space />
-          <q-btn
-            v-close-popup
-            icon="close"
-            flat
-            dense
-          />
-        </q-card-section>
+      <UWindow
+        width="720px"
+        :title="`${gettext(action === 'add' ? 'Add' : 'Edit')}: ${form.type}`"
+        :loading="saving"
+      >
         <q-tabs
           v-if="isDirectory"
           v-model="formTab"
-          dense
-          align="left"
+          class="text-grey"
+          active-color="primary"
+          indicator-color="primary"
+          align="justify"
+          narrow-indicator
         >
           <q-tab
+            no-caps
             name="general"
             :label="gettext('General')"
           />
           <q-tab
+            no-caps
             name="sync"
             :label="gettext('Sync Options')"
           />
         </q-tabs>
-        <q-card-section
+        <q-separator v-if="isDirectory" />
+        <div
           v-show="formTab === 'general'"
-          class="q-gutter-sm"
+          class="u-border q-ma-sm q-pa-md u-dense realm-form-grid"
         >
           <q-input
             v-model="form.realm"
@@ -531,6 +533,7 @@ defineExpose({ reload });
             v-if="supportsTfa"
             v-model="form.tfaType"
             dense
+            options-dense
             emit-value
             map-options
             :options="[
@@ -617,8 +620,9 @@ defineExpose({ reload });
               :label="gettext('Port')"
             />
             <q-select
-              v-model="form.mode"
-              dense
+            v-model="form.mode"
+            dense
+            options-dense
               emit-value
               map-options
               :options="[
@@ -661,8 +665,9 @@ defineExpose({ reload });
               :label="gettext('Scopes')"
             />
             <q-select
-              v-model="form['username-claim']"
-              dense
+            v-model="form['username-claim']"
+            dense
+            options-dense
               :options="['__default__', 'subject', 'username', 'email']"
               :label="gettext('Username Claim')"
             />
@@ -684,8 +689,9 @@ defineExpose({ reload });
               :label="gettext('Overwrite Groups')"
             />
             <q-select
-              v-model="form.prompt"
-              dense
+            v-model="form.prompt"
+            dense
+            options-dense
               :options="['__default__', 'none', 'login', 'consent', 'select_account']"
               :label="gettext('Prompt')"
             />
@@ -709,10 +715,10 @@ defineExpose({ reload });
             dense
             :label="gettext('Comment')"
           />
-        </q-card-section>
-        <q-card-section
+        </div>
+        <div
           v-show="formTab === 'sync' && isDirectory"
-          class="q-gutter-sm"
+          class="u-border q-ma-sm q-pa-md u-dense realm-form-grid"
         >
           <q-input
             v-model="form.bind_dn"
@@ -738,6 +744,7 @@ defineExpose({ reload });
           <q-select
             v-model="form.scope"
             dense
+            options-dense
             emit-value
             map-options
             :options="[
@@ -751,6 +758,7 @@ defineExpose({ reload });
           <q-select
             v-model="form['enable-new']"
             dense
+            options-dense
             emit-value
             map-options
             :options="[
@@ -801,37 +809,43 @@ defineExpose({ reload });
               />
             </q-item>
           </q-list>
-        </q-card-section>
-        <q-inner-loading :showing="saving" />
-        <q-card-actions align="right">
+        </div>
+        <template #foot>
           <q-btn
             v-close-popup
             flat
             no-caps
+            size="12px"
             :label="gettext('Cancel')"
           />
           <q-btn
             flat
             no-caps
-            color="primary"
+            size="12px"
+            :disable="saving"
+            :class="!saving ? 'bg-primary text-grey-1 u-button' : 'bg-grey-4 text-grey-6 u-button'"
             :label="gettext('OK')"
             @click="save"
           />
-        </q-card-actions>
-      </q-card>
+        </template>
+      </UWindow>
     </q-dialog>
     <q-dialog
       v-model="syncDialog"
       persistent
+      transition-show="scale"
+      transition-hide="scale"
     >
-      <q-card class="realm-dialog">
-        <q-card-section class="text-weight-bold bg-blue-8 text-grey-1">
-          {{ gettext('Realm Sync') }}
-        </q-card-section>
-        <q-card-section class="q-gutter-sm">
+      <UWindow
+        width="560px"
+        :title="gettext('Realm Sync')"
+        :loading="saving"
+      >
+        <div class="u-border q-ma-sm q-pa-md u-dense realm-form-grid">
           <q-select
             v-model="sync.scope"
             dense
+            options-dense
             emit-value
             map-options
             :options="[
@@ -867,29 +881,37 @@ defineExpose({ reload });
             </q-item>
           </q-list>
           <q-inner-loading :showing="saving" />
-        </q-card-section>
-        <q-card-actions align="right">
+        </div>
+        <template #foot>
           <q-btn
             v-close-popup
             flat
             no-caps
+            size="12px"
             :label="gettext('Cancel')"
           />
           <q-btn
             flat
             no-caps
+            size="12px"
+            outline
+            color="primary"
+            class="u-button"
+            :disable="saving"
             :label="gettext('Preview')"
             @click="submitSync(true)"
           />
           <q-btn
             flat
             no-caps
-            color="primary"
+            size="12px"
+            :disable="saving"
+            :class="!saving ? 'bg-primary text-grey-1 u-button' : 'bg-grey-4 text-grey-6 u-button'"
             :label="gettext('Sync')"
             @click="submitSync(false)"
           />
-        </q-card-actions>
-      </q-card>
+        </template>
+      </UWindow>
     </q-dialog>
     <TaskOutputDialog
       v-model="task.visible"
@@ -901,8 +923,20 @@ defineExpose({ reload });
   </q-card>
 </template>
 <style scoped>
-.realm-dialog {
-  width: 640px;
-  max-width: 95vw;
+.realm-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+}
+.realm-form-grid :deep(.q-field) {
+  padding-bottom: 15px;
+}
+.realm-form-grid :deep(.q-list) {
+  grid-column: 1 / -1;
+}
+@media (max-width: 640px) {
+  .realm-form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

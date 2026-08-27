@@ -440,10 +440,10 @@ defineExpose({ reload });
     transition-hide="scale"
   >
     <UWindow
-      width="520px"
+      width="680px"
       :title="title"
     >
-      <div class="u-border q-ma-sm q-pa-md u-dense">
+      <div class="u-border q-ma-sm q-pa-md u-dense realm-sync-job-form">
         <q-select
           v-model="form.realm"
           dense
@@ -499,35 +499,38 @@ defineExpose({ reload });
           :disable="action === 'add' && !form.realm"
           :label="gettext('Enable New')"
         />
-        <div class="text-sm text-grey-7 q-mt-sm q-mb-xs">
-          {{ gettext('Remove Vanished Options') }}
-        </div>
-        <q-checkbox
-          v-model="form.acl"
-          dense
-          right-label
-          color="primary"
-          :label="gettext('ACL')"
-        />
-        <q-checkbox
-          v-model="form.entry"
-          dense
-          right-label
-          color="primary"
-          :label="gettext('Entry')"
-        />
-        <q-checkbox
-          v-model="form.properties"
-          dense
-          right-label
-          color="primary"
-          :label="gettext('Properties')"
-        />
+        <q-list bordered>
+          <q-item-label header>{{ gettext('Remove Vanished Options') }}</q-item-label>
+          <q-item>
+            <q-checkbox
+              v-model="form.acl"
+              dense
+              color="primary"
+              :label="gettext('ACL')"
+            />
+          </q-item>
+          <q-item>
+            <q-checkbox
+              v-model="form.entry"
+              dense
+              color="primary"
+              :label="gettext('Entry')"
+            />
+          </q-item>
+          <q-item>
+            <q-checkbox
+              v-model="form.properties"
+              dense
+              color="primary"
+              :label="gettext('Properties')"
+            />
+          </q-item>
+        </q-list>
         <q-input
           v-model="form.comment"
           dense
           :label="gettext('Job Comment')"
-          class="q-field--with-bottom"
+          class="q-field--with-bottom realm-sync-job-comment"
         />
         <q-inner-loading :showing="saving" />
       </div>
@@ -558,3 +561,25 @@ defineExpose({ reload });
     @finished="reload"
   />
 </template>
+<style scoped>
+.realm-sync-job-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+}
+
+.realm-sync-job-form :deep(.q-field) {
+  padding-bottom: 15px;
+}
+
+.realm-sync-job-form :deep(.q-list),
+.realm-sync-job-comment {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .realm-sync-job-form {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

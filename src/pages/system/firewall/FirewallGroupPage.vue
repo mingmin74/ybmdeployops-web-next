@@ -22,7 +22,7 @@ const editing = shallowRef(false);
 const form = ref<Record<string, string | number | undefined>>({});
 const originalName = shallowRef('');
 
-const selectedGroup = computed(() => selected.value[0]);
+const selectedGroup = computed(() => selected.value[0] || groups.value[0]);
 const rulesBaseUrl = computed(() => {
   const group = textValue(selectedGroup.value?.group);
   return group ? `/cluster/firewall/groups/${encodeURIComponent(group)}` : '';
@@ -128,6 +128,7 @@ onMounted(() => {
         :pagination="{ page: 1, rowsPerPage: 10 }"
         :rows-per-page-options="[10]"
         @update:selected="selected = [...$event]"
+        @row-click="(_, row) => (selected = [row])"
         @row-dblclick="
           (_, row) => {
             selected = [row];
@@ -202,11 +203,15 @@ onMounted(() => {
         <div class="u-border q-ma-sm q-pa-md u-dense">
           <q-input
             v-model="form.group"
+            dense
+            class="q-field--with-bottom"
             :label="gettext('Group')"
             :rules="[(value) => !!value || gettext('This field is required')]"
           />
           <q-input
             v-model="form.comment"
+            dense
+            class="q-field--with-bottom"
             :label="gettext('Comment')"
           />
         </div>

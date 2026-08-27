@@ -264,20 +264,20 @@ function detailSelectionMode(task: BackupTaskRow) {
   return task.vmid
     ? gettext('Include selected VMs')
     : task.all
-      ? gettext('All')
-      : task.exclude
-        ? gettext('Exclude selected VMs')
-        : task.pool
-          ? gettext('Pool based')
-          : '-';
+    ? gettext('All')
+    : task.exclude
+    ? gettext('Exclude selected VMs')
+    : task.pool
+    ? gettext('Pool based')
+    : '-';
 }
 function detailNotification(task: BackupTaskRow) {
   const mode = task['notification-mode'];
   return mode === 'notification-system' || (mode === 'auto' && !task.mailto)
     ? gettext('Use global notification settings')
     : task.mailnotification === 'failure'
-      ? gettext('Send email on failure')
-      : gettext('Always send email');
+    ? gettext('Send email on failure')
+    : gettext('Always send email');
 }
 function treeLabel(item: PveRecord) {
   const id = textValue(item.id);
@@ -484,10 +484,10 @@ async function openTaskForm(action: 'add' | 'edit') {
       taskForm.selectionMode = data.exclude
         ? 'exclude'
         : data.all
-          ? 'all'
-          : data.pool
-            ? 'pool'
-            : 'include';
+        ? 'all'
+        : data.pool
+        ? 'pool'
+        : 'include';
       taskForm.pool = textValue(data.pool);
       taskForm.selectedVmids = textValue(data.exclude, textValue(data.vmid))
         .split(',')
@@ -896,7 +896,7 @@ onMounted(() => void reload());
           </div>
         </section>
         <section class="backup-disk-section">
-          <div class="row items-center q-mb-sm backup-disk-section__header">
+          <div class="row items-center q-mb-md backup-disk-section__header">
             <div class="backup-task-form__section-title backup-disk-section__title">
               {{ gettext('Included disks') }}
             </div>
@@ -1093,6 +1093,7 @@ onMounted(() => void reload());
                         round
                         flat
                         dense
+                        class="backup-plan-builder-btn"
                         color="primary"
                         icon="event"
                         :title="gettext('Custom Execution Plan')"
@@ -1304,7 +1305,7 @@ onMounted(() => void reload());
                 </div>
               </div>
             </div>
-            <div class="form-hint q-mt-md">
+            <div class="backup-task-form__hint q-mt-md">
               {{
                 gettext(
                   "Without any keep option, the storage's configuration or node's vzdump.conf is used as fallback"
@@ -1370,7 +1371,7 @@ onMounted(() => void reload());
                 :label="gettext('Backup Notes')"
               />
             </div>
-            <div class="form-hint q-mt-md">
+            <div class="backup-task-form__hint q-mt-md">
               {{ gettext('Notes are added to every backup created by this job.') }}
               {{ gettext('Template variables:') }}
               <span v-pre>{{ cluster }}</span>
@@ -1483,7 +1484,7 @@ onMounted(() => void reload());
                 </p>
               </div>
             </div>
-            <div class="q-mt-md bg-amber-1 q-pa-md u-border-dotted-amber">
+            <div class="backup-task-form__hint q-mt-md">
               <span class="text-weight-bold text-amber-9">{{ gettext('Comment') }}:</span>
               {{
                 gettext(
@@ -1838,7 +1839,6 @@ onMounted(() => void reload());
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
   color: #252d3d;
   font-size: 14px;
   font-weight: 600;
@@ -1908,12 +1908,17 @@ onMounted(() => void reload());
   line-height: 20px;
 }
 
-.form-hint {
+.backup-task-form__hint {
   padding: 16px;
-  background: #f5f5f5;
-  color: #666;
+  border: 1px dotted #e0b11c;
+  background: #fff8df;
+  color: #6f5810;
   font-size: 12px;
   line-height: 20px;
+}
+
+.backup-plan-builder-btn :deep(.q-btn__content .q-icon) {
+  font-size: 18px !important;
 }
 
 .advanced-row:hover {

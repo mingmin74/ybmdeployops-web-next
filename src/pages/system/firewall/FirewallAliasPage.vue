@@ -205,16 +205,22 @@ onMounted(refreshData);
         <div class="u-border q-ma-sm q-pa-md u-dense">
           <q-input
             v-model="form.name"
+            dense
+            class="q-field--with-bottom"
             :label="gettext('Name')"
             :rules="[(value) => !!value || gettext('This field is required')]"
           />
           <q-input
             v-model="form.cidr"
+            dense
+            class="q-field--with-bottom"
             label="CIDR"
             :rules="[(value) => !!value || gettext('This field is required')]"
           />
           <q-input
             v-model="form.comment"
+            dense
+            class="q-field--with-bottom"
             :label="gettext('Comment')"
           />
         </div>
