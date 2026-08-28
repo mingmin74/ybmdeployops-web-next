@@ -2,6 +2,7 @@
 import { computed, shallowRef, watch } from 'vue';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
+import OptionFormHint from './OptionFormHint.vue';
 
 const props = defineProps<{ modelValue?: unknown; userTagAccess?: unknown }>();
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>();
@@ -30,7 +31,8 @@ function isValidTagList(value: string) {
 
 <template>
   <div class="column q-gutter-sm">
-    <q-input v-model="tags" dense type="textarea" :label="gettext('Tags')" :hint="gettext('Separate tags with semicolons')" :rules="[(value) => isValidTagList(value) || gettext('Invalid tag')]" />
-    <div v-if="overlappingTags.length" class="text-caption text-warning">{{ gettext('NOTE: The following tags are also defined in the user allow list.') }} {{ overlappingTags.join(', ') }}</div>
+    <q-input v-model="tags" dense type="textarea" :label="gettext('Tags')" :rules="[(value) => isValidTagList(value) || gettext('Invalid tag')]" />
+    <OptionFormHint>{{ gettext('Separate tags with semicolons') }}</OptionFormHint>
+    <OptionFormHint v-if="overlappingTags.length">{{ gettext('NOTE: The following tags are also defined in the user allow list.') }} {{ overlappingTags.join(', ') }}</OptionFormHint>
   </div>
 </template>

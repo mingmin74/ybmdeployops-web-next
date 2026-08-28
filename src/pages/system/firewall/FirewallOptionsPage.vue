@@ -149,25 +149,31 @@ const activeFormValid = computed(() => {
 });
 
 function displayValue(value: unknown, definition: OptionDefinition) {
-  if (definition.kind === 'boolean')
-    return Number(value) ? gettext('Enabled') : gettext('Disabled');
+  if (definition.kind === 'boolean') return Number(value) ? gettext('Yes') : gettext('No');
   return textValue(value);
+}
+
+function optionRows(data: PveRecord = {}) {
+  return Object.entries(optionDefinitions.value).map(([key, definition]) => {
+    const rawValue = data[key] === undefined ? definition.defaultValue : data[key];
+    return {
+      key,
+      label: definition.label,
+      value: rawValue,
+      display: displayValue(rawValue, definition),
+      isDefault: data[key] === undefined,
+    };
+  });
 }
 
 async function refreshData() {
   loading.value = true;
+  rows.value = optionRows();
   try {
     const data = (await getFirewallOptionsByBaseUrl(baseUrl)).data || {};
-    rows.value = Object.entries(optionDefinitions.value).map(([key, definition]) => {
-      const rawValue = data[key] === undefined ? definition.defaultValue : data[key];
-      return {
-        key,
-        label: definition.label,
-        value: rawValue,
-        display: displayValue(rawValue, definition),
-        isDefault: data[key] === undefined,
-      };
-    });
+    rows.value = optionRows(data);
+  } catch {
+    // Keep the source-defined default rows visible when the backend cannot read this VNet.
   } finally {
     loading.value = false;
   }

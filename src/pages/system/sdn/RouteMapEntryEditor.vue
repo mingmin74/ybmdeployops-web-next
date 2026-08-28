@@ -77,10 +77,10 @@ const form = reactive({
 });
 
 const routeMapOptions = computed(() =>
-  [...new Set([...props.routeMapIds, form.routeMapId])].filter(Boolean),
+  [...new Set([...props.routeMapIds, form.routeMapId])].filter(Boolean)
 );
 const needsExitOrder = computed(
-  () => form.exitAction === 'on-match-goto' || form.exitAction === 'continue',
+  () => form.exitAction === 'on-match-goto' || form.exitAction === 'continue'
 );
 
 type MatchValueConfig =
@@ -160,7 +160,7 @@ function setValueConfig(key: string): SetValueConfig & { needsValue: boolean } {
         rules: [
           regexRule(
             RE_SET_LOCAL_PREF,
-            gettext('A number; prefix with + or - to add or subtract from the current value.'),
+            gettext('A number; prefix with + or - to add or subtract from the current value.')
           ),
         ],
       };
@@ -178,8 +178,8 @@ function setValueConfig(key: string): SetValueConfig & { needsValue: boolean } {
           regexRule(
             RE_SET_METRIC,
             gettext(
-              'A number, "rtt", "igp" or "aigp"; numbers and rtt may be prefixed with + or -.',
-            ),
+              'A number, "rtt", "igp" or "aigp"; numbers and rtt may be prefixed with + or -.'
+            )
           ),
         ],
       };
@@ -316,13 +316,16 @@ async function save() {
 }
 </script>
 <template>
-  <q-dialog v-model="visible" persistent
-    ><UWindow
+  <q-dialog
+    v-model="visible"
+    persistent
+  >
+    <UWindow
       :title="`${isCreate ? gettext('Add') : gettext('Edit')}: ${gettext('Route Map Entry')}`"
       width="820px"
       :loading="loading"
     >
-      <div class="q-pa-md u-dense">
+      <div class="q-pa-sm u-dense">
         <div class="u-border q-pa-md">
           <div class="row q-col-gutter-lg">
             <div class="col">
@@ -401,25 +404,43 @@ async function save() {
                 max="65535"
                 class="q-field--with-bottom"
                 :label="`${gettext('Target order')} *`"
-                :error="!form.exitOrder || Number(form.exitOrder) < 1 || Number(form.exitOrder) > 65535"
+                :error="
+                  !form.exitOrder || Number(form.exitOrder) < 1 || Number(form.exitOrder) > 65535
+                "
                 :error-message="gettext('Value must be 1-65535')"
               />
             </div>
           </div>
-          <div v-for="kind in ['match', 'set'] as const" :key="kind" class="q-mt-md">
+          <div
+            v-for="kind in ['match', 'set'] as const"
+            :key="kind"
+            class="q-mt-md"
+          >
             <div class="text-subtitle2 q-mb-sm">
               {{ gettext(kind === 'match' ? 'Match' : 'Set') }}
             </div>
-            <q-markup-table flat bordered dense>
+            <q-markup-table
+              flat
+              bordered
+              dense
+            >
               <thead>
                 <tr>
-                  <th class="text-left" style="width: 40%">{{ gettext('Property') }}</th>
+                  <th
+                    class="text-left"
+                    style="width: 40%"
+                  >
+                    {{ gettext('Property') }}
+                  </th>
                   <th class="text-left">{{ gettext('Value') }}</th>
                   <th class="route-map-actions" />
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(item, index) in form[kind]" :key="`${kind}-${index}`">
+                <tr
+                  v-for="(item, index) in form[kind]"
+                  :key="`${kind}-${index}`"
+                >
                   <td>
                     <q-select
                       v-model="item.key"
@@ -564,12 +585,15 @@ async function save() {
                   </td>
                 </tr>
                 <tr v-if="!form[kind].length">
-                  <td colspan="3" class="text-grey-7">
+                  <td
+                    colspan="3"
+                    class="text-grey-7"
+                  >
                     {{
                       gettext(
                         kind === 'match'
                           ? 'No match actions configured.'
-                          : 'No set actions configured.',
+                          : 'No set actions configured.'
                       )
                     }}
                   </td>
@@ -588,22 +612,26 @@ async function save() {
           </div>
         </div>
       </div>
-      <template #foot
-        ><q-btn
+      <template #foot>
+        <q-btn
           v-close-popup
           no-caps
           outline
           size="12px"
           class="u-button"
-          :label="gettext('Cancel')" /><q-btn
+          :label="gettext('Cancel')"
+        />
+        <q-btn
           no-caps
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
           :label="isCreate ? gettext('Create') : gettext('OK')"
           @click="save"
-      /></template> </UWindow
-  ></q-dialog>
+        />
+      </template>
+    </UWindow>
+  </q-dialog>
 </template>
 <style scoped>
 .route-map-actions {

@@ -281,7 +281,7 @@ async function save() {
             name="general"
             class="q-pa-md"
           >
-            <div class="u-border q-pa-md">
+            <div class="u-border q-pa-sm">
               <div class="row q-col-gutter-lg">
                 <div class="col-12">
                   <q-input
@@ -328,60 +328,51 @@ async function save() {
             <div class="u-border q-pa-md">
               <q-table
                 flat
+                dense
                 :rows="dhcpRanges"
                 :columns="dhcpColumns"
                 :pagination="{ page: 1, rowsPerPage: 0 }"
                 hide-bottom
                 row-key="_key"
+                :no-data-label="gettext('No DHCP ranges configured.')"
               >
-                <template #body="scope">
-                  <q-tr :props="scope">
-                    <q-td :props="scope">
-                      <q-input
-                        v-model="scope.row['start-address']"
-                        dense
-                        class="q-field--with-bottom"
-                        placeholder="192.168.1.100"
-                        :error="
-                          !dhcpRangesValid &&
-                          (!scope.row['start-address'] || !isValidIp(scope.row['start-address']))
-                        "
-                      />
-                    </q-td>
-                    <q-td :props="scope">
-                      <q-input
-                        v-model="scope.row['end-address']"
-                        dense
-                        class="q-field--with-bottom"
-                        placeholder="192.168.1.150"
-                        :error="
-                          !dhcpRangesValid &&
-                          (!scope.row['end-address'] || !isValidIp(scope.row['end-address']))
-                        "
-                      />
-                    </q-td>
-                    <q-td
-                      :props="scope"
-                      auto-width
-                    >
-                      <q-btn
-                        flat
-                        dense
-                        round
-                        size="sm"
-                        color="negative"
-                        icon="delete"
-                        @click="removeDhcpRange(scope.row._key)"
-                      />
-                    </q-td>
-                  </q-tr>
+                <template #body-cell-start-address="scope">
+                  <q-td :props="scope">
+                    <q-input
+                      v-model="scope.row['start-address']"
+                      dense
+                      placeholder="192.168.1.100"
+                      :error="
+                        !dhcpRangesValid &&
+                        (!scope.row['start-address'] || !isValidIp(scope.row['start-address']))
+                      "
+                    />
+                  </q-td>
                 </template>
-                <template #no-data>
-                  <q-td
-                    :colspan="dhcpColumns.length"
-                    class="text-center text-grey-6 text-sm py-md"
-                  >
-                    {{ gettext('No DHCP ranges configured.') }}
+                <template #body-cell-end-address="scope">
+                  <q-td :props="scope">
+                    <q-input
+                      v-model="scope.row['end-address']"
+                      dense
+                      placeholder="192.168.1.150"
+                      :error="
+                        !dhcpRangesValid &&
+                        (!scope.row['end-address'] || !isValidIp(scope.row['end-address']))
+                      "
+                    />
+                  </q-td>
+                </template>
+                <template #body-cell-actions="scope">
+                  <q-td :props="scope">
+                    <q-btn
+                      flat
+                      dense
+                      round
+                      size="sm"
+                      color="negative"
+                      icon="delete"
+                      @click="removeDhcpRange(scope.row._key)"
+                    />
                   </q-td>
                 </template>
               </q-table>

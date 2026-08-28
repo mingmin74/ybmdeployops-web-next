@@ -3,6 +3,7 @@ import { computed, reactive, watch } from 'vue';
 import type { PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
+import OptionFormHint from './OptionFormHint.vue';
 
 const props = defineProps<{ modelValue?: PveRecord; registeredTags?: unknown }>();
 const emit = defineEmits<{ 'update:modelValue': [value: PveRecord] }>();
@@ -45,7 +46,8 @@ function isValidTagList(value: string) {
 <template>
   <div class="column q-gutter-sm">
     <q-select v-model="form.mode" dense emit-value map-options options-dense :options="modeOptions" :label="gettext('Mode')" />
-    <q-input v-model="form.tags" dense type="textarea" :label="gettext('Predefined Tags')" :hint="gettext('Separate tags with semicolons')" :rules="[(value) => isValidTagList(value) || gettext('Invalid tag')]" />
-    <div v-if="overlappingTags.length" class="text-caption text-warning">{{ gettext('NOTE: The following tags are also defined as registered tags.') }} {{ overlappingTags.join(', ') }}</div>
+    <q-input v-model="form.tags" dense type="textarea" :label="gettext('Predefined Tags')" :rules="[(value) => isValidTagList(value) || gettext('Invalid tag')]" />
+    <OptionFormHint>{{ gettext('Separate tags with semicolons') }}</OptionFormHint>
+    <OptionFormHint v-if="overlappingTags.length">{{ gettext('NOTE: The following tags are also defined as registered tags.') }} {{ overlappingTags.join(', ') }}</OptionFormHint>
   </div>
 </template>

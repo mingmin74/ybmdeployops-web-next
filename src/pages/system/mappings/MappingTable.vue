@@ -31,6 +31,7 @@ const selected = shallowRef<PveRecord[]>([]);
 const nodes = shallowRef<PveRecord[]>([]);
 const loading = shallowRef(false);
 const saving = shallowRef(false);
+const directorySubmitted = shallowRef(false);
 const editorVisible = shallowRef(false);
 const editingId = shallowRef<string>();
 const editingNode = shallowRef('');
@@ -38,6 +39,7 @@ const directoryEditMode = shallowRef<DirectoryEditMode>('create');
 const directoryDetail = shallowRef<PveRecord>();
 const resourceEditMode = shallowRef<ResourceEditMode>('create');
 const resourceDetail = shallowRef<PveRecord>();
+const resourceEditorRef = shallowRef<{ submit: () => void }>();
 const form = reactive({
   id: '',
   node: '',
@@ -50,10 +52,15 @@ const form = reactive({
 
 const isDirectory = computed(() => props.kind === 'dir');
 const canConfigure = computed(() =>
-  Boolean((session.caps.mapping as Record<string, unknown> | undefined)?.['Mapping.Modify']),
+  Boolean((session.caps.mapping as Record<string, unknown> | undefined)?.['Mapping.Modify'])
 );
 const configuredNodes = computed(
-  () => new Set(mapValues(isDirectory.value ? directoryDetail.value : resourceDetail.value).map((raw) => textValue(parseMap(raw).node))),
+  () =>
+    new Set(
+      mapValues(isDirectory.value ? directoryDetail.value : resourceDetail.value).map((raw) =>
+        textValue(parseMap(raw).node)
+      )
+    )
 );
 const nodeOptions = computed(() =>
   nodes.value.map((node) => {
@@ -66,14 +73,14 @@ const nodeOptions = computed(() =>
           (!isDirectory.value && resourceEditMode.value === 'add-node')) &&
         configuredNodes.value.has(value),
     };
-  }),
+  })
 );
 const pathError = computed(() => {
   if (!isDirectory.value || !form.path.trim()) return '';
   return isValidDirectoryPath(form.path.trim())
     ? ''
     : gettext(
-        'Value does not look like a valid absolute path. These symbols are currently not allowed in path: ;,=()',
+        'Value does not look like a valid absolute path. These symbols are currently not allowed in path: ;,=()'
       );
 });
 const canSave = computed(() => {
@@ -84,7 +91,7 @@ const canSave = computed(() => {
   return Boolean(form.id.trim() && form.node && form.deviceId.trim());
 });
 const canEditSelected = computed(
-  () => selected.value.length === 1 && selected.value[0]?.type !== 'map',
+  () => selected.value.length === 1 && selected.value[0]?.type !== 'map'
 );
 
 const columns = computed<QTableColumn<PveRecord>[]>(() => {
@@ -115,16 +122,38 @@ const columns = computed<QTableColumn<PveRecord>[]>(() => {
   ];
   if (props.kind === 'pci')
     base.push(
-      { name: 'device-id', label: gettext('Vendor/Device'), field: row => row.type === 'map' ? textValue(row.id) : '', align: 'left' },
-      { name: 'subsystem-id', label: gettext('Subsystem Vendor/Device'), field: row => row.type === 'map' ? textValue(row['subsystem-id']) : '', align: 'left' },
-      { name: 'iommugroup', label: gettext('IOMMU-Group'), field: row => row.type === 'map' ? textValue(row.iommugroup) : '', align: 'left' },
+      {
+        name: 'device-id',
+        label: gettext('Vendor/Device'),
+        field: (row) => (row.type === 'map' ? textValue(row.id) : ''),
+        align: 'left',
+      },
+      {
+        name: 'subsystem-id',
+        label: gettext('Subsystem Vendor/Device'),
+        field: (row) => (row.type === 'map' ? textValue(row['subsystem-id']) : ''),
+        align: 'left',
+      },
+      {
+        name: 'iommugroup',
+        label: gettext('IOMMU-Group'),
+        field: (row) => (row.type === 'map' ? textValue(row.iommugroup) : ''),
+        align: 'left',
+      }
     );
   if (props.kind === 'usb')
     base.push({
-      name: 'path', label: gettext('Path'), field: row => row.type === 'map' ? textValue(row.path) : '',
+      name: 'path',
+      label: gettext('Path'),
+      field: (row) => (row.type === 'map' ? textValue(row.path) : ''),
       align: 'left',
     });
-  base.push({ name: 'status', label: gettext('Status'), field: row => statusText(row), align: 'left' });
+  base.push({
+    name: 'status',
+    label: gettext('Status'),
+    field: (row) => statusText(row),
+    align: 'left',
+  });
   base.push({
     name: 'description',
     label: gettext('Comment'),
@@ -199,15 +228,30 @@ function makeDirectoryRows(entries: PveRecord[]) {
 }
 
 function makeResourceRows(entries: PveRecord[]) {
-  return entries.flatMap(entry => {
+  return entries.flatMap((entry) => {
     const id = textValue(entry.id);
     const childrenByNode = new Map<string, PveRecord[]>();
     mapValues(entry).forEach((raw, index) => {
-      const map = parseMap(raw); const node = textValue(map.node); const children = childrenByNode.get(node) || [];
-      children.push({ ...map, mdev: entry.mdev ?? 0, name: id, text: props.kind === 'pci' ? textValue(map.path) : textValue(map.id), type: 'map', internalId: `${id}:map:${node}:${textValue(map.path || map.id)}:${index}` });
+      const map = parseMap(raw);
+      const node = textValue(map.node);
+      const children = childrenByNode.get(node) || [];
+      children.push({
+        ...map,
+        mdev: entry.mdev ?? 0,
+        name: id,
+        text: props.kind === 'pci' ? textValue(map.path) : textValue(map.id),
+        type: 'map',
+        internalId: `${id}:map:${node}:${textValue(map.path || map.id)}:${index}`,
+      });
       childrenByNode.set(node, children);
     });
-    return [{ ...entry, name: id, text: id, type: 'entry', internalId: `${id}:entry` }, ...[...childrenByNode.entries()].flatMap(([node, children]) => [{ name: id, node, text: node, type: 'node', internalId: `${id}:node:${node}` }, ...children])];
+    return [
+      { ...entry, name: id, text: id, type: 'entry', internalId: `${id}:entry` },
+      ...[...childrenByNode.entries()].flatMap(([node, children]) => [
+        { name: id, node, text: node, type: 'node', internalId: `${id}:node:${node}` },
+        ...children,
+      ]),
+    ];
   });
 }
 
@@ -241,6 +285,7 @@ async function loadNodes() {
 }
 
 function reset() {
+  directorySubmitted.value = false;
   Object.assign(form, {
     id: '',
     node: '',
@@ -301,7 +346,7 @@ async function editRow(row?: PveRecord) {
     await openDirectoryEditor(
       target.type === 'entry' ? 'edit-comment' : 'edit-node',
       textValue(target.name),
-      textValue(target.node),
+      textValue(target.node)
     );
     return;
   }
@@ -340,6 +385,7 @@ async function saveDirectory() {
 }
 
 async function save() {
+  if (isDirectory.value) directorySubmitted.value = true;
   if (!canSave.value || !canConfigure.value) return;
   saving.value = true;
   try {
@@ -353,53 +399,128 @@ async function save() {
   }
 }
 
-async function saveResource(value: { id: string; node: string; maps?: PveRecord[]; map?: PveRecord; description: string; mdev?: boolean; liveMigration?: boolean }) {
+async function saveResource(value: {
+  id: string;
+  node: string;
+  maps?: PveRecord[];
+  map?: PveRecord;
+  description: string;
+  mdev?: boolean;
+  liveMigration?: boolean;
+}) {
   if (!canConfigure.value) return;
   saving.value = true;
   try {
     const existing = resourceDetail.value;
     const newMaps = value.maps || (value.map ? [value.map] : []);
     let map = mapValues(existing);
-    if (resourceEditMode.value !== 'edit-entry') map = [...map.filter(raw => textValue(parseMap(raw).node) !== value.node), ...newMaps.map(printMap)];
+    if (resourceEditMode.value !== 'edit-entry')
+      map = [
+        ...map.filter((raw) => textValue(parseMap(raw).node) !== value.node),
+        ...newMaps.map(printMap),
+      ];
     const payload: PveRecord = { map, ...(existing?.digest ? { digest: existing.digest } : {}) };
     if (resourceEditMode.value === 'create' || resourceEditMode.value === 'edit-entry') {
       if (value.description) payload.description = value.description;
       else if (textValue(existing?.description)) payload.delete = 'description';
-      if (props.kind === 'pci') { payload.mdev = value.mdev ? 1 : 0; payload['live-migration-capable'] = value.liveMigration ? 1 : 0; }
+      if (props.kind === 'pci') {
+        payload.mdev = value.mdev ? 1 : 0;
+        payload['live-migration-capable'] = value.liveMigration ? 1 : 0;
+      }
     }
-    await saveDeviceMapping(props.kind, resourceEditMode.value === 'create' ? undefined : value.id, resourceEditMode.value === 'create' ? { ...payload, id: value.id } : payload);
-    editorVisible.value = false; await reload();
-  } finally { saving.value = false; }
+    await saveDeviceMapping(
+      props.kind,
+      resourceEditMode.value === 'create' ? undefined : value.id,
+      resourceEditMode.value === 'create' ? { ...payload, id: value.id } : payload
+    );
+    editorVisible.value = false;
+    await reload();
+  } finally {
+    saving.value = false;
+  }
 }
 
 async function loadResourceStatus(entries: PveRecord[]) {
   const nodeNames = new Set<string>();
-  entries.forEach(entry => mapValues(entry).forEach(raw => nodeNames.add(textValue(parseMap(raw).node))));
-  nodeNames.forEach(node => rows.value.forEach(row => { if (textValue(row.node) === node) row.loading = true; }));
+  entries.forEach((entry) =>
+    mapValues(entry).forEach((raw) => nodeNames.add(textValue(parseMap(raw).node)))
+  );
+  nodeNames.forEach((node) =>
+    rows.value.forEach((row) => {
+      if (textValue(row.node) === node) row.loading = true;
+    })
+  );
   rows.value = [...rows.value];
   const { getNodePciDevices, getNodeUsbDevices } = await import('@/api/host');
-  await Promise.all([...nodeNames].map(async node => {
-    try {
-      const hardware = ((await (props.kind === 'pci' ? getNodePciDevices(node) : getNodeUsbDevices(node))).data || []) as PveRecord[];
-      rows.value.forEach(row => { if (row.type === 'map' && textValue(row.node) === node) validateResourceMap(row, hardware); });
-    } catch (error) { rows.value.forEach(row => { if (row.type === 'map' && textValue(row.node) === node) { row.loading = false; row.valid = false; row.errmsg = error instanceof Error ? error.message : gettext('Unknown Node'); } }); }
-  }));
+  await Promise.all(
+    [...nodeNames].map(async (node) => {
+      try {
+        const hardware = ((
+          await (props.kind === 'pci' ? getNodePciDevices(node) : getNodeUsbDevices(node))
+        ).data || []) as PveRecord[];
+        rows.value.forEach((row) => {
+          if (row.type === 'map' && textValue(row.node) === node)
+            validateResourceMap(row, hardware);
+        });
+      } catch (error) {
+        rows.value.forEach((row) => {
+          if (row.type === 'map' && textValue(row.node) === node) {
+            row.loading = false;
+            row.valid = false;
+            row.errmsg = error instanceof Error ? error.message : gettext('Unknown Node');
+          }
+        });
+      }
+    })
+  );
   rows.value = [...rows.value];
 }
 
 function validateResourceMap(row: PveRecord, hardware: PveRecord[]) {
   row.loading = false;
   if (props.kind === 'usb') {
-    const device = row.path ? hardware.find(item => `${textValue(item.busnum)}-${textValue(item.usbpath)}` === textValue(row.path)) : hardware.find(item => `${textValue(item.vendid)}:${textValue(item.prodid)}`.replace(/0x/g, '') === textValue(row.id));
-    row.valid = Boolean(device) && `${textValue(device?.vendid)}:${textValue(device?.prodid)}`.replace(/0x/g, '') === textValue(row.id);
-    row.errmsg = row.valid ? '' : device ? gettext("Configuration for 'id' not correct") : gettext('Cannot find USB device %s').replace('%s', textValue(row.id)); return;
+    const device = row.path
+      ? hardware.find(
+          (item) => `${textValue(item.busnum)}-${textValue(item.usbpath)}` === textValue(row.path)
+        )
+      : hardware.find(
+          (item) =>
+            `${textValue(item.vendid)}:${textValue(item.prodid)}`.replace(/0x/g, '') ===
+            textValue(row.id)
+        );
+    row.valid =
+      Boolean(device) &&
+      `${textValue(device?.vendid)}:${textValue(device?.prodid)}`.replace(/0x/g, '') ===
+        textValue(row.id);
+    row.errmsg = row.valid
+      ? ''
+      : device
+      ? gettext("Configuration for 'id' not correct")
+      : gettext('Cannot find USB device %s').replace('%s', textValue(row.id));
+    return;
   }
-  const path = textValue(row.path).match(/\.\d$/) ? textValue(row.path) : `${textValue(row.path)}.0`;
-  const device = hardware.find(item => textValue(item.id) === path);
-  if (!device) { row.valid = false; row.errmsg = gettext('Cannot find PCI id %s').replace('%s', path); return; }
-  const checks: Record<string, string> = { id: `${textValue(device.vendor)}:${textValue(device.device)}`.replace(/0x/g, ''), 'subsystem-id': `${textValue(device.subsystem_vendor)}:${textValue(device.subsystem_device)}`.replace(/0x/g, ''), mdev: textValue(device.mdev || 0), iommugroup: Number(device.iommugroup) === -1 ? '' : textValue(device.iommugroup) };
-  const errors = Object.entries(checks).filter(([key, actual]) => textValue(row[key]) !== actual).map(([key]) => gettext("Configuration for %s not correct").replace('%s', key));
-  row.valid = !errors.length; row.errmsg = errors.join('; ');
+  const path = textValue(row.path).match(/\.\d$/)
+    ? textValue(row.path)
+    : `${textValue(row.path)}.0`;
+  const device = hardware.find((item) => textValue(item.id) === path);
+  if (!device) {
+    row.valid = false;
+    row.errmsg = gettext('Cannot find PCI id %s').replace('%s', path);
+    return;
+  }
+  const checks: Record<string, string> = {
+    id: `${textValue(device.vendor)}:${textValue(device.device)}`.replace(/0x/g, ''),
+    'subsystem-id': `${textValue(device.subsystem_vendor)}:${textValue(
+      device.subsystem_device
+    )}`.replace(/0x/g, ''),
+    mdev: textValue(device.mdev || 0),
+    iommugroup: Number(device.iommugroup) === -1 ? '' : textValue(device.iommugroup),
+  };
+  const errors = Object.entries(checks)
+    .filter(([key, actual]) => textValue(row[key]) !== actual)
+    .map(([key]) => gettext('Configuration for %s not correct').replace('%s', key));
+  row.valid = !errors.length;
+  row.errmsg = errors.join('; ');
 }
 
 function directoryRemoveMessage(row: PveRecord) {
@@ -450,11 +571,17 @@ function removeRow(row?: PveRecord) {
         }
         const id = textValue(target.name);
         const existing = (await getDeviceMapping(props.kind, id)).data || {};
-        if (target.type === 'entry') { await deleteDeviceMapping(props.kind, id); await reload(); return; }
+        if (target.type === 'entry') {
+          await deleteDeviceMapping(props.kind, id);
+          await reload();
+          return;
+        }
         const map = mapValues(existing).filter((raw) => {
           const value = parseMap(raw);
           if (target.type === 'node') return textValue(value.node) !== textValue(target.node);
-          return Object.entries(value).some(([key, item]) => textValue(target[key]) !== textValue(item));
+          return Object.entries(value).some(
+            ([key, item]) => textValue(target[key]) !== textValue(item)
+          );
         });
         if (map.length)
           await saveDeviceMapping(props.kind, id, {
@@ -463,7 +590,7 @@ function removeRow(row?: PveRecord) {
           });
         else await deleteDeviceMapping(props.kind, id);
         await reload();
-      })(),
+      })()
   );
 }
 
@@ -475,7 +602,7 @@ function allNodesMapped(row: PveRecord) {
 
 watch(
   () => props.kind,
-  () => void reload(),
+  () => void reload()
 );
 onMounted(() => {
   void reload();
@@ -500,8 +627,8 @@ onMounted(() => {
     @update:selected="selected = [...$event]"
     @row-dblclick="(_, row) => void editRow(row)"
   >
-    <template #top
-      ><div class="row q-gutter-sm">
+    <template #top>
+      <div class="row q-gutter-sm">
         <q-btn
           no-caps
           outline
@@ -511,7 +638,8 @@ onMounted(() => {
           :disable="!canConfigure"
           :label="gettext('Add')"
           @click="add"
-        /><q-btn
+        />
+        <q-btn
           no-caps
           outline
           size="12px"
@@ -520,7 +648,8 @@ onMounted(() => {
           :disable="!canConfigure || !canEditSelected"
           :label="gettext('Edit')"
           @click="() => void editRow()"
-        /><q-btn
+        />
+        <q-btn
           no-caps
           outline
           size="12px"
@@ -529,7 +658,9 @@ onMounted(() => {
           :disable="!canConfigure || selected.length !== 1"
           :label="gettext('Remove')"
           @click="() => removeRow()"
-        /><q-space /><q-btn
+        />
+        <q-space />
+        <q-btn
           no-caps
           outline
           size="12px"
@@ -537,41 +668,21 @@ onMounted(() => {
           class="u-button"
           :label="gettext('Reload')"
           @click="reload"
-        /></div
-    ></template>
-    <template v-if="isDirectory" #body-cell-name="slotProps"
-      ><q-td :props="slotProps"
-        ><div
+        />
+      </div>
+    </template>
+    <template
+      v-if="isDirectory"
+      #body-cell-name="slotProps"
+    >
+      <q-td :props="slotProps">
+        <div
           :class="
             slotProps.row.type === 'node'
               ? 'q-pl-md'
               : slotProps.row.type === 'map'
-                ? 'q-pl-xl'
-                : ''
-          "
-        >
-          <q-icon
-            :name="
-            slotProps.row.type === 'entry'
-                ? 'folder_open'
-                : slotProps.row.type === 'node'
-                  ? 'dns'
-                  : 'folder'
-            "
-            size="16px"
-            class="q-mr-sm"
-          />{{ slotProps.value }}
-        </div></q-td
-      ></template>
-    <template v-else #body-cell-tree="slotProps"
-      ><q-td :props="slotProps"
-        ><div
-          :class="
-            slotProps.row.type === 'node'
-              ? 'q-pl-md'
-              : slotProps.row.type === 'map'
-                ? 'q-pl-xl'
-                : ''
+              ? 'q-pl-xl'
+              : ''
           "
         >
           <q-icon
@@ -579,19 +690,53 @@ onMounted(() => {
               slotProps.row.type === 'entry'
                 ? 'folder_open'
                 : slotProps.row.type === 'node'
-                  ? 'dns'
-                  : kind === 'pci'
-                    ? 'memory'
-                    : 'usb'
+                ? 'dns'
+                : 'folder'
             "
             size="16px"
             class="q-mr-sm"
-          />{{ slotProps.value }}
-        </div></q-td
-      ></template>
-    <template #body-cell-actions="slotProps"
-      ><q-td :props="slotProps" class="q-gutter-xs"
-        ><q-btn
+          />
+          {{ slotProps.value }}
+        </div>
+      </q-td>
+    </template>
+    <template
+      v-else
+      #body-cell-tree="slotProps"
+    >
+      <q-td :props="slotProps">
+        <div
+          :class="
+            slotProps.row.type === 'node'
+              ? 'q-pl-md'
+              : slotProps.row.type === 'map'
+              ? 'q-pl-xl'
+              : ''
+          "
+        >
+          <q-icon
+            :name="
+              slotProps.row.type === 'entry'
+                ? 'folder_open'
+                : slotProps.row.type === 'node'
+                ? 'dns'
+                : kind === 'pci'
+                ? 'memory'
+                : 'usb'
+            "
+            size="16px"
+            class="q-mr-sm"
+          />
+          {{ slotProps.value }}
+        </div>
+      </q-td>
+    </template>
+    <template #body-cell-actions="slotProps">
+      <q-td
+        :props="slotProps"
+        class="q-gutter-xs"
+      >
+        <q-btn
           v-if="slotProps.row.type === 'entry' && !allNodesMapped(slotProps.row)"
           flat
           round
@@ -600,10 +745,14 @@ onMounted(() => {
           icon="add"
           :disable="!canConfigure"
           @click="() => void addNode(slotProps.row)"
-          ><q-tooltip>{{
-            gettext("Add new host mapping for '%s'").replace('%s', textValue(slotProps.row.name))
-          }}</q-tooltip></q-btn
-        ><q-btn
+        >
+          <q-tooltip>
+            {{
+              gettext("Add new host mapping for '%s'").replace('%s', textValue(slotProps.row.name))
+            }}
+          </q-tooltip>
+        </q-btn>
+        <q-btn
           v-if="slotProps.row.type !== 'map'"
           flat
           round
@@ -612,8 +761,10 @@ onMounted(() => {
           icon="edit"
           :disable="!canConfigure"
           @click="() => void editRow(slotProps.row)"
-          ><q-tooltip>{{ gettext('Edit') }}</q-tooltip></q-btn
-        ><q-btn
+        >
+          <q-tooltip>{{ gettext('Edit') }}</q-tooltip>
+        </q-btn>
+        <q-btn
           flat
           round
           dense
@@ -622,97 +773,203 @@ onMounted(() => {
           icon="delete"
           :disable="!canConfigure"
           @click="removeRow(slotProps.row)"
-          ><q-tooltip>{{ gettext('Remove') }}</q-tooltip></q-btn
-        ></q-td
-      ></template
-    >
+        >
+          <q-tooltip>{{ gettext('Remove') }}</q-tooltip>
+        </q-btn>
+      </q-td>
+    </template>
   </q-table>
-  <q-dialog v-model="editorVisible" persistent>
-    <UWindow v-if="!isDirectory" :title="`${resourceEditMode === 'create' ? gettext('Add') : gettext('Edit')}: ${gettext(title)}`" width="800px" :loading="saving">
-      <PciMappingEditor v-if="kind === 'pci'" :id="resourceEditMode === 'create' ? '' : textValue(editingId)" :node="resourceEditMode === 'edit-node' ? editingNode : ''" :nodes="nodeOptions" :maps="resourceEditMode === 'edit-node' ? mapValues(resourceDetail).map(parseMap).filter(map => textValue(map.node) === editingNode) : []" :global="{ description: textValue(resourceDetail?.description), mdev: Number(resourceDetail?.mdev) === 1, liveMigration: Number(resourceDetail?.['live-migration-capable']) === 1 }" :create="resourceEditMode === 'create'" :entry-only="resourceEditMode === 'edit-entry'" :node-locked="resourceEditMode === 'edit-node'" @submit="saveResource" />
-      <UsbMappingEditor v-else :id="resourceEditMode === 'create' ? '' : textValue(editingId)" :node="resourceEditMode === 'edit-node' ? editingNode : ''" :nodes="nodeOptions" :map="resourceEditMode === 'edit-node' ? mapValues(resourceDetail).map(parseMap).find(map => textValue(map.node) === editingNode) : undefined" :description="textValue(resourceDetail?.description)" :create="resourceEditMode === 'create'" :entry-only="resourceEditMode === 'edit-entry'" :node-locked="resourceEditMode === 'edit-node'" @submit="saveResource" />
-      <template #foot><q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" /></template>
-    </UWindow>
+  <q-dialog
+    v-model="editorVisible"
+    persistent
+  >
     <UWindow
-      v-if="isDirectory"
-      :title="`${isDirectory ? (directoryEditMode === 'create' ? gettext('Add') : gettext('Edit')) : !editingId ? gettext('Add') : gettext('Edit')}: ${gettext(title)}`"
-      width="500px"
+      v-if="!isDirectory"
+      :title="`${resourceEditMode === 'create' ? gettext('Add') : gettext('Edit')}: ${gettext(
+        title
+      )}`"
+      width="800px"
       :loading="saving"
-      ><div class="q-pa-md u-dense">
-        <div class="u-border q-pa-md q-gutter-sm">
-          <q-input
-            v-model="form.id"
-            dense
-            :disable="Boolean(editingId)"
-            :label="gettext('Name')"
-            :error="!form.id.trim()"
-            :error-message="gettext('This field is required')"
-          /><template v-if="!isDirectory || directoryEditMode !== 'edit-comment'"
-            ><q-select
-              v-if="!isDirectory || directoryEditMode !== 'edit-node'"
-              v-model="form.node"
-              dense
-              emit-value
-              map-options
-              :options="nodeOptions"
-              :label="gettext('Mapping on Node')" /><q-input
-              v-else
-              :model-value="form.node"
-              dense
-              disable
-              :label="gettext('Node')" /><q-input
-              v-if="kind === 'dir'"
-              v-model="form.path"
-              dense
-              :label="gettext('Path')"
-              hint="Make sure the directory exists."
-              :error="Boolean(pathError)"
-              :error-message="pathError" /><q-input
-              v-else
-              v-model="form.deviceId"
-              dense
-              :label="kind === 'pci' ? gettext('PCI Device') : gettext('USB Vendor/Device or Port')"
-              :hint="kind === 'usb' ? gettext('Use vendor:device or bus-port') : ''" /><q-checkbox
-              v-if="kind === 'pci'"
-              v-model="form.mdev"
-              dense
-              :label="gettext('Use with Mediated Devices')" /><q-checkbox
-              v-if="kind === 'pci'"
-              v-model="form.liveMigration"
-              dense
-              :label="gettext('Live Migration Capable')" /></template
-          ><q-input
-            v-if="
-              !isDirectory || directoryEditMode === 'create' || directoryEditMode === 'edit-comment'
-            "
-            v-model="form.description"
-            dense
-            :label="gettext('Comment')"
-          />
-        </div>
-      </div>
-      <template #foot
-        ><q-btn
+    >
+      <PciMappingEditor
+        v-if="kind === 'pci'"
+        ref="resourceEditorRef"
+        :id="resourceEditMode === 'create' ? '' : textValue(editingId)"
+        :node="resourceEditMode === 'edit-node' ? editingNode : ''"
+        :nodes="nodeOptions"
+        :maps="
+          resourceEditMode === 'edit-node'
+            ? mapValues(resourceDetail)
+                .map(parseMap)
+                .filter((map) => textValue(map.node) === editingNode)
+            : []
+        "
+        :global="{
+          description: textValue(resourceDetail?.description),
+          mdev: Number(resourceDetail?.mdev) === 1,
+          liveMigration: Number(resourceDetail?.['live-migration-capable']) === 1,
+        }"
+        :create="resourceEditMode === 'create'"
+        :entry-only="resourceEditMode === 'edit-entry'"
+        :node-locked="resourceEditMode === 'edit-node'"
+        @submit="saveResource"
+      />
+      <UsbMappingEditor
+        v-else
+        ref="resourceEditorRef"
+        :id="resourceEditMode === 'create' ? '' : textValue(editingId)"
+        :node="resourceEditMode === 'edit-node' ? editingNode : ''"
+        :nodes="nodeOptions"
+        :map="
+          resourceEditMode === 'edit-node'
+            ? mapValues(resourceDetail)
+                .map(parseMap)
+                .find((map) => textValue(map.node) === editingNode)
+            : undefined
+        "
+        :description="textValue(resourceDetail?.description)"
+        :create="resourceEditMode === 'create'"
+        :entry-only="resourceEditMode === 'edit-entry'"
+        :node-locked="resourceEditMode === 'edit-node'"
+        @submit="saveResource"
+      />
+      <template #foot>
+        <q-btn
           v-close-popup
           no-caps
           outline
           size="12px"
           class="u-button"
-          :label="gettext('Cancel')" /><q-btn
+          :label="gettext('Cancel')"
+        />
+        <q-btn
           no-caps
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :disable="!canConfigure || !canSave"
+          :disable="!canConfigure"
+          :label="resourceEditMode === 'create' ? gettext('Create') : gettext('OK')"
+          @click="resourceEditorRef?.submit()"
+        />
+      </template>
+    </UWindow>
+    <UWindow
+      v-if="isDirectory"
+      :title="`${
+        isDirectory
+          ? directoryEditMode === 'create'
+            ? gettext('Add')
+            : gettext('Edit')
+          : !editingId
+          ? gettext('Add')
+          : gettext('Edit')
+      }: ${gettext(title)}`"
+      width="500px"
+      :loading="saving"
+    >
+      <div class="q-pa-sm u-dense">
+        <div class="u-border q-pa-md">
+          <q-input
+            v-model="form.id"
+            dense
+            class="q-field--with-bottom"
+            :disable="Boolean(editingId)"
+            :label="`${gettext('Name')} *`"
+            :error="directorySubmitted && !form.id.trim()"
+            :error-message="gettext('This field is required')"
+          />
+          <template v-if="!isDirectory || directoryEditMode !== 'edit-comment'">
+            <q-select
+              v-if="!isDirectory || directoryEditMode !== 'edit-node'"
+              v-model="form.node"
+              dense
+              class="q-field--with-bottom"
+              emit-value
+              map-options
+              :options="nodeOptions"
+              :label="`${gettext('Mapping on Node')} *`"
+              :error="directorySubmitted && !form.node"
+              :error-message="gettext('This field is required')"
+            />
+            <q-input
+              v-else
+              :model-value="form.node"
+              dense
+              class="q-field--with-bottom"
+              disable
+              :label="`${gettext('Node')} *`"
+            />
+            <q-input
+              v-if="kind === 'dir'"
+              v-model="form.path"
+              dense
+              class="q-field--with-bottom"
+              :label="`${gettext('Path')} *`"
+              hint="Make sure the directory exists."
+              :error="directorySubmitted && (!form.path.trim() || Boolean(pathError))"
+              :error-message="
+                !form.path.trim() ? gettext('This field is required') : pathError
+              "
+            />
+            <q-input
+              v-else
+              v-model="form.deviceId"
+              dense
+              class="q-field--with-bottom"
+              :label="kind === 'pci' ? gettext('PCI Device') : gettext('USB Vendor/Device or Port')"
+              :hint="kind === 'usb' ? gettext('Use vendor:device or bus-port') : ''"
+            />
+            <q-checkbox
+              v-if="kind === 'pci'"
+              v-model="form.mdev"
+              dense
+              :label="gettext('Use with Mediated Devices')"
+            />
+            <q-checkbox
+              v-if="kind === 'pci'"
+              v-model="form.liveMigration"
+              dense
+              :label="gettext('Live Migration Capable')"
+            />
+          </template>
+          <q-input
+            v-if="
+              !isDirectory || directoryEditMode === 'create' || directoryEditMode === 'edit-comment'
+            "
+            v-model="form.description"
+            dense
+            class="q-field--with-bottom"
+            :label="gettext('Comment')"
+          />
+        </div>
+      </div>
+      <template #foot>
+        <q-btn
+          v-close-popup
+          no-caps
+          outline
+          size="12px"
+          class="u-button"
+          :label="gettext('Cancel')"
+        />
+        <q-btn
+          no-caps
+          flat
+          size="12px"
+          class="bg-primary text-grey-1 u-button"
+          :disable="!canConfigure"
           :label="
             isDirectory
               ? directoryEditMode === 'create'
                 ? gettext('Create')
                 : gettext('OK')
               : !editingId
-                ? gettext('Create')
-                : gettext('OK')
+              ? gettext('Create')
+              : gettext('OK')
           "
-          @click="() => void save()" /></template></UWindow
-  ></q-dialog>
+          @click="() => void save()"
+        />
+      </template>
+    </UWindow>
+  </q-dialog>
 </template>

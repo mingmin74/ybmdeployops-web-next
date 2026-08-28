@@ -1,5 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onDeactivated,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  shallowRef,
+  watch,
+} from 'vue';
 import type { QForm } from 'quasar';
 import { getClusterOptions, getLocalNetworks, updateClusterOptions } from '@/api/clusterOptions';
 import type { PveRecord } from '@/api/resources';
@@ -123,7 +134,7 @@ const networkOptions = computed(() =>
     .map((item) => ({
       label: `${textValue(item.cidr)}${item.iface ? ` (${textValue(item.iface)})` : ''}`,
       value: textValue(item.cidr),
-    })),
+    }))
 );
 
 const networkModel = computed({
@@ -135,7 +146,9 @@ const networkModel = computed({
 });
 
 const bandwidthValid = computed(() =>
-  Object.values(form.bwlimit).every((value) => !value || (Number.isFinite(Number(value)) && Number(value) > 0)),
+  Object.values(form.bwlimit).every(
+    (value) => !value || (Number.isFinite(Number(value)) && Number(value) > 0)
+  )
 );
 
 const saveDisabled = computed(() => activeType.value === 'bwlimit' && !bandwidthValid.value);
@@ -152,7 +165,11 @@ const rows = computed(
   () =>
     [
       { label: 'Keyboard Layout', type: 'keyboard', value: keyboardDisplay() },
-      { label: 'HTTP proxy', type: 'http_proxy', value: showData.value.http_proxy || gettext('None') },
+      {
+        label: 'HTTP proxy',
+        type: 'http_proxy',
+        value: showData.value.http_proxy || gettext('None'),
+      },
       { label: 'Console Viewer', type: 'console', value: consoleDisplay() },
       {
         label: 'Email from address',
@@ -184,12 +201,38 @@ const rows = computed(
         type: 'crs',
         value: objectToText(showData.value.crs) || gettext('Default'),
       },
-      { label: 'U2F Settings', type: 'u2f', value: objectToText(showData.value.u2f) || gettext('None') },
-      { label: 'WebAuthn Settings', type: 'webauthn', value: objectToText(showData.value.webauthn) || gettext('None') },
-      { label: 'Tag Style Override', type: 'tag-style', value: objectToText(showData.value['tag-style']) || gettext('No Overrides') },
-      { label: 'User Tag Access', type: 'user-tag-access', value: objectToText(showData.value['user-tag-access']) || `${gettext('Mode')}: free` },
-      { label: 'Registered Tags', type: 'registered-tags', value: Array.isArray(showData.value['registered-tags']) ? showData.value['registered-tags'].join(', ') : gettext('No Registered Tags') },
-      { label: 'Location', type: 'location', value: objectToText(showData.value.location) || gettext('None') },
+      {
+        label: 'U2F Settings',
+        type: 'u2f',
+        value: objectToText(showData.value.u2f) || gettext('None'),
+      },
+      {
+        label: 'WebAuthn Settings',
+        type: 'webauthn',
+        value: objectToText(showData.value.webauthn) || gettext('None'),
+      },
+      {
+        label: 'Tag Style Override',
+        type: 'tag-style',
+        value: objectToText(showData.value['tag-style']) || gettext('No Overrides'),
+      },
+      {
+        label: 'User Tag Access',
+        type: 'user-tag-access',
+        value: objectToText(showData.value['user-tag-access']) || `${gettext('Mode')}: free`,
+      },
+      {
+        label: 'Registered Tags',
+        type: 'registered-tags',
+        value: Array.isArray(showData.value['registered-tags'])
+          ? showData.value['registered-tags'].join(', ')
+          : gettext('No Registered Tags'),
+      },
+      {
+        label: 'Location',
+        type: 'location',
+        value: objectToText(showData.value.location) || gettext('None'),
+      },
       {
         label: 'Bandwidth Limits',
         type: 'bwlimit',
@@ -200,9 +243,17 @@ const rows = computed(
         type: 'max_workers',
         value: showData.value.max_workers || 4,
       },
-      { label: 'Next Free VMID Range', type: 'next-id', value: objectToText(showData.value['next-id']) || gettext('Default') },
-      { label: 'Consent Text', type: 'consent-text', value: showData.value['consent-text'] || gettext('None') },
-    ] as { label: string; type: OptionType; value: unknown }[],
+      {
+        label: 'Next Free VMID Range',
+        type: 'next-id',
+        value: objectToText(showData.value['next-id']) || gettext('Default'),
+      },
+      {
+        label: 'Consent Text',
+        type: 'consent-text',
+        value: showData.value['consent-text'] || gettext('None'),
+      },
+    ] as { label: string; type: OptionType; value: unknown }[]
 );
 
 function keyboardDisplay() {
@@ -237,7 +288,9 @@ function isValidMacPrefix(value: string) {
 function isValidIpCidr(value: string) {
   const [address, prefix] = value.split('/');
   if (!address || prefix === undefined || !/^\d+$/.test(prefix)) return false;
-  const isV4 = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(address) && address.split('.').every((part) => Number(part) <= 255);
+  const isV4 =
+    /^\d{1,3}(?:\.\d{1,3}){3}$/.test(address) &&
+    address.split('.').every((part) => Number(part) <= 255);
   const v6Parts = address.split('::');
   const v6Segments = address.replace('::', ':').split(':').filter(Boolean);
   const isV6 =
@@ -248,7 +301,10 @@ function isValidIpCidr(value: string) {
   return limit >= 0 && Number(prefix) >= 0 && Number(prefix) <= limit;
 }
 
-function addNetworkValue(value: string, done: (value?: string, mode?: 'add' | 'add-unique' | 'toggle') => void) {
+function addNetworkValue(
+  value: string,
+  done: (value?: string, mode?: 'add' | 'add-unique' | 'toggle') => void
+) {
   const cidr = value.trim();
   if (isValidIpCidr(cidr)) done(cidr, 'add-unique');
 }
@@ -260,7 +316,9 @@ function formatBwlimit(value: unknown) {
     .map((item) => {
       const [key, raw] = item.split('=');
       const mib = Number(raw) / 1024;
-      return `${bandwidthLabels[key as keyof typeof form.bwlimit] || key}=${Number.isFinite(mib) ? mib.toFixed(2) : raw}MiB/s`;
+      return `${bandwidthLabels[key as keyof typeof form.bwlimit] || key}=${
+        Number.isFinite(mib) ? mib.toFixed(2) : raw
+      }MiB/s`;
     })
     .join(',');
 }
@@ -339,7 +397,9 @@ async function openEdit(type: OptionType) {
   webauthnForm.value = { ...((data.webauthn as PveRecord | undefined) || {}) };
   tagStyleForm.value = { ...((data['tag-style'] as PveRecord | undefined) || {}) };
   userTagAccessForm.value = { ...((data['user-tag-access'] as PveRecord | undefined) || {}) };
-  registeredTags.value = Array.isArray(data['registered-tags']) ? data['registered-tags'].map((value) => textValue(value)) : [];
+  registeredTags.value = Array.isArray(data['registered-tags'])
+    ? data['registered-tags'].map((value) => textValue(value))
+    : [];
   locationForm.value = { ...((data.location as PveRecord | undefined) || {}) };
   form.max_workers = textValue(data.max_workers);
   const nextId = parsePropertyString(data['next-id']);
@@ -394,12 +454,17 @@ function buildSubmitData() {
     data[value ? 'tag-style' : 'delete'] = value || 'tag-style';
   } else if (type === 'user-tag-access') {
     const value = printPropertyString({
-      'user-allow': userTagAccessForm.value['user-allow'] === '__default__' ? '' : userTagAccessForm.value['user-allow'],
+      'user-allow':
+        userTagAccessForm.value['user-allow'] === '__default__'
+          ? ''
+          : userTagAccessForm.value['user-allow'],
       'user-allow-list': userTagAccessForm.value['user-allow-list'],
     });
     data[value ? 'user-tag-access' : 'delete'] = value || 'user-tag-access';
   } else if (type === 'registered-tags') {
-    data[registeredTags.value.length ? 'registered-tags' : 'delete'] = registeredTags.value.length ? registeredTags.value : 'registered-tags';
+    data[registeredTags.value.length ? 'registered-tags' : 'delete'] = registeredTags.value.length
+      ? registeredTags.value
+      : 'registered-tags';
   } else if (type === 'location') {
     const value = printPropertyString(locationForm.value);
     data[value ? 'location' : 'delete'] = value || 'location';
@@ -419,7 +484,14 @@ function buildSubmitData() {
     data[value ? 'consent-text' : 'delete'] = value || 'consent-text';
   } else {
     const value = textValue(form[type as keyof typeof form]);
-    const deleteEmpty = ['keyboard', 'http_proxy', 'console', 'email_from', 'mac_prefix', 'max_workers'].includes(type);
+    const deleteEmpty = [
+      'keyboard',
+      'http_proxy',
+      'console',
+      'email_from',
+      'mac_prefix',
+      'max_workers',
+    ].includes(type);
     data[deleteEmpty && (!value || value === '__default__') ? 'delete' : type] =
       deleteEmpty && (!value || value === '__default__') ? type : value;
   }
@@ -446,9 +518,22 @@ function selectOption(type: OptionType) {
   void openEdit(type);
 }
 
-watch([form, crsForm, u2fForm, webauthnForm, tagStyleForm, userTagAccessForm, registeredTags, locationForm], () => {
-  if (!syncingForm) dirty.value = true;
-}, { deep: true });
+watch(
+  [
+    form,
+    crsForm,
+    u2fForm,
+    webauthnForm,
+    tagStyleForm,
+    userTagAccessForm,
+    registeredTags,
+    locationForm,
+  ],
+  () => {
+    if (!syncingForm) dirty.value = true;
+  },
+  { deep: true }
+);
 
 function startPolling() {
   if (!pollingTimer) pollingTimer = setInterval(() => void loadOptions(), 5000);
@@ -470,7 +555,7 @@ onUnmounted(stopPolling);
 </script>
 
 <template>
-  <div class="q-ma-md vm-config-legacy vm-options-tab option-page">
+  <div class="q-ma-md q-pa-md bg-white vm-options-tab option-page">
     <div class="row">
       <div class="col-7 options-list-column">
         <div class="u-border q-pa-sm options-scroll options-list-panel">
@@ -482,7 +567,11 @@ onUnmounted(stopPolling);
             @click="selectOption(row.type)"
           >
             <div class="col-4 text-grey-10 options-list-label">
-              <q-icon :name="optionIcon(row.type)" size="16px" class="q-mr-xs options-list-icon" />
+              <q-icon
+                :name="optionIcon(row.type)"
+                size="16px"
+                class="q-mr-xs options-list-icon"
+              />
               {{ gettext(row.label) }}:
             </div>
             <div class="col-8 text-grey-8 options-list-value">{{ row.value }}</div>
@@ -491,7 +580,11 @@ onUnmounted(stopPolling);
       </div>
       <div class="col-5 options-editor-column">
         <div class="u-border u-hidden-error options-scroll options-editor">
-          <q-form ref="editorFormRef" class="q-pa-sm" @submit.prevent="saveOption">
+          <q-form
+            ref="editorFormRef"
+            class="q-pa-sm"
+            @submit.prevent="saveOption"
+          >
             <div class="row items-center no-wrap editor-titlebar">
               <div class="editor-title text-grey-10">
                 {{ gettext(rows.find((row) => row.type === activeType)?.label || '') }}
@@ -510,155 +603,197 @@ onUnmounted(stopPolling);
             </div>
             <div class="row q-col-gutter-lg">
               <div class="col-12">
-          <q-select
-            v-if="activeType === 'keyboard'"
-            v-model="form.keyboard"
-            dense
-            emit-value
-            map-options
-            options-dense
-            :options="keyboardOptions"
-            :label="gettext('Keyboard Layout')"
-          />
-          <q-input
-            v-else-if="activeType === 'http_proxy'"
-            v-model="form.http_proxy"
-            dense
-            type="url"
-            :label="gettext('HTTP proxy')"
-            :rules="[(value) => isValidHttpProxy(value) || gettext('Invalid HTTP proxy')]"
-          />
-          <q-select
-            v-else-if="activeType === 'console'"
-            v-model="form.console"
-            dense
-            emit-value
-            map-options
-            options-dense
-            :options="consoleOptions"
-            :label="gettext('Console Viewer')"
-          />
-          <q-input
-            v-else-if="activeType === 'email_from'"
-            v-model="form.email_from"
-            dense
-            :label="gettext('Email from address')"
-            :rules="[(value) => !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) || gettext('Invalid email address')]"
-          />
-          <q-input
-            v-else-if="activeType === 'mac_prefix'"
-            v-model="form.mac_prefix"
-            dense
-            :label="gettext('MAC address prefix')"
-            :rules="[(value) => !value || isValidMacPrefix(value) || gettext('Invalid MAC address prefix')]"
-          />
-          <q-select
-            v-else-if="activeType === 'migration' || activeType === 'replication'"
-            v-model="networkModel"
-            dense
-            emit-value
-            map-options
-            options-dense
-            clearable
-            use-input
-            fill-input
-            hide-selected
-            @new-value="addNetworkValue"
-            :options="networkOptions"
-            :label="gettext('Network')"
-            :rules="[(value) => !value || isValidIpCidr(value) || gettext('Invalid CIDR address')]"
-          />
-          <q-select
-            v-else-if="activeType === 'ha'"
-            v-model="form.ha"
-            dense
-            emit-value
-            map-options
-            options-dense
-            :options="haOptions"
-            :label="gettext('Shutdown Policy')"
-          />
-          <CrsOptionEditor
-            v-else-if="activeType === 'crs'"
-            v-model="crsForm"
-          />
-          <U2fOptionEditor
-            v-else-if="activeType === 'u2f'"
-            v-model="u2fForm"
-          />
-          <WebAuthnOptionEditor
-            v-else-if="activeType === 'webauthn'"
-            v-model="webauthnForm"
-            :original-id="originalWebAuthnId()"
-          />
-          <TagStyleOptionEditor
-            v-else-if="activeType === 'tag-style'"
-            v-model="tagStyleForm"
-          />
-          <UserTagAccessEditor
-            v-else-if="activeType === 'user-tag-access'"
-            v-model="userTagAccessForm"
-            :registered-tags="showData['registered-tags']"
-          />
-          <RegisteredTagsEditor
-            v-else-if="activeType === 'registered-tags'"
-            v-model="registeredTags"
-            :user-tag-access="showData['user-tag-access']"
-          />
-          <LocationOptionEditor
-            v-else-if="activeType === 'location'"
-            v-model="locationForm"
-          />
-          <div v-else-if="activeType === 'bwlimit'" class="column q-gutter-sm">
-            <q-input
-              v-for="(_, key) in form.bwlimit"
-              :key="key"
-              v-model="form.bwlimit[key]"
-              dense
-              type="number"
-              suffix="MiB/s"
-              :label="gettext(bandwidthLabels[key])"
-              :rules="[(value) => !value || (Number.isFinite(Number(value)) && Number(value) > 0) || gettext('Invalid bandwidth limit')]"
-            />
-          </div>
-          <div v-else-if="activeType === 'next-id'" class="column q-gutter-sm">
-            <q-input
-              v-model="form.nextIdLower"
-              dense
-              type="number"
-              min="100"
-              max="999999999"
-              :label="gettext('Lower')"
-              :rules="[(value) => !value || (Number.isInteger(Number(value)) && Number(value) >= 100 && Number(value) <= 999999999) || gettext('Invalid VMID range')]"
-            />
-            <q-input
-              v-model="form.nextIdUpper"
-              dense
-              type="number"
-              min="100"
-              max="999999999"
-              :label="gettext('Upper')"
-              :rules="[(value) => !value || (Number.isInteger(Number(value)) && Number(value) >= 100 && Number(value) <= 999999999) || gettext('Invalid VMID range')]"
-            />
-          </div>
-          <q-input
-            v-else-if="activeType === 'consent-text'"
-            v-model="form.consentText"
-            dense
-            type="textarea"
-            maxlength="65536"
-            :label="gettext('Consent Text')"
-          />
-          <q-input
-            v-else
-            v-model="form.max_workers"
-            dense
-            type="number"
-            min="1"
-            max="64"
-            :label="gettext('Maximal Workers/bulk-action')"
-            :rules="[(value) => !value || (Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 64) || gettext('Value must be between 1 and 64')]"
-          />
+                <q-select
+                  v-if="activeType === 'keyboard'"
+                  v-model="form.keyboard"
+                  dense
+                  emit-value
+                  map-options
+                  options-dense
+                  :options="keyboardOptions"
+                  :label="gettext('Keyboard Layout')"
+                />
+                <q-input
+                  v-else-if="activeType === 'http_proxy'"
+                  v-model="form.http_proxy"
+                  dense
+                  type="url"
+                  :label="gettext('HTTP proxy')"
+                  :rules="[(value) => isValidHttpProxy(value) || gettext('Invalid HTTP proxy')]"
+                />
+                <q-select
+                  v-else-if="activeType === 'console'"
+                  v-model="form.console"
+                  dense
+                  emit-value
+                  map-options
+                  options-dense
+                  :options="consoleOptions"
+                  :label="gettext('Console Viewer')"
+                />
+                <q-input
+                  v-else-if="activeType === 'email_from'"
+                  v-model="form.email_from"
+                  dense
+                  :label="gettext('Email from address')"
+                  :rules="[
+                    (value) =>
+                      !value ||
+                      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ||
+                      gettext('Invalid email address'),
+                  ]"
+                />
+                <q-input
+                  v-else-if="activeType === 'mac_prefix'"
+                  v-model="form.mac_prefix"
+                  dense
+                  :label="gettext('MAC address prefix')"
+                  :rules="[
+                    (value) =>
+                      !value || isValidMacPrefix(value) || gettext('Invalid MAC address prefix'),
+                  ]"
+                />
+                <q-select
+                  v-else-if="activeType === 'migration' || activeType === 'replication'"
+                  v-model="networkModel"
+                  dense
+                  emit-value
+                  map-options
+                  options-dense
+                  clearable
+                  use-input
+                  fill-input
+                  hide-selected
+                  @new-value="addNetworkValue"
+                  :options="networkOptions"
+                  :label="gettext('Network')"
+                  :rules="[
+                    (value) => !value || isValidIpCidr(value) || gettext('Invalid CIDR address'),
+                  ]"
+                />
+                <q-select
+                  v-else-if="activeType === 'ha'"
+                  v-model="form.ha"
+                  dense
+                  emit-value
+                  map-options
+                  options-dense
+                  :options="haOptions"
+                  :label="gettext('Shutdown Policy')"
+                />
+                <CrsOptionEditor
+                  v-else-if="activeType === 'crs'"
+                  v-model="crsForm"
+                />
+                <U2fOptionEditor
+                  v-else-if="activeType === 'u2f'"
+                  v-model="u2fForm"
+                />
+                <WebAuthnOptionEditor
+                  v-else-if="activeType === 'webauthn'"
+                  v-model="webauthnForm"
+                  :original-id="originalWebAuthnId()"
+                />
+                <TagStyleOptionEditor
+                  v-else-if="activeType === 'tag-style'"
+                  v-model="tagStyleForm"
+                />
+                <UserTagAccessEditor
+                  v-else-if="activeType === 'user-tag-access'"
+                  v-model="userTagAccessForm"
+                  :registered-tags="showData['registered-tags']"
+                />
+                <RegisteredTagsEditor
+                  v-else-if="activeType === 'registered-tags'"
+                  v-model="registeredTags"
+                  :user-tag-access="showData['user-tag-access']"
+                />
+                <LocationOptionEditor
+                  v-else-if="activeType === 'location'"
+                  v-model="locationForm"
+                />
+                <div
+                  v-else-if="activeType === 'bwlimit'"
+                  class="column q-gutter-sm"
+                >
+                  <q-input
+                    v-for="(_, key) in form.bwlimit"
+                    :key="key"
+                    v-model="form.bwlimit[key]"
+                    dense
+                    type="number"
+                    suffix="MiB/s"
+                    :label="gettext(bandwidthLabels[key])"
+                    :rules="[
+                      (value) =>
+                        !value ||
+                        (Number.isFinite(Number(value)) && Number(value) > 0) ||
+                        gettext('Invalid bandwidth limit'),
+                    ]"
+                  />
+                </div>
+                <div
+                  v-else-if="activeType === 'next-id'"
+                  class="column q-gutter-sm"
+                >
+                  <q-input
+                    v-model="form.nextIdLower"
+                    dense
+                    type="number"
+                    min="100"
+                    max="999999999"
+                    :label="gettext('Lower')"
+                    :rules="[
+                      (value) =>
+                        !value ||
+                        (Number.isInteger(Number(value)) &&
+                          Number(value) >= 100 &&
+                          Number(value) <= 999999999) ||
+                        gettext('Invalid VMID range'),
+                    ]"
+                  />
+                  <q-input
+                    v-model="form.nextIdUpper"
+                    dense
+                    type="number"
+                    min="100"
+                    max="999999999"
+                    :label="gettext('Upper')"
+                    :rules="[
+                      (value) =>
+                        !value ||
+                        (Number.isInteger(Number(value)) &&
+                          Number(value) >= 100 &&
+                          Number(value) <= 999999999) ||
+                        gettext('Invalid VMID range'),
+                    ]"
+                  />
+                </div>
+                <q-input
+                  v-else-if="activeType === 'consent-text'"
+                  v-model="form.consentText"
+                  dense
+                  type="textarea"
+                  maxlength="65536"
+                  :label="gettext('Consent Text')"
+                />
+                <q-input
+                  v-else
+                  v-model="form.max_workers"
+                  dense
+                  type="number"
+                  min="1"
+                  max="64"
+                  :label="gettext('Maximal Workers/bulk-action')"
+                  :rules="[
+                    (value) =>
+                      !value ||
+                      (Number.isInteger(Number(value)) &&
+                        Number(value) >= 1 &&
+                        Number(value) <= 64) ||
+                      gettext('Value must be between 1 and 64'),
+                  ]"
+                />
               </div>
             </div>
           </q-form>

@@ -3,6 +3,7 @@ import { computed, reactive, watch } from 'vue';
 import type { PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
+import OptionFormHint from './OptionFormHint.vue';
 
 const props = defineProps<{ modelValue?: PveRecord }>();
 const emit = defineEmits<{ 'update:modelValue': [value: PveRecord] }>();
@@ -63,10 +64,13 @@ const autoRebalancingDisabled = computed(() => !canUseAutoRebalancing.value || !
     <q-checkbox v-model="form['ha-rebalance-on-start']" :true-value="1" :false-value="0" :label="gettext('Rebalance on Start')" />
     <q-checkbox v-model="form['ha-auto-rebalance']" :true-value="1" :false-value="0" :disable="!canUseAutoRebalancing" :label="gettext('Automatic Rebalance')" />
     <template>
-      <q-input v-model="form['ha-auto-rebalance-threshold']" dense type="number" min="0" max="100" :disable="autoRebalancingDisabled" :label="gettext('Imbalance Threshold (%)')" :hint="`${gettext('Default')} (30)`" :rules="[(value) => !value || (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 100) || gettext('Value must be between 0 and 100')]" />
+      <q-input v-model="form['ha-auto-rebalance-threshold']" dense type="number" min="0" max="100" :disable="autoRebalancingDisabled" :label="gettext('Imbalance Threshold (%)')" :rules="[(value) => !value || (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 100) || gettext('Value must be between 0 and 100')]" />
+      <OptionFormHint>{{ `${gettext('Default')} (30)` }}</OptionFormHint>
       <q-select v-model="form['ha-auto-rebalance-method']" dense emit-value map-options options-dense :disable="autoRebalancingDisabled" :options="methodOptions" :label="gettext('Rebalancing Method')" />
-      <q-input v-model="form['ha-auto-rebalance-hold-duration']" dense type="number" min="0" :disable="autoRebalancingDisabled" :label="gettext('Hold Duration')" :hint="`${gettext('Default')} (3)`" :rules="[(value) => !value || (Number.isInteger(Number(value)) && Number(value) >= 0) || gettext('Invalid hold duration')]" />
-      <q-input v-model="form['ha-auto-rebalance-margin']" dense type="number" min="0" max="100" :disable="autoRebalancingDisabled" :label="gettext('Minimum Imbalance Improvement (%)')" :hint="`${gettext('Default')} (10)`" :rules="[(value) => !value || (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 100) || gettext('Value must be between 0 and 100')]" />
+      <q-input v-model="form['ha-auto-rebalance-hold-duration']" dense type="number" min="0" :disable="autoRebalancingDisabled" :label="gettext('Hold Duration')" :rules="[(value) => !value || (Number.isInteger(Number(value)) && Number(value) >= 0) || gettext('Invalid hold duration')]" />
+      <OptionFormHint>{{ `${gettext('Default')} (3)` }}</OptionFormHint>
+      <q-input v-model="form['ha-auto-rebalance-margin']" dense type="number" min="0" max="100" :disable="autoRebalancingDisabled" :label="gettext('Minimum Imbalance Improvement (%)')" :rules="[(value) => !value || (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 100) || gettext('Value must be between 0 and 100')]" />
+      <OptionFormHint>{{ `${gettext('Default')} (10)` }}</OptionFormHint>
     </template>
   </div>
 </template>

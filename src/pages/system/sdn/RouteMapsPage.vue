@@ -107,13 +107,13 @@ const columns: QTableColumn<RouteMapRow>[] = [
 const routeMapIds = computed(() =>
   [
     ...new Set(rows.value.map((row) => textValue(value(row, 'route-map-id'))).filter(Boolean)),
-  ].sort(),
+  ].sort()
 );
 const editorRouteMapId = computed(() =>
-  editing.value ? textValue(value(editing.value, 'route-map-id')) : undefined,
+  editing.value ? textValue(value(editing.value, 'route-map-id')) : undefined
 );
 const editorOrder = computed(() =>
-  editing.value ? textValue(value(editing.value, 'order')) : undefined,
+  editing.value ? textValue(value(editing.value, 'order')) : undefined
 );
 async function reload() {
   loading.value = true;
@@ -126,7 +126,7 @@ async function reload() {
       .sort(
         (a, b) =>
           textValue(value(a, 'route-map-id')).localeCompare(textValue(value(b, 'route-map-id'))) ||
-          Number(value(a, 'order')) - Number(value(b, 'order')),
+          Number(value(a, 'order')) - Number(value(b, 'order'))
       );
     selected.value = [];
   } finally {
@@ -156,14 +156,14 @@ function remove() {
     () =>
       void deleteSdnRouteMapEntry(
         textValue(value(row, 'route-map-id')),
-        textValue(value(row, 'order')),
-      ).then(reload),
+        textValue(value(row, 'order'))
+      ).then(reload)
   );
 }
 onMounted(() => void reload());
 </script>
 <template>
-  <div class="sdn-page bg-white">
+  <div class="q-pa-md q-ma-md bg-white">
     <q-table
       flat
       row-key="key"
@@ -178,8 +178,9 @@ onMounted(() => void reload());
       :no-data-label="gettext('No route maps configured.')"
       @row-dblclick="(_, row) => edit(row)"
       @update:selected="selected = [...$event]"
-      ><template #top
-        ><div class="row q-gutter-sm">
+    >
+      <template #top>
+        <div class="row q-gutter-sm">
           <q-btn
             no-caps
             outline
@@ -188,7 +189,8 @@ onMounted(() => void reload());
             class="u-button"
             :label="gettext('Add')"
             @click="add"
-          /><q-btn
+          />
+          <q-btn
             no-caps
             outline
             size="12px"
@@ -197,7 +199,8 @@ onMounted(() => void reload());
             :disable="selected.length !== 1"
             :label="gettext('Edit')"
             @click="edit()"
-          /><q-btn
+          />
+          <q-btn
             no-caps
             outline
             size="12px"
@@ -206,7 +209,8 @@ onMounted(() => void reload());
             :disable="selected.length !== 1"
             :label="gettext('Remove')"
             @click="remove"
-          /><q-btn
+          />
+          <q-btn
             no-caps
             outline
             size="12px"
@@ -214,22 +218,36 @@ onMounted(() => void reload());
             class="u-button"
             :label="gettext('Reload')"
             @click="reload"
-          /></div></template
-      ><template #body-cell-match="scope"
-        ><q-td :props="scope" class="route-map-cell">{{
-          actionText(scope.row, 'match')
-        }}</q-td></template
-      ><template #body-cell-set="scope"
-        ><q-td :props="scope" class="route-map-cell">{{
-          actionText(scope.row, 'set')
-        }}</q-td></template
-      ><template #body-cell-state="scope"
-        ><q-td :props="scope"
-          ><q-badge
+          />
+        </div>
+      </template>
+      <template #body-cell-match="scope">
+        <q-td
+          :props="scope"
+          class="route-map-cell"
+        >
+          {{ actionText(scope.row, 'match') }}
+        </q-td>
+      </template>
+      <template #body-cell-set="scope">
+        <q-td
+          :props="scope"
+          class="route-map-cell"
+        >
+          {{ actionText(scope.row, 'set') }}
+        </q-td>
+      </template>
+      <template #body-cell-state="scope">
+        <q-td :props="scope">
+          <q-badge
             v-if="scope.value"
             :color="scope.value === 'deleted' ? 'negative' : 'warning'"
-            :label="scope.value" /></q-td></template></q-table
-    ><RouteMapEntryEditor
+            :label="scope.value"
+          />
+        </q-td>
+      </template>
+    </q-table>
+    <RouteMapEntryEditor
       v-model="editorVisible"
       :route-map-id="editorRouteMapId"
       :order="editorOrder"

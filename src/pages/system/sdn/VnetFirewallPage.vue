@@ -31,29 +31,33 @@ const columns: QTableColumn<PveRecord>[] = [
   },
 ];
 
-const selectedVnet = computed(() => textValue(selected.value[0]?.vnet));
+function vnetRecordId(row?: PveRecord) {
+  return textValue(row?.id) || textValue(row?.vnet);
+}
+
+const selectedVnet = computed(() => vnetRecordId(selected.value[0]));
 const rulesBaseUrl = computed(() =>
   selectedVnet.value
-    ? `/cluster/sdn/vnets/${encodeURIComponent(selectedVnet.value)}/firewall/rules`
-    : '',
+    ? `/cluster/sdn/vnets/${selectedVnet.value}/firewall/rules`
+    : ''
 );
 const optionsBaseUrl = computed(() =>
   selectedVnet.value
-    ? `/cluster/sdn/vnets/${encodeURIComponent(selectedVnet.value)}/firewall/options`
-    : '',
+    ? `/cluster/sdn/vnets/${selectedVnet.value}/firewall/options`
+    : ''
 );
 
 async function refreshVnets() {
   loading.value = true;
   try {
     const previous = selectedVnet.value;
-    vnets.value = [...((await getSdnVnets(0)).data || [])].sort((a, b) =>
+    vnets.value = [...((await getSdnVnets()).data || [])].sort((a, b) =>
       `${textValue(a.zone)}\u0000${textValue(a.vnet)}`.localeCompare(
-        `${textValue(b.zone)}\u0000${textValue(b.vnet)}`,
-      ),
+        `${textValue(b.zone)}\u0000${textValue(b.vnet)}`
+      )
     );
     selected.value = previous
-      ? vnets.value.filter((vnet) => textValue(vnet.vnet) === previous).slice(0, 1)
+      ? vnets.value.filter((vnet) => vnetRecordId(vnet) === previous).slice(0, 1)
       : [];
   } finally {
     loading.value = false;
@@ -64,8 +68,8 @@ onMounted(refreshVnets);
 </script>
 
 <template>
-  <div class="sdn-page vnet-firewall bg-white">
-    <section class="vnet-firewall-list">
+  <div class="vnet-firewall bg-white q-ma-md">
+    <section class="vnet-firewall-list q-pa-md">
       <q-table
         flat
         row-key="vnet"
@@ -102,20 +106,51 @@ onMounted(refreshVnets);
         align="left"
         class="bg-grey-2 text-grey-8"
       >
-        <q-tab name="rules" :label="gettext('Rules')" :disable="!selectedVnet" />
-        <q-tab name="options" :label="gettext('Options')" :disable="!selectedVnet" />
+        <q-tab
+          name="rules"
+          :label="gettext('Rules')"
+          :disable="!selectedVnet"
+        />
+        <q-tab
+          name="options"
+          :label="gettext('Options')"
+          :disable="!selectedVnet"
+        />
       </q-tabs>
       <q-separator />
-      <q-tab-panels v-model="tab" animated>
-        <q-tab-panel name="rules" class="q-pa-sm">
-          <FirewallRulesPage v-if="rulesBaseUrl" :base-url="rulesBaseUrl" firewall-type="vnet" />
-          <div v-else class="vnet-firewall-empty text-grey-7">
+      <q-tab-panels
+        v-model="tab"
+        animated
+      >
+        <q-tab-panel
+          name="rules"
+          class="q-pa-sm"
+        >
+          <FirewallRulesPage
+            v-if="rulesBaseUrl"
+            :base-url="rulesBaseUrl"
+            firewall-type="vnet"
+          />
+          <div
+            v-else
+            class="vnet-firewall-empty text-grey-7"
+          >
             {{ gettext('No VNet selected') }}
           </div>
         </q-tab-panel>
-        <q-tab-panel name="options" class="q-pa-sm">
-          <FirewallOptionsPage v-if="optionsBaseUrl" :base-url="optionsBaseUrl" fwtype="vnet" />
-          <div v-else class="vnet-firewall-empty text-grey-7">
+        <q-tab-panel
+          name="options"
+          class="q-pa-sm"
+        >
+          <FirewallOptionsPage
+            v-if="optionsBaseUrl"
+            :base-url="optionsBaseUrl"
+            fwtype="vnet"
+          />
+          <div
+            v-else
+            class="vnet-firewall-empty text-grey-7"
+          >
             {{ gettext('No VNet selected') }}
           </div>
         </q-tab-panel>

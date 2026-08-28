@@ -206,7 +206,7 @@ function selectRow(_: Event, row: PveRecord) {
   padding-bottom: 0 !important;
 }
 
-.select-table :deep(.q-select__control) {
+.select-table--outlined :deep(.q-select__control) {
   height: 28px !important;
   display: flex;
   align-items: center;

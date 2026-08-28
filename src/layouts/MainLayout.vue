@@ -191,7 +191,6 @@
                     active-class="menu-active"
                     @click="go(grandchild.path)"
                   >
-                    <q-item-section avatar><q-icon :name="grandchild.icon" /></q-item-section>
                     <q-item-section>{{ gettext(grandchild.titleKey) }}</q-item-section>
                   </q-item>
                 </q-expansion-item>
