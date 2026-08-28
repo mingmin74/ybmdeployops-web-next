@@ -163,7 +163,7 @@ function remove() {
 onMounted(() => void reload());
 </script>
 <template>
-  <div class="q-ma-md bg-white">
+  <div class="sdn-page bg-white">
     <q-table
       flat
       row-key="key"
@@ -239,6 +239,11 @@ onMounted(() => void reload());
   </div>
 </template>
 <style scoped>
+.sdn-page {
+  margin: 16px;
+  background: #fff;
+}
+
 .route-map-cell {
   white-space: pre-line;
 }

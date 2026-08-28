@@ -212,16 +212,16 @@ async function save() {
       width="480px"
       :loading="loading"
     >
-      <div class="q-pa-md u-dense">
+      <div class="q-pa-sm u-dense">
         <div class="u-border q-pa-md">
           <div class="row q-col-gutter-lg">
-            <div class="col-6">
+            <div class="col-12">
               <q-input
                 v-model="form.vnet"
                 dense
                 class="q-field--with-bottom"
                 :disable="!isCreate"
-                :label="gettext('Name')"
+                :label="isCreate ? `${gettext('Name')} *` : gettext('Name')"
                 maxlength="8"
                 :error="isCreate && (!textValue(form.vnet).trim() || form.vnet.length > 8)"
                 :error-message="gettext('This field is required (max 8 characters)')"
@@ -236,10 +236,11 @@ async function save() {
               <q-select
                 v-model="form.zone"
                 dense
+                options-dense
                 emit-value
                 map-options
                 class="q-field--with-bottom"
-                :label="gettext('Zone')"
+                :label="`${gettext('Zone')} *`"
                 :options="zoneOptions"
                 :error="!textValue(form.zone)"
                 :error-message="gettext('This field is required')"
@@ -251,7 +252,7 @@ async function save() {
                 min="1"
                 max="16777216"
                 class="q-field--with-bottom"
-                :label="gettext('Tag')"
+                :label="tagRequired ? `${gettext('Tag')} *` : gettext('Tag')"
                 :disable="tagDisabled"
                 :error="!tagValid || (tagRequired && !textValue(form.tag))"
                 :error-message="
@@ -297,7 +298,6 @@ async function save() {
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :disable="!formValid"
           :label="isCreate ? gettext('Create') : gettext('OK')"
           @click="save"
         />

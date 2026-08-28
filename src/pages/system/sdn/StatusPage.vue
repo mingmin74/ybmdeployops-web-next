@@ -16,6 +16,7 @@ const filter = ref('');
 const dryRunVisible = ref(false);
 const dryRunLoading = ref(false);
 const selectedNode = ref('');
+const dryRunSelectorKey = ref(0);
 const rows = shallowRef<PveRecord[]>([]);
 const frrDiff = ref('');
 const interfacesDiff = ref('');
@@ -74,7 +75,7 @@ function applyChanges() {
   Dialog.create({
     title: gettext('Confirm'),
     message: gettext(
-      'Applying pending SDN changes will also apply any pending local node network changes. Proceed?',
+      'Applying pending SDN changes will also apply any pending local node network changes. Proceed?'
     ),
     cancel: true,
     persistent: true,
@@ -94,6 +95,7 @@ function applyChanges() {
 
 function openDryRun() {
   selectedNode.value = '';
+  dryRunSelectorKey.value += 1;
   frrDiff.value = '';
   interfacesDiff.value = '';
   dryRunVisible.value = true;
@@ -137,73 +139,77 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="sdn-status-page">
-    <q-card flat bordered class="sdn-status-card q-pa-md">
-      <q-table
-        flat
-        row-key="id"
-        table-header-class="u-table-header"
-        :rows="rows"
-        :columns="columns"
-        :filter="filter"
-        :loading="loading"
-        :pagination="{ page: 1, rowsPerPage: 10 }"
-        :rows-per-page-options="[10]"
-        :no-data-label="gettext('no record can be found')"
-      >
-        <template #top>
-          <div class="row items-center full-width q-col-gutter-md">
-            <div class="col-auto row q-gutter-sm">
-              <q-btn
-                no-caps
-                outline
-                size="12px"
-                color="primary"
-                class="u-button"
-                :label="gettext('Apply')"
-                @click="applyChanges"
-              />
-              <q-btn
-                no-caps
-                outline
-                size="12px"
-                color="primary"
-                class="u-button"
-                :label="gettext('Dry-Run')"
-                @click="openDryRun"
-              />
-              <q-btn
-                no-caps
-                outline
-                size="12px"
-                color="primary"
-                class="u-button"
-                :label="gettext('Refresh')"
-                @click="refreshData"
-              />
-            </div>
-            <q-space />
-            <q-input
-              v-model="filter"
-              borderless
-              dense
-              debounce="300"
-              :placeholder="gettext('Search')"
-            >
-              <template #append><q-icon name="search" /></template>
-            </q-input>
-          </div>
-        </template>
+  <div class="sdn-page sdn-status-page">
+    <q-table
+      flat
+      row-key="id"
+      table-header-class="u-table-header"
+      :rows="rows"
+      :columns="columns"
+      :filter="filter"
+      :loading="loading"
+      :pagination="{ page: 1, rowsPerPage: 10 }"
+      :rows-per-page-options="[10]"
+      :no-data-label="gettext('no record can be found')"
+    >
+      <template #top>
+        <div class="q-gutter-sm">
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Apply')"
+            @click="applyChanges"
+          />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Dry-Run')"
+            @click="openDryRun"
+          />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Refresh')"
+            @click="refreshData"
+          />
+        </div>
+        <q-space />
+        <q-input
+          v-model="filter"
+          borderless
+          dense
+          debounce="300"
+          :placeholder="gettext('Search')"
+        >
+          <template #append><q-icon name="search" /></template>
+        </q-input>
+      </template>
 
-        <template #body-cell-status="scope">
-          <q-td :props="scope"
-            ><q-badge :color="statusColor(scope.value)" :label="scope.value || '-'"
-          /></q-td>
-        </template>
-      </q-table>
-    </q-card>
+      <template #body-cell-status="scope">
+        <q-td :props="scope">
+          <q-badge
+            :color="statusColor(scope.value)"
+            :label="scope.value || '-'"
+          />
+        </q-td>
+      </template>
+    </q-table>
 
-    <q-dialog v-model="dryRunVisible" persistent transition-show="scale" transition-hide="scale">
+    <q-dialog
+      v-model="dryRunVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
       <UWindow
         :title="gettext('Pending SDN configuration changes')"
         width="800px"
@@ -211,23 +217,30 @@ onBeforeUnmount(() => {
       >
         <div class="q-pa-md q-gutter-md u-hidden-error">
           <NodeSelectTable
+            :key="dryRunSelectorKey"
             v-model="selectedNode"
+            disable-offline
             :label="gettext('Node')"
             field-style="standard"
             width="760px"
-            :auto-select="false"
           />
           <div class="sdn-diff-section relative-position">
-            <q-inner-loading :showing="dryRunLoading"
-              ><q-spinner color="primary" size="32px"
-            /></q-inner-loading>
+            <q-inner-loading :showing="dryRunLoading">
+              <q-spinner
+                color="primary"
+                size="32px"
+              />
+            </q-inner-loading>
             <div class="sdn-diff-section__title">{{ gettext('FRR Config') }}</div>
             <pre class="sdn-diff-output">{{ frrDiff }}</pre>
           </div>
           <div class="sdn-diff-section relative-position">
-            <q-inner-loading :showing="dryRunLoading"
-              ><q-spinner color="primary" size="32px"
-            /></q-inner-loading>
+            <q-inner-loading :showing="dryRunLoading">
+              <q-spinner
+                color="primary"
+                size="32px"
+              />
+            </q-inner-loading>
             <div class="sdn-diff-section__title">{{ gettext('Interfaces Config') }}</div>
             <pre class="sdn-diff-output">{{ interfacesDiff }}</pre>
           </div>
@@ -249,8 +262,14 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.sdn-page {
+  margin: 16px;
+  padding: 16px;
+  background: #fff;
+}
+
 .sdn-status-page {
-  padding: 14px;
+  min-height: calc(100vh - 96px);
 }
 
 .sdn-status-card {

@@ -339,7 +339,7 @@ onMounted(reload);
 </script>
 
 <template>
-  <div class="q-ma-md sdn-ipam bg-white">
+  <div class="sdn-page sdn-ipam bg-white">
     <q-table
       flat
       row-key="_key"
@@ -443,6 +443,11 @@ onMounted(reload);
 </template>
 
 <style scoped>
+.sdn-page {
+  margin: 16px;
+  background: #fff;
+}
+
 .sdn-ipam {
   min-height: calc(100vh - 96px);
 }

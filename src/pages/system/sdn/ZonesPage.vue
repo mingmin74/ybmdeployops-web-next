@@ -199,7 +199,7 @@ onMounted(refreshData);
 </script>
 
 <template>
-  <div class="q-ma-md bg-white">
+  <div class="q-ma-md q-pa-md bg-white">
     <q-table
       flat
       row-key="zone"
@@ -269,7 +269,13 @@ onMounted(refreshData);
           />
         </div>
         <q-space />
-        <q-input v-model="filter" borderless dense debounce="300" :placeholder="gettext('Search')">
+        <q-input
+          v-model="filter"
+          borderless
+          dense
+          debounce="300"
+          :placeholder="gettext('Search')"
+        >
           <template #append>
             <q-icon name="search" />
           </template>
@@ -297,3 +303,10 @@ onMounted(refreshData);
     />
   </div>
 </template>
+
+<style scoped>
+.sdn-page {
+  margin: 16px;
+  background: #fff;
+}
+</style>

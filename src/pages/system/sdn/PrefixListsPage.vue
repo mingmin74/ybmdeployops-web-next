@@ -201,7 +201,7 @@ onMounted(() => void reloadPrefixLists());
 </script>
 
 <template>
-  <div class="q-ma-md row q-col-gutter-md">
+  <div class="sdn-page row q-col-gutter-md">
     <div class="col-6">
       <q-table
         flat
@@ -330,3 +330,10 @@ onMounted(() => void reloadPrefixLists());
     />
   </div>
 </template>
+
+<style scoped>
+.sdn-page {
+  margin: 16px;
+  background: #fff;
+}
+</style>

@@ -27,27 +27,37 @@ const selected = defineModel<PveRecord[]>('selected', { required: true });
       },
     ]"
     :pagination="{ rowsPerPage: 0 }"
-    ><template #body-cell-ip="scope"
-      ><q-td :props="scope"
-        ><q-input
+  >
+    <template #body-cell-ip="scope">
+      <q-td :props="scope">
+        <q-input
           v-model="scope.row.ip"
           dense
           borderless
-          :disable="Boolean(scope.row.cidr)" /></q-td></template
-    ><template #body-cell-ip6="scope"
-      ><q-td :props="scope"
-        ><q-input
+          :disable="Boolean(scope.row.cidr)"
+        />
+      </q-td>
+    </template>
+    <template #body-cell-ip6="scope">
+      <q-td :props="scope">
+        <q-input
           v-model="scope.row.ip6"
           dense
           borderless
-          :disable="Boolean(scope.row.cidr6)" /></q-td></template
-    ><template #body-cell-hello_multiplier="scope"
-      ><q-td :props="scope"
-        ><q-input
+          :disable="Boolean(scope.row.cidr6)"
+        />
+      </q-td>
+    </template>
+    <template #body-cell-hello_multiplier="scope">
+      <q-td :props="scope">
+        <q-input
           v-model="scope.row.hello_multiplier"
           dense
           borderless
           type="number"
-          placeholder="10" /></q-td></template
-  ></q-table>
+          placeholder="10"
+        />
+      </q-td>
+    </template>
+  </q-table>
 </template>

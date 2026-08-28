@@ -123,7 +123,7 @@ async function save() {
                 dense
                 class="q-field--with-bottom"
                 :disable="!isCreate"
-                label="MAC"
+                :label="`${gettext('MAC')} *`"
                 :error="isCreate ? !macValid : !textValue(form.mac)"
                 :error-message="
                   isCreate ? (!textValue(form.mac) ? gettext('This field is required') : '') : ''
@@ -133,7 +133,7 @@ async function save() {
                 v-model="form.ip"
                 dense
                 class="q-field--with-bottom"
-                :label="gettext('IP Address')"
+                :label="`${gettext('IP Address')} *`"
                 :error="!ipValid"
                 :error-message="!textValue(form.ip) ? gettext('This field is required') : ''"
               />
@@ -155,7 +155,6 @@ async function save() {
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :disable="!formValid"
           :label="isCreate ? gettext('Create') : gettext('OK')"
           @click="save"
         />

@@ -60,18 +60,22 @@ async function save() {
 </script>
 
 <template>
-  <q-dialog v-model="visible" persistent>
+  <q-dialog
+    v-model="visible"
+    persistent
+  >
     <UWindow
       :title="`${isCreate ? gettext('Add') : gettext('Edit')}: ${gettext('Prefix List')}`"
       width="460px"
       :loading="loading"
     >
-      <div class="q-pa-md u-dense">
+      <div class="q-pa-sm u-dense">
         <div class="u-border q-pa-md">
           <q-input
             v-model="form.id"
             dense
-            :label="gettext('Name')"
+            :label="isCreate ? `${gettext('Name')} *` : gettext('Name')"
+            class="q-field--with-bottom"
             :disable="!isCreate"
             :error="!form.id.trim()"
             :error-message="gettext('This field is required')"
@@ -92,7 +96,6 @@ async function save() {
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :disable="!form.id.trim()"
           :label="isCreate ? gettext('Create') : gettext('OK')"
           @click="save"
         />

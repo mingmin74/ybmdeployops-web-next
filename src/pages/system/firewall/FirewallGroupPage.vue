@@ -20,9 +20,10 @@ const groups = shallowRef<PveRecord[]>([]);
 const dialog = shallowRef(false);
 const editing = shallowRef(false);
 const form = ref<Record<string, string | number | undefined>>({});
+const editorForm = ref<{ validate: () => Promise<boolean> }>();
 const originalName = shallowRef('');
 
-const selectedGroup = computed(() => selected.value[0] || groups.value[0]);
+const selectedGroup = computed(() => selected.value[0]);
 const rulesBaseUrl = computed(() => {
   const group = textValue(selectedGroup.value?.group);
   return group ? `/cluster/firewall/groups/${encodeURIComponent(group)}` : '';
@@ -48,17 +49,19 @@ const columns: QTableColumn<PveRecord>[] = [
 async function refreshGroups() {
   loading.value = true;
   try {
+    const selectedGroupName = textValue(selectedGroup.value?.group);
     groups.value = (await getFirewallGroups()).data || [];
     const current = groups.value.find(
-      (item) => textValue(item.group) === textValue(selectedGroup.value?.group)
+      (item) => textValue(item.group) === selectedGroupName
     );
-    selected.value = current ? [current] : groups.value[0] ? [groups.value[0]] : [];
+    selected.value = current ? [current] : [];
   } finally {
     loading.value = false;
   }
 }
 
 function openDialog(mode: 'add' | 'edit') {
+  if (mode === 'add') selected.value = [];
   editing.value = mode === 'edit';
   const record = selectedGroup.value;
   originalName.value = textValue(record?.group);
@@ -87,6 +90,11 @@ async function submitForm() {
   } finally {
     loading.value = false;
   }
+}
+
+async function validateAndSubmit() {
+  if (!(await editorForm.value?.validate())) return;
+  await submitForm();
 }
 
 function removeSelected() {
@@ -182,7 +190,6 @@ onMounted(() => {
     </div>
     <div class="col-8">
       <FirewallRulesPage
-        v-if="rulesBaseUrl"
         :base-url="rulesBaseUrl"
         firewall-type="group"
         :allow-groups="false"
@@ -200,12 +207,16 @@ onMounted(() => {
         width="420px"
         :loading="loading"
       >
-        <div class="u-border q-ma-sm q-pa-md u-dense">
+        <q-form
+          ref="editorForm"
+          class="u-border q-ma-sm q-pa-md u-dense"
+          @submit.prevent="validateAndSubmit"
+        >
           <q-input
             v-model="form.group"
             dense
             class="q-field--with-bottom"
-            :label="gettext('Group')"
+            :label="`${gettext('Group')} *`"
             :rules="[(value) => !!value || gettext('This field is required')]"
           />
           <q-input
@@ -214,7 +225,7 @@ onMounted(() => {
             class="q-field--with-bottom"
             :label="gettext('Comment')"
           />
-        </div>
+        </q-form>
         <template #foot>
           <q-btn
             v-close-popup
@@ -229,9 +240,8 @@ onMounted(() => {
             flat
             size="12px"
             class="bg-primary text-grey-1 u-button"
-            :disable="!form.group"
             :label="gettext('OK')"
-            @click="submitForm"
+            @click="validateAndSubmit"
           />
         </template>
       </UWindow>

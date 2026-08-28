@@ -132,9 +132,11 @@ const macros = shallowRef<PveRecord[]>([]);
 const refs = shallowRef<PveRecord[]>([]);
 const groups = shallowRef<PveRecord[]>([]);
 const form = ref<RuleForm>({});
+const editorForm = ref<{ validate: () => Promise<boolean> }>();
 const draggedPos = shallowRef<string | number | undefined>();
 
 const selectedRule = computed(() => selected.value[0]);
+const hasBaseUrl = computed(() => Boolean(baseUrl));
 const allowedDirections = computed(() => directions[firewallType]);
 const allowedActions = computed(() =>
   form.value.type === 'forward' ? ['ACCEPT', 'DROP'] : ['ACCEPT', 'REJECT', 'DROP']
@@ -286,6 +288,11 @@ function ruleForm(row?: PveRecord): RuleForm {
 }
 
 async function refreshData() {
+  if (!baseUrl) {
+    rows.value = [];
+    selected.value = [];
+    return;
+  }
   loading.value = true;
   try {
     rows.value = (await getFirewallRulesByBaseUrl(baseUrl)).data || [];
@@ -305,6 +312,7 @@ async function loadSelectors() {
 }
 
 async function openDialog(nextMode: EditMode) {
+  if (!baseUrl) return;
   mode.value = nextMode;
   const editingGroup = nextMode === 'edit' && selectedRule.value?.type === 'group';
   const detail =
@@ -347,7 +355,7 @@ function acceptNewValue(value: string, done: (value?: string) => void) {
   done(value);
 }
 function ipRefLengthRule(value: unknown) {
-  return String(value || '').length <= 512 || gettext('Too long, consider using IP sets.');
+  return textValue(value).length <= 512 || gettext('Too long, consider using IP sets.');
 }
 function cellError(row: PveRecord, field: string) {
   return textValue((row.errors as PveRecord | undefined)?.[field]);
@@ -394,6 +402,11 @@ async function submitForm() {
   } finally {
     loading.value = false;
   }
+}
+
+async function validateAndSubmit() {
+  if (!(await editorForm.value?.validate())) return;
+  await submitForm();
 }
 
 async function setEnabled(row: PveRecord, enable: boolean) {
@@ -486,6 +499,7 @@ watch(
             size="12px"
             color="primary"
             class="u-button"
+            :disable="!hasBaseUrl"
             :label="gettext('Add')"
             @click="openDialog('add')"
           />
@@ -535,6 +549,7 @@ watch(
             size="12px"
             color="primary"
             class="u-button"
+            :disable="!hasBaseUrl"
             :label="gettext('Refresh')"
             @click="refreshData"
           />
@@ -604,7 +619,11 @@ watch(
         width="680px"
         :loading="loading"
       >
-        <div class="u-border q-ma-sm q-pa-md u-dense">
+        <q-form
+          ref="editorForm"
+          class="u-border q-ma-sm q-pa-md u-dense"
+          @submit.prevent="validateAndSubmit"
+        >
           <div class="row q-col-gutter-x-md u-hidden-error">
             <template v-if="isGroupEditor">
               <q-select
@@ -614,7 +633,8 @@ watch(
                 options-dense
                 emit-value
                 map-options
-                :label="gettext('Security Group')"
+                :label="`${gettext('Security Group')} *`"
+                :rules="[(value) => !!value || gettext('This field is required')]"
                 :options="
                   groups.map((group) => ({
                     label: textValue(group.group),
@@ -644,7 +664,8 @@ watch(
                 options-dense
                 emit-value
                 map-options
-                :label="gettext('Direction')"
+                :label="`${gettext('Direction')} *`"
+                :rules="[(value) => !!value || gettext('This field is required')]"
                 :options="allowedDirections.map((value) => ({ label: value, value }))"
                 @update:model-value="onDirectionChange"
               />
@@ -653,7 +674,8 @@ watch(
                 class="col-6 q-field--with-bottom"
                 dense
                 options-dense
-                :label="gettext('Action')"
+                :label="`${gettext('Action')} *`"
+                :rules="[(value) => !!value || gettext('This field is required')]"
                 :options="allowedActions"
               />
               <q-select
@@ -776,7 +798,7 @@ watch(
               :label="gettext('Enable')"
             />
           </div>
-        </div>
+        </q-form>
         <template #foot>
           <q-btn
             v-close-popup
@@ -791,9 +813,8 @@ watch(
             flat
             size="12px"
             class="bg-primary text-grey-1 u-button"
-            :disable="isGroupEditor && !form.action"
             :label="gettext('Save')"
-            @click="submitForm"
+            @click="validateAndSubmit"
           />
         </template>
       </UWindow>

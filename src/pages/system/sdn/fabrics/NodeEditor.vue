@@ -40,7 +40,7 @@ const wireguardInterfaces = shallowRef<WireGuardInterface[]>([]);
 const selectedWireguardInterface = shallowRef<number | null>(null);
 const wireguardPeers = shallowRef<WireGuardPeer[]>([]);
 const availableWireguardPeers = computed(() =>
-  wireguardPeers.value.filter((peer) => peer.node !== textValue(form.node_id)),
+  wireguardPeers.value.filter((peer) => peer.node !== textValue(form.node_id))
 );
 const form = reactive({
   node_id: '',
@@ -79,7 +79,7 @@ const externalWireguardValid = computed(
   () =>
     !isWireguard.value ||
     form.role !== 'external' ||
-    (Boolean(form.endpoint.trim()) && /^[A-Za-z0-9+/]{43}=$/.test(form.public_key.trim())),
+    (Boolean(form.endpoint.trim()) && /^[A-Za-z0-9+/]{43}=$/.test(form.public_key.trim()))
 );
 const wireguardPeersValid = computed(() => {
   for (const iface of wireguardInterfaces.value) {
@@ -134,7 +134,7 @@ function printProperties(value: PveRecord) {
         !['peers', 'public_key', 'endpoint', 'allowed_ips', 'id', 'isCreate'].includes(key) &&
         item !== '' &&
         item !== undefined &&
-        item !== null,
+        item !== null
     )
     .map(([key, item]) => `${key}=${textValue(item)}`)
     .join(',');
@@ -165,7 +165,7 @@ function printInterfaces() {
         return true;
       })
       .map(([key, value]) => `${key}=${textValue(value)}`)
-      .join(','),
+      .join(',')
   );
 }
 async function loadInterfaces(node: string) {
@@ -188,7 +188,7 @@ async function loadInterfaces(node: string) {
         type: 'wireguard',
         ip: '',
         ip6: '',
-      })),
+      }))
     );
   interfaces.value = [
     ...(network.data || [])
@@ -258,8 +258,8 @@ async function load() {
                   wireguardPeers.value.find(
                     (candidate) =>
                       candidate.node === textValue(peer.node) &&
-                      candidate.node_iface === textValue(peer.node_iface),
-                  )?.endpoint,
+                      candidate.node_iface === textValue(peer.node_iface)
+                  )?.endpoint
                 ),
               skip_route_generation: textValue(peer.skip_route_generation) === '1',
             })),
@@ -273,7 +273,7 @@ async function load() {
           ...saved.find((item) => textValue(item.name) === textValue(iface.name)),
         }));
         selectedInterfaces.value = interfaces.value.filter((item) =>
-          selectedNames.has(textValue(item.name)),
+          selectedNames.has(textValue(item.name))
         );
       }
     } else {
@@ -292,7 +292,7 @@ watch(
   (node) => {
     const nodeId = textValue(node);
     if (visible.value && nodeId && nodeId !== props.nodeId) void loadInterfaces(nodeId);
-  },
+  }
 );
 async function save() {
   if (
@@ -356,12 +356,16 @@ async function save() {
 }
 </script>
 <template>
-  <q-dialog v-model="visible" persistent
-    ><UWindow
+  <q-dialog
+    v-model="visible"
+    persistent
+  >
+    <UWindow
       :title="`${isCreate ? gettext('Add') : gettext('Edit')}: ${gettext('Node')}`"
       width="800px"
       :loading="loading"
-      ><div class="q-pa-md u-dense">
+    >
+      <div class="q-pa-sm u-dense">
         <div class="u-border q-pa-md">
           <div class="row q-col-gutter-lg">
             <div class="col">
@@ -369,16 +373,19 @@ async function save() {
                 v-if="!isWireguard || form.role === 'internal'"
                 v-model="form.node_id"
                 dense
+                options-dense
                 emit-value
                 map-options
                 :disable="!isCreate"
                 :options="nodeOptions"
                 class="q-field--with-bottom"
-                :label="gettext('Node')"
-              /><q-select
+                :label="isCreate ? `${gettext('Node')} *` : gettext('Node')"
+              />
+              <q-select
                 v-if="isWireguard && isCreate"
                 v-model="form.role"
                 dense
+                options-dense
                 emit-value
                 map-options
                 class="q-field--with-bottom"
@@ -387,20 +394,23 @@ async function save() {
                   { label: gettext('Internal (cluster member)'), value: 'internal' },
                   { label: gettext('External peer'), value: 'external' },
                 ]"
-              /><q-input
+              />
+              <q-input
                 v-if="isWireguard && form.role === 'external'"
                 v-model="form.node_id"
                 dense
                 :disable="!isCreate"
                 class="q-field--with-bottom"
-                :label="gettext('Name')"
-              /><q-input
+                :label="isCreate ? `${gettext('Name')} *` : gettext('Name')"
+              />
+              <q-input
                 v-if="fabricIpPrefix && !isWireguard"
                 v-model="form.ip"
                 dense
                 class="q-field--with-bottom"
                 :label="gettext('IPv4')"
-              /><q-input
+              />
+              <q-input
                 v-if="fabricIp6Prefix && protocol !== 'ospf' && !isWireguard"
                 v-model="form.ip6"
                 dense
@@ -417,21 +427,26 @@ async function save() {
                 min="1"
                 max="4294967295"
                 class="q-field--with-bottom"
-                :label="gettext('ASN')"
+                :label="`${gettext('ASN')} *`"
                 :error="!form.asn"
                 :error-message="gettext('This field is required')"
-              /><template v-if="isWireguard"
-                ><q-input
+              />
+              <template v-if="isWireguard">
+                <q-input
                   v-model="form.endpoint"
                   dense
                   class="q-field--with-bottom"
                   :label="gettext('Endpoint')"
-                  :placeholder="gettext('Host that peers connect to')" /><q-input
+                  :placeholder="gettext('Host that peers connect to')"
+                />
+                <q-input
                   v-if="form.role === 'external'"
                   v-model="form.public_key"
                   dense
                   class="q-field--with-bottom"
-                  :label="gettext('Public Key')" /><q-input
+                  :label="gettext('Public Key')"
+                />
+                <q-input
                   v-model="form.allowed_ips"
                   dense
                   class="q-field--with-bottom"
@@ -439,7 +454,8 @@ async function save() {
                   :placeholder="
                     gettext('Destination CIDRs that route to this node, comma-separated')
                   "
-              /></template>
+                />
+              </template>
             </div>
           </div>
           <q-table
@@ -455,31 +471,42 @@ async function save() {
             :columns="interfaceColumns"
             :pagination="{ rowsPerPage: 0 }"
             @update:selected="selectedInterfaces = [...$event]"
-            ><template #body-cell-ip="scope"
-              ><q-td :props="scope"
-                ><q-input
+          >
+            <template #body-cell-ip="scope">
+              <q-td :props="scope">
+                <q-input
                   v-model="scope.row.ip"
                   dense
                   borderless
-                  :disable="Boolean(scope.row.cidr)" /></q-td></template
-            ><template #body-cell-ip6="scope"
-              ><q-td :props="scope"
-                ><q-input
+                  :disable="Boolean(scope.row.cidr)"
+                />
+              </q-td>
+            </template>
+            <template #body-cell-ip6="scope">
+              <q-td :props="scope">
+                <q-input
                   v-model="scope.row.ip6"
                   dense
                   borderless
-                  :disable="Boolean(scope.row.cidr6)" /></q-td></template
-            ><template #body-cell-network_type="scope"
-              ><q-td :props="scope"
-                ><q-select
+                  :disable="Boolean(scope.row.cidr6)"
+                />
+              </q-td>
+            </template>
+            <template #body-cell-network_type="scope">
+              <q-td :props="scope">
+                <q-select
                   v-model="scope.row.network_type"
                   dense
+                  options-dense
                   borderless
                   emit-value
                   map-options
                   :options="['broadcast', 'non-broadcast', 'point-to-multipoint', 'point-to-point']"
-                  :placeholder="gettext('auto')" /></q-td></template
-          ></q-table>
+                  :placeholder="gettext('auto')"
+                />
+              </q-td>
+            </template>
+          </q-table>
           <OpenFabricInterfaceEditor
             v-if="protocol === 'openfabric'"
             v-model:rows="interfaces"
@@ -507,20 +534,24 @@ async function save() {
           />
         </div>
       </div>
-      <template #foot
-        ><q-btn
+      <template #foot>
+        <q-btn
           v-close-popup
           no-caps
           outline
           size="12px"
           class="u-button"
-          :label="gettext('Cancel')" /><q-btn
+          :label="gettext('Cancel')"
+        />
+        <q-btn
           no-caps
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :disable="!form.node_id || (protocol === 'bgp' && !form.asn) || !wireguardPeersValid"
           :label="isCreate ? gettext('Create') : gettext('OK')"
-          @click="save" /></template></UWindow
-  ></q-dialog>
+          @click="save"
+        />
+      </template>
+    </UWindow>
+  </q-dialog>
 </template>

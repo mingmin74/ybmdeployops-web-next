@@ -55,7 +55,7 @@ const visibleRows = computed(() =>
   rows.value.flatMap((fabric) => [
     fabric,
     ...(expanded.value.has(fabric.key) ? fabric.children || [] : []),
-  ]),
+  ])
 );
 function merged(record: PveRecord) {
   return { ...record, ...((record.pending as PveRecord) || {}) };
@@ -68,11 +68,11 @@ function display(row: FabricRow, key: string) {
   return value === 'deleted' || value === undefined || value === null || value === ''
     ? '-'
     : Array.isArray(value)
-      ? value
-          .map((item) => (textValue(item).split(',')[0] ?? '').replace(/^name=/, ''))
-          .sort()
-          .join(', ')
-      : textValue(value);
+    ? value
+        .map((item) => (textValue(item).split(',')[0] ?? '').replace(/^name=/, ''))
+        .sort()
+        .join(', ')
+    : textValue(value);
 }
 function toggle(fabric: FabricRow) {
   const next = new Set(expanded.value);
@@ -147,7 +147,7 @@ function remove(row: FabricRow) {
         row.type === 'fabric'
           ? deleteSdnFabric(String(row.id))
           : deleteSdnFabricNode(String(row.fabric_id), String(row.node_id))
-      ).then(reload),
+      ).then(reload)
   );
 }
 function select(row: FabricRow) {
@@ -156,7 +156,7 @@ function select(row: FabricRow) {
 onMounted(() => void reload());
 </script>
 <template>
-  <div class="q-ma-md bg-white">
+  <div class="q-ma-md q-pa-md bg-white">
     <q-table
       flat
       row-key="key"
@@ -177,8 +177,9 @@ onMounted(() => void reload());
       selection="single"
       @row-click="(_, row) => select(row)"
       @update:selected="selected = [...$event]"
-      ><template #top
-        ><div class="row q-gutter-sm">
+    >
+      <template #top>
+        <div class="row q-gutter-sm">
           <q-btn-dropdown
             no-caps
             outline
@@ -186,17 +187,20 @@ onMounted(() => void reload());
             color="primary"
             class="u-button"
             :label="gettext('Add Fabric')"
-            ><q-list dense
-              ><q-item
+          >
+            <q-list dense>
+              <q-item
                 v-for="(_, protocol) in protocolLabels"
                 :key="protocol"
                 v-close-popup
                 clickable
                 @click="chooseFabric(protocol)"
-                ><q-item-section>{{ protocolLabels[protocol] }}</q-item-section></q-item
-              ></q-list
-            ></q-btn-dropdown
-          ><q-btn
+              >
+                <q-item-section>{{ protocolLabels[protocol] }}</q-item-section>
+              </q-item>
+            </q-list>
+          </q-btn-dropdown>
+          <q-btn
             no-caps
             outline
             size="12px"
@@ -205,7 +209,8 @@ onMounted(() => void reload());
             :disable="selected[0]?.type !== 'fabric'"
             :label="gettext('Add Node')"
             @click="selected[0] && chooseNode(selected[0])"
-          /><q-btn
+          />
+          <q-btn
             no-caps
             outline
             size="12px"
@@ -213,10 +218,15 @@ onMounted(() => void reload());
             class="u-button"
             :label="gettext('Reload')"
             @click="reload"
-          /></div></template
-      ><template #body-cell-name="scope"
-        ><q-td :props="scope" @click.stop="select(scope.row)"
-          ><div :style="{ paddingLeft: `${scope.row.depth * 24}px` }">
+          />
+        </div>
+      </template>
+      <template #body-cell-name="scope">
+        <q-td
+          :props="scope"
+          @click.stop="select(scope.row)"
+        >
+          <div :style="{ paddingLeft: `${scope.row.depth * 24}px` }">
             <q-btn
               v-if="scope.row.type === 'fabric'"
               flat
@@ -225,40 +235,59 @@ onMounted(() => void reload());
               size="sm"
               :icon="expanded.has(scope.row.key) ? 'expand_more' : 'chevron_right'"
               @click.stop="toggle(scope.row)"
-            /><q-icon v-else name="computer" size="16px" class="q-mr-sm" />
-            <span :class="{ 'fabric-deleted': state(scope.row) === 'deleted' }">{{
-              scope.row.type === 'fabric' ? display(scope.row, 'id') : display(scope.row, 'node_id')
-            }}</span>
-          </div></q-td
-        ></template
-      ><template #body-cell-protocol="scope"
-        ><q-td :props="scope"
-          ><span :class="{ 'fabric-deleted': state(scope.row) === 'deleted' }">{{
+            />
+            <q-icon
+              v-else
+              name="computer"
+              size="16px"
+              class="q-mr-sm"
+            />
+            <span :class="{ 'fabric-deleted': state(scope.row) === 'deleted' }">
+              {{
+                scope.row.type === 'fabric'
+                  ? display(scope.row, 'id')
+                  : display(scope.row, 'node_id')
+              }}
+            </span>
+          </div>
+        </q-td>
+      </template>
+      <template #body-cell-protocol="scope">
+        <q-td :props="scope">
+          <span :class="{ 'fabric-deleted': state(scope.row) === 'deleted' }">
+            {{
             scope.row.type === 'fabric'
               ? protocolLabels[scope.row.protocol as SdnFabricProtocol]
               : ''
-          }}</span></q-td
-        ></template
-      ><template #body-cell-ip="scope"
-        ><q-td :props="scope">{{
-          display(scope.row, scope.row.type === 'fabric' ? 'ip_prefix' : 'ip')
-        }}</q-td></template
-      ><template #body-cell-ip6="scope"
-        ><q-td :props="scope">{{
-          display(scope.row, scope.row.type === 'fabric' ? 'ip6_prefix' : 'ip6')
-        }}</q-td></template
-      ><template #body-cell-interfaces="scope"
-        ><q-td :props="scope">{{ display(scope.row, 'interfaces') }}</q-td></template
-      ><template #body-cell-action="scope"
-        ><q-td :props="scope"
-          ><q-btn
+            }}
+          </span>
+        </q-td>
+      </template>
+      <template #body-cell-ip="scope">
+        <q-td :props="scope">
+          {{ display(scope.row, scope.row.type === 'fabric' ? 'ip_prefix' : 'ip') }}
+        </q-td>
+      </template>
+      <template #body-cell-ip6="scope">
+        <q-td :props="scope">
+          {{ display(scope.row, scope.row.type === 'fabric' ? 'ip6_prefix' : 'ip6') }}
+        </q-td>
+      </template>
+      <template #body-cell-interfaces="scope">
+        <q-td :props="scope">{{ display(scope.row, 'interfaces') }}</q-td>
+      </template>
+      <template #body-cell-action="scope">
+        <q-td :props="scope">
+          <q-btn
             v-if="scope.row.type === 'fabric'"
             flat
             dense
             color="primary"
             icon="add_circle"
             :aria-label="gettext('Add Node')"
-            @click="chooseNode(scope.row)" /><q-btn
+            @click="chooseNode(scope.row)"
+          />
+          <q-btn
             flat
             dense
             color="primary"
@@ -272,21 +301,30 @@ onMounted(() => void reload());
                     rows.find((item) => textValue(item.id) === textValue(scope.row.fabric_id))!,
                     scope.row,
                   )
-            " /><q-btn
+            "
+          />
+          <q-btn
             flat
             dense
             color="negative"
             icon="delete"
             :aria-label="gettext('Delete')"
             :disable="state(scope.row) === 'deleted'"
-            @click="remove(scope.row)" /></q-td></template
-      ><template #body-cell-state="scope"
-        ><q-td :props="scope"
-          ><q-badge
+            @click="remove(scope.row)"
+          />
+        </q-td>
+      </template>
+      <template #body-cell-state="scope">
+        <q-td :props="scope">
+          <q-badge
             v-if="state(scope.row)"
             :color="state(scope.row) === 'deleted' ? 'negative' : 'warning'"
-            :label="state(scope.row)" /></q-td></template></q-table
-    ><component
+            :label="state(scope.row)"
+          />
+        </q-td>
+      </template>
+    </q-table>
+    <component
       :is="editor"
       v-if="editor"
       v-model="editorVisible"
@@ -296,6 +334,11 @@ onMounted(() => void reload());
   </div>
 </template>
 <style scoped>
+.sdn-page {
+  margin: 16px;
+  background: #fff;
+}
+
 .fabric-deleted {
   text-decoration: line-through;
 }

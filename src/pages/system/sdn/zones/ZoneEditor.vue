@@ -35,6 +35,7 @@ const ipamOptions = shallowRef<{ label: string; value: string }[]>([]);
 const dnsOptions = shallowRef<{ label: string; value: string }[]>([]);
 const controllerOptions = shallowRef<{ label: string; value: string }[]>([]);
 const fabricOptions = shallowRef<{ label: string; value: string; cidr: string | undefined }[]>([]);
+const showAdvanced = shallowRef(false);
 
 const form = reactive<{
   zone: string;
@@ -215,7 +216,7 @@ async function loadOptions() {
     .filter(
       (item) =>
         textValue((item as PveRecord).type) === 'fabric' ||
-        textValue((item as PveRecord).type_prev) === 'fabric',
+        textValue((item as PveRecord).type_prev) === 'fabric'
     )
     .map((item) => ({
       label: textValue((item as PveRecord).iface),
@@ -317,7 +318,10 @@ async function load() {
 }
 
 watch(visible, (open) => {
-  if (open) void load();
+  if (open) {
+    showAdvanced.value = false;
+    void load();
+  }
 });
 
 async function save() {
@@ -334,13 +338,16 @@ async function save() {
 </script>
 
 <template>
-  <q-dialog v-model="visible" persistent>
+  <q-dialog
+    v-model="visible"
+    persistent
+  >
     <UWindow
       :title="`${isCreate ? gettext('Add') : gettext('Edit')}: ${typeName}`"
       width="640px"
       :loading="loading"
     >
-      <div class="q-pa-md u-dense">
+      <div class="q-pa-sm u-dense">
         <div class="u-border q-pa-md">
           <div class="row q-col-gutter-lg">
             <div class="col-6">
@@ -349,7 +356,7 @@ async function save() {
                 dense
                 class="q-field--with-bottom"
                 :disable="!isCreate"
-                :label="gettext('ID')"
+                :label="isCreate ? `${gettext('ID')} *` : gettext('ID')"
                 maxlength="8"
                 :error="!textValue(form.zone).trim() || form.zone.length > 8"
                 :error-message="gettext('This field is required (max 8 characters)')"
@@ -359,7 +366,7 @@ async function save() {
                 v-model="form.bridge"
                 dense
                 class="q-field--with-bottom"
-                :label="gettext('Bridge')"
+                :label="`${gettext('Bridge')} *`"
                 maxlength="10"
                 :error="!textValue(form.bridge).trim()"
                 :error-message="gettext('This field is required')"
@@ -372,7 +379,7 @@ async function save() {
                 min="0"
                 max="4096"
                 class="q-field--with-bottom"
-                :label="gettext('Service VLAN')"
+                :label="`${gettext('Service VLAN')} *`"
                 :error="!tagValid"
                 :error-message="gettext('Value must be 0-4096')"
               />
@@ -380,6 +387,7 @@ async function save() {
                 v-if="zoneType === 'qinq'"
                 v-model="form['vlan-protocol']"
                 dense
+                options-dense
                 emit-value
                 map-options
                 class="q-field--with-bottom"
@@ -401,10 +409,11 @@ async function save() {
                 v-if="zoneType === 'evpn'"
                 v-model="form.controller"
                 dense
+                options-dense
                 emit-value
                 map-options
                 class="q-field--with-bottom"
-                :label="gettext('Primary Controller')"
+                :label="`${gettext('Primary Controller')} *`"
                 :options="controllerOptions"
                 :error="!textValue(form.controller).trim()"
                 :error-message="gettext('This field is required')"
@@ -417,7 +426,7 @@ async function save() {
                 min="1"
                 max="16000000"
                 class="q-field--with-bottom"
-                label="VRF-VXLAN Tag"
+                label="VRF-VXLAN Tag *"
                 :error="!vrfVxlanValid"
                 :error-message="gettext('Value must be 1-16000000')"
               />
@@ -439,6 +448,7 @@ async function save() {
                 v-model="form.nodes"
                 multiple
                 dense
+                options-dense
                 emit-value
                 map-options
                 class="q-field--with-bottom"
@@ -449,10 +459,11 @@ async function save() {
               <q-select
                 v-model="form.ipam"
                 dense
+                options-dense
                 emit-value
                 map-options
                 class="q-field--with-bottom"
-                :label="gettext('IPAM')"
+                :label="`${gettext('IPAM')} *`"
                 :options="ipamOptions"
                 :error="!textValue(form.ipam)"
                 :error-message="gettext('This field is required')"
@@ -461,6 +472,7 @@ async function save() {
                 v-if="zoneType === 'vxlan'"
                 v-model="form.fabric"
                 dense
+                options-dense
                 emit-value
                 map-options
                 clearable
@@ -482,12 +494,16 @@ async function save() {
               />
             </div>
           </div>
-          <q-expansion-item dense :label="gettext('Advanced')" default-opened>
+          <div
+            v-if="showAdvanced"
+            class="q-mt-md"
+          >
             <div class="row q-col-gutter-lg">
               <div class="col-6">
                 <q-select
                   v-model="form.dns"
                   dense
+                  options-dense
                   emit-value
                   map-options
                   clearable
@@ -500,6 +516,7 @@ async function save() {
                   v-model="form.exitnodes"
                   multiple
                   dense
+                  options-dense
                   emit-value
                   map-options
                   class="q-field--with-bottom"
@@ -510,6 +527,7 @@ async function save() {
                   v-if="zoneType === 'evpn'"
                   v-model="form['exitnodes-primary']"
                   dense
+                  options-dense
                   emit-value
                   map-options
                   clearable
@@ -534,6 +552,7 @@ async function save() {
                 <q-select
                   v-model="form.reversedns"
                   dense
+                  options-dense
                   emit-value
                   map-options
                   clearable
@@ -561,12 +580,16 @@ async function save() {
                 />
               </div>
             </div>
-            <div v-if="zoneType === 'evpn'" class="row q-col-gutter-lg q-mt-sm">
+            <div
+              v-if="zoneType === 'evpn'"
+              class="row q-col-gutter-lg q-mt-sm"
+            >
               <div class="col-6">
                 <q-select
                   v-model="form['secondary-controllers']"
                   multiple
                   dense
+                  options-dense
                   emit-value
                   map-options
                   clearable
@@ -584,10 +607,16 @@ async function save() {
                 />
               </div>
             </div>
-          </q-expansion-item>
+          </div>
         </div>
       </div>
       <template #foot>
+        <q-checkbox
+          v-model="showAdvanced"
+          dense
+          class="q-mr-auto"
+          :label="gettext('Advanced')"
+        />
         <q-btn
           v-close-popup
           no-caps
@@ -601,7 +630,6 @@ async function save() {
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :disable="!formValid"
           :label="isCreate ? gettext('Create') : gettext('OK')"
           @click="save"
         />

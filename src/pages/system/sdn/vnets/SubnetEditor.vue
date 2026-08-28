@@ -156,15 +156,18 @@ function reset(data: PveRecord = {}) {
 }
 
 function addDhcpRange() {
-  dhcpRanges.value.push({
-    _key: nextDhcpKey++,
-    'start-address': '',
-    'end-address': '',
-  });
+  dhcpRanges.value = [
+    ...dhcpRanges.value,
+    {
+      _key: nextDhcpKey++,
+      'start-address': '',
+      'end-address': '',
+    },
+  ];
 }
 
-function removeDhcpRange(idx: number) {
-  dhcpRanges.value.splice(idx, 1);
+function removeDhcpRange(key: number) {
+  dhcpRanges.value = dhcpRanges.value.filter((range) => range._key !== key);
 }
 
 function cleanPayload(): PveRecord {
@@ -199,7 +202,7 @@ function cleanPayload(): PveRecord {
 
   if (dhcpRanges.value.length > 0) {
     payload['dhcp-range'] = dhcpRanges.value.map(
-      (r) => `start-address=${r['start-address']},end-address=${r['end-address']}`,
+      (r) => `start-address=${r['start-address']},end-address=${r['end-address']}`
     );
   } else if (!isCreate.value) {
     deleted.push('dhcp-range');
@@ -240,7 +243,12 @@ async function save() {
 </script>
 
 <template>
-  <q-dialog v-model="visible" persistent>
+  <q-dialog
+    v-model="visible"
+    persistent
+    transition-show="scale"
+    transition-hide="scale"
+  >
     <UWindow
       :title="`${isCreate ? gettext('Create') : gettext('Edit')}: Subnet`"
       width="640px"
@@ -254,8 +262,14 @@ async function save() {
           active-color="primary"
           indicator-color="primary"
         >
-          <q-tab name="general" :label="gettext('General')" />
-          <q-tab name="dhcp" :label="gettext('DHCP Ranges')" />
+          <q-tab
+            name="general"
+            :label="gettext('General')"
+          />
+          <q-tab
+            name="dhcp"
+            :label="gettext('DHCP Ranges')"
+          />
         </q-tabs>
         <q-tab-panels
           v-model="tabPanel"
@@ -263,16 +277,19 @@ async function save() {
           transition-prev="jump-up"
           transition-next="jump-up"
         >
-          <q-tab-panel name="general" class="q-pa-md">
+          <q-tab-panel
+            name="general"
+            class="q-pa-md"
+          >
             <div class="u-border q-pa-md">
               <div class="row q-col-gutter-lg">
-                <div class="col-6">
+                <div class="col-12">
                   <q-input
                     v-model="form.cidr"
                     dense
                     class="q-field--with-bottom"
                     :disable="!isCreate"
-                    :label="gettext('Subnet (CIDR)')"
+                    :label="isCreate ? `${gettext('Subnet (CIDR)')} *` : gettext('Subnet (CIDR)')"
                     placeholder="192.168.10.0/24"
                     :error="!cidrValid"
                     :error-message="gettext('Invalid CIDR notation (IPv4 /0-32 or IPv6 /0-128)')"
@@ -286,7 +303,13 @@ async function save() {
                     :error="!gatewayValid"
                     :error-message="gettext('Invalid IPv4 or IPv6 address')"
                   />
-                  <q-checkbox v-model="form.snat" dense :label="'SNAT'" />
+                  <q-checkbox
+                    v-model="form.snat"
+                    dense
+                    right-label
+                    color="primary"
+                    :label="gettext('SNAT')"
+                  />
                   <q-input
                     v-model="form.dnszoneprefix"
                     dense
@@ -298,7 +321,10 @@ async function save() {
               </div>
             </div>
           </q-tab-panel>
-          <q-tab-panel name="dhcp" class="q-pa-md">
+          <q-tab-panel
+            name="dhcp"
+            class="q-pa-md"
+          >
             <div class="u-border q-pa-md">
               <q-table
                 flat
@@ -312,31 +338,32 @@ async function save() {
                   <q-tr :props="scope">
                     <q-td :props="scope">
                       <q-input
-                        v-model="dhcpRanges[scope.rowIndex]!['start-address']"
+                        v-model="scope.row['start-address']"
                         dense
                         class="q-field--with-bottom"
                         placeholder="192.168.1.100"
                         :error="
                           !dhcpRangesValid &&
-                          (!dhcpRanges[scope.rowIndex]!['start-address'] ||
-                            !isValidIp(dhcpRanges[scope.rowIndex]!['start-address']))
+                          (!scope.row['start-address'] || !isValidIp(scope.row['start-address']))
                         "
                       />
                     </q-td>
                     <q-td :props="scope">
                       <q-input
-                        v-model="dhcpRanges[scope.rowIndex]!['end-address']"
+                        v-model="scope.row['end-address']"
                         dense
                         class="q-field--with-bottom"
                         placeholder="192.168.1.150"
                         :error="
                           !dhcpRangesValid &&
-                          (!dhcpRanges[scope.rowIndex]!['end-address'] ||
-                            !isValidIp(dhcpRanges[scope.rowIndex]!['end-address']))
+                          (!scope.row['end-address'] || !isValidIp(scope.row['end-address']))
                         "
                       />
                     </q-td>
-                    <q-td :props="scope" auto-width>
+                    <q-td
+                      :props="scope"
+                      auto-width
+                    >
                       <q-btn
                         flat
                         dense
@@ -344,13 +371,16 @@ async function save() {
                         size="sm"
                         color="negative"
                         icon="delete"
-                        @click="removeDhcpRange(scope.rowIndex)"
+                        @click="removeDhcpRange(scope.row._key)"
                       />
                     </q-td>
                   </q-tr>
                 </template>
                 <template #no-data>
-                  <q-td :colspan="dhcpColumns.length" class="text-center text-grey-6 text-sm py-md">
+                  <q-td
+                    :colspan="dhcpColumns.length"
+                    class="text-center text-grey-6 text-sm py-md"
+                  >
                     {{ gettext('No DHCP ranges configured.') }}
                   </q-td>
                 </template>
@@ -384,7 +414,6 @@ async function save() {
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :disable="!formValid"
           :label="isCreate ? gettext('Create') : gettext('OK')"
           @click="save"
         />

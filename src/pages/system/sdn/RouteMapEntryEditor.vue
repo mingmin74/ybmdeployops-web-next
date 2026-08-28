@@ -333,7 +333,9 @@ async function save() {
                 new-value-mode="add-unique"
                 :options="routeMapOptions"
                 :disable="!isCreate"
-                :label="gettext('Route Map ID')"
+                options-dense
+                class="q-field--with-bottom"
+                :label="isCreate ? `${gettext('Route Map ID')} *` : gettext('Route Map ID')"
                 :error="!form.routeMapId"
                 :error-message="gettext('This field is required')"
               />
@@ -344,13 +346,18 @@ async function save() {
                 min="1"
                 max="65535"
                 :disable="!isCreate"
-                :label="gettext('Order')"
+                class="q-field--with-bottom"
+                :label="isCreate ? `${gettext('Order')} *` : gettext('Order')"
+                :error="!form.order || Number(form.order) < 1 || Number(form.order) > 65535"
+                :error-message="gettext('Value must be 1-65535')"
               />
               <q-select
                 v-model="form.action"
                 dense
                 emit-value
                 map-options
+                options-dense
+                class="q-field--with-bottom"
                 :options="[
                   { label: gettext('Permit'), value: 'permit' },
                   { label: gettext('Deny'), value: 'deny' },
@@ -365,6 +372,8 @@ async function save() {
                 clearable
                 emit-value
                 map-options
+                options-dense
+                class="q-field--with-bottom"
                 :options="routeMapOptions"
                 :label="gettext('Call')"
               />
@@ -373,6 +382,8 @@ async function save() {
                 dense
                 emit-value
                 map-options
+                options-dense
+                class="q-field--with-bottom"
                 :options="[
                   { label: `${gettext('Default')} (exit)`, value: '__default__' },
                   { label: gettext('On match next'), value: 'on-match-next' },
@@ -388,7 +399,10 @@ async function save() {
                 type="number"
                 min="1"
                 max="65535"
-                :label="gettext('Target order')"
+                class="q-field--with-bottom"
+                :label="`${gettext('Target order')} *`"
+                :error="!form.exitOrder || Number(form.exitOrder) < 1 || Number(form.exitOrder) > 65535"
+                :error-message="gettext('Value must be 1-65535')"
               />
             </div>
           </div>
@@ -410,6 +424,7 @@ async function save() {
                     <q-select
                       v-model="item.key"
                       dense
+                      options-dense
                       emit-value
                       map-options
                       :options="kind === 'match' ? matchOptions : setOptions"
@@ -427,6 +442,7 @@ async function save() {
                         <q-select
                           v-model="item.value"
                           dense
+                          options-dense
                           emit-value
                           map-options
                           clearable
@@ -584,7 +600,6 @@ async function save() {
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :disable="!form.routeMapId || !form.order || (needsExitOrder && !form.exitOrder)"
           :label="isCreate ? gettext('Create') : gettext('OK')"
           @click="save"
       /></template> </UWindow

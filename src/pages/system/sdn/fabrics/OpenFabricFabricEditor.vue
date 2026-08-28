@@ -5,5 +5,10 @@ const props = defineProps<{ fabricId?: string; disableIpPrefixEdit?: boolean }>(
 defineEmits<{ saved: [] }>();
 </script>
 <template>
-  <FabricEditor v-model="visible" protocol="openfabric" v-bind="props" @saved="$emit('saved')" />
+  <FabricEditor
+    v-model="visible"
+    protocol="openfabric"
+    v-bind="props"
+    @saved="$emit('saved')"
+  />
 </template>

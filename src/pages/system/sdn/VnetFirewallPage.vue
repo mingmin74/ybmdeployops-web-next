@@ -64,7 +64,7 @@ onMounted(refreshVnets);
 </script>
 
 <template>
-  <div class="vnet-firewall q-ma-md bg-white">
+  <div class="sdn-page vnet-firewall bg-white">
     <section class="vnet-firewall-list">
       <q-table
         flat
@@ -125,6 +125,11 @@ onMounted(refreshVnets);
 </template>
 
 <style scoped>
+.sdn-page {
+  margin: 16px;
+  background: #fff;
+}
+
 .vnet-firewall {
   display: flex;
   min-height: 420px;

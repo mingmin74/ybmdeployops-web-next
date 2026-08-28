@@ -11,5 +11,10 @@ const props = defineProps<{
 defineEmits<{ saved: [] }>();
 </script>
 <template>
-  <NodeEditor v-model="visible" protocol="openfabric" v-bind="props" @saved="$emit('saved')" />
+  <NodeEditor
+    v-model="visible"
+    protocol="openfabric"
+    v-bind="props"
+    @saved="$emit('saved')"
+  />
 </template>

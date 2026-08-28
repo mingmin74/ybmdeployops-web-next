@@ -36,6 +36,8 @@ const editingIpset = shallowRef(false);
 const editingEntry = shallowRef(false);
 const ipsetForm = ref<Record<string, string | number | undefined>>({});
 const entryForm = ref<Record<string, string | number | undefined>>({});
+const ipsetEditorForm = ref<{ validate: () => Promise<boolean> }>();
+const entryEditorForm = ref<{ validate: () => Promise<boolean> }>();
 const originalIpsetName = shallowRef('');
 const originalCidr = shallowRef('');
 
@@ -178,6 +180,16 @@ async function submitEntry() {
   } finally {
     entryLoading.value = false;
   }
+}
+
+async function validateAndSubmitIpset() {
+  if (!(await ipsetEditorForm.value?.validate())) return;
+  await submitIpset();
+}
+
+async function validateAndSubmitEntry() {
+  if (!(await entryEditorForm.value?.validate())) return;
+  await submitEntry();
 }
 function removeIpset() {
   const item = selectedSet.value;
@@ -389,12 +401,16 @@ onMounted(() => {
         width="420px"
         :loading="loading"
       >
-        <div class="u-border q-ma-sm q-pa-md u-dense">
+        <q-form
+          ref="ipsetEditorForm"
+          class="u-border q-ma-sm q-pa-md u-dense"
+          @submit.prevent="validateAndSubmitIpset"
+        >
           <q-input
             v-model="ipsetForm.name"
             dense
             class="q-field--with-bottom"
-            :label="gettext('Name')"
+            :label="`${gettext('Name')} *`"
             :rules="[(value) => !!value || gettext('This field is required')]"
           />
           <q-input
@@ -403,7 +419,7 @@ onMounted(() => {
             class="q-field--with-bottom"
             :label="gettext('Comment')"
           />
-        </div>
+        </q-form>
         <template #foot>
           <q-btn
             v-close-popup
@@ -418,9 +434,8 @@ onMounted(() => {
             flat
             size="12px"
             class="bg-primary text-grey-1 u-button"
-            :disable="!ipsetForm.name"
             :label="gettext('OK')"
-            @click="submitIpset"
+            @click="validateAndSubmitIpset"
           />
         </template>
       </UWindow>
@@ -436,7 +451,11 @@ onMounted(() => {
         width="420px"
         :loading="entryLoading"
       >
-        <div class="u-border q-ma-sm q-pa-md u-dense">
+        <q-form
+          ref="entryEditorForm"
+          class="u-border q-ma-sm q-pa-md u-dense"
+          @submit.prevent="validateAndSubmitEntry"
+        >
           <q-select
             v-if="!editingEntry"
             v-model="entryForm.cidr"
@@ -447,7 +466,7 @@ onMounted(() => {
             clearable
             emit-value
             map-options
-            :label="gettext('IP/CIDR')"
+            :label="`${gettext('IP/CIDR')} *`"
             :options="aliases"
             :rules="[(value) => !!value || gettext('This field is required')]"
             @new-value="acceptCidrValue"
@@ -458,7 +477,7 @@ onMounted(() => {
             dense
             class="q-field--with-bottom"
             readonly
-            label="CIDR"
+            label="CIDR *"
           />
           <q-checkbox
             v-model="entryForm.nomatch"
@@ -476,7 +495,7 @@ onMounted(() => {
             class="q-field--with-bottom"
             :label="gettext('Comment')"
           />
-        </div>
+        </q-form>
         <template #foot>
           <q-btn
             v-close-popup
@@ -491,9 +510,8 @@ onMounted(() => {
             flat
             size="12px"
             class="bg-primary text-grey-1 u-button"
-            :disable="!entryForm.cidr"
             :label="gettext('OK')"
-            @click="submitEntry"
+            @click="validateAndSubmitEntry"
           />
         </template>
       </UWindow>

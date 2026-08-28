@@ -22,6 +22,7 @@ const filter = ref('');
 const selected = ref<PveRecord[]>([]);
 const rows = shallowRef<PveRecord[]>([]);
 const form = ref<Record<string, string | number | null | undefined>>({});
+const editorForm = ref<{ validate: () => Promise<boolean> }>();
 const originalName = ref('');
 
 const columns: QTableColumn<PveRecord>[] = [
@@ -96,6 +97,11 @@ async function submitForm() {
   } finally {
     loading.value = false;
   }
+}
+
+async function validateAndSubmit() {
+  if (!(await editorForm.value?.validate())) return;
+  await submitForm();
 }
 
 function removeSelected() {
@@ -202,19 +208,23 @@ onMounted(refreshData);
         width="480px"
         :loading="loading"
       >
-        <div class="u-border q-ma-sm q-pa-md u-dense">
+        <q-form
+          ref="editorForm"
+          class="u-border q-ma-sm q-pa-md u-dense"
+          @submit.prevent="validateAndSubmit"
+        >
           <q-input
             v-model="form.name"
             dense
             class="q-field--with-bottom"
-            :label="gettext('Name')"
+            :label="`${gettext('Name')} *`"
             :rules="[(value) => !!value || gettext('This field is required')]"
           />
           <q-input
             v-model="form.cidr"
             dense
             class="q-field--with-bottom"
-            label="CIDR"
+            label="CIDR *"
             :rules="[(value) => !!value || gettext('This field is required')]"
           />
           <q-input
@@ -223,7 +233,7 @@ onMounted(refreshData);
             class="q-field--with-bottom"
             :label="gettext('Comment')"
           />
-        </div>
+        </q-form>
         <template #foot>
           <q-btn
             v-close-popup
@@ -238,9 +248,8 @@ onMounted(refreshData);
             flat
             size="12px"
             class="bg-primary text-grey-1 u-button"
-            :disable="!form.name || !form.cidr"
             :label="gettext('OK')"
-            @click="submitForm"
+            @click="validateAndSubmit"
           />
         </template>
       </UWindow>

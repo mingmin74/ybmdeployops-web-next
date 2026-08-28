@@ -16,15 +16,14 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ saved: [] }>();
 const activeTab = shallowRef('fabric');
+const showAdvanced = shallowRef(false);
 const isCreate = computed(() => !props.fabricId);
 const hasIp = computed(() => props.protocol !== 'wireguard');
 const hasIp6 = computed(() => props.protocol !== 'wireguard' && props.protocol !== 'ospf');
 const hasRedistribution = computed(() => props.protocol === 'ospf' || props.protocol === 'bgp');
 const protocolName = computed(
   () =>
-    ({ openfabric: 'OpenFabric', ospf: 'OSPF', wireguard: 'WireGuard', bgp: 'BGP' })[
-      props.protocol
-    ],
+    ({ openfabric: 'OpenFabric', ospf: 'OSPF', wireguard: 'WireGuard', bgp: 'BGP' }[props.protocol])
 );
 const redistributionSources = computed(() =>
   props.protocol === 'ospf'
@@ -39,7 +38,7 @@ const redistributionSources = computed(() =>
         { label: gettext('Connected'), value: 'connected' },
         { label: gettext('Static'), value: 'static' },
         { label: gettext('Kernel'), value: 'kernel' },
-      ],
+      ]
 );
 const form = reactive({
   id: '',
@@ -61,12 +60,12 @@ const prefixValid = computed(
     props.protocol === 'wireguard' ||
     (props.protocol === 'ospf'
       ? Boolean(textValue(form.ip_prefix).trim())
-      : Boolean(textValue(form.ip_prefix).trim() || textValue(form.ip6_prefix).trim())),
+      : Boolean(textValue(form.ip_prefix).trim() || textValue(form.ip6_prefix).trim()))
 );
 const redistributionValid = computed(
   () =>
     new Set(form.redistribute.map((row) => row.source)).size === form.redistribute.length &&
-    form.redistribute.every((row) => row.source),
+    form.redistribute.every((row) => row.source)
 );
 function parseProperty(value: unknown): RedistributionEntry[] {
   const entries = Array.isArray(value) ? value : value ? [textValue(value)] : [];
@@ -85,7 +84,7 @@ function printRedistribution() {
   return form.redistribute.map((row) =>
     [`source=${row.source}`, row.routeMap ? `route-map=${row.routeMap}` : '']
       .filter(Boolean)
-      .join(','),
+      .join(',')
   );
 }
 function reset(data: PveRecord = {}) {
@@ -109,6 +108,7 @@ function reset(data: PveRecord = {}) {
 }
 watch(visible, async (open) => {
   if (!open) return;
+  showAdvanced.value = false;
   reset();
   if (props.fabricId) {
     loading.value = true;
@@ -129,10 +129,10 @@ function cleanPayload() {
     props.protocol === 'openfabric'
       ? ['ip_prefix', 'ip6_prefix', 'hello_interval', 'csnp_interval', 'route_filter']
       : props.protocol === 'ospf'
-        ? ['ip_prefix', 'area', 'route_filter']
-        : props.protocol === 'wireguard'
-          ? ['persistent_keepalive']
-          : ['ip_prefix', 'ip6_prefix', 'bfd', 'route_filter', 'route_map_in', 'route_map_out'];
+      ? ['ip_prefix', 'area', 'route_filter']
+      : props.protocol === 'wireguard'
+      ? ['persistent_keepalive']
+      : ['ip_prefix', 'ip6_prefix', 'bfd', 'route_filter', 'route_map_in', 'route_map_out'];
   const deleted: string[] = [];
   fields.forEach((key) => {
     const value = form[key];
@@ -167,12 +167,16 @@ async function save() {
 }
 </script>
 <template>
-  <q-dialog v-model="visible" persistent
-    ><UWindow
+  <q-dialog
+    v-model="visible"
+    persistent
+  >
+    <UWindow
       :title="`${isCreate ? gettext('Add') : gettext('Edit')}: ${protocolName}`"
       width="600px"
       :loading="loading"
-      ><div class="q-pa-md u-dense">
+    >
+      <div class="q-pa-sm u-dense">
         <q-tabs
           v-if="hasRedistribution"
           v-model="activeTab"
@@ -180,12 +184,25 @@ async function save() {
           align="left"
           active-color="primary"
           indicator-color="primary"
-          ><q-tab name="fabric" :label="gettext('Fabric')" /><q-tab
+        >
+          <q-tab
+            name="fabric"
+            :label="gettext('Fabric')"
+          />
+          <q-tab
             name="redistribution"
-            :label="gettext('Route Redistribution')" /></q-tabs
-        ><q-tab-panels v-model="activeTab" animated
-          ><q-tab-panel name="fabric" class="q-pa-none"
-            ><div class="u-border q-pa-md">
+            :label="gettext('Route Redistribution')"
+          />
+        </q-tabs>
+        <q-tab-panels
+          v-model="activeTab"
+          animated
+        >
+          <q-tab-panel
+            name="fabric"
+            class="q-pa-none"
+          >
+            <div class="u-border q-pa-md">
               <div class="row q-col-gutter-lg">
                 <div class="col">
                   <q-input
@@ -193,10 +210,11 @@ async function save() {
                     dense
                     class="q-field--with-bottom"
                     :disable="!isCreate"
-                    :label="gettext('Name')"
+                    :label="isCreate ? `${gettext('Name')} *` : gettext('Name')"
                     :error="!form.id"
                     :error-message="gettext('This field is required')"
-                  /><q-input
+                  />
+                  <q-input
                     v-if="hasIp"
                     v-model="form.ip_prefix"
                     dense
@@ -206,7 +224,8 @@ async function save() {
                     placeholder="192.0.2.0/24"
                     :error="!prefixValid"
                     :error-message="gettext('Either IPv4 Prefix or IPv6 Prefix is required')"
-                  /><q-input
+                  />
+                  <q-input
                     v-if="hasIp6"
                     v-model="form.ip6_prefix"
                     dense
@@ -217,25 +236,30 @@ async function save() {
                   />
                 </div>
                 <div class="col">
-                  <template v-if="protocol === 'openfabric'"
-                    ><q-input
+                  <template v-if="protocol === 'openfabric'">
+                    <q-input
                       v-model="form.hello_interval"
                       dense
                       type="number"
                       class="q-field--with-bottom"
-                      :label="gettext('Hello Interval')" /><q-input
+                      :label="gettext('Hello Interval')"
+                    />
+                    <q-input
                       v-model="form.csnp_interval"
                       dense
                       type="number"
                       class="q-field--with-bottom"
-                      :label="gettext('CSNP Interval')" /></template
-                  ><q-input
+                      :label="gettext('CSNP Interval')"
+                    />
+                  </template>
+                  <q-input
                     v-else-if="protocol === 'ospf'"
                     v-model="form.area"
                     dense
                     class="q-field--with-bottom"
                     :label="gettext('Area')"
-                  /><q-input
+                  />
+                  <q-input
                     v-else-if="protocol === 'wireguard'"
                     v-model="form.persistent_keepalive"
                     dense
@@ -245,21 +269,19 @@ async function save() {
                     class="q-field--with-bottom"
                     :label="`${gettext('Persistent Keepalive')} (s)`"
                     :placeholder="gettext('off')"
-                  /><template v-else
-                    ><q-checkbox
-                      v-model="form.bfd"
-                      dense
-                      :label="gettext('BFD')" /><q-expansion-item dense :label="gettext('Advanced')"
-                      ><q-input
-                        v-model="form.route_map_in"
+                  />
+                  <template v-else>
+                    <div class="fabric-bfd-field">
+                      <q-checkbox
+                        v-model="form.bfd"
                         dense
-                        class="q-field--with-bottom"
-                        :label="gettext('Incoming Route Map')" /><q-input
-                        v-model="form.route_map_out"
-                        dense
-                        class="q-field--with-bottom"
-                        :label="gettext('Outgoing Route Map')" /></q-expansion-item></template
-                  ><q-input
+                        right-label
+                        color="primary"
+                        :label="gettext('BFD')"
+                      />
+                    </div>
+                  </template>
+                  <q-input
                     v-if="protocol !== 'wireguard'"
                     v-model="form.route_filter"
                     dense
@@ -268,29 +290,73 @@ async function save() {
                     :placeholder="gettext('IP Prefixes')"
                   />
                 </div>
-              </div></div></q-tab-panel
-          ><q-tab-panel v-if="hasRedistribution" name="redistribution" class="q-pa-none"
-            ><div class="u-border q-pa-md">
+              </div>
+              <div
+                v-if="protocol === 'bgp' && showAdvanced"
+                class="q-mt-md"
+              >
+                <q-input
+                  v-model="form.route_map_in"
+                  dense
+                  class="q-field--with-bottom"
+                  :label="gettext('Incoming Route Map')"
+                />
+                <q-input
+                  v-model="form.route_map_out"
+                  dense
+                  class="q-field--with-bottom"
+                  :label="gettext('Outgoing Route Map')"
+                />
+              </div>
+            </div>
+          </q-tab-panel>
+          <q-tab-panel
+            v-if="hasRedistribution"
+            name="redistribution"
+            class="q-pa-none"
+          >
+            <div class="u-border q-pa-md">
               <RedistributionEditor
                 v-model="form.redistribute"
                 :sources="redistributionSources"
-              /></div></q-tab-panel
-        ></q-tab-panels>
+              />
+            </div>
+          </q-tab-panel>
+        </q-tab-panels>
       </div>
-      <template #foot
-        ><q-btn
+      <template #foot>
+        <q-checkbox
+          v-if="protocol === 'bgp'"
+          v-model="showAdvanced"
+          dense
+          class="q-mr-auto"
+          :label="gettext('Advanced')"
+        />
+        <q-btn
           v-close-popup
           no-caps
           outline
           size="12px"
           class="u-button"
-          :label="gettext('Cancel')" /><q-btn
+          :label="gettext('Cancel')"
+        />
+        <q-btn
           no-caps
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :disable="!form.id || !prefixValid || !redistributionValid"
           :label="isCreate ? gettext('Create') : gettext('OK')"
-          @click="save" /></template></UWindow
-  ></q-dialog>
+          @click="save"
+        />
+      </template>
+    </UWindow>
+  </q-dialog>
 </template>
+
+<style scoped>
+.fabric-bfd-field {
+  display: flex;
+  align-items: center;
+  min-height: 55px;
+}
+</style>
