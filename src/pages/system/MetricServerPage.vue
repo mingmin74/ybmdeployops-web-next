@@ -46,6 +46,7 @@ type MetricForm = {
 const loading = ref(false);
 const dialogLoading = ref(false);
 const submitted = ref(false);
+const showAdvanced = shallowRef(false);
 const filter = ref('');
 const dialogVisible = ref(false);
 const selected = ref<PveRecord[]>([]);
@@ -117,6 +118,7 @@ function formatMetricType(type: unknown) {
 
 function resetForm(action: 'add' | 'edit', type: MetricType) {
   submitted.value = false;
+  showAdvanced.value = false;
   Object.assign(form, {
     action,
     type,
@@ -393,11 +395,12 @@ onMounted(() => {
             class="u-button"
             :label="gettext('Add')"
           >
-            <q-list>
+            <q-list dense>
               <q-item
                 v-for="type in ['graphite', 'influxdb', 'opentelemetry'] as MetricType[]"
                 :key="type"
                 v-close-popup
+                dense
                 clickable
                 @click="openDialog('add', type)"
               >
@@ -470,6 +473,7 @@ onMounted(() => {
                 />
                 <q-input
                   v-model="form.port"
+                  v-if="form.type !== 'graphite'"
                   dense
                   type="number"
                   min="1"
@@ -493,45 +497,8 @@ onMounted(() => {
                     :options="influxProtocolOptions"
                     :label="gettext('Protocol')"
                   />
-                  <q-input
-                    v-model="form['api-path-prefix']"
-                    dense
-                    :disable="isUdp"
-                    :label="gettext('API Path Prefix')"
-                  />
-                  <q-input
-                    v-model="form.timeout"
-                    dense
-                    type="number"
-                    min="1"
-                    :disable="isUdp"
-                    :label="`${gettext('Timeout')} (s)`"
-                    :error="submitted && Boolean(form.timeout) && !validNumber(form.timeout, 1)"
-                    :error-message="gettext('Invalid value')"
-                  />
                 </template>
-                <template v-else-if="form.type === 'graphite'">
-                  <q-select
-                    v-model="form.proto"
-                    dense
-                    emit-value
-                    map-options
-                    options-dense
-                    :options="graphiteProtocolOptions"
-                    :label="gettext('Protocol')"
-                  />
-                  <q-input
-                    v-model="form.mtu"
-                    dense
-                    type="number"
-                    min="1"
-                    :disable="isGraphiteTcp"
-                    :label="gettext('MTU')"
-                    :error="submitted && Boolean(form.mtu) && !validNumber(form.mtu, 1)"
-                    :error-message="gettext('Invalid value')"
-                  />
-                </template>
-                <template v-else>
+                <template v-else-if="form.type === 'opentelemetry'">
                   <q-select
                     :model-value="form['otel-protocol']"
                     dense
@@ -590,57 +557,25 @@ onMounted(() => {
                     :placeholder="form.action === 'edit' ? gettext('unchanged') : ''"
                     :label="gettext('Token')"
                   />
-                  <q-checkbox
-                    v-model="form['verify-certificate']"
-                    dense
-                    color="primary"
-                    :disable="form.influxdbproto !== 'https'"
-                    :label="gettext('Verify Certificate')"
-                  />
-                  <q-input
-                    v-model="form['max-body-size']"
-                    dense
-                    type="number"
-                    min="1"
-                    :disable="isUdp"
-                    placeholder="25000000"
-                    :label="gettext('Batch Size (bytes)')"
-                    :error="
-                      submitted &&
-                      Boolean(form['max-body-size']) &&
-                      !validNumber(form['max-body-size'], 1)
-                    "
-                    :error-message="gettext('Invalid value')"
-                  />
-                  <q-input
-                    v-model="form.mtu"
-                    dense
-                    type="number"
-                    min="1"
-                    :disable="!isUdp"
-                    placeholder="1500"
-                    :label="gettext('MTU')"
-                    :error="submitted && Boolean(form.mtu) && !validNumber(form.mtu, 1)"
-                    :error-message="gettext('Invalid value')"
-                  />
                 </template>
                 <template v-else-if="form.type === 'graphite'">
+                  <q-input
+                    v-model="form.port"
+                    dense
+                    type="number"
+                    min="1"
+                    max="65536"
+                    :label="`${gettext('Port')} *`"
+                    :error="submitted && !validNumber(form.port, 1, 65536)"
+                    :error-message="
+                      form.port ? gettext('Invalid value') : gettext('This field is required')
+                    "
+                  />
                   <q-input
                     v-model="form.path"
                     dense
                     placeholder="proxmox"
                     :label="gettext('Path')"
-                  />
-                  <q-input
-                    v-model="form.timeout"
-                    dense
-                    type="number"
-                    min="1"
-                    :disable="!isGraphiteTcp"
-                    placeholder="1"
-                    :label="gettext('TCP Timeout')"
-                    :error="submitted && Boolean(form.timeout) && !validNumber(form.timeout, 1)"
-                    :error-message="gettext('Invalid value')"
                   />
                 </template>
                 <template v-else>
@@ -671,13 +606,111 @@ onMounted(() => {
                 </template>
               </div>
             </div>
+            <div
+              v-if="showAdvanced"
+              class="row q-col-gutter-lg q-mt-sm metric-server-form"
+            >
+              <template v-if="form.type === 'influxdb'">
+                <div class="col">
+                  <q-input
+                    v-model="form['api-path-prefix']"
+                    dense
+                    :disable="isUdp"
+                    :label="gettext('API Path Prefix')"
+                  />
+                  <q-input
+                    v-model="form.timeout"
+                    dense
+                    type="number"
+                    min="1"
+                    :disable="isUdp"
+                    :label="`${gettext('Timeout')} (s)`"
+                    :error="submitted && Boolean(form.timeout) && !validNumber(form.timeout, 1)"
+                    :error-message="gettext('Invalid value')"
+                  />
+                  <q-checkbox
+                    v-model="form['verify-certificate']"
+                    dense
+                    color="primary"
+                    :disable="form.influxdbproto !== 'https'"
+                    :label="gettext('Verify Certificate')"
+                  />
+                </div>
+                <div class="col">
+                  <q-input
+                    v-model="form['max-body-size']"
+                    dense
+                    type="number"
+                    min="1"
+                    :disable="isUdp"
+                    placeholder="25000000"
+                    :label="gettext('Batch Size (bytes)')"
+                    :error="
+                      submitted &&
+                      Boolean(form['max-body-size']) &&
+                      !validNumber(form['max-body-size'], 1)
+                    "
+                    :error-message="gettext('Invalid value')"
+                  />
+                  <q-input
+                    v-model="form.mtu"
+                    dense
+                    type="number"
+                    min="1"
+                    :disable="!isUdp"
+                    placeholder="1500"
+                    :label="gettext('MTU')"
+                    :error="submitted && Boolean(form.mtu) && !validNumber(form.mtu, 1)"
+                    :error-message="gettext('Invalid value')"
+                  />
+                </div>
+              </template>
+              <template v-else-if="form.type === 'graphite'">
+                <div class="col">
+                  <q-select
+                    v-model="form.proto"
+                    dense
+                    emit-value
+                    map-options
+                    options-dense
+                    :options="graphiteProtocolOptions"
+                    :label="gettext('Protocol')"
+                  />
+                </div>
+                <div class="col">
+                  <q-input
+                    v-model="form.mtu"
+                    dense
+                    type="number"
+                    min="1"
+                    :disable="isGraphiteTcp"
+                    :label="gettext('MTU')"
+                    :error="submitted && Boolean(form.mtu) && !validNumber(form.mtu, 1)"
+                    :error-message="gettext('Invalid value')"
+                  />
+                  <q-input
+                    v-model="form.timeout"
+                    dense
+                    type="number"
+                    min="1"
+                    :disable="!isGraphiteTcp"
+                    placeholder="1"
+                    :label="gettext('TCP Timeout')"
+                    :error="submitted && Boolean(form.timeout) && !validNumber(form.timeout, 1)"
+                    :error-message="gettext('Invalid value')"
+                  />
+                </div>
+              </template>
+            </div>
           </div>
-          <q-expansion-item
-            v-if="form.type === 'opentelemetry'"
+          <div
+            v-if="form.type === 'opentelemetry' && showAdvanced"
             class="q-mt-md u-border"
-            :label="gettext('Advanced JSON Configuration')"
           >
             <div class="q-pa-md metric-server-advanced-form">
+              <div class="q-mb-sm text-weight-medium">
+                {{ gettext('Advanced JSON Configuration') }}
+              </div>
               <q-input
                 v-model="form.headers_advanced"
                 type="textarea"
@@ -693,9 +726,17 @@ onMounted(() => {
                 :label="gettext('Resource Attributes (JSON)')"
               />
             </div>
-          </q-expansion-item>
+          </div>
         </div>
         <template #foot>
+          <q-checkbox
+            v-model="showAdvanced"
+            dense
+            right-label
+            color="primary"
+            class="q-mr-auto"
+            :label="gettext('Advanced')"
+          />
           <q-btn
             no-caps
             flat

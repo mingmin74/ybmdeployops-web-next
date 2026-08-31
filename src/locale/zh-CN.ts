@@ -316,7 +316,7 @@ export default {
   'CT Volumes': 'CT 卷',
   Detail: '详情',
   Back: '返回',
-  'Metric Server': 'Metric Server',
+  'Metric Server': '指标服务器',
   Tasks: '任务',
   Logs: '日志',
   Login: '登录',
