@@ -170,48 +170,6 @@ const hostBootMode = computed(() => {
     return bootInfo.secureboot ? `${gettext('EFI')} (${gettext('Secure Boot')})` : gettext('EFI');
   return '-';
 });
-const repositoryStatus = computed(() => {
-  if (subscriptionActive.value === undefined || !standardRepositories.value.length)
-    return 'unknown';
-
-  const getRepositoryStatus = (handle: string) =>
-    Boolean(standardRepositories.value.find((repository) => repository.handle === handle)?.status);
-  const enterpriseRepository = getRepositoryStatus('enterprise');
-  const noSubscriptionRepository = getRepositoryStatus('no-subscription');
-  const testRepository = getRepositoryStatus('test');
-
-  if (noSubscriptionRepository || testRepository) return 'non-production';
-  if (subscriptionActive.value && enterpriseRepository) return 'ok';
-  if (!subscriptionActive.value && enterpriseRepository) return 'no-subscription';
-  if (!enterpriseRepository || !noSubscriptionRepository || !testRepository) return 'no-repository';
-  return 'unknown';
-});
-const repositoryStatusInfo = computed(() => {
-  switch (repositoryStatus.value) {
-    case 'ok':
-      return {
-        value: gettext('Production-ready Enterprise repository enabled'),
-        className: 'good',
-      };
-    case 'no-subscription':
-      return {
-        value: gettext('Enterprise repository needs valid subscription'),
-        className: 'warning',
-      };
-    case 'non-production':
-      return {
-        value: gettext('Non production-ready repository enabled!'),
-        className: 'warning',
-      };
-    case 'no-repository':
-      return {
-        value: gettext('No Proxmox VE repository enabled!'),
-        className: 'critical',
-      };
-    default:
-      return { value: '-', className: 'faded' };
-  }
-});
 const hostInfoRows = computed<Array<{ label: string; value: string; className?: string }>>(() => [
   { label: gettext('CPU(s)'), value: hostCpuDescription.value },
   { label: gettext('Kernel Version'), value: hostKernelVersion.value },
@@ -227,11 +185,6 @@ const hostInfoRows = computed<Array<{ label: string; value: string; className?: 
     label: gettext('KSM Sharing'),
     value: formatBytes(Number((current.value.ksm as PveRecord | undefined)?.shared || 0)),
   },
-  /* {
-    label: gettext('Repository Status'),
-    value: repositoryStatusInfo.value.value,
-    className: repositoryStatusInfo.value.className,
-  }, */
 ]);
 const hostBasicTitle = computed(
   () =>

@@ -1,5 +1,6 @@
 import { request } from './request';
 import type { PveRecord } from './resources';
+import { textValue } from '@/utils/pveFormat';
 
 export function getNodeFirewallRules(node: string) {
   return request<PveRecord[]>(`/api2/json/nodes/${node}/firewall/rules`, {
@@ -269,7 +270,7 @@ export function deleteFirewallRuleByBaseUrl(
   digest?: unknown,
 ) {
   const url = `${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(String(pos))}`;
-  return request(digest ? `${url}?digest=${encodeURIComponent(String(digest))}` : url, {
+  return request(digest ? `${url}?digest=${encodeURIComponent(textValue(digest))}` : url, {
     method: 'DELETE',
   });
 }
@@ -392,7 +393,7 @@ export function updateFirewallGroup(data: PveRecord) {
 
 export function deleteFirewallGroup(group: string, digest?: unknown) {
   const url = `/api2/extjs/cluster/firewall/groups/${encodeURIComponent(group)}`;
-  return request(digest ? `${url}?digest=${encodeURIComponent(String(digest))}` : url, { method: 'DELETE' });
+  return request(digest ? `${url}?digest=${encodeURIComponent(textValue(digest))}` : url, { method: 'DELETE' });
 }
 
 export function getFirewallGroupRules(group: string) {
@@ -450,7 +451,7 @@ export function updateFirewallIpset(data: PveRecord) {
 
 export function deleteFirewallIpset(name: string, digest?: unknown) {
   const url = `/api2/extjs/cluster/firewall/ipset/${encodeURIComponent(name)}`;
-  return request(digest ? `${url}?digest=${encodeURIComponent(String(digest))}` : url, { method: 'DELETE' });
+  return request(digest ? `${url}?digest=${encodeURIComponent(textValue(digest))}` : url, { method: 'DELETE' });
 }
 
 export function getFirewallIpsetEntries(name: string) {
@@ -473,5 +474,5 @@ export function updateFirewallIpsetEntry(name: string, cidr: string, data: PveRe
 
 export function deleteFirewallIpsetEntry(name: string, cidr: string, digest?: unknown) {
   const url = `/api2/extjs/cluster/firewall/ipset/${encodeURIComponent(name)}/${encodeURIComponent(cidr)}`;
-  return request(digest ? `${url}?digest=${encodeURIComponent(String(digest))}` : url, { method: 'DELETE' });
+  return request(digest ? `${url}?digest=${encodeURIComponent(textValue(digest))}` : url, { method: 'DELETE' });
 }

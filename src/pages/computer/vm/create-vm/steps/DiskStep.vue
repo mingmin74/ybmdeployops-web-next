@@ -406,7 +406,7 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                         @update:model-value="
                           (storage) => {
                             disk.importFrom = '';
-                            loadImportImages(storage);
+                            if (typeof storage === 'string') loadImportImages(storage);
                           }
                         "
                       />

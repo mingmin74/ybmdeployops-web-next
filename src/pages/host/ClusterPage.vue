@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { QTableColumn } from 'quasar';
-import { computed, onMounted, ref, shallowRef } from 'vue';
-import { getClusterConfig, getClusterNodes, type PveRecord } from '@/api/resources';
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue';
+import { getClusterJoinInfo } from '@/api/cluster';
+import { getClusterNodes, type PveRecord } from '@/api/resources';
+import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
+import ClusterActionDialogs from './components/ClusterActionDialogs.vue';
 import { gettext } from '@/locale';
 
 const loading = ref(false);
@@ -11,6 +14,13 @@ const clusterInfo = ref({
   version: '',
   nodeNumber: 0,
 });
+const joinInfo = shallowRef<PveRecord>({});
+const actionMode = shallowRef<'create' | 'information' | 'join' | null>(null);
+const taskVisible = shallowRef(false);
+const taskUpid = shallowRef('');
+const taskTitle = shallowRef('');
+let infoTimer: number | undefined;
+let nodesTimer: number | undefined;
 
 const inCluster = computed(() => Boolean(clusterInfo.value.name));
 
@@ -21,44 +31,93 @@ function toText(value: unknown) {
   return '';
 }
 
-const columns: QTableColumn<PveRecord>[] = [
+const columns = computed<QTableColumn<PveRecord>[]>(() => [
   { name: 'node', required: true, label: gettext('Node Name'), field: 'node', align: 'left' },
   { name: 'node_id', label: gettext('Node ID'), align: 'left', field: 'nodeid' },
   { name: 'quorum_votes', label: gettext('Votes'), field: 'quorum_votes', align: 'left' },
-  { name: 'ring0_addr', label: gettext('Link 0'), field: 'ring0_addr', align: 'left' },
-  { name: 'ring1_addr', label: gettext('Link 1'), field: 'ring1_addr', align: 'left' },
-];
+  ...Array.from({ length: 8 }, (_, index) => index)
+    .filter((index) => rows.value.some((row) => Boolean(row[`ring${index}_addr`])))
+    .map((index) => ({ name: `ring${index}_addr`, label: `${gettext('Link')} ${index}`, field: `ring${index}_addr`, align: 'left' as const })),
+]);
 
 async function loadClusterInfo() {
   loading.value = true;
   try {
-    const [configResponse, nodesResponse] = await Promise.all([
-      getClusterConfig(),
-      getClusterNodes(),
+    const [infoResponse, nodesResponse] = await Promise.all([
+      getClusterJoinInfo().catch(() => ({ data: {} })),
+      getClusterNodes().catch(() => ({ data: [] as PveRecord[] })),
     ]);
-    const config = configResponse.data || {};
-    const totem = (config.totem || {}) as PveRecord;
-    rows.value = nodesResponse.data || [];
+    const info: PveRecord = infoResponse.data || {};
+    const totem = (info.totem || {}) as PveRecord;
+    joinInfo.value = info;
+    rows.value = [...(nodesResponse.data || [])].sort((left, right) => toText(left.node).localeCompare(toText(right.node)));
     clusterInfo.value = {
       name: toText(totem.cluster_name),
       version: toText(totem.config_version),
-      nodeNumber: rows.value.length,
+      nodeNumber: Array.isArray(info.nodelist) ? info.nodelist.length : rows.value.length,
     };
   } finally {
     loading.value = false;
   }
 }
 
+async function loadJoinInfo() {
+  const response = await getClusterJoinInfo().catch(() => ({ data: {} }));
+  const info: PveRecord = response.data || {};
+  joinInfo.value = info;
+  const totem = (info.totem || {}) as PveRecord;
+  clusterInfo.value = { name: toText(totem.cluster_name), version: toText(totem.config_version), nodeNumber: Array.isArray(info.nodelist) ? info.nodelist.length : rows.value.length };
+}
+async function loadNodes() {
+  const response = await getClusterNodes().catch(() => ({ data: [] as PveRecord[] }));
+  rows.value = [...(response.data || [])].sort((left, right) => toText(left.node).localeCompare(toText(right.node)));
+}
+function openTask(upid: string, title: string) { taskUpid.value = upid; taskTitle.value = title; taskVisible.value = upid.startsWith('UPID:'); }
+function taskNode() { return taskUpid.value.split(':')[1] || toText(joinInfo.value.preferred_node) || toText(rows.value[0]?.node); }
+
 onMounted(() => {
   void loadClusterInfo();
+  infoTimer = window.setInterval(() => void loadJoinInfo(), 15000);
+  nodesTimer = window.setInterval(() => void loadNodes(), 5000);
 });
+onBeforeUnmount(() => { if (infoTimer) window.clearInterval(infoTimer); if (nodesTimer) window.clearInterval(nodesTimer); });
 </script>
 
 <template>
   <div class="q-ma-md">
     <q-card class="q-mt-sm no-border-radius no-shadow">
       <q-card-section>
-        <div class="row q-gutter-md q-mb-md">
+        <div class="row q-gutter-sm q-mb-md">
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            class="u-button"
+            :color="inCluster ? 'grey' : 'primary'"
+            :disable="inCluster"
+            :label="gettext('Create Cluster')"
+            @click="actionMode = 'create'"
+          />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            class="u-button"
+            :color="inCluster ? 'primary' : 'grey'"
+            :disable="!inCluster"
+            :label="gettext('Join Information')"
+            @click="actionMode = 'information'"
+          />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            class="u-button"
+            :color="inCluster ? 'grey' : 'primary'"
+            :disable="inCluster"
+            :label="gettext('Join Cluster')"
+            @click="actionMode = 'join'"
+          />
           <q-btn
             no-caps
             outline
@@ -68,18 +127,18 @@ onMounted(() => {
             :label="gettext('Refresh')"
             @click="loadClusterInfo"
           />
-          <div v-if="inCluster" class="row q-gutter-lg items-center">
-            <div>
-              {{ gettext('Cluster Name') }}:
-              <span class="text-grey-8">{{ clusterInfo.name || '-' }}</span>
+          <div v-if="inCluster" class="cluster-summary">
+            <div class="cluster-summary-item">
+              <span>{{ gettext('Cluster Name') }}</span>
+              <strong>{{ clusterInfo.name || '-' }}</strong>
             </div>
-            <div>
-              {{ gettext('Config Version') }}:
-              <span class="text-grey-8">{{ clusterInfo.version || '-' }}</span>
+            <div class="cluster-summary-item">
+              <span>{{ gettext('Config Version') }}</span>
+              <strong>{{ clusterInfo.version || '-' }}</strong>
             </div>
-            <div>
-              {{ gettext('Number of Nodes') }}:
-              <span class="text-grey-8">{{ clusterInfo.nodeNumber }}</span>
+            <div class="cluster-summary-item">
+              <span>{{ gettext('Number of Nodes') }}</span>
+              <strong>{{ clusterInfo.nodeNumber }}</strong>
             </div>
           </div>
           <div v-else class="row items-center text-red">
@@ -106,5 +165,31 @@ onMounted(() => {
         </q-table>
       </q-card-section>
     </q-card>
+    <ClusterActionDialogs v-model="actionMode" :join-info="joinInfo" @task="openTask" />
+    <TaskOutputDialog v-model="taskVisible" :node="taskNode()" :upid="taskUpid" :title="taskTitle" @finished="loadClusterInfo" />
   </div>
 </template>
+
+<style scoped>
+.cluster-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  align-items: center;
+  margin-left: 8px;
+}
+
+.cluster-summary-item {
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+  color: #666;
+  font-size: 12px;
+}
+
+.cluster-summary-item strong {
+  color: #333;
+  font-size: 13px;
+  font-weight: 500;
+}
+</style>

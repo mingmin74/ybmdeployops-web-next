@@ -3,6 +3,7 @@ import { Dialog } from 'quasar';
 import type { QTableColumn } from 'quasar';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useSessionStore } from '@/stores/session';
+import type { PveRecord } from '@/api/resources';
 import {
   createUser,
   getGroups,
@@ -768,7 +769,7 @@ defineExpose({ reload: loadUsersData });
                   row-key="groupid"
                   field-style="standard"
                   :rows="groupRows"
-                  :columns="groupColumns"
+                  :columns="groupColumns as QTableColumn<PveRecord>[]"
                   :display-value="formData.groups.join(', ')"
                   :get-row-value="(row) => String(row.groupid || '')"
                 />

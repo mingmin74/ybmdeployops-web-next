@@ -3,7 +3,6 @@ import { shallowRef } from 'vue';
 import { gettext } from '@/locale';
 import BackupTasksPanel from './components/BackupTasksPanel.vue';
 import ReplicationTasksPanel from './components/ReplicationTasksPanel.vue';
-import BksManagementPanel from './components/BksManagementPanel.vue';
 
 const activeTab = shallowRef('backup');
 const tabs = [

@@ -8,6 +8,7 @@ import NodeDiskTablePage from '@/components/NodeDiskTablePage.vue';
 import { getNodeDiskSmart, getNodeDisks, initializeNodeDiskGpt, wipeNodeDisk, type PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
 import { formatBytes } from '@/utils/format';
+import { textValue } from '@/utils/pveFormat';
 
 const props = defineProps<{
   embedded?: boolean;
@@ -37,7 +38,7 @@ const columns: QTableColumn<PveRecord>[] = [
     align: 'left',
     sortable: true,
   },
-  { name: 'gpt', label: 'GPT', field: (row) => Boolean(row.gpt) ? gettext('Yes') : gettext('No'), align: 'left', sortable: true },
+  { name: 'gpt', label: 'GPT', field: (row) => row.gpt ? gettext('Yes') : gettext('No'), align: 'left', sortable: true },
   { name: 'model', label: gettext('Model'), field: 'model', align: 'left', sortable: true },
   { name: 'serial', label: gettext('Serial'), field: 'serial', align: 'left', sortable: true },
   { name: 'status', label: 'S.M.A.R.T', field: 'status', align: 'left', sortable: true },
@@ -45,17 +46,17 @@ const columns: QTableColumn<PveRecord>[] = [
 ];
 
 function diskType(value: unknown) {
-  return ({ ssd: 'SSD', hdd: gettext('Hard Disk'), usb: 'USB' } as Record<string, string>)[String(value)] || String(value || '-');
+  return ({ ssd: 'SSD', hdd: gettext('Hard Disk'), usb: 'USB' } as Record<string, string>)[String(value)] || textValue(value, '-');
 }
 
 function diskUsage(value: unknown) {
-  return ({ bios: gettext('BIOS boot'), zfsreserved: gettext('ZFS reserved'), efi: 'EFI', lvm: 'LVM', zfs: 'ZFS' } as Record<string, string>)[String(value)] || String(value || '-');
+  return ({ bios: gettext('BIOS boot'), zfsreserved: gettext('ZFS reserved'), efi: 'EFI', lvm: 'LVM', zfs: 'ZFS' } as Record<string, string>)[String(value)] || textValue(value, '-');
 }
 
 function formatSmartValue(key: string, value: unknown) {
-  if (key === 'temperature' && Number.isFinite(Number(value))) return `${value} °C`;
+  if (key === 'temperature' && Number.isFinite(Number(value))) return `${textValue(value)} °C`;
   if (['passed', 'health'].includes(key)) return Number(value) === 1 || value === true || String(value).toLowerCase() === 'passed' ? gettext('Passed') : gettext('Failed');
-  return String(value ?? '-');
+  return textValue(value, '-');
 }
 
 async function loadRows(node: string) {
@@ -69,9 +70,9 @@ async function loadRows(node: string) {
   return normalize(response.data || []);
 }
 
-function diskName(row?: PveRecord) { return String(row?.devpath || row?.name || row?.device || ''); }
+function diskName(row?: PveRecord) { return textValue(row?.devpath || row?.name || row?.device); }
 function openTask(upid: unknown, title: string) {
-  taskUpid.value = String(upid || ''); taskTitle.value = title;
+  taskUpid.value = textValue(upid); taskTitle.value = title;
   taskVisible.value = taskUpid.value.startsWith('UPID:');
   if (!taskVisible.value) void table.value?.reload();
 }
@@ -87,7 +88,7 @@ function initializeGpt(row?: PveRecord) {
 }
 function wipe(row?: PveRecord) {
   const disk = diskName(row); if (!props.node || !disk || row?.parent) return;
-  Dialog.create({ title: gettext('Wipe Disk'), message: `${gettext('All data on the device will be lost!')}<br><br>${disk}<br>${gettext('Usage')}: ${diskUsage(row?.used)}<br>${gettext('Size')}: ${formatBytes(row?.size)}<br>${gettext('Serial')}: ${row?.serial || '-'}`, html: true, cancel: true, persistent: true }).onOk(() => void wipeNodeDisk(props.node!, disk).then((result) => openTask(result.data, gettext('Wipe Disk'))));
+  Dialog.create({ title: gettext('Wipe Disk'), message: `${gettext('All data on the device will be lost!')}<br><br>${disk}<br>${gettext('Usage')}: ${diskUsage(row?.used)}<br>${gettext('Size')}: ${formatBytes(row?.size)}<br>${gettext('Serial')}: ${textValue(row?.serial, '-')}`, html: true, cancel: true, persistent: true }).onOk(() => void wipeNodeDisk(props.node!, disk).then((result) => openTask(result.data, gettext('Wipe Disk'))));
 }
 function handleAction(name: string, row?: PveRecord) {
   if (name === 'smart') void showSmart(row);

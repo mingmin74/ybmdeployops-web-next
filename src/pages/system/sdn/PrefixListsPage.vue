@@ -193,7 +193,7 @@ function removeEntry() {
     ),
     cancel: true,
     persistent: true,
-  }).onOk(() => void deleteSdnPrefixListEntry(id, String(seq)).then(reloadEntries));
+  }).onOk(() => void deleteSdnPrefixListEntry(id, textValue(seq)).then(reloadEntries));
 }
 
 watch(selectedPrefixList, reloadEntries);

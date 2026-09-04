@@ -77,6 +77,18 @@ export function shutdownNode(node: string) {
   });
 }
 
+/** Runs a node-scoped guest bulk operation, matching PVE's node BulkAction window. */
+export function runNodeBulkAction(
+  node: string,
+  action: 'startall' | 'stopall' | 'suspendall' | 'migrateall',
+  data: Record<string, unknown>
+) {
+  return request<string>(
+    `/api2/extjs/nodes/${encodeURIComponent(node)}/${action}`,
+    { method: 'POST', data, notifyOnError: true }
+  );
+}
+
 export function getNodeSpiceShell(node: string, proxy: string) {
   return request<Record<string, string>>(
     `/api2/extjs/nodes/${encodeURIComponent(node)}/spiceshell`,

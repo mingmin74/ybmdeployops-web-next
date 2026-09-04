@@ -6,6 +6,7 @@ import { applyNodeNetwork, createNodeNetwork, deleteNodeNetwork, getNodeNetwork,
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
+import { textValue } from '@/utils/pveFormat';
 import { useSessionStore } from '@/stores/session';
 type NetworkType = 'bridge'|'bond'|'OVSBridge'|'OVSBond'|'OVSIntPort'|'OVSPort'|'vlan'|'eth';
 type Form = Record<string, string | boolean> & {
@@ -17,9 +18,9 @@ let loadId=0,editId=0;
 const canAudit=computed(()=>Boolean((session.caps as {nodes?:Record<string,unknown>}).nodes?.['Sys.Audit']));
 const canModify=computed(()=>Boolean((session.caps as {nodes?:Record<string,unknown>}).nodes?.['Sys.Modify']));
 const selectedRow=computed(()=>selected.value[0]); const editable=computed(()=>Boolean(selectedRow.value&&selectedRow.value.type!=='unknown'));
-function str(row:Record<string,unknown>,key:string){const value=row[key];return value==null?'':String(value)}
+function str(row:Record<string,unknown>,key:string){const value=row[key];return textValue(value)}
 function bool(row:Record<string,unknown>,key:string){const value=row[key];return value===true||value===1||value==='1'}
-function typeLabel(type:unknown){return ({eth:gettext('Network Device'),bridge:gettext('Linux Bridge'),bond:gettext('Linux Bond'),vlan:gettext('Linux VLAN'),OVSBridge:gettext('OVS Bridge'),OVSBond:gettext('OVS Bond'),OVSPort:gettext('OVS Port'),OVSIntPort:gettext('OVS IntPort')}as Record<string,string>)[String(type)]||String(type||'-')}
+function typeLabel(type:unknown){return ({eth:gettext('Network Device'),bridge:gettext('Linux Bridge'),bond:gettext('Linux Bond'),vlan:gettext('Linux VLAN'),OVSBridge:gettext('OVS Bridge'),OVSBond:gettext('OVS Bond'),OVSPort:gettext('OVS Port'),OVSIntPort:gettext('OVS IntPort')}as Record<string,string>)[String(type)]||textValue(type,'-')}
 function next(type:NetworkType){const p=type==='bond'||type==='OVSBond'?'bond':type==='vlan'?'vlan':'vmbr',used=new Set(rows.value.map(r=>str(r,'iface')));let n=0;while(used.has(`${p}${n}`))n++;return `${p}${n}`}
 function empty(type:NetworkType='bridge'):Form{return {type,iface:type==='OVSIntPort'?'':next(type),autostart:true,cidr:'',gateway:'',cidr6:'',gateway6:'',comments:'',mtu:'',bridge_ports:'',bridge_vlan_aware:false,bridge_vids:'',slaves:'',bond_mode:type==='OVSBond'?'active-backup':type==='bond'?'balance-rr':'','bond-primary':'',bond_xmit_hash_policy:'','vlan-raw-device':'','vlan-id':'',ovs_ports:'',ovs_bonds:'',ovs_bridge:'',ovs_tag:'',ovs_options:''}}
 const form=ref<Form>(empty());

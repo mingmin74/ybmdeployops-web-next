@@ -160,7 +160,7 @@ const overviewIllustration = computed(() =>
 const vmName = computed(() => textValue(current.value.name || selectedVm.value.name, '-'));
 const vmid = computed(() => textValue(current.value.vmid || selectedVm.value.vmid, '-'));
 const nodeName = computed(() => textValue(selectedVm.value.node || current.value.node, '-'));
-const currentStatus = computed(() =>
+const currentStatusText = computed(() =>
   textValue(
     current.value.qmpstatus && current.value.qmpstatus !== current.value.status
       ? `${textValue(current.value.status)}(${textValue(current.value.qmpstatus)})`
@@ -264,8 +264,8 @@ const basicInfoRows = computed(() => [
   { label: gettext('Uptime'), value: formatUptime(current.value.uptime) },
   {
     label: gettext('Status'),
-    value: statusText(currentStatus.value),
-    tone: statusColor(currentStatus.value),
+    value: statusText(currentStatusText.value),
+    tone: statusColor(currentStatusText.value),
   },
   { label: gettext('HA Status'), value: haStatus.value },
   {

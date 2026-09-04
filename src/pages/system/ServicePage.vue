@@ -349,14 +349,6 @@ function serviceStatusColor(service: PveService) {
   return 'primary';
 }
 
-function serviceStateDetails(service: PveService) {
-  return [
-    `sub-state: ${serviceSubState(service)}`,
-    `active-state: ${service['active-state'] || 'unknown'}`,
-    `unit-state: ${service['unit-state'] || 'unknown'}`,
-  ].join(' · ');
-}
-
 function canRunServiceAction(
   service: PveService | undefined,
   action: 'start' | 'stop' | 'restart'

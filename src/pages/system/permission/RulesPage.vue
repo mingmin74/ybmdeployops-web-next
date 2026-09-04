@@ -55,7 +55,7 @@ const selectedRule = computed(() => selectedRules.value[0]);
 const canRemove = computed(() => selectedRules.value.length === 1);
 const roleRows = computed<PveRecord[]>(() => roleOptions.value.map((role) => ({ ...role })));
 const selectedRoleLabel = computed(
-  () => roleRows.value.find((role) => textValue(role.roleid) === form.role)?.roleid || form.role
+  () => textValue(roleRows.value.find((role) => textValue(role.roleid) === form.role)?.roleid || form.role)
 );
 const roleColumns: QTableColumn<PveRecord>[] = [
   { name: 'roleid', label: gettext('Role'), field: 'roleid', align: 'left', sortable: true },

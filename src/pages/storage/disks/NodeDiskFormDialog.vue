@@ -2,6 +2,7 @@
 import { computed, reactive, watch } from 'vue';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
+import { textValue } from '@/utils/pveFormat';
 
 export interface NodeDiskFormField {
   name: string;
@@ -18,7 +19,7 @@ const props = defineProps<{ title: string; fields: NodeDiskFormField[]; defaults
 const visible = defineModel<boolean>({ required: true });
 const emit = defineEmits<{ submit: [values: Record<string, unknown>] }>();
 const values = reactive<Record<string, unknown>>({});
-const hasValue = (value: unknown) => value !== undefined && value !== null && String(value).trim() !== '';
+const hasValue = (value: unknown) => textValue(value).trim() !== '';
 const valid = computed(() => props.fields.filter((field) => field.required && (!field.visible || field.visible(values))).every((field) => hasValue(values[field.name])));
 
 watch(visible, (open) => {

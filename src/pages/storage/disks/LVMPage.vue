@@ -8,6 +8,7 @@ import NodeDiskFormDialog, { type NodeDiskFormField } from './NodeDiskFormDialog
 import NodeDiskDestroyDialog from './NodeDiskDestroyDialog.vue';
 import { createNodeLvm, deleteNodeLvm, getNodeUnusedDisks, getNodeLvm, type PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
+import { textValue } from '@/utils/pveFormat';
 import { formatBytes, usagePercent } from '@/utils/format';
 
 const props = defineProps<{
@@ -59,9 +60,9 @@ async function loadRows(node: string) {
   const normalize = (items: PveRecord[], prefix = ''): PveRecord[] => items.map((item, index) => ({ ...item, node, name: item.name || `${node}-${prefix}${index}`, children: Array.isArray(item.children) ? normalize(item.children as PveRecord[], `${prefix}${index}-`) : [] }));
   return normalize(data);
 }
-function openTask(upid: unknown) { taskUpid.value = String(upid || ''); taskVisible.value = taskUpid.value.startsWith('UPID:'); if (!taskVisible.value) void table.value?.reload(); }
+function openTask(upid: unknown) { taskUpid.value = textValue(upid); taskVisible.value = taskUpid.value.startsWith('UPID:'); if (!taskVisible.value) void table.value?.reload(); }
 async function create(values: Record<string, unknown>) { if (!props.node) return; saving.value = true; try { const result = await createNodeLvm(props.node, values); createVisible.value = false; openTask(result.data); } finally { saving.value = false; } }
-function destroy(row?: PveRecord) { destroyName.value = String(row?.name || ''); destroyVisible.value = Boolean(props.node && destroyName.value); }
+function destroy(row?: PveRecord) { destroyName.value = textValue(row?.name); destroyVisible.value = Boolean(props.node && destroyName.value); }
 async function confirmDestroy(params: PveRecord) { if (!props.node || !destroyName.value) return; destroying.value = true; try { const result = await deleteNodeLvm(props.node, destroyName.value, params); destroyVisible.value = false; openTask(result.data); } finally { destroying.value = false; } }
 async function action(name: string, row?: PveRecord) { if (name === 'create' && props.node) { const result = await getNodeUnusedDisks(props.node); diskOptions.value = (result.data || []).map((disk) => ({ label: String(disk.devpath || disk.name), value: String(disk.devpath || disk.name) })); createVisible.value = true; } else if (name === 'destroy') destroy(row); }
 </script>

@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router';
 import { getNodeSpiceShell, getNodes, rebootNode, shutdownNode } from '@/api/host';
 import type { PveNode } from '@/api/resources';
 import UsageProgress from '@/components/UsageProgress.vue';
+import BulkActionDialog, { type NodeBulkAction } from '@/components/BulkActionDialog.vue';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 import { usagePercent } from '@/utils/format';
@@ -20,18 +21,22 @@ const actionLoading = shallowRef(false);
 const filter = shallowRef('');
 const selected = shallowRef<NodeRow[]>([]);
 const nodes = shallowRef<NodeRow[]>([]);
+const bulkActionVisible = shallowRef(false);
+const bulkAction = shallowRef<NodeBulkAction>('startall');
 let refreshTimer: number | undefined;
 
 const selectedNode = computed(() => selected.value[0]);
-const dcCaps = computed(
-  () => (session.caps as unknown as { dc?: Record<string, unknown> }).dc || {}
-);
 const nodeCaps = computed(
   () => (session.caps as unknown as { nodes?: Record<string, unknown> }).nodes || {}
 );
-const canAudit = computed(() => Boolean(dcCaps.value['Sys.Audit']));
+const vmCaps = computed(
+  () => (session.caps as unknown as { vms?: Record<string, unknown> }).vms || {}
+);
 const canPowerManage = computed(() => Boolean(nodeCaps.value['Sys.PowerMgmt']));
 const canConsole = computed(() => Boolean(nodeCaps.value['Sys.Console']));
+const canBulkPowerManage = computed(() => Boolean(vmCaps.value['VM.PowerMgmt']));
+const canBulkMigrate = computed(() => Boolean(vmCaps.value['VM.Migrate']) && nodes.value.length > 1);
+const canBulkAction = computed(() => canUseSelectedNode.value && (canBulkPowerManage.value || canBulkMigrate.value));
 const canUseSelectedNode = computed(() => selectedNode.value?.status === 'online');
 const nodeColumns: QTableColumn<NodeRow>[] = [
   {
@@ -89,8 +94,7 @@ async function loadNodes() {
   }
 }
 
-function openNodeDetail() {
-  const node = selectedNode.value;
+function openNodeDetail(node = selectedNode.value) {
   if (!node) return;
   selected.value = [node];
   void router.push({ name: 'host-node-detail', params: { node: node.node } });
@@ -166,23 +170,10 @@ async function downloadSpiceShell() {
   }
 }
 
-function openNodeAction(
-  action:
-    | 'network'
-    | 'setting'
-    | 'firewall'
-    | 'taskHistory'
-    | 'subscription'
-    | 'packageversion'
-    | 'systemreport'
-) {
-  const node = selectedNode.value;
-  if (!node || node.status === 'offline') return;
-
-  $q.notify({
-    type: 'info',
-    message: `${gettext('Node')} ${node.node}: ${gettext(action)}`,
-  });
+function openBulkAction(action: NodeBulkAction) {
+  if (!canBulkAction.value) return;
+  bulkAction.value = action;
+  bulkActionVisible.value = true;
 }
 
 onMounted(() => {
@@ -224,7 +215,7 @@ onBeforeUnmount(() => {
               :color="selectedNode ? 'primary' : 'grey'"
               :disable="!selectedNode"
               :label="gettext('Node Details')"
-              @click="openNodeDetail"
+              @click="openNodeDetail()"
             />
             <q-btn
               v-if="canPowerManage"
@@ -292,69 +283,46 @@ onBeforeUnmount(() => {
               outline
               size="12px"
               class="u-button"
-              :color="canUseSelectedNode ? 'primary' : 'grey'"
-              :disable="!canUseSelectedNode"
-              :label="`${gettext('More')} ${gettext('Actions')}`"
+              :color="canBulkAction ? 'primary' : 'grey'"
+              :disable="!canBulkAction"
+              :label="`${gettext('Bulk')} ${gettext('Actions')}`"
             >
               <q-list>
                 <q-item
-                  v-if="canAudit"
                   v-close-popup
                   dense
                   clickable
-                  @click="openNodeAction('network')"
+                  :disable="!canBulkPowerManage"
+                  @click="openBulkAction('startall')"
                 >
-                  <q-item-section>{{ gettext('Network') }}</q-item-section>
-                </q-item>
-                <q-item
-                  v-if="canAudit"
-                  v-close-popup
-                  dense
-                  clickable
-                  @click="openNodeAction('setting')"
-                >
-                  <q-item-section>{{ gettext('Setting') }}</q-item-section>
-                </q-item>
-                <q-item
-                  v-if="canAudit"
-                  v-close-popup
-                  dense
-                  clickable
-                  @click="openNodeAction('firewall')"
-                >
-                  <q-item-section>{{ gettext('Firewall') }}</q-item-section>
+                  <q-item-section>{{ gettext('Bulk Start') }}</q-item-section>
                 </q-item>
                 <q-item
                   v-close-popup
                   dense
                   clickable
-                  @click="openNodeAction('taskHistory')"
+                  :disable="!canBulkPowerManage"
+                  @click="openBulkAction('stopall')"
                 >
-                  <q-item-section>{{ gettext('Task History') }}</q-item-section>
+                  <q-item-section>{{ gettext('Bulk Shutdown') }}</q-item-section>
                 </q-item>
                 <q-item
                   v-close-popup
                   dense
                   clickable
-                  @click="openNodeAction('subscription')"
+                  :disable="!canBulkPowerManage"
+                  @click="openBulkAction('suspendall')"
                 >
-                  <q-item-section>{{ gettext('Subscription') }}</q-item-section>
+                  <q-item-section>{{ gettext('Bulk Suspend') }}</q-item-section>
                 </q-item>
                 <q-item
                   v-close-popup
                   dense
                   clickable
-                  @click="openNodeAction('packageversion')"
+                  :disable="!canBulkMigrate"
+                  @click="openBulkAction('migrateall')"
                 >
-                  <q-item-section>{{ gettext('PackageVersion') }}</q-item-section>
-                </q-item>
-                <q-item
-                  v-close-popup
-                  dense
-                  clickable
-                  @click="openNodeAction('systemreport')"
-                >
-                  <q-item-section>{{ gettext('SystemReport') }}</q-item-section>
+                  <q-item-section>{{ gettext('Bulk Migrate') }}</q-item-section>
                 </q-item>
               </q-list>
             </q-btn-dropdown>
@@ -390,6 +358,19 @@ onBeforeUnmount(() => {
             />
           </q-td>
         </template>
+        <template #body-cell-node="props">
+          <q-td :props="props">
+            <q-btn
+              flat
+              dense
+              no-caps
+              color="primary"
+              class="node-detail-link"
+              :label="props.value"
+              @click.stop="openNodeDetail(props.row)"
+            />
+          </q-td>
+        </template>
         <template #body-cell-disk="props">
           <q-td :props="props"><UsageProgress :percent="props.value" /></q-td>
         </template>
@@ -397,6 +378,12 @@ onBeforeUnmount(() => {
           <q-td :props="props"><UsageProgress :percent="props.value" /></q-td>
         </template>
       </q-table>
+      <BulkActionDialog
+        v-model="bulkActionVisible"
+        :node="selectedNode?.node || ''"
+        :action="bulkAction"
+        @completed="loadNodes"
+      />
     </div>
   </div>
 </template>
@@ -409,5 +396,10 @@ onBeforeUnmount(() => {
   min-height: calc(100vh - 130px);
   padding: 12px;
   background: #fff;
+}
+
+.node-detail-link {
+  min-height: auto;
+  padding: 0;
 }
 </style>
