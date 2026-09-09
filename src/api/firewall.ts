@@ -16,7 +16,7 @@ function vmFirewallBase(node: string, vmid: string | number, guestType: 'qemu' |
 export function getVmFirewallRules(
   node: string,
   vmid: string | number,
-  guestType: 'qemu' | 'lxc' = 'qemu',
+  guestType: 'qemu' | 'lxc' = 'qemu'
 ) {
   return request<PveRecord[]>(`${vmFirewallBase(node, vmid, guestType)}/rules`, {
     method: 'GET',
@@ -28,7 +28,7 @@ export function createVmFirewallRule(
   node: string,
   vmid: string | number,
   data: PveRecord,
-  guestType: 'qemu' | 'lxc' = 'qemu',
+  guestType: 'qemu' | 'lxc' = 'qemu'
 ) {
   return request(`${vmFirewallBase(node, vmid, guestType)}/rules`, { method: 'POST', data });
 }
@@ -38,14 +38,14 @@ export function updateVmFirewallRule(
   vmid: string | number,
   pos: string | number,
   data: PveRecord,
-  guestType: 'qemu' | 'lxc' = 'qemu',
+  guestType: 'qemu' | 'lxc' = 'qemu'
 ) {
   return request(
     `${vmFirewallBase(node, vmid, guestType)}/rules/${encodeURIComponent(String(pos))}`,
     {
       method: 'PUT',
       data,
-    },
+    }
   );
 }
 
@@ -54,21 +54,21 @@ export function deleteVmFirewallRule(
   vmid: string | number,
   pos: string | number,
   digest?: unknown,
-  guestType: 'qemu' | 'lxc' = 'qemu',
+  guestType: 'qemu' | 'lxc' = 'qemu'
 ) {
   return request(
     `${vmFirewallBase(node, vmid, guestType)}/rules/${encodeURIComponent(String(pos))}`,
     {
       method: 'DELETE',
       ...(digest ? { data: { digest } } : {}),
-    },
+    }
   );
 }
 
 export function getVmFirewallOptions(
   node: string,
   vmid: string | number,
-  guestType: 'qemu' | 'lxc' = 'qemu',
+  guestType: 'qemu' | 'lxc' = 'qemu'
 ) {
   return request<PveRecord>(`${vmFirewallBase(node, vmid, guestType)}/options`, {
     method: 'GET',
@@ -80,7 +80,7 @@ export function updateVmFirewallOptions(
   node: string,
   vmid: string | number,
   data: PveRecord,
-  guestType: 'qemu' | 'lxc' = 'qemu',
+  guestType: 'qemu' | 'lxc' = 'qemu'
 ) {
   return request(`${vmFirewallBase(node, vmid, guestType)}/options`, { method: 'PUT', data });
 }
@@ -89,7 +89,7 @@ export function getVmFirewallLogs(
   node: string,
   vmid: string | number,
   params: PveRecord,
-  guestType: 'qemu' | 'lxc' = 'qemu',
+  guestType: 'qemu' | 'lxc' = 'qemu'
 ) {
   return request<PveRecord[]>(
     `/api2/extjs/nodes/${encodeURIComponent(node)}/${guestType}/${encodeURIComponent(String(vmid))}/firewall/log`,
@@ -97,7 +97,7 @@ export function getVmFirewallLogs(
       method: 'GET',
       params,
       notifyOnError: true,
-    },
+    }
   ) as Promise<{ data?: PveRecord[]; total?: number }>;
 }
 
@@ -116,7 +116,7 @@ export function updateVmFirewallAlias(
   node: string,
   vmid: string | number,
   name: string,
-  data: PveRecord,
+  data: PveRecord
 ) {
   return request(`${vmFirewallBase(node, vmid)}/aliases/${encodeURIComponent(name)}`, {
     method: 'PUT',
@@ -158,7 +158,7 @@ export function createVmFirewallIpsetEntry(
   node: string,
   vmid: string | number,
   name: string,
-  data: PveRecord,
+  data: PveRecord
 ) {
   return request(`${vmFirewallBase(node, vmid)}/ipset/${encodeURIComponent(name)}`, {
     method: 'POST',
@@ -170,11 +170,11 @@ export function deleteVmFirewallIpsetEntry(
   node: string,
   vmid: string | number,
   name: string,
-  cidr: string,
+  cidr: string
 ) {
   return request(
     `${vmFirewallBase(node, vmid)}/ipset/${encodeURIComponent(name)}/${encodeURIComponent(cidr)}`,
-    { method: 'DELETE' },
+    { method: 'DELETE' }
   );
 }
 
@@ -205,11 +205,11 @@ export function updateNodeFirewallOptions(node: string, data: PveRecord) {
 }
 
 export function getNodeFirewallLogs(node: string, params: PveRecord) {
-  return request<{ data?: PveRecord[]; total?: number }>(`/api2/extjs/nodes/${node}/firewall/log`, {
+  return request<PveRecord[]>(`/api2/extjs/nodes/${node}/firewall/log`, {
     method: 'GET',
     params,
     notifyOnError: true,
-  });
+  }) as Promise<{ data?: PveRecord[]; total?: number }>;
 }
 
 export function getFirewallRules() {
@@ -243,10 +243,10 @@ export function getFirewallRulesByBaseUrl(baseUrl: string) {
 }
 
 export function getFirewallRuleByBaseUrl(baseUrl: string, pos: string | number) {
-  return request<PveRecord>(
-    `${firewallUrl(baseUrl, 'json')}/${encodeURIComponent(String(pos))}`,
-    { method: 'GET', notifyOnError: true },
-  );
+  return request<PveRecord>(`${firewallUrl(baseUrl, 'json')}/${encodeURIComponent(String(pos))}`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
 }
 
 export function createFirewallRuleByBaseUrl(baseUrl: string, data: PveRecord) {
@@ -256,7 +256,7 @@ export function createFirewallRuleByBaseUrl(baseUrl: string, data: PveRecord) {
 export function updateFirewallRuleByBaseUrl(
   baseUrl: string,
   pos: string | number,
-  data: PveRecord,
+  data: PveRecord
 ) {
   return request(`${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(String(pos))}`, {
     method: 'PUT',
@@ -267,7 +267,7 @@ export function updateFirewallRuleByBaseUrl(
 export function deleteFirewallRuleByBaseUrl(
   baseUrl: string,
   pos: string | number,
-  digest?: unknown,
+  digest?: unknown
 ) {
   const url = `${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(String(pos))}`;
   return request(digest ? `${url}?digest=${encodeURIComponent(textValue(digest))}` : url, {
@@ -278,7 +278,7 @@ export function deleteFirewallRuleByBaseUrl(
 export function moveFirewallRuleByBaseUrl(
   baseUrl: string,
   pos: string | number,
-  moveto: string | number,
+  moveto: string | number
 ) {
   return request(`${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(String(pos))}`, {
     method: 'PUT',
@@ -309,13 +309,19 @@ export function createFirewallAliasByBaseUrl(baseUrl: string, data: PveRecord) {
 }
 
 export function updateFirewallAliasByBaseUrl(baseUrl: string, name: string, data: PveRecord) {
-  return request(`${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(name)}`, { method: 'PUT', data });
+  return request(`${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    data,
+  });
 }
 
 export function deleteFirewallAliasByBaseUrl(baseUrl: string, name: string, digest?: unknown) {
   const url = `${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(name)}`;
-  const digestValue = typeof digest === 'string' || typeof digest === 'number' ? String(digest) : '';
-  return request(digestValue ? `${url}?digest=${encodeURIComponent(digestValue)}` : url, { method: 'DELETE' });
+  const digestValue =
+    typeof digest === 'string' || typeof digest === 'number' ? String(digest) : '';
+  return request(digestValue ? `${url}?digest=${encodeURIComponent(digestValue)}` : url, {
+    method: 'DELETE',
+  });
 }
 
 export function getFirewallIpsetsByBaseUrl(baseUrl: string) {
@@ -332,26 +338,51 @@ export function updateFirewallIpsetByBaseUrl(baseUrl: string, data: PveRecord) {
 
 export function deleteFirewallIpsetByBaseUrl(baseUrl: string, name: string, digest?: unknown) {
   const url = `${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(name)}`;
-  const digestValue = typeof digest === 'string' || typeof digest === 'number' ? String(digest) : '';
-  return request(digestValue ? `${url}?digest=${encodeURIComponent(digestValue)}` : url, { method: 'DELETE' });
+  const digestValue =
+    typeof digest === 'string' || typeof digest === 'number' ? String(digest) : '';
+  return request(digestValue ? `${url}?digest=${encodeURIComponent(digestValue)}` : url, {
+    method: 'DELETE',
+  });
 }
 
 export function getFirewallIpsetEntriesByBaseUrl(baseUrl: string, name: string) {
-  return request<PveRecord[]>(`${firewallUrl(baseUrl, 'json')}/${encodeURIComponent(name)}`, { method: 'GET', notifyOnError: true });
+  return request<PveRecord[]>(`${firewallUrl(baseUrl, 'json')}/${encodeURIComponent(name)}`, {
+    method: 'GET',
+    notifyOnError: true,
+  });
 }
 
 export function createFirewallIpsetEntryByBaseUrl(baseUrl: string, name: string, data: PveRecord) {
-  return request(`${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(name)}`, { method: 'POST', data });
+  return request(`${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(name)}`, {
+    method: 'POST',
+    data,
+  });
 }
 
-export function updateFirewallIpsetEntryByBaseUrl(baseUrl: string, name: string, cidr: string, data: PveRecord) {
-  return request(`${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(name)}/${encodeURIComponent(cidr)}`, { method: 'PUT', data });
+export function updateFirewallIpsetEntryByBaseUrl(
+  baseUrl: string,
+  name: string,
+  cidr: string,
+  data: PveRecord
+) {
+  return request(
+    `${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(name)}/${encodeURIComponent(cidr)}`,
+    { method: 'PUT', data }
+  );
 }
 
-export function deleteFirewallIpsetEntryByBaseUrl(baseUrl: string, name: string, cidr: string, digest?: unknown) {
+export function deleteFirewallIpsetEntryByBaseUrl(
+  baseUrl: string,
+  name: string,
+  cidr: string,
+  digest?: unknown
+) {
   const url = `${firewallUrl(baseUrl, 'extjs')}/${encodeURIComponent(name)}/${encodeURIComponent(cidr)}`;
-  const digestValue = typeof digest === 'string' || typeof digest === 'number' ? String(digest) : '';
-  return request(digestValue ? `${url}?digest=${encodeURIComponent(digestValue)}` : url, { method: 'DELETE' });
+  const digestValue =
+    typeof digest === 'string' || typeof digest === 'number' ? String(digest) : '';
+  return request(digestValue ? `${url}?digest=${encodeURIComponent(digestValue)}` : url, {
+    method: 'DELETE',
+  });
 }
 
 export function getFirewallOptions() {
@@ -393,7 +424,9 @@ export function updateFirewallGroup(data: PveRecord) {
 
 export function deleteFirewallGroup(group: string, digest?: unknown) {
   const url = `/api2/extjs/cluster/firewall/groups/${encodeURIComponent(group)}`;
-  return request(digest ? `${url}?digest=${encodeURIComponent(textValue(digest))}` : url, { method: 'DELETE' });
+  return request(digest ? `${url}?digest=${encodeURIComponent(textValue(digest))}` : url, {
+    method: 'DELETE',
+  });
 }
 
 export function getFirewallGroupRules(group: string) {
@@ -451,7 +484,9 @@ export function updateFirewallIpset(data: PveRecord) {
 
 export function deleteFirewallIpset(name: string, digest?: unknown) {
   const url = `/api2/extjs/cluster/firewall/ipset/${encodeURIComponent(name)}`;
-  return request(digest ? `${url}?digest=${encodeURIComponent(textValue(digest))}` : url, { method: 'DELETE' });
+  return request(digest ? `${url}?digest=${encodeURIComponent(textValue(digest))}` : url, {
+    method: 'DELETE',
+  });
 }
 
 export function getFirewallIpsetEntries(name: string) {
@@ -462,17 +497,22 @@ export function getFirewallIpsetEntries(name: string) {
 }
 
 export function createFirewallIpsetEntry(name: string, data: PveRecord) {
-  return request(`/api2/extjs/cluster/firewall/ipset/${encodeURIComponent(name)}`, { method: 'POST', data });
+  return request(`/api2/extjs/cluster/firewall/ipset/${encodeURIComponent(name)}`, {
+    method: 'POST',
+    data,
+  });
 }
 
 export function updateFirewallIpsetEntry(name: string, cidr: string, data: PveRecord) {
   return request(
     `/api2/extjs/cluster/firewall/ipset/${encodeURIComponent(name)}/${encodeURIComponent(cidr)}`,
-    { method: 'PUT', data },
+    { method: 'PUT', data }
   );
 }
 
 export function deleteFirewallIpsetEntry(name: string, cidr: string, digest?: unknown) {
   const url = `/api2/extjs/cluster/firewall/ipset/${encodeURIComponent(name)}/${encodeURIComponent(cidr)}`;
-  return request(digest ? `${url}?digest=${encodeURIComponent(textValue(digest))}` : url, { method: 'DELETE' });
+  return request(digest ? `${url}?digest=${encodeURIComponent(textValue(digest))}` : url, {
+    method: 'DELETE',
+  });
 }

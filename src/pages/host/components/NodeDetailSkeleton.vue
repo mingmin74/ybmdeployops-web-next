@@ -239,7 +239,7 @@ watch(
       </q-tab-panel>
       <q-tab-panel
         name="replication"
-        class="q-pa-none"
+        class="q-pa-md"
       >
         <NodeReplicationPanel :node="node.node" />
       </q-tab-panel>
@@ -304,10 +304,7 @@ watch(
   border: 1px solid transparent;
   border-radius: 6px;
   color: #5e6b7c;
-  transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
 .node-detail__tabs :deep(.q-tab .q-icon) {
   font-size: 18px;

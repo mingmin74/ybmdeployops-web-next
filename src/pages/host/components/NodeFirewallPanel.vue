@@ -13,9 +13,15 @@ const basePath = `/nodes/${encodeURIComponent(node)}/firewall`;
     firewall-type="node"
     list-refs-url="/cluster/firewall/refs"
     allow-iface
+    left-navigation
   >
     <template #tabs>
-      <q-tab no-caps name="log" :label="gettext('Log')" />
+      <q-tab
+        no-caps
+        name="log"
+        icon="view_list"
+        :label="gettext('Log')"
+      />
     </template>
     <template #panels>
       <q-tab-panel name="log">
