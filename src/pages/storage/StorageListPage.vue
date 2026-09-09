@@ -255,11 +255,24 @@ onMounted(() => {
       <q-tree
         v-model:selected="treeSelected"
         v-model:expanded="treeExpanded"
+        class="storage-tree__control"
         :nodes="treeNodes"
         node-key="id"
+        no-connectors
         selected-color="primary"
         @update:selected="onTreeSelect"
-      />
+      >
+        <template #default-header="{ node }">
+          <div class="row items-center no-wrap storage-tree__node">
+            <q-icon
+              :name="node.icon"
+              size="15px"
+              class="storage-tree__node-icon q-mr-xs"
+            />
+            <span class="ellipsis">{{ node.label }}</span>
+          </div>
+        </template>
+      </q-tree>
     </div>
     <div class="col q-ml-md bg-white q-pa-md">
       <div v-if="current">
@@ -395,4 +408,44 @@ onMounted(() => {
   border-right: 1px solid #eeeeee;
 }
 
+.storage-tree__control {
+  color: #333333;
+  font-size: 12px;
+}
+
+.storage-tree__control :deep(.q-tree__node-header) {
+  min-height: 30px;
+  padding: 0 6px 0 2px;
+  transition: background-color 0.15s ease-out;
+}
+
+.storage-tree__control :deep(.q-tree__node-header:hover) {
+  background: #f2f5fc;
+}
+
+.storage-tree__control :deep(.q-tree__node--selected > .q-tree__node-header) {
+  background: #e6f1fc;
+}
+
+.storage-tree__control :deep(.q-tree__arrow) {
+  width: 18px;
+  color: #9aa3b2;
+  font-size: 16px;
+}
+
+.storage-tree__node {
+  min-width: 0;
+  line-height: 30px;
+}
+
+.storage-tree__node-icon {
+  flex: 0 0 auto;
+  color: #7c8798;
+}
+
+.storage-tree__control
+  :deep(.q-tree__node--selected > .q-tree__node-header)
+  .storage-tree__node-icon {
+  color: #1976d2;
+}
 </style>

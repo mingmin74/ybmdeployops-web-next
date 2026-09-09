@@ -63,12 +63,12 @@ const { node = 'localhost' } = defineProps<{ node?: string }>();
       >
         <CephSummaryPage />
       </q-tab-panel>
-      <q-tab-panel name="monitor"><CephMonitorPage :node="node" /></q-tab-panel>
-      <q-tab-panel name="osd"><CephOsdPage :node="node" /></q-tab-panel>
-      <q-tab-panel name="cephfs"><CephFilesystemPage /></q-tab-panel>
-      <q-tab-panel name="pools"><CephStoragePoolsPage :node="node" /></q-tab-panel>
-      <q-tab-panel name="config"><CephConfigurationPage :node="node" /></q-tab-panel>
-      <q-tab-panel name="logs"><CephLogsPage :node="node" /></q-tab-panel>
+      <q-tab-panel name="monitor" class="q-pa-none"><CephMonitorPage :node="node" /></q-tab-panel>
+      <q-tab-panel name="osd" class="q-pa-none"><CephOsdPage :node="node" /></q-tab-panel>
+      <q-tab-panel name="cephfs" class="q-pa-none"><CephFilesystemPage /></q-tab-panel>
+      <q-tab-panel name="pools" class="q-pa-none"><CephStoragePoolsPage :node="node" /></q-tab-panel>
+      <q-tab-panel name="config" class="q-pa-none"><CephConfigurationPage :node="node" /></q-tab-panel>
+      <q-tab-panel name="logs" class="q-pa-none"><CephLogsPage :node="node" /></q-tab-panel>
     </q-tab-panels>
   </div>
 </template>

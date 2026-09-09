@@ -329,7 +329,7 @@ watch(
       <template #top>
         <div class="text-subtitle2">{{ gettext('Metadata Servers') }}</div>
         <q-space />
-        <div class="row q-gutter-sm">
+        <div class="row items-center" style="gap: 8px;">
           <q-btn
             no-caps
             outline

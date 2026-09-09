@@ -24,7 +24,7 @@ const props = defineProps<{
   tree?: boolean;
   treeColumn?: string;
 }>();
-const emit = defineEmits<{ action: [name: string, row?: PveRecord]; selection: [row?: PveRecord]; rowDblclick: [row: PveRecord] }>();
+const emit = defineEmits<{ action: [name: string, row: PveRecord | undefined, node: string]; selection: [row?: PveRecord]; rowDblclick: [row: PveRecord] }>();
 
 const loading = ref(false);
 const filter = ref('');
@@ -140,7 +140,7 @@ watch(
               class="u-button"
               :disable="(action.requiresSelection && !selectedRow) || action.disable?.(selectedRow)"
               :label="action.label"
-              @click="emit('action', action.name, selectedRow)"
+              @click="emit('action', action.name, selectedRow, selectedNode)"
             />
             <q-btn
               no-caps

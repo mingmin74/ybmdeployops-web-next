@@ -20,12 +20,14 @@ const smartVisible = shallowRef(false);
 const smartLoading = shallowRef(false);
 const smartValues = shallowRef<PveRecord>({});
 const smartDisk = shallowRef('');
+const smartNode = shallowRef('');
 const wipeVisible = shallowRef(false);
 const wipeLoading = shallowRef(false);
 const wipeTarget = shallowRef<PveRecord>({});
 const taskVisible = shallowRef(false);
 const taskUpid = shallowRef('');
 const taskTitle = shallowRef('');
+const taskNode = shallowRef('');
 const actions = computed(() => [
   { name: 'smart', label: gettext('Show S.M.A.R.T. values'), requiresSelection: true, disable: (row?: PveRecord) => Boolean(row?.parent) },
   { name: 'gpt', label: gettext('Initialize Disk with GPT'), requiresSelection: true, disable: (row?: PveRecord) => Boolean(row?.parent || (row?.used && row.used !== 'unused')) },
@@ -73,34 +75,44 @@ async function loadRows(node: string) {
 }
 
 function diskName(row?: PveRecord) { return textValue(row?.devpath || row?.name || row?.device); }
-function openTask(upid: unknown, title: string) {
+function nodeName(row?: PveRecord) { return textValue(row?.node || props.node); }
+function openTask(upid: unknown, title: string, node: string) {
   taskUpid.value = textValue(upid); taskTitle.value = title;
+  taskNode.value = node;
   taskVisible.value = taskUpid.value.startsWith('UPID:');
   if (!taskVisible.value) void table.value?.reload();
 }
 async function showSmart(row?: PveRecord) {
-  const disk = diskName(row); if (!props.node || !disk) return;
+  const disk = diskName(row);
+  const node = nodeName(row) || smartNode.value;
+  if (!node || !disk) return;
   smartDisk.value = disk;
+  smartNode.value = node;
   smartVisible.value = true; smartLoading.value = true;
-  try { smartValues.value = (await getNodeDiskSmart(props.node, disk)).data || {}; }
+  try { smartValues.value = (await getNodeDiskSmart(node, disk)).data || {}; }
   finally { smartLoading.value = false; }
 }
 function initializeGpt(row?: PveRecord) {
-  const disk = diskName(row); if (!props.node || !disk || row?.parent || (row?.used && row.used !== 'unused')) return;
-  Dialog.create({ title: gettext('Initialize Disk with GPT'), message: `${gettext('Initialize Disk with GPT')}: ${disk}`, cancel: true, persistent: true }).onOk(() => void initializeNodeDiskGpt(props.node!, disk).then((result) => openTask(result.data, gettext('Initialize Disk with GPT'))));
+  const disk = diskName(row);
+  const node = nodeName(row);
+  if (!node || !disk || row?.parent || (row?.used && row.used !== 'unused')) return;
+  Dialog.create({ title: gettext('Initialize Disk with GPT'), message: `${gettext('Initialize Disk with GPT')}: ${disk}`, cancel: true, persistent: true }).onOk(() => void initializeNodeDiskGpt(node, disk).then((result) => openTask(result.data, gettext('Initialize Disk with GPT'), node)));
 }
 function wipe(row?: PveRecord) {
-  const disk = diskName(row); if (!props.node || !disk || row?.parent) return;
+  const disk = diskName(row);
+  if (!nodeName(row) || !disk || row?.parent) return;
   wipeTarget.value = row || {};
   wipeVisible.value = true;
 }
 async function confirmWipe() {
-  const disk = diskName(wipeTarget.value); if (!props.node || !disk) return;
+  const disk = diskName(wipeTarget.value);
+  const node = nodeName(wipeTarget.value);
+  if (!node || !disk) return;
   wipeLoading.value = true;
   try {
-    const result = await wipeNodeDisk(props.node, disk);
+    const result = await wipeNodeDisk(node, disk);
     wipeVisible.value = false;
-    openTask(result.data, gettext('Wipe Disk'));
+    openTask(result.data, gettext('Wipe Disk'), node);
   } finally {
     wipeLoading.value = false;
   }
@@ -128,5 +140,5 @@ function handleAction(name: string, row?: PveRecord) {
   />
   <DiskSmartDialog v-model="smartVisible" :disk="smartDisk" :loading="smartLoading" :values="smartValues" @reload="showSmart({ devpath: smartDisk })" />
   <DiskWipeDialog v-model="wipeVisible" :disk="wipeTarget" :loading="wipeLoading" @submit="confirmWipe" />
-  <TaskOutputDialog v-model="taskVisible" :node="node || ''" :upid="taskUpid" :title="taskTitle" @finished="table?.reload()" />
+  <TaskOutputDialog v-model="taskVisible" :node="taskNode" :upid="taskUpid" :title="taskTitle" @finished="table?.reload()" />
 </template>
