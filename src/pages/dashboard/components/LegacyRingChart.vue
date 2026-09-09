@@ -27,7 +27,7 @@ const props = withDefaults(
     chartOption: () => ({
       radius: ['40%', '80%'],
     }),
-  },
+  }
 );
 
 const chartRef = ref<HTMLDivElement | null>(null);
@@ -79,6 +79,9 @@ async function updateChart() {
         data: chartData.map((item) => ({
           value: item.count,
           name: item.state_name || '',
+          itemStyle: {
+            color: colorMap(item.cls),
+          },
         })),
       },
     ],
@@ -113,7 +116,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="chartRef" class="legacy-ring-chart"></div>
+  <div
+    ref="chartRef"
+    class="legacy-ring-chart"
+  ></div>
 </template>
 
 <style scoped>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue';
 import LineMetricChart from '@/components/LineMetricChart.vue';
+import UWindow from '@/components/UWindow.vue';
 import LegacyRingChart from '@/pages/dashboard/components/LegacyRingChart.vue';
 import type { PveRecord } from '@/api/resources';
 import { getCephMetadata, getCephStatus } from '@/api/ceph';
@@ -30,6 +31,8 @@ type PerformancePoint = {
 const status = shallowRef<PveRecord>({});
 const metadata = shallowRef<PveRecord>({});
 const performanceHistory = shallowRef<PerformancePoint[]>([]);
+const selectedWarning = shallowRef<WarningRow | null>(null);
+const warningDialogVisible = shallowRef(false);
 const { node = 'localhost' } = defineProps<{ node?: string }>();
 let statusTimer: ReturnType<typeof setInterval> | undefined;
 let metadataTimer: ReturnType<typeof setInterval> | undefined;
@@ -97,13 +100,18 @@ const pgStates = computed<PgState[]>(() => {
     .sort((a, b) => a.state_name.localeCompare(b.state_name));
 });
 const pgSummary = computed(() =>
-  ['Unknown', 'Clean', 'Busy', 'Warning', 'Critical']
-    .map((label) => ({
-      label,
+  [
+    { label: 'Unknown', color: 'grey-6' },
+    { label: 'Clean', color: 'positive' },
+    { label: 'Busy', color: 'info' },
+    { label: 'Warning', color: 'warning' },
+    { label: 'Critical', color: 'negative' },
+  ]
+    .map((category) => ({
+      ...category,
       count: pgStates.value
-        .filter((item) => item.category === label)
+        .filter((item) => item.category === category.label)
         .reduce((sum, item) => sum + item.count, 0),
-      color: pgCategory(label.toLowerCase()).color,
     }))
     .filter((item) => item.count > 0)
 );
@@ -306,6 +314,11 @@ async function copyWarning(warning: WarningRow) {
   );
 }
 
+function showWarningDetail(warning: WarningRow) {
+  selectedWarning.value = warning;
+  warningDialogVisible.value = true;
+}
+
 function serviceIcon(color: string) {
   if (color === 'positive') return 'check_circle';
   if (color === 'warning') return 'warning';
@@ -423,7 +436,10 @@ async function refreshStatus() {
   status.value = response.data || {};
   const latestPgmap = (status.value.pgmap || {}) as PveRecord;
   const now = new Date();
-  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(
+    2,
+    '0'
+  )}:${String(now.getSeconds()).padStart(2, '0')}`;
   performanceHistory.value = [
     ...performanceHistory.value,
     {
@@ -462,14 +478,14 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="ceph-summary column q-gutter-md">
+  <div class="ceph-summary column q-gutter-y-md">
     <div class="row q-col-gutter-sm">
       <div class="col-12 col-lg-6">
         <q-card class="summary-panel no-shadow no-border-radius full-height">
           <q-card-section class="panel-section">
             <div class="panel-header">{{ gettext('Health') }}</div>
             <div class="panel-content row q-col-gutter-lg items-center">
-              <div class="col-12 col-sm-4 text-center">
+              <div class="col-12 col-sm-5 text-center">
                 <q-icon
                   name="health_and_safety"
                   :color="healthColor"
@@ -485,47 +501,51 @@ onUnmounted(() => {
                   {{ gettext('Ceph Version') }}: {{ cephVersion || '-' }}
                 </div>
               </div>
-              <div class="col-12 col-sm-8">
+              <div class="col-12 col-sm-7">
                 <div
                   v-if="warnings.length"
                   class="column q-gutter-sm"
                 >
-                  <q-expansion-item
+                  <q-item
                     v-for="warning in warnings"
                     :key="warning.id"
                     dense
-                    dense-toggle
-                    expand-separator
-                    header-class="warning-row"
+                    clickable
+                    class="warning-row"
+                    @click="showWarningDetail(warning)"
                   >
-                    <template #header>
-                      <q-item-section avatar>
-                        <q-icon
-                          name="error"
-                          :color="statusColor(warning.severity)"
-                        />
-                      </q-item-section>
-                      <q-item-section>
-                        <div>{{ warning.summary }}</div>
-                        <div class="text-caption text-grey-7">
-                          {{ warning.severity }}
-                        </div>
-                      </q-item-section>
-                      <q-item-section side>
+                    <q-item-section avatar>
+                      <q-icon
+                        name="error"
+                        :color="statusColor(warning.severity)"
+                      />
+                    </q-item-section>
+                    <q-item-section>
+                      <div>{{ warning.summary }}</div>
+                      <div class="text-caption text-grey-7">
+                        {{ warning.severity }}
+                      </div>
+                    </q-item-section>
+                    <q-item-section side>
+                      <div class="row items-center no-wrap q-gutter-xs">
                         <q-btn
                           flat
                           round
                           dense
                           icon="content_copy"
+                          size="sm"
+                          icon-size="18px"
                           :aria-label="gettext('Copy to Clipboard')"
                           @click.stop="copyWarning(warning)"
                         />
-                      </q-item-section>
-                    </template>
-                    <div class="warning-detail">
-                      {{ warning.detail || gettext('no additional data') }}
-                    </div>
-                  </q-expansion-item>
+                        <q-icon
+                          name="open_in_new"
+                          color="grey-7"
+                          size="18px"
+                        />
+                      </div>
+                    </q-item-section>
+                  </q-item>
                 </div>
                 <div
                   v-else
@@ -554,18 +574,50 @@ onUnmounted(() => {
                   <thead>
                     <tr>
                       <th></th>
-                      <th>{{ gettext('In') }}</th>
-                      <th>{{ gettext('Out') }}</th>
+                      <th>
+                        <q-icon
+                          name="circle"
+                          color="positive"
+                          size="14px"
+                          class="q-mr-xs"
+                        />
+                        {{ gettext('In') }}
+                      </th>
+                      <th>
+                        <q-icon
+                          name="radio_button_unchecked"
+                          color="warning"
+                          size="16px"
+                          class="q-mr-xs"
+                        />
+                        {{ gettext('Out') }}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
-                      <th>{{ gettext('Up') }}</th>
+                      <th>
+                        <q-icon
+                          name="arrow_circle_up"
+                          color="positive"
+                          size="17px"
+                          class="q-mr-xs"
+                        />
+                        {{ gettext('Up') }}
+                      </th>
                       <td>{{ osdStatus.upIn }}</td>
                       <td>{{ osdStatus.upOut }}</td>
                     </tr>
                     <tr>
-                      <th>{{ gettext('Down') }}</th>
+                      <th>
+                        <q-icon
+                          name="arrow_circle_down"
+                          color="negative"
+                          size="17px"
+                          class="q-mr-xs"
+                        />
+                        {{ gettext('Down') }}
+                      </th>
                       <td>{{ osdStatus.downIn }}</td>
                       <td>{{ osdStatus.downOut }}</td>
                     </tr>
@@ -696,44 +748,50 @@ onUnmounted(() => {
     </q-card>
     <q-card class="summary-panel no-shadow no-border-radius">
       <q-card-section class="panel-section">
-        <div class="panel-header">{{ gettext('Performance') }}</div>
         <div class="performance-layout">
-          <div class="usage-ring-panel">
-            <div class="metric-label">{{ gettext('Usage') }}</div>
-            <q-circular-progress
-              show-value
-              class="usage-ring"
-              size="116px"
-              :thickness="0.16"
-              :value="usage"
-              color="primary"
-              track-color="blue-grey-1"
-            >
-              {{ usage.toFixed(0) }}%
-            </q-circular-progress>
-            <div class="usage-ring-value">
-              {{ formatBytes(pgmap.bytes_used as number) }} {{ gettext('of') }}
-              {{ formatBytes(pgmap.bytes_total as number) }}
+          <div class="usage-column">
+            <div class="chart-header">
+              <strong>{{ gettext('Performance') }}</strong>
             </div>
-            <div
-              v-if="recovery"
-              class="recovery-summary"
-            >
-              <span>{{ gettext('Recovery') }} / {{ gettext('Rebalance') }}</span>
-              <strong>{{ recovery.recovered }} / {{ recovery.total }}</strong>
-              <span
-                v-if="recovery.speed"
-                class="text-caption"
+            <div class="usage-ring-panel">
+              <div class="metric-label">{{ gettext('Usage') }}</div>
+              <q-circular-progress
+                show-value
+                class="usage-ring"
+                size="116px"
+                :thickness="0.16"
+                :value="usage"
+                color="primary"
+                track-color="blue-grey-1"
               >
-                {{ formatBytes(recovery.speed) }}/s -
-                {{ formatDuration(recovery.remainingSeconds) }} {{ gettext('left') }}
-              </span>
-              <q-linear-progress
-                rounded
-                size="8px"
-                :value="recovery.percent / 100"
-                color="info"
-              />
+                {{ usage.toFixed(0) }}%
+              </q-circular-progress>
+              <div class="usage-ring-value">
+                {{ formatBytes(pgmap.bytes_used as number) }} {{ gettext('of') }}
+                {{ formatBytes(pgmap.bytes_total as number) }}
+              </div>
+              <div
+                v-if="recovery"
+                class="recovery-summary"
+              >
+                <div class="recovery-heading">
+                  <span>{{ gettext('Recovery') }} / {{ gettext('Rebalance') }}</span>
+                  <strong>{{ recovery.recovered }} / {{ recovery.total }}</strong>
+                </div>
+                <q-linear-progress
+                  size="6px"
+                  :value="recovery.percent / 100"
+                  color="info"
+                  track-color="blue-grey-1"
+                />
+                <div
+                  v-if="recovery.speed"
+                  class="recovery-meta"
+                >
+                  <span>{{ formatBytes(recovery.speed) }}/s</span>
+                  <span>{{ formatDuration(recovery.remainingSeconds) }} {{ gettext('left') }}</span>
+                </div>
+              </div>
             </div>
           </div>
           <div class="performance-charts">
@@ -746,7 +804,7 @@ onUnmounted(() => {
                 :series="bandwidthSeries"
                 unit-type="bytespersecond"
                 power-of-two
-                :height="210"
+                :height="250"
               />
             </div>
             <div class="chart-block">
@@ -757,13 +815,52 @@ onUnmounted(() => {
                 :x-data="chartXAxis"
                 :series="iopsSeries"
                 y-unit="IOPS"
-                :height="210"
+                :height="250"
               />
             </div>
           </div>
         </div>
       </q-card-section>
     </q-card>
+    <q-dialog
+      v-model="warningDialogVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <UWindow
+        :title="selectedWarning?.summary || gettext('Details')"
+        width="720px"
+      >
+        <div
+          v-if="selectedWarning"
+          class="warning-dialog-content"
+        >
+          <div class="row items-center q-mb-sm">
+            <q-icon
+              name="error"
+              :color="statusColor(selectedWarning.severity)"
+              size="20px"
+              class="q-mr-sm"
+            />
+            <strong>{{ selectedWarning.severity }}</strong>
+          </div>
+          <pre class="warning-detail">{{
+            selectedWarning.detail || gettext('no additional data')
+          }}</pre>
+        </div>
+        <template #foot>
+          <q-btn
+            v-close-popup
+            no-caps
+            flat
+            size="12px"
+            class="bg-primary text-grey-1 u-button"
+            :label="gettext('Close')"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
   </div>
 </template>
 
@@ -796,10 +893,16 @@ onUnmounted(() => {
   min-height: 46px;
 }
 .warning-detail {
-  padding: 8px 16px 12px 56px;
+  margin: 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font-family: monospace;
   color: #555;
+}
+.warning-dialog-content {
+  max-height: min(60vh, 560px);
+  overflow-y: auto;
+  padding: 16px;
 }
 .osd-table {
   width: 100%;
@@ -872,13 +975,16 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin: 0 auto;
+  width: max-content;
+  max-width: 100%;
 }
 .service-widget {
   align-items: center;
   color: #333;
   display: inline-flex;
   gap: 6px;
-  justify-content: center;
+  justify-content: flex-start;
   line-height: 20px;
 }
 .service-empty,
@@ -905,17 +1011,20 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
 }
+.usage-column {
+  border-right: 1px solid #dfe1e6;
+}
 .usage-ring-panel {
   align-items: center;
-  border-right: 1px solid #dfe1e6;
   display: flex;
   flex-direction: column;
-  min-height: 458px;
-  padding: 18px;
+  height: calc(100% - 38px);
+  min-height: 250px;
+  padding: 16px 20px;
   text-align: center;
 }
 .usage-ring {
-  margin: 12px 0 10px;
+  margin: 10px 0 12px;
 }
 .usage-ring-value {
   color: #333;
@@ -926,22 +1035,34 @@ onUnmounted(() => {
 .recovery-summary {
   align-self: stretch;
   display: grid;
-  gap: 8px;
-  margin-top: 26px;
+  gap: 9px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #dfe1e6;
   text-align: left;
 }
-.recovery-summary span {
+.recovery-heading,
+.recovery-meta {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+.recovery-heading span,
+.recovery-meta {
   color: #666;
   font-size: 12px;
 }
-.recovery-summary strong {
+.recovery-heading strong {
   color: #333;
   font-size: 13px;
+}
+.recovery-meta {
+  gap: 10px;
 }
 .performance-charts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 0 10px;
+  /* padding: 0 10px; */
 }
 .chart-block {
   min-width: 0;
@@ -968,8 +1089,11 @@ onUnmounted(() => {
   }
   .usage-ring-panel {
     border-bottom: 1px solid #dfe1e6;
-    border-right: 0;
+    height: auto;
     min-height: auto;
+  }
+  .usage-column {
+    border-right: 0;
   }
 }
 @media (max-width: 760px) {

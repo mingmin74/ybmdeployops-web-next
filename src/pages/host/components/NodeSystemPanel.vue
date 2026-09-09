@@ -53,7 +53,7 @@ const sections = [
       <template #after>
         <q-tab-panels
           v-model="activeTab"
-          class="bg-transparent"
+          class="bg-transparent q-pa-md"
         >
           <q-tab-panel
             name="services"
@@ -63,31 +63,31 @@ const sections = [
           </q-tab-panel>
           <q-tab-panel
             name="network"
-            class="q-pa-sm"
+            class="q-pa-none"
           >
             <NodeSystemNetworkPanel :node="props.node" />
           </q-tab-panel>
           <q-tab-panel
             name="dns"
-            class="q-pa-md"
+            class="q-pa-none"
           >
             <NodeSystemDnsPanel :node="props.node" />
           </q-tab-panel>
           <q-tab-panel
             name="hosts"
-            class="q-pa-md"
+            class="q-pa-none"
           >
             <NodeSystemHostsPanel :node="props.node" />
           </q-tab-panel>
           <q-tab-panel
             name="options"
-            class="q-pa-md"
+            class="q-pa-none"
           >
             <NodeSystemOptionsPanel :node="props.node" />
           </q-tab-panel>
           <q-tab-panel
             name="time"
-            class="q-pa-md"
+            class="q-pa-none"
           >
             <NodeSystemTimePanel :node="props.node" />
           </q-tab-panel>
@@ -95,7 +95,10 @@ const sections = [
             name="syslog"
             class="q-pa-none"
           >
-            <SystemLogsPage :node="props.node" :show-node-selector="false" />
+            <SystemLogsPage
+              :node="props.node"
+              :show-node-selector="false"
+            />
           </q-tab-panel>
         </q-tab-panels>
       </template>

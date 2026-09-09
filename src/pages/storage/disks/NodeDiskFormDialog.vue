@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue';
+import type { QForm } from 'quasar';
+import { reactive, useTemplateRef, watch } from 'vue';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
@@ -19,8 +20,15 @@ const props = defineProps<{ title: string; fields: NodeDiskFormField[]; defaults
 const visible = defineModel<boolean>({ required: true });
 const emit = defineEmits<{ submit: [values: Record<string, unknown>] }>();
 const values = reactive<Record<string, unknown>>({});
-const hasValue = (value: unknown) => textValue(value).trim() !== '';
-const valid = computed(() => props.fields.filter((field) => field.required && (!field.visible || field.visible(values))).every((field) => hasValue(values[field.name])));
+const form = useTemplateRef<QForm>('form');
+const hasValue = (value: unknown) => Array.isArray(value) ? value.length > 0 : textValue(value).trim() !== '';
+const requiredRule = (value: unknown) => hasValue(value) || gettext('This field is required');
+const fieldLabel = (field: NodeDiskFormField) => field.required ? `${field.label} *` : field.label;
+
+async function submit() {
+  if (!await form.value?.validate()) return;
+  emit('submit', { ...values });
+}
 
 watch(visible, (open) => {
   if (!open) return;
@@ -32,20 +40,26 @@ watch(visible, (open) => {
 <template>
   <q-dialog v-model="visible" persistent transition-show="scale" transition-hide="scale">
     <UWindow :title="title" width="560px" :loading="loading">
-      <q-form class="q-pa-md" @submit.prevent="emit('submit', { ...values })">
-        <div class="row q-gutter-lg">
-          <div v-for="field in fields" v-show="!field.visible || field.visible(values)" :key="field.name" class="col-12">
-            <q-checkbox v-if="field.type === 'checkbox'" v-model="values[field.name] as boolean" dense right-label color="primary" :label="field.label" />
-            <q-select v-else-if="field.type === 'select'" v-model="values[field.name] as string | string[]" dense options-dense emit-value map-options class="q-field--with-bottom" :options="field.options || []" :label="field.label" :hint="field.hint" :multiple="field.multiple" />
-            <q-input v-else-if="field.type === 'number'" v-model.number="values[field.name] as number" dense type="number" class="q-field--with-bottom" :label="field.label" :hint="field.hint" :rules="field.required ? [(value) => hasValue(value) || gettext('This field is required')] : []" />
-            <q-input v-else v-model="values[field.name] as string" dense class="q-field--with-bottom" :label="field.label" :hint="field.hint" :rules="field.required ? [(value) => !!String(value || '').trim() || gettext('This field is required')] : []" />
+      <q-form ref="form" class="node-disk-form u-border q-ma-sm q-pa-md" @submit.prevent="submit">
+        <div class="column q-gutter-sm">
+          <div v-for="field in fields" v-show="!field.visible || field.visible(values)" :key="field.name">
+            <q-checkbox v-if="field.type === 'checkbox'" v-model="values[field.name] as boolean" dense right-label color="primary" :label="fieldLabel(field)" />
+            <q-select v-else-if="field.type === 'select'" v-model="values[field.name] as string | string[]" dense options-dense emit-value map-options class="q-field--with-bottom" :options="field.options || []" :label="fieldLabel(field)" :hint="field.hint" :multiple="field.multiple" :rules="field.required ? [requiredRule] : []" />
+            <q-input v-else-if="field.type === 'number'" v-model.number="values[field.name] as number" dense type="number" class="q-field--with-bottom" :label="fieldLabel(field)" :hint="field.hint" :rules="field.required ? [requiredRule] : []" />
+            <q-input v-else v-model="values[field.name] as string" dense class="q-field--with-bottom" :label="fieldLabel(field)" :hint="field.hint" :rules="field.required ? [requiredRule] : []" />
           </div>
         </div>
       </q-form>
       <template #foot>
-        <q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" />
-        <q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :disable="!valid || loading" :label="gettext('Create')" @click="emit('submit', { ...values })" />
+        <q-btn v-close-popup no-caps outline size="12px" class="u-button u-border-button" :disable="loading" :label="gettext('Cancel')" />
+        <q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button q-ml-sm" :disable="loading" :loading="loading" :label="gettext('Create')" @click="submit" />
       </template>
     </UWindow>
   </q-dialog>
 </template>
+
+<style scoped>
+.node-disk-form {
+  min-height: 190px;
+}
+</style>

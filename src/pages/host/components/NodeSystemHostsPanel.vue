@@ -66,25 +66,45 @@ watch([() => props.node, canAudit], () => void load(), { immediate: true });
         no-caps
         outline
         size="12px"
+        color="primary"
         class="u-button"
         :disable="!dirty || saving"
         :label="gettext('Revert')"
         @click="draft = hosts"
       />
     </div>
-    <q-input
-      v-if="canModify"
-      v-model="draft"
-      type="textarea"
-      autogrow
-      outlined
-      input-style="font-family: Consolas, 'Courier New', monospace; white-space: pre; min-height: 420px"
-    />
-    <pre
-      v-else
-      class="hosts-output"
-      >{{ hosts || '-' }}</pre
-    >
+    <section class="hosts-editor u-border">
+      <header class="hosts-editor__header row items-center no-wrap">
+        <q-icon
+          name="description"
+          size="16px"
+          color="primary"
+        />
+        <span>/etc/hosts</span>
+        <q-space />
+        <span
+          v-if="canModify && dirty"
+          class="hosts-editor__status"
+        >
+          {{ gettext('Unsaved changes') }}
+        </span>
+      </header>
+      <q-input
+        v-if="canModify"
+        v-model="draft"
+        type="textarea"
+        autogrow
+        borderless
+        dense
+        spellcheck="false"
+        class="hosts-editor__input"
+        input-class="hosts-editor__textarea"
+      />
+      <pre
+        v-else
+        class="hosts-editor__output"
+        >{{ hosts || '-' }}</pre>
+    </section>
   </template>
   <div
     v-else
@@ -94,14 +114,46 @@ watch([() => props.node, canAudit], () => void load(), { immediate: true });
   </div>
 </template>
 <style scoped>
-.hosts-output {
+.hosts-editor {
+  background: #fff;
+}
+.hosts-editor__header {
+  min-height: 36px;
+  padding: 0 12px;
+  gap: 7px;
+  border-bottom: 1px solid #dfe1e6;
+  background: #f2f5fc;
+  color: #333;
+  font-size: 12px;
+  font-weight: 600;
+}
+.hosts-editor__status {
+  color: #cf4c35;
+  font-weight: 400;
+}
+.hosts-editor__input :deep(.q-field__control) {
+  min-height: 420px;
+  padding: 0;
+}
+.hosts-editor__input :deep(.q-field__native) {
+  min-height: 420px;
+  padding: 12px;
+  color: #333;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+.hosts-editor__output {
   max-height: 520px;
   margin: 0;
   padding: 12px;
   overflow: auto;
-  border: 1px solid #dfe1e6;
-  background: #f7f9fb;
+  background: #fff;
   color: #333;
+  font-family: Consolas, 'Courier New', monospace;
   font-size: 12px;
   line-height: 1.6;
   white-space: pre-wrap;

@@ -10,6 +10,7 @@ export interface NodeDiskTableAction {
   label: string;
   color?: string;
   requiresSelection?: boolean;
+  disable?: (row?: PveRecord) => boolean;
 }
 
 const props = defineProps<{
@@ -21,6 +22,7 @@ const props = defineProps<{
   node?: string | undefined;
   actions?: NodeDiskTableAction[];
   tree?: boolean;
+  treeColumn?: string;
 }>();
 const emit = defineEmits<{ action: [name: string, row?: PveRecord]; selection: [row?: PveRecord]; rowDblclick: [row: PveRecord] }>();
 
@@ -136,7 +138,7 @@ watch(
               size="12px"
               :color="action.color || 'primary'"
               class="u-button"
-              :disable="action.requiresSelection && !selectedRow"
+              :disable="(action.requiresSelection && !selectedRow) || action.disable?.(selectedRow)"
               :label="action.label"
               @click="emit('action', action.name, selectedRow)"
             />
@@ -169,7 +171,16 @@ watch(
             <span class="text-grey-6">{{ message }}</span>
           </div>
         </template>
-        <template v-if="props.tree" #body-cell-name="scope">
+        <template v-if="props.tree && (!props.treeColumn || props.treeColumn === 'name')" #body-cell-name="scope">
+          <q-td :props="scope">
+            <div class="row items-center no-wrap" :style="{ paddingLeft: `${Number(scope.row.__treeLevel || 0) * 18}px` }">
+              <q-btn v-if="Number(scope.row.__treeChildren || 0)" flat dense round size="sm" :icon="expanded.has(String(scope.row[rowKey])) ? 'expand_more' : 'chevron_right'" @click.stop="toggleTree(scope.row)" />
+              <span v-else class="node-disk-tree-spacer" />
+              {{ scope.value }}
+            </div>
+          </q-td>
+        </template>
+        <template v-if="props.tree && props.treeColumn === 'devpath'" #body-cell-devpath="scope">
           <q-td :props="scope">
             <div class="row items-center no-wrap" :style="{ paddingLeft: `${Number(scope.row.__treeLevel || 0) * 18}px` }">
               <q-btn v-if="Number(scope.row.__treeChildren || 0)" flat dense round size="sm" :icon="expanded.has(String(scope.row[rowKey])) ? 'expand_more' : 'chevron_right'" @click.stop="toggleTree(scope.row)" />

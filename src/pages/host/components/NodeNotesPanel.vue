@@ -82,7 +82,10 @@ watch(
         no-caps
         outline
         dense
+        size="12px"
+        icon-size="16px"
         color="primary"
+        class="node-notes-panel__action"
         icon="edit"
         :label="gettext('Edit')"
         @click="openEditor"
@@ -128,6 +131,13 @@ watch(
 }
 .node-notes-panel__title {
   gap: 12px;
+}
+.node-notes-panel__action {
+  min-height: 28px;
+  padding: 0 10px;
+}
+.node-notes-panel__action :deep(.q-btn__content .q-icon) {
+  font-size: 16px !important;
 }
 .node-notes-panel__content {
   min-height: 287px;

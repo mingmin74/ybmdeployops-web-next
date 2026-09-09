@@ -15,7 +15,7 @@ defineProps<{
 const session = useSessionStore();
 const activeTab = shallowRef('disk');
 const nodeCaps = computed(
-  () => (session.caps as unknown as { nodes?: Record<string, unknown> }).nodes || {},
+  () => (session.caps as unknown as { nodes?: Record<string, unknown> }).nodes || {}
 );
 const canAudit = computed(() => Boolean(nodeCaps.value['Sys.Audit']));
 
@@ -29,7 +29,13 @@ const tabs = [
 </script>
 
 <template>
-  <q-splitter v-if="canAudit" :model-value="146" unit="px" disable class="node-disk-panel full-height">
+  <q-splitter
+    v-if="canAudit"
+    :model-value="146"
+    unit="px"
+    disable
+    class="node-disk-panel full-height"
+  >
     <template #before>
       <q-tabs
         v-model="activeTab"
@@ -41,21 +47,64 @@ const tabs = [
         active-color="primary"
         class="node-disk-panel__tabs"
       >
-        <q-tab v-for="tab in tabs" :key="tab.name" v-bind="tab" />
+        <q-tab
+          v-for="tab in tabs"
+          :key="tab.name"
+          v-bind="tab"
+        />
       </q-tabs>
     </template>
 
     <template #after>
-      <q-tab-panels v-model="activeTab" class="bg-transparent full-height">
-        <q-tab-panel name="disk" class="q-pa-none"><DiskPage embedded :node="node" /></q-tab-panel>
-        <q-tab-panel name="lvm" class="q-pa-none"><LVMPage embedded :node="node" /></q-tab-panel>
-        <q-tab-panel name="lvmthin" class="q-pa-none"
-          ><LVMThinPage embedded :node="node"
-        /></q-tab-panel>
-        <q-tab-panel name="directory" class="q-pa-none"
-          ><DirectoryPage embedded :node="node"
-        /></q-tab-panel>
-        <q-tab-panel name="zfs" class="q-pa-none"><ZFSPage embedded :node="node" /></q-tab-panel>
+      <q-tab-panels
+        v-model="activeTab"
+        class="bg-transparent full-height q-pa-md"
+      >
+        <q-tab-panel
+          name="disk"
+          class="q-pa-none"
+        >
+          <DiskPage
+            embedded
+            :node="node"
+          />
+        </q-tab-panel>
+        <q-tab-panel
+          name="lvm"
+          class="q-pa-none"
+        >
+          <LVMPage
+            embedded
+            :node="node"
+          />
+        </q-tab-panel>
+        <q-tab-panel
+          name="lvmthin"
+          class="q-pa-none"
+        >
+          <LVMThinPage
+            embedded
+            :node="node"
+          />
+        </q-tab-panel>
+        <q-tab-panel
+          name="directory"
+          class="q-pa-none"
+        >
+          <DirectoryPage
+            embedded
+            :node="node"
+          />
+        </q-tab-panel>
+        <q-tab-panel
+          name="zfs"
+          class="q-pa-none"
+        >
+          <ZFSPage
+            embedded
+            :node="node"
+          />
+        </q-tab-panel>
       </q-tab-panels>
     </template>
   </q-splitter>

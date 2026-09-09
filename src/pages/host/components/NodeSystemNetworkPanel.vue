@@ -2,64 +2,955 @@
 import type { QTableColumn } from 'quasar';
 import { useQuasar } from 'quasar';
 import { computed, ref, shallowRef, watch } from 'vue';
-import { applyNodeNetwork, createNodeNetwork, deleteNodeNetwork, getNodeNetwork, getNodeNetworkDevice, revertNodeNetwork, updateNodeNetwork, type PveNodeNetwork } from '@/api/host';
+import {
+  applyNodeNetwork,
+  createNodeNetwork,
+  deleteNodeNetwork,
+  getNodeNetwork,
+  getNodeNetworkDevice,
+  revertNodeNetwork,
+  updateNodeNetwork,
+  type PveNodeNetwork,
+} from '@/api/host';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 import { useSessionStore } from '@/stores/session';
-type NetworkType = 'bridge'|'bond'|'OVSBridge'|'OVSBond'|'OVSIntPort'|'OVSPort'|'vlan'|'eth';
+type NetworkType =
+  'bridge' | 'bond' | 'OVSBridge' | 'OVSBond' | 'OVSIntPort' | 'OVSPort' | 'vlan' | 'eth';
 type Form = Record<string, string | boolean> & {
-  type: NetworkType; iface: string; autostart: boolean; cidr: string; gateway: string; cidr6: string; gateway6: string; comments: string; mtu: string; bridge_ports: string; bridge_vlan_aware: boolean; bridge_vids: string; slaves: string; bond_mode: string; 'bond-primary': string; bond_xmit_hash_policy: string; 'vlan-raw-device': string; 'vlan-id': string; ovs_ports: string; ovs_bonds: string; ovs_bridge: string; ovs_tag: string; ovs_options: string;
+  type: NetworkType;
+  iface: string;
+  autostart: boolean;
+  cidr: string;
+  gateway: string;
+  cidr6: string;
+  gateway6: string;
+  comments: string;
+  mtu: string;
+  bridge_ports: string;
+  bridge_vlan_aware: boolean;
+  bridge_vids: string;
+  slaves: string;
+  bond_mode: string;
+  'bond-primary': string;
+  bond_xmit_hash_policy: string;
+  'vlan-raw-device': string;
+  'vlan-id': string;
+  ovs_ports: string;
+  ovs_bonds: string;
+  ovs_bridge: string;
+  ovs_tag: string;
+  ovs_options: string;
 };
-const props=defineProps<{node:string}>(); const $q=useQuasar(); const session=useSessionStore();
-const rows=shallowRef<PveNodeNetwork[]>([]), selected=shallowRef<PveNodeNetwork[]>([]), changes=shallowRef(''), loading=shallowRef(false), saving=shallowRef(false), visible=shallowRef(false), mode=shallowRef<'create'|'edit'>('create'), taskVisible=shallowRef(false), taskUpid=shallowRef(''), taskTitle=shallowRef('');
-let loadId=0,editId=0;
-const canAudit=computed(()=>Boolean((session.caps as {nodes?:Record<string,unknown>}).nodes?.['Sys.Audit']));
-const canModify=computed(()=>Boolean((session.caps as {nodes?:Record<string,unknown>}).nodes?.['Sys.Modify']));
-const selectedRow=computed(()=>selected.value[0]); const editable=computed(()=>Boolean(selectedRow.value&&selectedRow.value.type!=='unknown'));
-function str(row:Record<string,unknown>,key:string){const value=row[key];return textValue(value)}
-function bool(row:Record<string,unknown>,key:string){const value=row[key];return value===true||value===1||value==='1'}
-function typeLabel(type:unknown){return ({eth:gettext('Network Device'),bridge:gettext('Linux Bridge'),bond:gettext('Linux Bond'),vlan:gettext('Linux VLAN'),OVSBridge:gettext('OVS Bridge'),OVSBond:gettext('OVS Bond'),OVSPort:gettext('OVS Port'),OVSIntPort:gettext('OVS IntPort')}as Record<string,string>)[String(type)]||textValue(type,'-')}
-function next(type:NetworkType){const p=type==='bond'||type==='OVSBond'?'bond':type==='vlan'?'vlan':'vmbr',used=new Set(rows.value.map(r=>str(r,'iface')));let n=0;while(used.has(`${p}${n}`))n++;return `${p}${n}`}
-function empty(type:NetworkType='bridge'):Form{return {type,iface:type==='OVSIntPort'?'':next(type),autostart:true,cidr:'',gateway:'',cidr6:'',gateway6:'',comments:'',mtu:'',bridge_ports:'',bridge_vlan_aware:false,bridge_vids:'',slaves:'',bond_mode:type==='OVSBond'?'active-backup':type==='bond'?'balance-rr':'','bond-primary':'',bond_xmit_hash_policy:'','vlan-raw-device':'','vlan-id':'',ovs_ports:'',ovs_bonds:'',ovs_bridge:'',ovs_tag:'',ovs_options:''}}
-const form=ref<Form>(empty());
+const props = defineProps<{ node: string }>();
+const $q = useQuasar();
+const session = useSessionStore();
+const rows = shallowRef<PveNodeNetwork[]>([]),
+  selected = shallowRef<PveNodeNetwork[]>([]),
+  changes = shallowRef(''),
+  loading = shallowRef(false),
+  saving = shallowRef(false),
+  visible = shallowRef(false),
+  mode = shallowRef<'create' | 'edit'>('create'),
+  taskVisible = shallowRef(false),
+  taskUpid = shallowRef(''),
+  taskTitle = shallowRef('');
+let loadId = 0,
+  editId = 0;
+const canAudit = computed(() =>
+  Boolean((session.caps as { nodes?: Record<string, unknown> }).nodes?.['Sys.Audit'])
+);
+const canModify = computed(() =>
+  Boolean((session.caps as { nodes?: Record<string, unknown> }).nodes?.['Sys.Modify'])
+);
+const selectedRow = computed(() => selected.value[0]);
+const editable = computed(() => Boolean(selectedRow.value && selectedRow.value.type !== 'unknown'));
+function str(row: Record<string, unknown>, key: string) {
+  const value = row[key];
+  return textValue(value);
+}
+function bool(row: Record<string, unknown>, key: string) {
+  const value = row[key];
+  return value === true || value === 1 || value === '1';
+}
+function typeLabel(type: unknown) {
+  return (
+    (
+      {
+        eth: gettext('Network Device'),
+        bridge: gettext('Linux Bridge'),
+        bond: gettext('Linux Bond'),
+        vlan: gettext('Linux VLAN'),
+        OVSBridge: gettext('OVS Bridge'),
+        OVSBond: gettext('OVS Bond'),
+        OVSPort: gettext('OVS Port'),
+        OVSIntPort: gettext('OVS IntPort'),
+      } as Record<string, string>
+    )[String(type)] || textValue(type, '-')
+  );
+}
+function next(type: NetworkType) {
+  const p = type === 'bond' || type === 'OVSBond' ? 'bond' : type === 'vlan' ? 'vlan' : 'vmbr',
+    used = new Set(rows.value.map((r) => str(r, 'iface')));
+  let n = 0;
+  while (used.has(`${p}${n}`)) n++;
+  return `${p}${n}`;
+}
+function empty(type: NetworkType = 'bridge'): Form {
+  return {
+    type,
+    iface: type === 'OVSIntPort' ? '' : next(type),
+    autostart: true,
+    cidr: '',
+    gateway: '',
+    cidr6: '',
+    gateway6: '',
+    comments: '',
+    mtu: '',
+    bridge_ports: '',
+    bridge_vlan_aware: false,
+    bridge_vids: '',
+    slaves: '',
+    bond_mode: type === 'OVSBond' ? 'active-backup' : type === 'bond' ? 'balance-rr' : '',
+    'bond-primary': '',
+    bond_xmit_hash_policy: '',
+    'vlan-raw-device': '',
+    'vlan-id': '',
+    ovs_ports: '',
+    ovs_bonds: '',
+    ovs_bridge: '',
+    ovs_tag: '',
+    ovs_options: '',
+  };
+}
+const form = ref<Form>(empty());
+const showAdvanced = shallowRef(false);
 // Retain the complete API object for the edit session. Only schema-known fields
 // are submitted, because the PVE network endpoint rejects additional properties.
-const originalNetwork=shallowRef<PveNodeNetwork>();
-const originalForm=shallowRef<Form>();
-function fill(row:PveNodeNetwork,type=String(row.type)as NetworkType){const f=empty(type);for(const k of Object.keys(f))f[k]=k==='type'?type:k==='autostart'||k==='bridge_vlan_aware'?bool(row,k):str(row,k);f.cidr=str(row,'cidr')||str(row,'address');f.cidr6=str(row,'cidr6')||str(row,'address6');return f}
-const vlanInterfaceDerived=computed(()=>form.value.type==='vlan'&&/^(.+)\.(\d+)$/.test(form.value.iface.trim()));
-const vlanNameDerived=computed(()=>form.value.type==='vlan'&&/^vlan(\d+)$/.test(form.value.iface.trim()));
-const title=computed(()=>`${mode.value==='create'?gettext('Create'):gettext('Edit')}: ${typeLabel(form.value.type)}`);
-function bridgeVidsValid(value:string){return !value.trim()||value.trim().split(/[\s,]+/).every((part)=>{const match=part.match(/^(\d+)(?:-(\d+))?$/);if(!match)return false;const start=Number(match[1]),end=Number(match[2]||match[1]);return start>=2&&end<=4094&&start<=end})}
-const valid=computed(()=>{const f=form.value,i=f.iface.trim(),mtu=f.mtu.trim();if(!i||i.length>15||(f.type==='bridge'&&!/^[a-zA-Z][a-zA-Z0-9_]{0,9}$/.test(i))||((f.type==='bond'||f.type==='OVSBond')&&!/^bond\d{1,4}$/.test(i))||(f.type==='vlan'&&!/^(?:vlan\d+|\w+\.\d+)$/.test(i)))return false;if(f.type==='vlan'&&(!f['vlan-id']||!f['vlan-raw-device']))return false;if(['OVSBond','OVSIntPort','OVSPort'].includes(f.type)&&!f.ovs_bridge)return false;return bridgeVidsValid(f.bridge_vids)&&(!mtu||(Number.isInteger(+mtu)&&+mtu>=1280&&+mtu<=65520))});
-const columns:QTableColumn<PveNodeNetwork>[]=[
- {name:'iface',label:gettext('iface'),field:r=>`${str(r,'iface')}${Number(r.speed)>0?` (${Number(r.speed)/1000}Gb)`:''}`,align:'left',sortable:true},{name:'altnames',label:gettext('Alternative Names'),field:r=>Array.isArray(r.altnames)?r.altnames.join(', '):str(r,'altnames'),align:'left'}, {name:'type',label:gettext('type'),field:r=>typeLabel(r.type),align:'left',sortable:true},{name:'active',label:gettext('active'),field:'active',align:'left'}, {name:'autostart',label:gettext('autostart'),field:'autostart',align:'left'}, {name:'bridge_vlan_aware',label:gettext('VLAN aware'),field:r=>bool(r,'bridge_vlan_aware')?gettext('Yes'):gettext('No'),align:'left'}, {name:'ports',label:gettext('Ports/Slaves'),field:r=>str(r,r.type==='bond'?'slaves':r.type==='OVSBond'?'ovs_bonds':r.type==='OVSBridge'?'ovs_ports':'bridge_ports'),align:'left'}, {name:'bond_mode',label:gettext('Bond Mode'),field:'bond_mode',align:'left'}, {name:'cidr',label:gettext('IP address'),field:r=>str(r,'cidr')||str(r,'address'),align:'left'}, {name:'gateway',label:gettext('Gateway'),field:'gateway',align:'left'}, {name:'vlan-id',label:gettext('VLAN ID'),field:'vlan-id',align:'left'}, {name:'vlan-raw-device',label:gettext('VLAN raw device'),field:'vlan-raw-device',align:'left'}, {name:'mtu',label:'MTU',field:'mtu',align:'left'}, {name:'comments',label:gettext('Description'),field:'comments',align:'left'}];
-const visibleColumns=['iface','altnames','type','active','autostart','bridge_vlan_aware','ports','bond_mode','cidr','gateway','comments'];
-async function load(){const node=props.node,id=++loadId;if(!node||!canAudit.value){rows.value=[];changes.value='';return}loading.value=true;try{const r=await getNodeNetwork(node,{_dc:Date.now()});if(id!==loadId||node!==props.node)return;rows.value=r.data||[];changes.value=r.changes||'';const iface=str(selectedRow.value||{},'iface');selected.value=iface?rows.value.filter(r=>str(r,'iface')===iface):[]}finally{if(id===loadId)loading.value=false}}
-function open(type:Exclude<NetworkType,'eth'|'OVSPort'>){mode.value='create';originalNetwork.value=undefined;originalForm.value=undefined;form.value=empty(type);visible.value=true}
-async function edit(){const row=selectedRow.value;if(!row||!props.node)return;const iface=str(row,'iface'),type=str(row,'type')as NetworkType,id=++editId;saving.value=true;try{const r=await getNodeNetworkDevice(props.node,iface);if(id!==editId||!r.data||str(r.data,'type')!==type)return;mode.value='edit';originalNetwork.value={...r.data};form.value=fill(r.data,type);originalForm.value={...form.value};visible.value=true}finally{if(id===editId)saving.value=false}}
-function payload(){const groups:Record<NetworkType,string[]>={eth:['type','iface','autostart','comments','cidr','gateway','cidr6','gateway6','mtu'],bridge:['type','iface','autostart','comments','cidr','gateway','cidr6','gateway6','mtu','bridge_ports','bridge_vlan_aware','bridge_vids'],bond:['type','iface','autostart','comments','cidr','gateway','cidr6','gateway6','mtu','slaves','bond_mode','bond-primary','bond_xmit_hash_policy'],vlan:['type','iface','autostart','comments','cidr','gateway','cidr6','gateway6','mtu','vlan-raw-device','vlan-id'],OVSBridge:['type','iface','autostart','comments','cidr','gateway','cidr6','gateway6','mtu','ovs_ports','ovs_options'],OVSBond:['type','iface','autostart','comments','mtu','ovs_bonds','bond_mode','ovs_bridge','ovs_tag','ovs_options'],OVSIntPort:['type','iface','autostart','comments','cidr','gateway','cidr6','gateway6','mtu','ovs_bridge','ovs_tag','ovs_options'],OVSPort:['type','iface','autostart','comments','cidr','gateway','cidr6','gateway6','mtu','ovs_bridge','ovs_tag','ovs_options']};const data:Record<string,unknown>={},del:string[]=[];for(const k of groups[form.value.type]){const v=form.value[k]??'',initial=originalForm.value?.[k]??'';if(k==='type')data[k]=v;else if(typeof v==='boolean')data[k]=v?1:0;else if(v.trim())data[k]=v.trim();else if(mode.value==='edit'&&typeof initial==='string'&&initial.trim()&&!['type','iface'].includes(k))del.push(k)}if(del.length)data.delete=del.join(',');return data}
-async function task(upid?:string,label?:string){if(upid?.startsWith('UPID:')){taskUpid.value=upid;taskTitle.value=label||gettext('Network');taskVisible.value=true}else await load()}
-function onTaskVisibleChange(visible:boolean){if(!visible)void load()}
-async function save(){if(!props.node||!valid.value)return;saving.value=true;try{const r=mode.value==='create'?await createNodeNetwork(props.node,payload()):await updateNodeNetwork(props.node,form.value.iface,payload());visible.value=false;await task(r.data,mode.value==='create'?gettext('Create Network Device'):gettext('Save Network Configuration'))}finally{saving.value=false}}
-function confirm(message:string,fn:()=>Promise<void>){$q.dialog({title:gettext('Confirm'),message,cancel:true,persistent:true}).onOk(()=>void fn())}
-function remove(){const iface=str(selectedRow.value||{},'iface');if(iface)confirm(gettext("Are you sure you want to remove entry '%s'").replace('%s',iface),async()=>{saving.value=true;try{const r=await deleteNodeNetwork(props.node,iface);await task(r.data,gettext('Remove Network Device'))}finally{saving.value=false}})}
-async function revert(){if(!changes.value)return;saving.value=true;try{await revertNodeNetwork(props.node);await load()}finally{saving.value=false}}
-function apply(){if(changes.value)confirm(gettext('Do you want to apply pending network changes?'),async()=>{saving.value=true;try{const r=await applyNodeNetwork(props.node);await task(r.data,gettext('Apply Network Configuration'))}finally{saving.value=false}})}
-function vlanSync(){if(form.value.type!=='vlan')return;const m=form.value.iface.trim().match(/^(.+)\.(\d+)$/),v=form.value.iface.trim().match(/^vlan(\d+)$/);if(m){form.value['vlan-raw-device']=m[1]||'';form.value['vlan-id']=m[2]||''}else if(v)form.value['vlan-id']=v[1]||''}
-function bondSync(){if(form.value.type!=='bond'){form.value['bond-primary']='';form.value.bond_xmit_hash_policy='';return}if(['balance-xor','802.3ad'].includes(form.value.bond_mode))form.value['bond-primary']='';else{form.value.bond_xmit_hash_policy='';if(form.value.bond_mode!=='active-backup')form.value['bond-primary']=''}}
-watch(()=>[form.value.type,form.value.iface],vlanSync);watch([()=>props.node,canAudit],()=>{visible.value=false;void load()},{immediate:true});
+const originalNetwork = shallowRef<PveNodeNetwork>();
+const originalForm = shallowRef<Form>();
+function fill(row: PveNodeNetwork, type = String(row.type) as NetworkType) {
+  const f = empty(type);
+  for (const k of Object.keys(f))
+    f[k] =
+      k === 'type'
+        ? type
+        : k === 'autostart' || k === 'bridge_vlan_aware'
+          ? bool(row, k)
+          : str(row, k);
+  f.cidr = str(row, 'cidr') || str(row, 'address');
+  f.cidr6 = str(row, 'cidr6') || str(row, 'address6');
+  return f;
+}
+const vlanInterfaceDerived = computed(
+  () => form.value.type === 'vlan' && /^(.+)\.(\d+)$/.test(form.value.iface.trim())
+);
+const vlanNameDerived = computed(
+  () => form.value.type === 'vlan' && /^vlan(\d+)$/.test(form.value.iface.trim())
+);
+const title = computed(
+  () =>
+    `${mode.value === 'create' ? gettext('Create') : gettext('Edit')}: ${typeLabel(
+      form.value.type
+    )}`
+);
+function bridgeVidsValid(value: string) {
+  return (
+    !value.trim() ||
+    value
+      .trim()
+      .split(/[\s,]+/)
+      .every((part) => {
+        const match = part.match(/^(\d+)(?:-(\d+))?$/);
+        if (!match) return false;
+        const start = Number(match[1]),
+          end = Number(match[2] || match[1]);
+        return start >= 2 && end <= 4094 && start <= end;
+      })
+  );
+}
+const valid = computed(() => {
+  const f = form.value,
+    i = f.iface.trim(),
+    mtu = f.mtu.trim();
+  if (
+    !i ||
+    i.length > 15 ||
+    (f.type === 'bridge' && !/^[a-zA-Z][a-zA-Z0-9_]{0,9}$/.test(i)) ||
+    ((f.type === 'bond' || f.type === 'OVSBond') && !/^bond\d{1,4}$/.test(i)) ||
+    (f.type === 'vlan' && !/^(?:vlan\d+|\w+\.\d+)$/.test(i))
+  )
+    return false;
+  if (f.type === 'vlan' && (!f['vlan-id'] || !f['vlan-raw-device'])) return false;
+  if (['OVSBond', 'OVSIntPort', 'OVSPort'].includes(f.type) && !f.ovs_bridge) return false;
+  return (
+    bridgeVidsValid(f.bridge_vids) &&
+    (!mtu || (Number.isInteger(+mtu) && +mtu >= 1280 && +mtu <= 65520))
+  );
+});
+const columns: QTableColumn<PveNodeNetwork>[] = [
+  {
+    name: 'iface',
+    label: gettext('iface'),
+    field: (r) =>
+      `${str(r, 'iface')}${Number(r.speed) > 0 ? ` (${Number(r.speed) / 1000}Gb)` : ''}`,
+    align: 'left',
+    sortable: true,
+  },
+  {
+    name: 'altnames',
+    label: gettext('Alternative Names'),
+    field: (r) => (Array.isArray(r.altnames) ? r.altnames.join(', ') : str(r, 'altnames')),
+    align: 'left',
+  },
+  {
+    name: 'type',
+    label: gettext('type'),
+    field: (r) => typeLabel(r.type),
+    align: 'left',
+    sortable: true,
+  },
+  { name: 'active', label: gettext('active'), field: 'active', align: 'left' },
+  { name: 'autostart', label: gettext('autostart'), field: 'autostart', align: 'left' },
+  {
+    name: 'bridge_vlan_aware',
+    label: gettext('VLAN aware'),
+    field: (r) => (bool(r, 'bridge_vlan_aware') ? gettext('Yes') : gettext('No')),
+    align: 'left',
+  },
+  {
+    name: 'ports',
+    label: gettext('Ports/Slaves'),
+    field: (r) =>
+      str(
+        r,
+        r.type === 'bond'
+          ? 'slaves'
+          : r.type === 'OVSBond'
+            ? 'ovs_bonds'
+            : r.type === 'OVSBridge'
+              ? 'ovs_ports'
+              : 'bridge_ports'
+      ),
+    align: 'left',
+  },
+  { name: 'bond_mode', label: gettext('Bond Mode'), field: 'bond_mode', align: 'left' },
+  {
+    name: 'cidr',
+    label: gettext('IP address'),
+    field: (r) => str(r, 'cidr') || str(r, 'address'),
+    align: 'left',
+  },
+  { name: 'gateway', label: gettext('Gateway'), field: 'gateway', align: 'left' },
+  { name: 'vlan-id', label: gettext('VLAN ID'), field: 'vlan-id', align: 'left' },
+  {
+    name: 'vlan-raw-device',
+    label: gettext('VLAN raw device'),
+    field: 'vlan-raw-device',
+    align: 'left',
+  },
+  { name: 'mtu', label: 'MTU', field: 'mtu', align: 'left' },
+  { name: 'comments', label: gettext('Description'), field: 'comments', align: 'left' },
+];
+const visibleColumns = [
+  'iface',
+  'altnames',
+  'type',
+  'active',
+  'autostart',
+  'bridge_vlan_aware',
+  'ports',
+  'bond_mode',
+  'cidr',
+  'gateway',
+  'comments',
+];
+async function load() {
+  const node = props.node,
+    id = ++loadId;
+  if (!node || !canAudit.value) {
+    rows.value = [];
+    changes.value = '';
+    return;
+  }
+  loading.value = true;
+  try {
+    const r = await getNodeNetwork(node, { _dc: Date.now() });
+    if (id !== loadId || node !== props.node) return;
+    rows.value = r.data || [];
+    changes.value = r.changes || '';
+    const iface = str(selectedRow.value || {}, 'iface');
+    selected.value = iface ? rows.value.filter((r) => str(r, 'iface') === iface) : [];
+  } finally {
+    if (id === loadId) loading.value = false;
+  }
+}
+function open(type: Exclude<NetworkType, 'eth' | 'OVSPort'>) {
+  mode.value = 'create';
+  originalNetwork.value = undefined;
+  originalForm.value = undefined;
+  form.value = empty(type);
+  visible.value = true;
+}
+async function edit() {
+  const row = selectedRow.value;
+  if (!row || !props.node) return;
+  const iface = str(row, 'iface'),
+    type = str(row, 'type') as NetworkType,
+    id = ++editId;
+  saving.value = true;
+  try {
+    const r = await getNodeNetworkDevice(props.node, iface);
+    if (id !== editId || !r.data || str(r.data, 'type') !== type) return;
+    mode.value = 'edit';
+    originalNetwork.value = { ...r.data };
+    form.value = fill(r.data, type);
+    originalForm.value = { ...form.value };
+    visible.value = true;
+  } finally {
+    if (id === editId) saving.value = false;
+  }
+}
+function payload() {
+  const groups: Record<NetworkType, string[]> = {
+    eth: ['type', 'iface', 'autostart', 'comments', 'cidr', 'gateway', 'cidr6', 'gateway6', 'mtu'],
+    bridge: [
+      'type',
+      'iface',
+      'autostart',
+      'comments',
+      'cidr',
+      'gateway',
+      'cidr6',
+      'gateway6',
+      'mtu',
+      'bridge_ports',
+      'bridge_vlan_aware',
+      'bridge_vids',
+    ],
+    bond: [
+      'type',
+      'iface',
+      'autostart',
+      'comments',
+      'cidr',
+      'gateway',
+      'cidr6',
+      'gateway6',
+      'mtu',
+      'slaves',
+      'bond_mode',
+      'bond-primary',
+      'bond_xmit_hash_policy',
+    ],
+    vlan: [
+      'type',
+      'iface',
+      'autostart',
+      'comments',
+      'cidr',
+      'gateway',
+      'cidr6',
+      'gateway6',
+      'mtu',
+      'vlan-raw-device',
+      'vlan-id',
+    ],
+    OVSBridge: [
+      'type',
+      'iface',
+      'autostart',
+      'comments',
+      'cidr',
+      'gateway',
+      'cidr6',
+      'gateway6',
+      'mtu',
+      'ovs_ports',
+      'ovs_options',
+    ],
+    OVSBond: [
+      'type',
+      'iface',
+      'autostart',
+      'comments',
+      'mtu',
+      'ovs_bonds',
+      'bond_mode',
+      'ovs_bridge',
+      'ovs_tag',
+      'ovs_options',
+    ],
+    OVSIntPort: [
+      'type',
+      'iface',
+      'autostart',
+      'comments',
+      'cidr',
+      'gateway',
+      'cidr6',
+      'gateway6',
+      'mtu',
+      'ovs_bridge',
+      'ovs_tag',
+      'ovs_options',
+    ],
+    OVSPort: [
+      'type',
+      'iface',
+      'autostart',
+      'comments',
+      'cidr',
+      'gateway',
+      'cidr6',
+      'gateway6',
+      'mtu',
+      'ovs_bridge',
+      'ovs_tag',
+      'ovs_options',
+    ],
+  };
+  const data: Record<string, unknown> = {},
+    del: string[] = [];
+  for (const k of groups[form.value.type]) {
+    const v = form.value[k] ?? '',
+      initial = originalForm.value?.[k] ?? '';
+    if (k === 'type') data[k] = v;
+    else if (typeof v === 'boolean') data[k] = v ? 1 : 0;
+    else if (v.trim()) data[k] = v.trim();
+    else if (
+      mode.value === 'edit' &&
+      typeof initial === 'string' &&
+      initial.trim() &&
+      !['type', 'iface'].includes(k)
+    )
+      del.push(k);
+  }
+  if (del.length) data.delete = del.join(',');
+  return data;
+}
+async function task(upid?: string, label?: string) {
+  if (upid?.startsWith('UPID:')) {
+    taskUpid.value = upid;
+    taskTitle.value = label || gettext('Network');
+    taskVisible.value = true;
+  } else await load();
+}
+function onTaskVisibleChange(visible: boolean) {
+  if (!visible) void load();
+}
+async function save() {
+  if (!props.node || !valid.value) return;
+  saving.value = true;
+  try {
+    const r =
+      mode.value === 'create'
+        ? await createNodeNetwork(props.node, payload())
+        : await updateNodeNetwork(props.node, form.value.iface, payload());
+    visible.value = false;
+    await task(
+      r.data,
+      mode.value === 'create'
+        ? gettext('Create Network Device')
+        : gettext('Save Network Configuration')
+    );
+  } finally {
+    saving.value = false;
+  }
+}
+function confirm(message: string, fn: () => Promise<void>) {
+  $q.dialog({ title: gettext('Confirm'), message, cancel: true, persistent: true }).onOk(
+    () => void fn()
+  );
+}
+function remove() {
+  const iface = str(selectedRow.value || {}, 'iface');
+  if (iface)
+    confirm(
+      gettext("Are you sure you want to remove entry '%s'").replace('%s', iface),
+      async () => {
+        saving.value = true;
+        try {
+          const r = await deleteNodeNetwork(props.node, iface);
+          await task(r.data, gettext('Remove Network Device'));
+        } finally {
+          saving.value = false;
+        }
+      }
+    );
+}
+async function revert() {
+  if (!changes.value) return;
+  saving.value = true;
+  try {
+    await revertNodeNetwork(props.node);
+    await load();
+  } finally {
+    saving.value = false;
+  }
+}
+function apply() {
+  if (changes.value)
+    confirm(gettext('Do you want to apply pending network changes?'), async () => {
+      saving.value = true;
+      try {
+        const r = await applyNodeNetwork(props.node);
+        await task(r.data, gettext('Apply Network Configuration'));
+      } finally {
+        saving.value = false;
+      }
+    });
+}
+function vlanSync() {
+  if (form.value.type !== 'vlan') return;
+  const m = form.value.iface.trim().match(/^(.+)\.(\d+)$/),
+    v = form.value.iface.trim().match(/^vlan(\d+)$/);
+  if (m) {
+    form.value['vlan-raw-device'] = m[1] || '';
+    form.value['vlan-id'] = m[2] || '';
+  } else if (v) form.value['vlan-id'] = v[1] || '';
+}
+function bondSync() {
+  if (form.value.type !== 'bond') {
+    form.value['bond-primary'] = '';
+    form.value.bond_xmit_hash_policy = '';
+    return;
+  }
+  if (['balance-xor', '802.3ad'].includes(form.value.bond_mode)) form.value['bond-primary'] = '';
+  else {
+    form.value.bond_xmit_hash_policy = '';
+    if (form.value.bond_mode !== 'active-backup') form.value['bond-primary'] = '';
+  }
+}
+watch(() => [form.value.type, form.value.iface], vlanSync);
+watch(
+  [() => props.node, canAudit],
+  () => {
+    visible.value = false;
+    void load();
+  },
+  { immediate: true }
+);
 </script>
 
 <template>
- <q-table flat row-key="iface" selection="single" hide-selected-banner table-header-class="u-table-header" :rows="rows" :columns="columns" :visible-columns="visibleColumns" :loading="loading" :selected="selected" :rows-per-page-options="[0]" :no-data-label="gettext('no record can be found')" table-style="max-width:100%;overflow-x:auto" @update:selected="selected=[...$event]">
-  <template #top><div class="row full-width items-center q-gutter-sm"><q-btn-dropdown no-caps outline size="12px" color="primary" class="u-button" :disable="!canModify" :label="gettext('Create')"><q-list dense><q-item v-for="o in [{value:'bridge'},{value:'bond'},{value:'OVSBridge'},{value:'OVSBond'},{value:'OVSIntPort'},{value:'vlan'}]" :key="o.value" v-close-popup clickable @click="open(o.value as Exclude<NetworkType,'eth'|'OVSPort'>)"><q-item-section>{{ typeLabel(o.value) }}</q-item-section></q-item></q-list></q-btn-dropdown><q-btn no-caps outline size="12px" color="primary" class="u-button" :disable="!editable||!canModify" :loading="saving" :label="gettext('Edit')" @click="edit"/><q-btn no-caps outline size="12px" color="negative" class="u-button" :disable="!selectedRow||!canModify" :loading="saving" :label="gettext('Remove')" @click="remove"/><q-btn no-caps outline size="12px" color="primary" class="u-button" :loading="loading" :label="gettext('Reload')" @click="load"/><q-btn no-caps outline size="12px" color="primary" class="u-button" :disable="!changes||!canModify" :loading="saving" :label="gettext('Revert')" @click="revert"/><q-btn no-caps outline size="12px" color="primary" class="u-button" :disable="!changes||!canModify" :loading="saving" :label="gettext('Apply Configuration')" @click="apply"/></div></template>
-  <template #body-cell-active="s"><q-td :props="s"><q-badge :color="s.value?'green':'grey'" :label="s.value?gettext('Active'):'-'"/></q-td></template>
- </q-table>
- <div v-if="changes" class="pending-note">{{ gettext("Pending changes (Either reboot or use 'Apply Configuration' (needs ifupdown2) to activate)") }}</div><pre v-if="changes" class="pending">{{ changes }}</pre>
- <q-dialog v-model="visible" persistent transition-show="scale" transition-hide="scale"><UWindow :title="title" width="900px" :loading="saving"><q-form class="q-pa-md u-dense" @submit.prevent="save"><div class="u-border q-pa-md row q-gutter-lg"><div class="col"><q-input v-model="form.iface" dense class="q-field--with-bottom" :readonly="mode==='edit'" :label="gettext('iface')"/><template v-if="form.type!=='OVSBond'"><q-input v-model="form.cidr" dense class="q-field--with-bottom" label="IPv4/CIDR"/><q-input v-model="form.gateway" dense class="q-field--with-bottom" :label="`${gettext('Gateway')} (IPv4)`"/><q-input v-model="form.cidr6" dense class="q-field--with-bottom" label="IPv6/CIDR"/><q-input v-model="form.gateway6" dense class="q-field--with-bottom" :label="`${gettext('Gateway')} (IPv6)`"/></template><q-input v-model="form.comments" dense class="q-field--with-bottom" :label="gettext('Description')"/><q-input v-model="form.mtu" dense type="number" min="1280" max="65520" class="q-field--with-bottom" label="MTU" hint="1280-65520, default 1500"/></div><div class="col"><template v-if="form.type==='bridge'"><q-input v-model="form.bridge_ports" dense class="q-field--with-bottom" :label="gettext('Ports/Slaves')"/><q-checkbox v-model="form.bridge_vlan_aware" dense right-label color="primary" :label="gettext('VLAN aware')"/><q-input v-model="form.bridge_vids" dense class="q-field--with-bottom" :disable="!form.bridge_vlan_aware" :label="gettext('VLAN IDs')" hint="2-4094"/></template><template v-else-if="form.type==='bond'||form.type==='OVSBond'"><q-input v-model="form[form.type==='bond'?'slaves':'ovs_bonds'] as string" dense class="q-field--with-bottom" :label="gettext('Slaves')"/><q-select v-model="form.bond_mode" dense options-dense class="q-field--with-bottom" :label="gettext('Mode')" :options="form.type==='OVSBond'?['active-backup','balance-slb','lacp-balance-slb','lacp-balance-tcp']:['balance-rr','active-backup','balance-xor','broadcast','802.3ad','balance-tlb','balance-alb']" @update:model-value="bondSync"/><q-select v-if="form.type==='bond'" v-model="form.bond_xmit_hash_policy" dense options-dense class="q-field--with-bottom" :disable="!['balance-xor','802.3ad'].includes(form.bond_mode)" :label="gettext('Hash policy')" :options="['layer2','layer2+3','layer3+4']"/><q-input v-if="form.type==='bond'" v-model="form['bond-primary']" dense class="q-field--with-bottom" :disable="form.bond_mode!=='active-backup'" label="bond-primary"/></template><template v-else-if="form.type==='vlan'"><q-input v-model="form['vlan-raw-device']" dense class="q-field--with-bottom" :disable="vlanInterfaceDerived" :label="gettext('VLAN raw device')"/><q-input v-model="form['vlan-id']" dense type="number" min="1" max="4094" class="q-field--with-bottom" :disable="vlanInterfaceDerived||vlanNameDerived" :label="gettext('VLAN ID')"/></template><template v-if="['OVSBridge','OVSBond','OVSIntPort','OVSPort'].includes(form.type)"><q-input v-if="form.type==='OVSBridge'" v-model="form.ovs_ports" dense class="q-field--with-bottom" :label="gettext('Ports/Slaves')"/><q-input v-else v-model="form.ovs_bridge" dense class="q-field--with-bottom" :readonly="mode==='edit'" :label="typeLabel('OVSBridge')"/><q-input v-if="form.type!=='OVSBridge'" v-model="form.ovs_tag" dense type="number" min="1" max="4094" class="q-field--with-bottom" :label="gettext('VLAN Tag')"/><q-input v-model="form.ovs_options" dense class="q-field--with-bottom" :label="gettext('OVS options')"/></template><q-checkbox v-model="form.autostart" dense right-label color="primary" :label="gettext('autostart')"/></div></div></q-form><template #foot><q-btn v-close-popup no-caps outline size="12px" class="u-button u-border-button" :label="gettext('Cancel')"/><q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :disable="!valid||saving" :label="mode==='create'?gettext('Create'):gettext('Save')" @click="save"/></template></UWindow></q-dialog>
- <TaskOutputDialog v-model="taskVisible" :node="props.node" :upid="taskUpid" :title="taskTitle" @finished="load" @update:model-value="onTaskVisibleChange"/>
+  <q-table
+    flat
+    row-key="iface"
+    selection="single"
+    hide-selected-banner
+    table-header-class="u-table-header"
+    :rows="rows"
+    :columns="columns"
+    :visible-columns="visibleColumns"
+    :loading="loading"
+    :selected="selected"
+    :rows-per-page-options="[0]"
+    :no-data-label="gettext('no record can be found')"
+    table-style="max-width:100%;overflow-x:auto"
+    @update:selected="selected = [...$event]"
+  >
+    <template #top>
+      <div class="row full-width items-center q-gutter-sm">
+        <q-btn-dropdown
+          no-caps
+          outline
+          size="12px"
+          color="primary"
+          class="u-button"
+          :disable="!canModify"
+          :label="gettext('Create')"
+        >
+          <q-list dense>
+            <q-item
+              v-for="o in [
+                { value: 'bridge' },
+                { value: 'bond' },
+                { value: 'OVSBridge' },
+                { value: 'OVSBond' },
+                { value: 'OVSIntPort' },
+                { value: 'vlan' },
+              ]"
+              :key="o.value"
+              v-close-popup
+              clickable
+              @click="open(o.value as Exclude<NetworkType, 'eth' | 'OVSPort'>)"
+            >
+              <q-item-section>{{ typeLabel(o.value) }}</q-item-section>
+            </q-item>
+          </q-list>
+        </q-btn-dropdown>
+        <q-btn
+          no-caps
+          outline
+          size="12px"
+          color="primary"
+          class="u-button"
+          :disable="!editable || !canModify"
+          :loading="saving"
+          :label="gettext('Edit')"
+          @click="edit"
+        />
+        <q-btn
+          no-caps
+          outline
+          size="12px"
+          color="negative"
+          class="u-button"
+          :disable="!selectedRow || !canModify"
+          :loading="saving"
+          :label="gettext('Remove')"
+          @click="remove"
+        />
+        <q-btn
+          no-caps
+          outline
+          size="12px"
+          color="primary"
+          class="u-button"
+          :loading="loading"
+          :label="gettext('Reload')"
+          @click="load"
+        />
+        <q-btn
+          no-caps
+          outline
+          size="12px"
+          color="primary"
+          class="u-button"
+          :disable="!changes || !canModify"
+          :loading="saving"
+          :label="gettext('Revert')"
+          @click="revert"
+        />
+        <q-btn
+          no-caps
+          outline
+          size="12px"
+          color="primary"
+          class="u-button"
+          :disable="!changes || !canModify"
+          :loading="saving"
+          :label="gettext('Apply Configuration')"
+          @click="apply"
+        />
+      </div>
+    </template>
+    <template #body-cell-active="s">
+      <q-td :props="s">
+        <q-badge
+          :color="s.value ? 'green' : 'grey'"
+          :label="s.value ? gettext('Active') : '-'"
+        />
+      </q-td>
+    </template>
+  </q-table>
+  <div
+    v-if="changes"
+    class="pending-note"
+  >
+    {{
+      gettext(
+        "Pending changes (Either reboot or use 'Apply Configuration' (needs ifupdown2) to activate)"
+      )
+    }}
+  </div>
+  <pre
+    v-if="changes"
+    class="pending"
+    >{{ changes }}</pre>
+  <q-dialog
+    v-model="visible"
+    persistent
+    transition-show="scale"
+    transition-hide="scale"
+  >
+    <UWindow
+      :title="title"
+      width="900px"
+      :loading="saving"
+    >
+      <q-form
+        class="q-ma-sm u-dense"
+        @submit.prevent="save"
+      >
+        <div class="u-border-dotted-blue bg-white q-px-md q-py-sm">
+          <div class="row q-gutter-lg">
+            <div class="col">
+              <q-input
+                v-model="form.iface"
+                dense
+                class="q-field--with-bottom"
+                :readonly="mode === 'edit'"
+                :label="gettext('Name')"
+              />
+              <template v-if="form.type !== 'OVSBond'">
+                <q-input
+                  v-model="form.cidr"
+                  dense
+                  class="q-field--with-bottom"
+                  label="IPv4/CIDR"
+                />
+                <q-input
+                  v-model="form.gateway"
+                  dense
+                  class="q-field--with-bottom"
+                  :label="`${gettext('Gateway')} (IPv4)`"
+                />
+                <q-input
+                  v-model="form.cidr6"
+                  dense
+                  class="q-field--with-bottom"
+                  label="IPv6/CIDR"
+                />
+                <q-input
+                  v-model="form.gateway6"
+                  dense
+                  class="q-field--with-bottom"
+                  :label="`${gettext('Gateway')} (IPv6)`"
+                />
+              </template>
+            </div>
+            <div class="col">
+              <q-checkbox
+                v-if="!['OVSIntPort', 'OVSPort', 'OVSBond'].includes(form.type)"
+                v-model="form.autostart"
+                dense
+                right-label
+                color="primary"
+                class="network-form__checkbox q-field--with-bottom"
+                :label="gettext('Autostart')"
+              />
+              <template v-if="form.type === 'bridge'">
+                <q-checkbox
+                  v-model="form.bridge_vlan_aware"
+                  dense
+                  right-label
+                  color="primary"
+                  class="network-form__checkbox q-field--with-bottom"
+                  :label="gettext('VLAN aware')"
+                />
+                <q-input
+                  v-model="form.bridge_ports"
+                  dense
+                  class="q-field--with-bottom"
+                  :label="gettext('Bridge ports')"
+                />
+              </template>
+              <template v-else-if="form.type === 'bond' || form.type === 'OVSBond'">
+                <q-input
+                  v-model="form[form.type === 'bond' ? 'slaves' : 'ovs_bonds'] as string"
+                  dense
+                  class="q-field--with-bottom"
+                  :label="gettext('Slaves')"
+                />
+                <q-select
+                  v-model="form.bond_mode"
+                  dense
+                  options-dense
+                  class="q-field--with-bottom"
+                  :label="gettext('Mode')"
+                  :options="
+                    form.type === 'OVSBond'
+                      ? ['active-backup', 'balance-slb', 'lacp-balance-slb', 'lacp-balance-tcp']
+                      : [
+                          'balance-rr',
+                          'active-backup',
+                          'balance-xor',
+                          'broadcast',
+                          '802.3ad',
+                          'balance-tlb',
+                          'balance-alb',
+                        ]
+                  "
+                  @update:model-value="bondSync"
+                />
+                <q-select
+                  v-if="form.type === 'bond'"
+                  v-model="form.bond_xmit_hash_policy"
+                  dense
+                  options-dense
+                  class="q-field--with-bottom"
+                  :disable="!['balance-xor', '802.3ad'].includes(form.bond_mode)"
+                  :label="gettext('Hash policy')"
+                  :options="['layer2', 'layer2+3', 'layer3+4']"
+                />
+              </template>
+              <template v-else-if="form.type === 'vlan'">
+                <q-input
+                  v-model="form['vlan-id']"
+                  dense
+                  type="number"
+                  min="1"
+                  max="4094"
+                  class="q-field--with-bottom"
+                  :disable="vlanInterfaceDerived || vlanNameDerived"
+                  :label="gettext('VLAN ID')"
+                />
+              </template>
+              <template
+                v-if="['OVSBridge', 'OVSBond', 'OVSIntPort', 'OVSPort'].includes(form.type)"
+              >
+                <q-input
+                  v-if="form.type === 'OVSBridge'"
+                  v-model="form.ovs_ports"
+                  dense
+                  class="q-field--with-bottom"
+                  :label="gettext('Ports/Slaves')"
+                />
+                <q-input
+                  v-else
+                  v-model="form.ovs_bridge"
+                  dense
+                  class="q-field--with-bottom"
+                  :readonly="mode === 'edit'"
+                  :label="typeLabel('OVSBridge')"
+                />
+                <q-input
+                  v-if="form.type !== 'OVSBridge'"
+                  v-model="form.ovs_tag"
+                  dense
+                  type="number"
+                  min="1"
+                  max="4094"
+                  class="q-field--with-bottom"
+                  :label="gettext('VLAN Tag')"
+                />
+              </template>
+              <q-input
+                v-model="form.comments"
+                dense
+                class="q-field--with-bottom"
+                :label="gettext('Comment')"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-if="showAdvanced"
+          class="u-border-dotted-blue bg-white q-px-md q-py-sm q-mt-sm"
+        >
+          <div class="row q-gutter-lg">
+            <div class="col">
+              <q-input
+                v-model="form.mtu"
+                dense
+                type="number"
+                min="1280"
+                max="65520"
+                class="q-field--with-bottom"
+                label="MTU"
+                placeholder="1500"
+              />
+              <q-input
+                v-if="form.type === 'vlan'"
+                v-model="form['vlan-raw-device']"
+                dense
+                class="q-field--with-bottom"
+                :disable="vlanInterfaceDerived"
+                :label="gettext('VLAN raw device')"
+              />
+              <q-input
+                v-model="form['bond-primary']"
+                v-if="form.type === 'bond'"
+                dense
+                class="q-field--with-bottom"
+                :disable="form.bond_mode !== 'active-backup'"
+                label="bond-primary"
+              />
+            </div>
+            <div class="col">
+              <q-input
+                v-model="form.ovs_options"
+                v-if="['OVSBridge', 'OVSBond', 'OVSIntPort', 'OVSPort'].includes(form.type)"
+                dense
+                class="q-field--with-bottom"
+                :label="gettext('OVS options')"
+              />
+              <q-input
+                v-model="form.bridge_vids"
+                v-if="form.type === 'bridge'"
+                dense
+                class="q-field--with-bottom"
+                :disable="!form.bridge_vlan_aware"
+                :label="gettext('VLAN IDs')"
+                placeholder="2-4094"
+              />
+            </div>
+          </div>
+        </div>
+      </q-form>
+      <template #foot>
+        <q-checkbox
+          v-model="showAdvanced"
+          dense
+          right-label
+          color="primary"
+          :label="gettext('Advanced')"
+        />
+        <q-space />
+        <q-btn
+          v-close-popup
+          no-caps
+          flat
+          size="12px"
+          class="bg-grey-8 text-grey-1 u-button"
+          :disable="saving"
+          :label="gettext('Cancel')"
+        />
+        <q-btn
+          no-caps
+          flat
+          size="12px"
+          class="bg-primary text-grey-1 u-button q-ml-sm"
+          :disable="!valid || saving"
+          :loading="saving"
+          :label="mode === 'create' ? gettext('Create') : gettext('Save')"
+          @click="save"
+        />
+      </template>
+    </UWindow>
+  </q-dialog>
+  <TaskOutputDialog
+    v-model="taskVisible"
+    :node="props.node"
+    :upid="taskUpid"
+    :title="taskTitle"
+    @finished="load"
+    @update:model-value="onTaskVisibleChange"
+  />
 </template>
-<style scoped>.pending-note{padding:10px 12px;border:1px solid #dfe1e6;border-top:0;background:#fff8e1;color:#666;font-size:12px}.pending{max-height:180px;margin:0;padding:12px;overflow:auto;border:1px solid #dfe1e6;border-top:0;background:#f7f9fb;color:#333;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word}</style>
+<style scoped>
+.network-form__checkbox {
+  display: flex;
+  width: 100%;
+  height: 55px;
+  box-sizing: border-box;
+  align-items: center;
+}
+.pending-note {
+  padding: 10px 12px;
+  border: 1px solid #dfe1e6;
+  border-top: 0;
+  background: #fff8e1;
+  color: #666;
+  font-size: 12px;
+}
+.pending {
+  max-height: 180px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid #dfe1e6;
+  border-top: 0;
+  background: #f7f9fb;
+  color: #333;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+</style>
