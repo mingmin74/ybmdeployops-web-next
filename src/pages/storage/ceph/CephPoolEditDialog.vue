@@ -24,6 +24,7 @@ const props = defineProps<{
 const loading = shallowRef(false);
 const submitting = shallowRef(false);
 const advanced = shallowRef(false);
+const submitAttempted = shallowRef(false);
 const rules = shallowRef<PveRecord[]>([]);
 type PoolForm = {
   name: string;
@@ -57,6 +58,11 @@ const title = computed(
   () => `${gettext(isCreate.value ? 'Create' : 'Edit')}: ${gettext('Ceph Pool')}`
 );
 const nameValid = computed(() => /^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(form.name.trim()));
+const nameErrorMessage = computed(() =>
+  form.name.trim()
+    ? gettext('Pool name may contain letters, numbers, dot, underscore, and hyphen.')
+    : gettext('This field is required.')
+);
 const sizeValid = computed(() => Number.isInteger(form.size) && form.size >= 2 && form.size <= 7);
 const minSizeValid = computed(
   () => Number.isInteger(form.minSize) && form.minSize >= 1 && form.minSize <= 7
@@ -115,6 +121,7 @@ function resetForm() {
   form.pgNumMin = pool?.pg_num_min === undefined ? null : numberValue(pool.pg_num_min, 0);
   form.isErasure = textValue(pool?.type).toLowerCase() === 'erasure';
   advanced.value = !isCreate.value;
+  submitAttempted.value = false;
 }
 
 async function loadRules() {
@@ -168,6 +175,7 @@ function payload(): CephPoolPayload {
 }
 
 async function submit() {
+  submitAttempted.value = true;
   if (!canSubmit.value) return;
   submitting.value = true;
   try {
@@ -213,11 +221,9 @@ watch(
               :readonly="!isCreate"
               autofocus
               class="q-field--with-bottom"
-              :label="gettext('Name')"
-              :error="Boolean(form.name) && !nameValid"
-              :error-message="
-                gettext('Pool name may contain letters, numbers, dot, underscore, and hyphen.')
-              "
+              :label="`${gettext('Name')} *`"
+              :error="submitAttempted && !nameValid"
+              :error-message="nameErrorMessage"
             />
             <q-input
               v-model.number="form.size"
@@ -227,8 +233,8 @@ watch(
               max="7"
               :disable="form.isErasure"
               class="q-field--with-bottom"
-              :label="gettext('Size')"
-              :error="!sizeValid"
+              :label="`${gettext('Size')} *`"
+              :error="submitAttempted && !sizeValid"
               :error-message="gettext('Value must be between 2 and 7.')"
             />
           </div>
@@ -240,7 +246,7 @@ watch(
               emit-value
               map-options
               class="q-field--with-bottom"
-              :label="gettext('PG Autoscaler Mode')"
+              :label="`${gettext('PG Autoscaler Mode')} *`"
               :options="['warn', 'on', 'off'].map((value) => ({ label: value, value }))"
             />
             <q-checkbox
@@ -257,12 +263,7 @@ watch(
             </q-checkbox>
           </div>
         </div>
-        <q-expansion-item
-          v-model="advanced"
-          dense
-          :label="gettext('Advanced')"
-          header-class="text-primary q-px-none"
-        >
+        <template v-if="advanced">
           <div class="row q-gutter-lg q-pt-sm">
             <div class="col">
               <q-input
@@ -273,8 +274,8 @@ watch(
                 max="7"
                 :disable="form.isErasure"
                 class="q-field--with-bottom"
-                :label="gettext('Min. Size')"
-                :error="!minSizeValid"
+                :label="`${gettext('Min. Size')} *`"
+                :error="submitAttempted && !minSizeValid"
                 :error-message="gettext('Value must be between 1 and 7.')"
               />
               <div
@@ -301,8 +302,10 @@ watch(
                 map-options
                 :disable="form.isErasure"
                 class="q-field--with-bottom"
-                :label="gettext('Crush Rule')"
+                :label="`${gettext('Crush Rule')} *`"
                 :options="ruleOptions"
+                :error="submitAttempted && !form.crushRule"
+                :error-message="gettext('This field is required.')"
               />
               <q-input
                 v-model.number="form.pgNum"
@@ -311,8 +314,8 @@ watch(
                 min="1"
                 max="32768"
                 class="q-field--with-bottom"
-                label="# of PGs"
-                :error="!pgNumValid"
+                label="# of PGs *"
+                :error="submitAttempted && !pgNumValid"
                 :error-message="gettext('Value must be between 1 and 32768.')"
               />
             </div>
@@ -325,7 +328,7 @@ watch(
                 step="0.001"
                 class="q-field--with-bottom"
                 :label="gettext('Target Ratio')"
-                :error="!targetRatioValid"
+                :error="submitAttempted && !targetRatioValid"
               />
               <q-input
                 v-model.number="form.targetSize"
@@ -335,11 +338,8 @@ watch(
                 suffix="GiB"
                 class="q-field--with-bottom"
                 :label="gettext('Target Size')"
-                :error="!targetSizeValid"
+                :error="submitAttempted && !targetSizeValid"
               />
-              <div class="pool-hint">
-                {{ gettext('Target Ratio takes precedence over Target Size.') }}
-              </div>
               <q-input
                 v-model.number="form.pgNumMin"
                 dense
@@ -348,13 +348,21 @@ watch(
                 max="32768"
                 class="q-field--with-bottom"
                 :label="gettext('Min. # of PGs')"
-                :error="!pgNumMinValid"
+                :error="submitAttempted && !pgNumMinValid"
               />
             </div>
           </div>
-        </q-expansion-item>
+        </template>
       </div>
       <template #foot>
+        <q-checkbox
+          v-model="advanced"
+          dense
+          right-label
+          color="primary"
+          :label="gettext('Advanced')"
+        />
+        <q-space />
         <q-btn
           v-close-popup
           no-caps
@@ -369,7 +377,6 @@ watch(
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :disable="!canSubmit"
           :loading="submitting"
           :label="gettext(isCreate ? 'Create' : 'OK')"
           @click="submit"

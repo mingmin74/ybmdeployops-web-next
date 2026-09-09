@@ -50,7 +50,6 @@ const columns: QTableColumn<PveRecord>[] = [
     label: gettext('Quorum'),
     align: 'center',
     field: (row) => Boolean(row.quorum),
-    format: (value) => (value ? '✓' : '✗'),
     sortable: true,
   },
   {
@@ -257,16 +256,6 @@ watch(
 
 <template>
   <div class="column q-gutter-md">
-    <q-btn
-      no-caps
-      outline
-      size="12px"
-      color="primary"
-      class="u-button self-start"
-      :loading="loading"
-      :label="gettext('Refresh')"
-      @click="refreshData"
-    />
     <q-table
       v-model:selected="selectedMons"
       flat
@@ -288,11 +277,31 @@ watch(
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="canStart('mon') ? 'primary' : 'grey'"
             class="u-button"
             :label="gettext('Start')"
             :disable="!canStart('mon')"
             @click="requestServiceAction('mon', 'start')"
+          />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            :color="canOperate('mon') ? 'negative' : 'grey'"
+            class="u-button"
+            :label="gettext('Stop')"
+            :disable="!canOperate('mon')"
+            @click="requestServiceAction('mon', 'stop')"
+          />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            :color="canOperate('mon') ? 'primary' : 'grey'"
+            class="u-button"
+            :label="gettext('Restart')"
+            :disable="!canOperate('mon')"
+            @click="requestServiceAction('mon', 'restart')"
           />
           <q-btn
             no-caps
@@ -309,35 +318,6 @@ watch(
             size="12px"
             color="primary"
             class="u-button"
-            :label="gettext('Stop')"
-            :disable="!canOperate('mon')"
-            @click="requestServiceAction('mon', 'stop')"
-          />
-          <q-btn
-            no-caps
-            outline
-            size="12px"
-            color="primary"
-            class="u-button"
-            :label="gettext('Cluster-wide Bulk Restart')"
-            @click="requestBulkRestart('mgr')"
-          />
-          <q-btn
-            no-caps
-            outline
-            size="12px"
-            color="primary"
-            class="u-button"
-            :label="gettext('Restart')"
-            :disable="!canOperate('mon')"
-            @click="requestServiceAction('mon', 'restart')"
-          />
-          <q-btn
-            no-caps
-            outline
-            size="12px"
-            color="primary"
-            class="u-button"
             :label="gettext('Create')"
             @click="openCreate('mon')"
           />
@@ -345,7 +325,7 @@ watch(
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="selectedRow('mon') ? 'negative' : 'grey'"
             class="u-button"
             :label="gettext('Destroy')"
             :disable="!selectedRow('mon')"
@@ -355,13 +335,21 @@ watch(
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="selectedRow('mon') ? 'primary' : 'grey'"
             class="u-button"
             :label="gettext('Syslog')"
             :disable="!selectedRow('mon')"
             @click="openSyslog('mon')"
           />
         </div>
+      </template>
+      <template #body-cell-quorum="props">
+        <q-td :props="props">
+          <q-icon
+            :name="props.value ? 'check' : 'close'"
+            :class="props.value ? 'text-positive' : 'text-negative'"
+          />
+        </q-td>
       </template>
     </q-table>
     <q-table
@@ -385,7 +373,7 @@ watch(
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="canStart('mgr') ? 'primary' : 'grey'"
             class="u-button"
             :label="gettext('Start')"
             :disable="!canStart('mgr')"
@@ -395,7 +383,7 @@ watch(
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="canOperate('mgr') ? 'negative' : 'grey'"
             class="u-button"
             :label="gettext('Stop')"
             :disable="!canOperate('mgr')"
@@ -405,11 +393,20 @@ watch(
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="canOperate('mgr') ? 'primary' : 'grey'"
             class="u-button"
             :label="gettext('Restart')"
             :disable="!canOperate('mgr')"
             @click="requestServiceAction('mgr', 'restart')"
+          />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Cluster-wide Bulk Restart')"
+            @click="requestBulkRestart('mgr')"
           />
           <q-btn
             no-caps
@@ -424,7 +421,7 @@ watch(
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="selectedRow('mgr') ? 'negative' : 'grey'"
             class="u-button"
             :label="gettext('Destroy')"
             :disable="!selectedRow('mgr')"
@@ -434,13 +431,21 @@ watch(
             no-caps
             outline
             size="12px"
-            color="primary"
+            :color="selectedRow('mgr') ? 'primary' : 'grey'"
             class="u-button"
             :label="gettext('Syslog')"
             :disable="!selectedRow('mgr')"
             @click="openSyslog('mgr')"
           />
         </div>
+      </template>
+      <template #body-cell-quorum="props">
+        <q-td :props="props">
+          <q-icon
+            :name="props.value ? 'check' : 'close'"
+            :class="props.value ? 'text-positive' : 'text-negative'"
+          />
+        </q-td>
       </template>
     </q-table>
     <q-dialog
@@ -451,7 +456,9 @@ watch(
     >
       <UWindow
         width="420px"
-        :title="`${gettext('Create')} ${createType === 'mon' ? gettext('Monitor') : gettext('Manager')}`"
+        :title="`${gettext('Create')} ${
+          createType === 'mon' ? gettext('Monitor') : gettext('Manager')
+        }`"
         :loading="actionLoading"
       >
         <div class="q-pa-md">

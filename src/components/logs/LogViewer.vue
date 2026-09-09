@@ -44,6 +44,7 @@ const untilDatePopup = useTemplateRef<{ show: () => void }>('untilDatePopup');
 let timer: ReturnType<typeof setInterval> | undefined;
 
 const isSystemLog = computed(() => source === 'system');
+const hasTimespanControls = computed(() => source === 'system' || source === 'service');
 const output = computed(() => lines.value.join('\n'));
 const currentNode = computed(() => fixedNode || selectedNode.value);
 const modeOptions = computed(() => [
@@ -66,7 +67,16 @@ function parseDate(value: string) {
 }
 
 function buildParams(isPolling: boolean) {
-  if (!isSystemLog.value) return { start: cephStart.value, limit: 510 };
+  if (source === 'ceph') return { start: cephStart.value, limit: 510 };
+  if (source === 'service') {
+    if (liveMode.value) return { start: cephStart.value, limit: 510 };
+    return {
+      start: 0,
+      limit: 510,
+      since: since.value,
+      until: `${until.value} 23:59:59`,
+    };
+  }
   if (liveMode.value) {
     if (isPolling && startcursor.value) return { startcursor: startcursor.value };
     return { lastentries: 500, ...(endcursor.value ? { endcursor: endcursor.value } : {}) };
@@ -176,13 +186,17 @@ function resetAndLoad() {
   cephStart.value = 0;
   lines.value = [];
   void loadLogs(false);
-  if (isSystemLog.value && liveMode.value) startPolling();
+  if (hasTimespanControls.value && liveMode.value) startPolling();
 }
 
 function startPolling() {
   stopPolling();
   timer = setInterval(() => {
-    if ((isSystemLog.value && liveMode.value) || (!isSystemLog.value && scrollToEnd.value)) {
+    if (
+      (isSystemLog.value && liveMode.value) ||
+      (source === 'service' && liveMode.value && scrollToEnd.value) ||
+      (source === 'ceph' && scrollToEnd.value)
+    ) {
       void loadLogs(true);
     }
   }, 1000);
@@ -211,7 +225,7 @@ function updateScrollPosition() {
 }
 
 watch(liveMode, (enabled) => {
-  if (!isSystemLog.value) return;
+  if (!hasTimespanControls.value) return;
   if (enabled) {
     resetAndLoad();
   } else {
@@ -242,12 +256,11 @@ onBeforeUnmount(() => {
 <template>
   <div class="row column q-px-md q-py-sm">
     <div
-      v-if="isSystemLog"
-      class="col q-mb-sm"
+      v-if="hasTimespanControls"
+      class="q-mb-sm"
     >
       <div class="row q-gutter-sm items-center">
         <q-btn-toggle
-          v-if="isSystemLog"
           v-model="liveMode"
           no-caps
           size="12px"
@@ -255,7 +268,7 @@ onBeforeUnmount(() => {
           toggle-color="primary"
           :options="modeOptions"
         />
-        <template v-if="isSystemLog && !liveMode">
+        <template v-if="!liveMode">
           <q-input
             v-model="since"
             square
@@ -347,7 +360,7 @@ onBeforeUnmount(() => {
       {{ output || gettext('No logs found') }}
     </div>
     <q-inner-loading
-      v-if="isSystemLog"
+      v-if="hasTimespanControls"
       :showing="loading"
     />
   </div>

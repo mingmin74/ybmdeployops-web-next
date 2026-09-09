@@ -207,7 +207,6 @@ watch(
           size="12px"
           color="primary"
           class="u-button"
-          icon="add"
           :loading="actionLoading"
           :label="gettext('Create')"
           @click="openCreate"
@@ -218,7 +217,6 @@ watch(
           size="12px"
           color="primary"
           class="u-button"
-          icon="edit"
           :disable="!selectedPool"
           :label="gettext('Edit')"
           @click="openEdit()"
@@ -229,7 +227,6 @@ watch(
           size="12px"
           color="negative"
           class="u-button"
-          icon="delete"
           :disable="!selectedPool"
           :label="gettext('Destroy')"
           @click="openDestroy"
@@ -267,9 +264,6 @@ watch(
       <q-td :props="props">
         <span :class="{ faded: Number(props.row.target_size_ratio) > 0 }">
           {{ formatBytes(props.row.target_size as number) }}
-          <q-tooltip v-if="Number(props.row.target_size_ratio) > 0">
-            {{ gettext('Target Size Ratio takes precedence over Target Size.') }}
-          </q-tooltip>
         </span>
       </q-td>
     </template>
@@ -299,18 +293,35 @@ watch(
       :title="`${gettext('Destroy')}: ${gettext('Ceph Pool')}`"
       :loading="actionLoading"
     >
-      <div class="q-pa-md">
-        <div class="q-mb-md">{{ gettext('This action cannot be undone.') }}</div>
+      <div class="q-pa-md destroy-dialog-content">
+        <div class="row no-wrap items-start q-mb-md destroy-warning">
+          <q-icon
+            name="warning"
+            color="negative"
+            size="24px"
+            class="q-mr-sm"
+          />
+          <div>
+            <div class="text-weight-medium">{{ gettext('This action cannot be undone.') }}</div>
+            <div class="text-grey-7 q-mt-xs">
+              {{
+                gettext('The Ceph pool and all data stored in it will be permanently destroyed.')
+              }}
+            </div>
+          </div>
+        </div>
         <div class="q-mb-sm">
-          {{ gettext('Please enter the pool name to confirm destruction.') }}:
-          <strong>{{ destroyName }}</strong>
+          {{ gettext('Please enter the pool name to confirm destruction.') }}
+          <strong class="destroy-pool-name">{{ destroyName }}</strong>
         </div>
         <q-input
           v-model="destroyConfirmation"
           dense
           autofocus
           class="q-field--with-bottom"
-          :label="gettext('Name')"
+          :label="`${gettext('Pool Name')} *`"
+          :error="Boolean(destroyConfirmation) && !destroyConfirmed"
+          :error-message="gettext('The pool name does not match.')"
         />
       </div>
       <template #foot>
@@ -344,3 +355,19 @@ watch(
     @finished="refreshData"
   />
 </template>
+
+<style scoped>
+.destroy-warning {
+  padding: 12px;
+  background: #fff4f2;
+  border-left: 3px solid #ff6c59;
+  font-size: 12px;
+}
+
+.destroy-pool-name {
+  display: block;
+  margin-top: 4px;
+  color: #cf4c35;
+  font-size: 13px;
+}
+</style>

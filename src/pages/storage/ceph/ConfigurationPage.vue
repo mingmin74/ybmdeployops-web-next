@@ -81,7 +81,7 @@ async function refreshData() {
 watch(
   () => node,
   () => refreshData(),
-  { immediate: true },
+  { immediate: true }
 );
 </script>
 
@@ -105,22 +105,22 @@ watch(
       :limits="[30, 70]"
       class="configuration-main-splitter"
     >
-      <template #before
-        ><q-splitter
+      <template #before>
+        <q-splitter
           v-model="configSplitter"
           horizontal
           unit="%"
           :limits="[25, 75]"
           class="configuration-bottom-splitter"
         >
-          <template #before
-            ><section class="configuration-pane">
+          <template #before>
+            <section class="configuration-pane">
               <div class="pane-header">{{ gettext('Configuration') }}</div>
               <pre class="ceph-pre">{{ configText }}</pre>
-            </section></template
-          >
-          <template #after
-            ><section class="configuration-pane configuration-db-pane">
+            </section>
+          </template>
+          <template #after>
+            <section class="configuration-pane configuration-db-pane">
               <div class="pane-header">{{ gettext('Configuration Database') }}</div>
               <q-table
                 flat
@@ -131,15 +131,17 @@ watch(
                 :loading="loading"
                 :pagination="{ page: 1, rowsPerPage: 0 }"
                 :rows-per-page-options="[0]"
-              /></section
-          ></template> </q-splitter
-      ></template>
-      <template #after
-        ><section class="configuration-pane crush-pane">
+              />
+            </section>
+          </template>
+        </q-splitter>
+      </template>
+      <template #after>
+        <section class="configuration-pane crush-pane">
           <div class="pane-header">Crush Map</div>
           <pre class="ceph-pre">{{ crushText }}</pre>
-        </section></template
-      >
+        </section>
+      </template>
     </q-splitter>
   </div>
 </template>
@@ -150,7 +152,7 @@ watch(
   flex-direction: column;
   height: calc(100vh - 214px);
   min-height: 560px;
-  padding: 16px;
+  /* padding: 16px; */
 }
 .configuration-toolbar {
   display: flex;

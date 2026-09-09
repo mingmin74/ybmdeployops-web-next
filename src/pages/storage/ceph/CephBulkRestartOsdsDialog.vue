@@ -45,7 +45,7 @@ const affectedText = computed(() => {
     return `${gettext('up to')} ${maxCount.value} ${gettext('OSDs')} ${scope} (${gettext('outdated filter, exact count at task start')})`;
   return onlyOutdated.value
     ? `${affectedCount.value} ${gettext('outdated OSDs')} ${scope} (${gettext('of')} ${maxCount.value} ${gettext('total')})`
-    : `${affectedCount.value} OSD${affectedCount.value === 1 ? '' : 's'} ${scope}`;
+    : `${affectedCount.value} ${gettext(affectedCount.value === 1 ? 'OSD' : 'OSDs')} ${scope}`;
 });
 const durationText = computed(
   () =>
@@ -127,64 +127,94 @@ watch(model, (visible) => {
       width="600px"
       :loading="loading"
     >
-      <div class="q-pa-md column q-gutter-sm">
+      <div class="bulk-restart-content">
         <div
           v-if="healthWarnings.length"
-          class="text-warning"
+          class="bulk-warning"
         >
-          <q-icon name="warning" />
-          {{ gettext('A rolling restart may be refused unless every warning is benign.') }}
-          <ul class="q-my-xs">
-            <li
-              v-for="warning in healthWarnings"
-              :key="warning"
-            >
-              {{ warning }}
-            </li>
-          </ul>
-        </div>
-        <q-select
-          v-model="selectedNode"
-          dense
-          options-dense
-          emit-value
-          map-options
-          class="q-field--with-bottom"
-          :disable="allNodes"
-          :label="gettext('Node')"
-          :options="nodeOptions"
-        />
-        <div class="row q-gutter-lg">
-          <q-checkbox
-            v-model="allNodes"
-            dense
-            right-label
-            color="primary"
-            :label="gettext('all nodes (cluster-wide)')"
+          <q-icon
+            name="warning"
+            size="20px"
+            class="bulk-warning-icon"
           />
-          <q-checkbox
-            v-model="onlyOutdated"
+          <div>
+            <div class="bulk-warning-title">{{ gettext('Ceph health warning') }}</div>
+            <div>
+              {{ gettext('A rolling restart may be refused unless every warning is benign.') }}
+            </div>
+            <ul class="bulk-warning-list">
+              <li
+                v-for="warning in healthWarnings"
+                :key="warning"
+              >
+                {{ warning }}
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <section class="bulk-section">
+          <div class="bulk-section-title">{{ gettext('Restart scope') }}</div>
+          <q-select
+            v-model="selectedNode"
             dense
-            right-label
-            color="primary"
-            :label="gettext('only outdated OSD versions')"
+            options-dense
+            emit-value
+            map-options
+            class="q-field--with-bottom"
+            :disable="allNodes"
+            :label="gettext('Node')"
+            :options="nodeOptions"
           />
-        </div>
-        <div>
-          <strong>{{ gettext('Affected') }}:</strong>
-          {{ affectedText }}
-        </div>
-        <div>
-          <strong>{{ gettext('Duration') }}:</strong>
-          {{ durationText }}
-        </div>
-        <div class="text-caption">
-          {{
-            gettext(
-              "OSDs are restarted serially with a per-step 'ok-to-stop' check. 'noout' is applied per OSD during the restart and unset on completion."
-            )
-          }}
-        </div>
+          <div class="row q-col-gutter-lg q-row-gutter-sm">
+            <div class="col-12 col-sm-6">
+              <q-checkbox
+                v-model="allNodes"
+                dense
+                right-label
+                color="primary"
+                :label="gettext('all nodes (cluster-wide)')"
+              />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-checkbox
+                v-model="onlyOutdated"
+                dense
+                right-label
+                color="primary"
+                :label="gettext('only outdated OSD versions')"
+              />
+            </div>
+          </div>
+        </section>
+
+        <section class="bulk-section">
+          <div class="bulk-section-title">{{ gettext('Execution summary') }}</div>
+          <div class="bulk-summary-row">
+            <span class="bulk-summary-label">{{ gettext('Affected') }}</span>
+            <span>{{ affectedText }}</span>
+          </div>
+          <div class="bulk-summary-row">
+            <span class="bulk-summary-label">{{ gettext('Duration') }}</span>
+            <span>{{ durationText }}</span>
+          </div>
+        </section>
+
+        <section class="bulk-note">
+          <q-icon
+            name="info"
+            color="primary"
+            size="18px"
+          />
+          <div>
+            <div class="bulk-note-title">{{ gettext('Safety information') }}</div>
+            {{
+              gettext(
+                "OSDs are restarted serially with a per-step 'ok-to-stop' check. 'noout' is applied per OSD during the restart and unset on completion."
+              )
+            }}
+          </div>
+        </section>
       </div>
       <template #foot>
         <q-btn
@@ -210,3 +240,71 @@ watch(model, (visible) => {
     </UWindow>
   </q-dialog>
 </template>
+
+<style scoped>
+.bulk-restart-content {
+  color: #333333;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+.bulk-section {
+  border: 1px solid #dfe1e6;
+  padding: 12px 14px;
+}
+.bulk-section-title {
+  color: #333333;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.bulk-warning,
+.bulk-note {
+  align-items: flex-start;
+  display: flex;
+  font-size: 12px;
+  gap: 10px;
+  line-height: 1.6;
+  padding: 10px 12px;
+}
+.bulk-warning {
+  background: #fff8e1;
+  border-left: 3px solid #fc0;
+  color: #665200;
+}
+.bulk-warning-icon {
+  color: #d9ad00;
+  flex: 0 0 auto;
+}
+.bulk-warning-title,
+.bulk-note-title {
+  color: #333333;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.bulk-warning-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.bulk-summary-row {
+  display: grid;
+  font-size: 12px;
+  gap: 12px;
+  grid-template-columns: 72px minmax(0, 1fr);
+  line-height: 1.7;
+}
+.bulk-summary-row + .bulk-summary-row {
+  border-top: 1px solid #eeeeee;
+  margin-top: 6px;
+  padding-top: 6px;
+}
+.bulk-summary-label {
+  color: #666666;
+}
+.bulk-note {
+  background: #f5f8fc;
+  border-left: 3px solid #1976d2;
+  color: #666666;
+}
+</style>

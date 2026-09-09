@@ -21,6 +21,8 @@ export function getLogs({
       service: service || '',
       start: Number(params.start) || 0,
       limit: Number(params.limit) || 510,
+      ...(typeof params.since === 'string' ? { since: params.since } : {}),
+      ...(typeof params.until === 'string' ? { until: params.until } : {}),
     });
   }
   return getCephLogs(node, params);

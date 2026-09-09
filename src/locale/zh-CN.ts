@@ -1,4 +1,35 @@
 export default {
+  'Bulk Restart OSDs': '批量重启 OSD',
+  'Optional dedicated devices for BlueStore metadata and write-ahead log.':
+    '可选：为 BlueStore 元数据和预写日志配置独立设备。',
+  'Volume Details': '卷详情',
+  'No details available': '暂无详细信息',
+  'Restart scope': '重启范围',
+  'Execution summary': '执行摘要',
+  'Safety information': '安全说明',
+  'Ceph health warning': 'Ceph 健康警告',
+  'A rolling restart may be refused unless every warning is benign.':
+    '除非确认所有警告均无风险，否则 Ceph 可能拒绝执行滚动重启。',
+  'all nodes (cluster-wide)': '所有节点（整个集群）',
+  'only outdated OSD versions': '仅重启版本过旧的 OSD',
+  Affected: '影响范围',
+  Duration: '预计时长',
+  'cluster-wide': '整个集群',
+  'on node': '位于节点',
+  'up to': '最多',
+  'outdated filter, exact count at task start': '已启用版本筛选，任务开始时确定准确数量',
+  'outdated OSDs': '个版本过旧的 OSD',
+  'Approximately 2 minutes per OSD': '每个 OSD 约需 2 分钟',
+  minutes: '分钟',
+  'depending on cluster recovery speed': '具体取决于集群恢复速度',
+  "OSDs are restarted serially with a per-step 'ok-to-stop' check. 'noout' is applied per OSD during the restart and unset on completion.":
+    'OSD 将逐个重启，每一步都会执行“可停止（ok-to-stop）”检查。重启期间会为当前 OSD 设置 noout 标志，完成后自动取消。',
+  'Cluster-wide Bulk Restart': '集群范围批量重启',
+  'Confirm Cluster-wide Rolling Restart': '确认集群范围滚动重启',
+  "This will restart all MDS daemons across the entire cluster, one by one. Each daemon is restarted only when Ceph's 'ok-to-stop' check passes.":
+    '此操作将逐个重启整个集群中的所有 MDS 守护进程。只有在 Ceph 的“可停止（ok-to-stop）”检查通过后，才会重启每个守护进程。',
+  "This will restart all services across the entire cluster, one by one. Each service is restarted only when Ceph's 'ok-to-stop' check passes.":
+    '此操作将逐个重启整个集群中的所有服务。只有在 Ceph 的“可停止（ok-to-stop）”检查通过后，才会重启每个服务。',
   Convention: '常规',
   Name: '名称',
   'Keep all backups': '保留全部备份',

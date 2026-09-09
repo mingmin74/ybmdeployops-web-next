@@ -287,16 +287,6 @@ watch(
 
 <template>
   <div class="column q-gutter-md">
-    <q-btn
-      no-caps
-      outline
-      size="12px"
-      color="primary"
-      class="u-button self-start"
-      :loading="loading"
-      :label="gettext('Refresh')"
-      @click="refreshData"
-    />
     <q-table
       flat
       row-key="name"
@@ -317,7 +307,6 @@ watch(
           size="12px"
           color="primary"
           class="u-button"
-          icon="add"
           :disable="!canCreateFilesystem"
           :label="gettext('Create')"
           @click="openCreateFilesystem"
@@ -347,7 +336,6 @@ watch(
             size="12px"
             color="primary"
             class="u-button"
-            icon="play_arrow"
             :disable="!canStart"
             :label="gettext('Start')"
             @click="requestServiceAction('start')"
@@ -358,7 +346,6 @@ watch(
             size="12px"
             color="primary"
             class="u-button"
-            icon="stop"
             :disable="!canStopOrRestart"
             :label="gettext('Stop')"
             @click="requestServiceAction('stop')"
@@ -369,7 +356,6 @@ watch(
             size="12px"
             color="primary"
             class="u-button"
-            icon="refresh"
             :disable="!canStopOrRestart"
             :label="gettext('Restart')"
             @click="requestServiceAction('restart')"
@@ -380,7 +366,6 @@ watch(
             size="12px"
             color="primary"
             class="u-button"
-            icon="refresh"
             :label="gettext('Cluster-wide Bulk Restart')"
             @click="requestBulkRestart"
           />
@@ -390,7 +375,6 @@ watch(
             size="12px"
             color="negative"
             class="u-button"
-            icon="delete"
             :disable="!canDestroy"
             :label="gettext('Destroy')"
             @click="requestDestroy"
@@ -401,7 +385,6 @@ watch(
             size="12px"
             color="primary"
             class="u-button"
-            icon="article"
             :disable="!selectedMetadataServer"
             :loading="actionLoading"
             :label="gettext('Syslog')"
@@ -413,7 +396,6 @@ watch(
             size="12px"
             color="primary"
             class="u-button"
-            icon="add"
             :label="gettext('Create')"
             @click="openCreateMetadataServer"
           />

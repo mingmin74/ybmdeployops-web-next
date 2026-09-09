@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { QTableColumn } from 'quasar';
-import { computed, ref, shallowRef, watch } from 'vue';
+import type { QForm, QTableColumn } from 'quasar';
+import { computed, nextTick, ref, shallowRef, useTemplateRef, watch } from 'vue';
 import type { PveRecord } from '@/api/resources';
 import { getClusterNodes, getNodeDisks } from '@/api/resources';
 import {
@@ -18,6 +18,7 @@ import { gettext } from '@/locale';
 import CephOsdDetailsDialog from './CephOsdDetailsDialog.vue';
 import CephBulkRestartOsdsDialog from './CephBulkRestartOsdsDialog.vue';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
+import UWindow from '@/components/UWindow.vue';
 import { formatBytes, textValue } from '@/utils/pveFormat';
 
 const loading = ref(false);
@@ -55,6 +56,7 @@ const taskVisible = ref(false);
 const taskUpid = ref('');
 const taskNode = ref('');
 const taskTitle = ref('');
+const createOsdForm = useTemplateRef<QForm>('createOsdForm');
 
 const nodeOptions = computed(() =>
   nodes.value.map((node) => textValue(node.node || node.name)).filter(Boolean)
@@ -287,9 +289,11 @@ function openCreate() {
     'crush-device-class': '',
   };
   createVisible.value = true;
+  void nextTick(() => createOsdForm.value?.resetValidation());
 }
 async function create() {
-  if (!createForm.value.dev) return;
+  const valid = await createOsdForm.value?.validate();
+  if (!valid) return;
   const { node, ...data } = createForm.value;
   const payload = Object.fromEntries(Object.entries(data).filter(([, value]) => value !== ''));
   await run(() => createCephOsd(node, payload), node, `${gettext('Create')}: OSD`);
@@ -603,83 +607,144 @@ watch(
       transition-show="scale"
       transition-hide="scale"
     >
-      <q-card class="osd-dialog">
-        <q-card-section class="text-subtitle1">{{ gettext('Create') }}: OSD</q-card-section>
-        <q-card-section class="column q-gutter-md">
-          <q-select
-            v-model="createForm.node"
-            dense
-            options-dense
-            class="q-field--with-bottom"
-            :label="gettext('Host')"
-            :options="nodeOptions"
-          />
-          <q-select
-            v-model="createForm.dev"
-            dense
-            options-dense
-            class="q-field--with-bottom"
-            :label="gettext('Disk')"
-            :options="unusedDiskOptions"
-          />
-          <q-select
-            v-model="createForm.db_dev"
-            dense
-            options-dense
-            class="q-field--with-bottom"
-            clearable
-            :label="gettext('DB Disk')"
-            :options="journalDiskOptions"
-          />
-          <q-input
-            v-model="createForm.db_dev_size"
-            dense
-            type="number"
-            min="1"
-            max="131072"
-            step="0.01"
-            class="q-field--with-bottom"
-            :disable="!createForm.db_dev"
-            :label="`${gettext('DB size')} (${gettext('GiB')})`"
-          />
-          <q-select
-            v-model="createForm.wal_dev"
-            dense
-            options-dense
-            class="q-field--with-bottom"
-            clearable
-            :label="gettext('WAL Disk')"
-            :options="journalDiskOptions"
-          />
-          <q-input
-            v-model="createForm.wal_dev_size"
-            dense
-            type="number"
-            min="0.5"
-            max="131072"
-            step="0.01"
-            class="q-field--with-bottom"
-            :disable="!createForm.wal_dev"
-            :label="`${gettext('WAL size')} (${gettext('GiB')})`"
-          />
-          <q-select
-            v-model="createForm['crush-device-class']"
-            dense
-            options-dense
-            class="q-field--with-bottom"
-            clearable
-            :label="gettext('Device Class')"
-            :options="crushClassOptions"
-          />
-          <q-checkbox
-            v-model="createForm.encrypted"
-            dense
-            right-label
-            color="primary"
-            :label="gettext('Encrypt OSD')"
-          />
-        </q-card-section>
-        <q-card-actions align="right">
+      <UWindow
+        :title="`${gettext('Create')}: OSD`"
+        width="680px"
+        :loading="actionLoading"
+      >
+        <q-form
+          ref="createOsdForm"
+          class="osd-create-content"
+          @submit.prevent="create"
+        >
+          <section class="osd-create-section">
+            <div class="osd-create-section-title">{{ gettext('Basic Settings') }}</div>
+            <div class="row q-col-gutter-lg">
+              <div class="col-12 col-sm-5">
+                <q-select
+                  v-model="createForm.node"
+                  dense
+                  options-dense
+                  label-slot
+                  lazy-rules
+                  class="q-field--with-bottom"
+                  :options="nodeOptions"
+                  :rules="[(value) => Boolean(value) || gettext('Required field')]"
+                >
+                  <template #label>
+                    {{ gettext('Host') }}
+                    <span class="osd-required-mark">*</span>
+                  </template>
+                </q-select>
+              </div>
+              <div class="col-12 col-sm-7">
+                <q-select
+                  v-model="createForm.dev"
+                  dense
+                  options-dense
+                  label-slot
+                  lazy-rules
+                  class="q-field--with-bottom"
+                  :options="unusedDiskOptions"
+                  :rules="[(value) => Boolean(value) || gettext('Required field')]"
+                >
+                  <template #label>
+                    {{ gettext('Disk') }}
+                    <span class="osd-required-mark">*</span>
+                  </template>
+                </q-select>
+              </div>
+            </div>
+          </section>
+
+          <section class="osd-create-section">
+            <div class="osd-create-section-title">BlueStore DB / WAL</div>
+            <div class="row q-col-gutter-lg">
+              <div class="col-12 col-sm-8">
+                <q-select
+                  v-model="createForm.db_dev"
+                  dense
+                  options-dense
+                  class="q-field--with-bottom"
+                  clearable
+                  :label="gettext('DB Disk')"
+                  :options="journalDiskOptions"
+                />
+              </div>
+              <div class="col-12 col-sm-4">
+                <q-input
+                  v-model="createForm.db_dev_size"
+                  dense
+                  type="number"
+                  min="1"
+                  max="131072"
+                  step="0.01"
+                  class="q-field--with-bottom"
+                  :disable="!createForm.db_dev"
+                  :label="`${gettext('DB size')} (${gettext('GiB')})`"
+                />
+              </div>
+            </div>
+            <div class="row q-col-gutter-lg">
+              <div class="col-12 col-sm-8">
+                <q-select
+                  v-model="createForm.wal_dev"
+                  dense
+                  options-dense
+                  class="q-field--with-bottom"
+                  clearable
+                  :label="gettext('WAL Disk')"
+                  :options="journalDiskOptions"
+                />
+              </div>
+              <div class="col-12 col-sm-4">
+                <q-input
+                  v-model="createForm.wal_dev_size"
+                  dense
+                  type="number"
+                  min="0.5"
+                  max="131072"
+                  step="0.01"
+                  class="q-field--with-bottom"
+                  :disable="!createForm.wal_dev"
+                  :label="`${gettext('WAL size')} (${gettext('GiB')})`"
+                />
+              </div>
+            </div>
+            <div class="osd-create-hint">
+              {{
+                gettext('Optional dedicated devices for BlueStore metadata and write-ahead log.')
+              }}
+            </div>
+          </section>
+
+          <section class="osd-create-section">
+            <div class="osd-create-section-title">{{ gettext('Advanced settings') }}</div>
+            <div class="row items-center q-col-gutter-lg">
+              <div class="col-12 col-sm-7">
+                <q-select
+                  v-model="createForm['crush-device-class']"
+                  dense
+                  options-dense
+                  class="q-field--with-bottom"
+                  clearable
+                  :label="gettext('Device Class')"
+                  :options="crushClassOptions"
+                />
+              </div>
+              <div class="col-12 col-sm-5 osd-encrypt-option">
+                <q-checkbox
+                  v-model="createForm.encrypted"
+                  dense
+                  right-label
+                  color="primary"
+                  :label="gettext('Encrypt OSD')"
+                />
+              </div>
+            </div>
+          </section>
+        </q-form>
+        <template #foot>
           <q-btn
             no-caps
             outline
@@ -694,13 +759,12 @@ watch(
             no-caps
             size="12px"
             class="bg-primary text-grey-1 u-button"
-            :disable="!createForm.dev"
             :loading="actionLoading"
             :label="gettext('Create')"
             @click="create"
           />
-        </q-card-actions>
-      </q-card>
+        </template>
+      </UWindow>
     </q-dialog>
     <q-dialog
       v-model="flagsVisible"
@@ -708,11 +772,12 @@ watch(
       transition-show="scale"
       transition-hide="scale"
     >
-      <q-card class="osd-dialog">
-        <q-card-section class="text-subtitle1">
-          {{ gettext('Manage Global OSD Flags') }}
-        </q-card-section>
-        <q-card-section class="q-pa-none">
+      <UWindow
+        :title="gettext('Manage Global OSD Flags')"
+        width="680px"
+        :loading="actionLoading"
+      >
+        <div class="q-pa-none">
           <q-table
             flat
             dense
@@ -744,8 +809,8 @@ watch(
               </q-td>
             </template>
           </q-table>
-        </q-card-section>
-        <q-card-actions align="right">
+        </div>
+        <template #foot>
           <q-btn
             no-caps
             outline
@@ -764,8 +829,8 @@ watch(
             :label="gettext('Apply')"
             @click="saveFlags"
           />
-        </q-card-actions>
-      </q-card>
+        </template>
+      </UWindow>
     </q-dialog>
     <CephOsdDetailsDialog
       v-model:visible="detailVisible"
@@ -791,11 +856,12 @@ watch(
       transition-show="scale"
       transition-hide="scale"
     >
-      <q-card class="osd-dialog">
-        <q-card-section class="text-subtitle1">
-          {{ gettext('Destroy') }}: osd.{{ osdId }}
-        </q-card-section>
-        <q-card-section class="column q-gutter-sm">
+      <UWindow
+        :title="`${gettext('Destroy')}: osd.${osdId}`"
+        width="480px"
+        :loading="actionLoading"
+      >
+        <div class="column q-gutter-sm q-pa-md">
           <q-checkbox
             v-model="cleanupDisks"
             dense
@@ -810,8 +876,8 @@ watch(
           >
             {{ warning }}
           </div>
-        </q-card-section>
-        <q-card-actions align="right">
+        </div>
+        <template #foot>
           <q-btn
             no-caps
             outline
@@ -830,8 +896,8 @@ watch(
             :label="gettext('Destroy')"
             @click="confirmDestroy"
           />
-        </q-card-actions>
-      </q-card>
+        </template>
+      </UWindow>
     </q-dialog>
     <q-dialog
       v-model="confirmVisible"
@@ -839,10 +905,20 @@ watch(
       transition-show="scale"
       transition-hide="scale"
     >
-      <q-card class="osd-dialog">
-        <q-card-section class="text-subtitle1">{{ gettext('Confirm') }}</q-card-section>
-        <q-card-section>{{ confirmMessage }}</q-card-section>
-        <q-card-actions align="right">
+      <UWindow
+        :title="gettext('Confirm')"
+        width="420px"
+        :loading="actionLoading"
+      >
+        <div class="osd-confirm-content">
+          <q-icon
+            name="help_outline"
+            color="primary"
+            size="24px"
+          />
+          <span>{{ confirmMessage }}</span>
+        </div>
+        <template #foot>
           <q-btn
             no-caps
             outline
@@ -861,15 +937,50 @@ watch(
             :label="gettext('Confirm')"
             @click="confirm"
           />
-        </q-card-actions>
-      </q-card>
+        </template>
+      </UWindow>
     </q-dialog>
   </div>
 </template>
 
 <style scoped>
-.osd-dialog {
-  min-width: 420px;
+.osd-create-content {
+  color: #333333;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.osd-create-section {
+  border: 1px solid #dfe1e6;
+  padding: 12px 14px 2px;
+}
+.osd-create-section-title {
+  color: #333333;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.osd-create-hint {
+  color: #666666;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: -5px 0 9px;
+}
+.osd-encrypt-option {
+  padding-bottom: 15px;
+}
+.osd-required-mark {
+  color: #cf4c35;
+}
+.osd-confirm-content {
+  align-items: center;
+  color: #333333;
+  display: flex;
+  font-size: 13px;
+  gap: 12px;
+  min-height: 78px;
+  padding: 18px 20px;
 }
 .osd-toolbar {
   gap: 8px;
