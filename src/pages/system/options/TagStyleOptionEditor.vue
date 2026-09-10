@@ -23,7 +23,7 @@ watch(
     form.caseSensitive = Number(value?.['case-sensitive']) === 1;
     form.colors = textValue(value?.['color-map']);
   },
-  { immediate: true, deep: true },
+  { immediate: true, deep: true }
 );
 watch(
   form,
@@ -34,7 +34,7 @@ watch(
       'case-sensitive': value.caseSensitive ? 1 : 0,
       'color-map': value.colors,
     }),
-  { deep: true },
+  { deep: true }
 );
 
 const shapeOptions = [
@@ -53,9 +53,28 @@ const orderingOptions = [
 
 <template>
   <div class="column q-gutter-sm">
-    <q-select v-model="form.shape" dense emit-value map-options options-dense :options="shapeOptions" :label="gettext('Shape')" />
-    <q-select v-model="form.ordering" dense emit-value map-options options-dense :options="orderingOptions" :label="gettext('Ordering')" />
-    <q-checkbox v-model="form.caseSensitive" :label="gettext('Case-Sensitive')" />
+    <q-select
+      v-model="form.shape"
+      dense
+      emit-value
+      map-options
+      options-dense
+      :options="shapeOptions"
+      :label="gettext('Shape')"
+    />
+    <q-select
+      v-model="form.ordering"
+      dense
+      emit-value
+      map-options
+      options-dense
+      :options="orderingOptions"
+      :label="gettext('Ordering')"
+    />
+    <q-checkbox
+      v-model="form.caseSensitive"
+      :label="gettext('Case-Sensitive')"
+    />
     <div class="text-caption text-grey-8">{{ gettext('Color Overrides') }}</div>
     <TagColorGrid v-model="form.colors" />
   </div>

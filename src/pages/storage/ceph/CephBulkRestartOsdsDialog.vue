@@ -42,14 +42,21 @@ const affectedText = computed(() => {
     ? gettext('cluster-wide')
     : `${gettext('on node')} '${selectedNode.value}'`;
   if (onlyOutdated.value && !metadataLoaded.value)
-    return `${gettext('up to')} ${maxCount.value} ${gettext('OSDs')} ${scope} (${gettext('outdated filter, exact count at task start')})`;
+    return `${gettext('up to')} ${maxCount.value} ${gettext('OSDs')} ${scope} (${gettext(
+      'outdated filter, exact count at task start'
+    )})`;
   return onlyOutdated.value
-    ? `${affectedCount.value} ${gettext('outdated OSDs')} ${scope} (${gettext('of')} ${maxCount.value} ${gettext('total')})`
+    ? `${affectedCount.value} ${gettext('outdated OSDs')} ${scope} (${gettext('of')} ${
+        maxCount.value
+      } ${gettext('total')})`
     : `${affectedCount.value} ${gettext(affectedCount.value === 1 ? 'OSD' : 'OSDs')} ${scope}`;
 });
 const durationText = computed(
   () =>
-    `${gettext('Approximately 2 minutes per OSD')} (${Math.max(2, affectedCount.value * 2)} ${gettext('minutes')}, ${gettext('depending on cluster recovery speed')}).`
+    `${gettext('Approximately 2 minutes per OSD')} (${Math.max(
+      2,
+      affectedCount.value * 2
+    )} ${gettext('minutes')}, ${gettext('depending on cluster recovery speed')}).`
 );
 
 async function loadHealth() {

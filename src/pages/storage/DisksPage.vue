@@ -22,14 +22,37 @@ const activeTab = shallowRef('disk');
           align="left"
           narrow-indicator
         >
-          <q-tab no-caps name="disk" :label="gettext('Disks')" />
-          <q-tab no-caps name="directory" :label="gettext('Mount Point')" />
-          <q-tab no-caps name="LVM" :label="gettext('LVM')" />
-          <q-tab no-caps name="LVMThin" :label="gettext('LVMThin')" />
-          <q-tab no-caps name="ZFS" :label="gettext('ZFS')" />
+          <q-tab
+            no-caps
+            name="disk"
+            :label="gettext('Disks')"
+          />
+          <q-tab
+            no-caps
+            name="directory"
+            :label="gettext('Mount Point')"
+          />
+          <q-tab
+            no-caps
+            name="LVM"
+            :label="gettext('LVM')"
+          />
+          <q-tab
+            no-caps
+            name="LVMThin"
+            :label="gettext('LVMThin')"
+          />
+          <q-tab
+            no-caps
+            name="ZFS"
+            :label="gettext('ZFS')"
+          />
         </q-tabs>
         <q-separator />
-        <q-tab-panels v-model="activeTab" animated>
+        <q-tab-panels
+          v-model="activeTab"
+          animated
+        >
           <q-tab-panel name="disk">
             <DiskPage embedded />
           </q-tab-panel>

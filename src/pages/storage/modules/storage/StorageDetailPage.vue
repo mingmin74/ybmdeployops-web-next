@@ -10,12 +10,7 @@ import type { PveRecord } from '@/api/resources';
 import { getStorageRrd } from '@/api/overview';
 import { getStorageStatus } from '@/api/storageContent';
 import { gettext } from '@/locale';
-import {
-  formatContent,
-  formatStorageType,
-  textValue,
-  timestampToTime,
-} from '@/utils/pveFormat';
+import { formatContent, formatStorageType, textValue, timestampToTime } from '@/utils/pveFormat';
 
 const props = defineProps<{
   node: string;
@@ -64,7 +59,7 @@ const contentTabs = computed(() => {
 });
 
 const chartXAxis = computed(() =>
-  chartRows.value.map((item) => timestampToTime(Number(item.time) * 1000)),
+  chartRows.value.map((item) => timestampToTime(Number(item.time) * 1000))
 );
 
 const storageUsageSeries = computed(() => [
@@ -137,7 +132,7 @@ onMounted(() => {
 
 watch(
   [() => props.node, () => props.storage.storage, timeType, rrdConsolidation],
-  startChartRefresh,
+  startChartRefresh
 );
 
 watch([() => props.node, () => props.storage.storage], startStatusRefresh);
@@ -159,7 +154,11 @@ onBeforeUnmount(() => {
       narrow-indicator
       class="storage-tabs text-grey-8"
     >
-      <q-tab no-caps name="summary" :label="gettext('Summary')" />
+      <q-tab
+        no-caps
+        name="summary"
+        :label="gettext('Summary')"
+      />
       <q-tab
         v-for="item in contentTabs"
         :key="item.name"
@@ -170,11 +169,21 @@ onBeforeUnmount(() => {
     </q-tabs>
     <q-separator />
 
-    <q-tab-panels v-model="tab" animated>
-      <q-tab-panel name="summary" class="q-pa-md">
+    <q-tab-panels
+      v-model="tab"
+      animated
+    >
+      <q-tab-panel
+        name="summary"
+        class="q-pa-md"
+      >
         <section class="summary-strip">
           <header class="summary-header">
-            <q-icon name="storage" size="22px" color="primary" />
+            <q-icon
+              name="storage"
+              size="22px"
+              color="primary"
+            />
             <div>
               <div class="summary-title">{{ `${gettext('Storage')} ${gettext('Summary')}` }}</div>
               <div class="summary-subtitle">{{ textValue(storage.storage, '-') }}</div>
@@ -182,20 +191,20 @@ onBeforeUnmount(() => {
           </header>
           <div class="summary-fields">
             <div class="summary-field">
-              <span>{{ gettext('Type') }}</span
-              ><strong>{{ formatStorageType(status.type, status.monhost, true) }}</strong>
+              <span>{{ gettext('Type') }}</span>
+              <strong>{{ formatStorageType(status.type, status.monhost, true) }}</strong>
             </div>
             <div class="summary-field">
-              <span>{{ gettext('Content') }}</span
-              ><strong>{{ formatContent(status.content) || '-' }}</strong>
+              <span>{{ gettext('Content') }}</span>
+              <strong>{{ formatContent(status.content) || '-' }}</strong>
             </div>
             <div class="summary-field">
-              <span>{{ gettext('Enabled') }}</span
-              ><strong>{{ boolLabel(Number(status.disabled || 0) === 0) }}</strong>
+              <span>{{ gettext('Enabled') }}</span>
+              <strong>{{ boolLabel(Number(status.disabled || 0) === 0) }}</strong>
             </div>
             <div class="summary-field">
-              <span>{{ gettext('Active') }}</span
-              ><strong>{{ boolLabel(status.active) }}</strong>
+              <span>{{ gettext('Active') }}</span>
+              <strong>{{ boolLabel(status.active) }}</strong>
             </div>
           </div>
           <UsageProgress :percent="(Number(status.used) / Number(status.total || 1)) * 100" />
@@ -240,7 +249,12 @@ onBeforeUnmount(() => {
         </section>
       </q-tab-panel>
 
-      <q-tab-panel v-for="item in contentTabs" :key="item.name" :name="item.name" class="q-pa-md">
+      <q-tab-panel
+        v-for="item in contentTabs"
+        :key="item.name"
+        :name="item.name"
+        class="q-pa-md"
+      >
         <StorageBackupView
           v-if="item.name === 'backup'"
           :node="node"

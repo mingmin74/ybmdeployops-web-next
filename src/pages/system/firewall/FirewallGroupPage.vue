@@ -51,9 +51,7 @@ async function refreshGroups() {
   try {
     const selectedGroupName = textValue(selectedGroup.value?.group);
     groups.value = (await getFirewallGroups()).data || [];
-    const current = groups.value.find(
-      (item) => textValue(item.group) === selectedGroupName
-    );
+    const current = groups.value.find((item) => textValue(item.group) === selectedGroupName);
     selected.value = current ? [current] : [];
   } finally {
     loading.value = false;

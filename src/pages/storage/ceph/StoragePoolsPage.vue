@@ -110,7 +110,9 @@ const columns: QTableColumn<PveRecord>[] = [
     label: `${gettext('Used')} (%)`,
     align: 'right',
     field: (row) =>
-      `${formatBytes(row.bytes_used as number)} (${(Number(row.percent_used || 0) * 100).toFixed(2)}%)`,
+      `${formatBytes(row.bytes_used as number)} (${(Number(row.percent_used || 0) * 100).toFixed(
+        2
+      )}%)`,
     sortable: true,
   },
 ];
@@ -200,7 +202,10 @@ watch(
     <template #top>
       <div class="text-subtitle2">{{ gettext('Resource Pool') }}</div>
       <q-space />
-      <div class="row items-center" style="gap: 8px;">
+      <div
+        class="row items-center"
+        style="gap: 8px"
+      >
         <q-btn
           no-caps
           outline

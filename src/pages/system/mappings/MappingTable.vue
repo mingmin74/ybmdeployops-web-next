@@ -907,9 +907,7 @@ onMounted(() => {
               :label="`${gettext('Path')} *`"
               hint="Make sure the directory exists."
               :error="directorySubmitted && (!form.path.trim() || Boolean(pathError))"
-              :error-message="
-                !form.path.trim() ? gettext('This field is required') : pathError
-              "
+              :error-message="!form.path.trim() ? gettext('This field is required') : pathError"
             />
             <q-input
               v-else

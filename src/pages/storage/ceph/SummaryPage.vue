@@ -128,10 +128,10 @@ const pgChartData = computed<RingData[]>(() =>
       item.color === 'positive'
         ? 'good'
         : item.color === 'warning'
-          ? 'warning'
-          : item.color === 'negative'
-            ? 'critical'
-            : 'faded',
+        ? 'warning'
+        : item.color === 'negative'
+        ? 'critical'
+        : 'faded',
   }))
 );
 const chartXAxis = computed(() => performanceHistory.value.map((item) => item.time));

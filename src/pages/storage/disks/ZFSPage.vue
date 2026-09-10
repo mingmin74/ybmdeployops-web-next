@@ -7,7 +7,14 @@ import UWindow from '@/components/UWindow.vue';
 import NodeDiskTablePage from '@/components/NodeDiskTablePage.vue';
 import NodeDiskFormDialog, { type NodeDiskFormField } from './NodeDiskFormDialog.vue';
 import NodeDiskDestroyDialog from './NodeDiskDestroyDialog.vue';
-import { createNodeZfs, deleteNodeZfs, getNodeUnusedDisks, getNodeZfs, getNodeZfsDetail, type PveRecord } from '@/api/resources';
+import {
+  createNodeZfs,
+  deleteNodeZfs,
+  getNodeUnusedDisks,
+  getNodeZfs,
+  getNodeZfsDetail,
+  type PveRecord,
+} from '@/api/resources';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 import { formatBytes } from '@/utils/format';
@@ -19,17 +26,79 @@ const props = defineProps<{
 const detailVisible = shallowRef(false);
 const detailLoading = shallowRef(false);
 const detail = shallowRef<PveRecord>({});
-const createVisible = shallowRef(false); const saving = shallowRef(false); const taskVisible = shallowRef(false); const taskUpid = shallowRef('');
+const createVisible = shallowRef(false);
+const saving = shallowRef(false);
+const taskVisible = shallowRef(false);
+const taskUpid = shallowRef('');
 const operationNode = shallowRef('');
-const destroyVisible = shallowRef(false); const destroying = shallowRef(false); const destroyPool = shallowRef('');
+const destroyVisible = shallowRef(false);
+const destroying = shallowRef(false);
+const destroyPool = shallowRef('');
 const table = shallowRef<InstanceType<typeof NodeDiskTablePage>>();
 const diskOptions = shallowRef<Array<{ label: string; value: string }>>([]);
-const actions = computed(() => [{ name: 'create', label: `${gettext('Create')}: ZFS` }, { name: 'detail', label: gettext('Detail'), requiresSelection: true }, { name: 'destroy', label: gettext('Destroy'), color: 'negative', requiresSelection: true }]);
+const actions = computed(() => [
+  { name: 'create', label: `${gettext('Create')}: ZFS` },
+  { name: 'detail', label: gettext('Detail'), requiresSelection: true },
+  { name: 'destroy', label: gettext('Destroy'), color: 'negative', requiresSelection: true },
+]);
 const fields = computed<NodeDiskFormField[]>(() => [
-  { name: 'name', label: gettext('Name'), required: true }, { name: 'devices', label: gettext('Disk'), type: 'select', options: diskOptions.value, multiple: true, required: true },
-  { name: 'raidlevel', label: gettext('RAID Level'), type: 'select', required: true, options: [{ label: 'Single Disk', value: 'single' }, { label: 'Mirror', value: 'mirror' }, { label: 'RAID10', value: 'raid10' }, { label: 'RAIDZ', value: 'raidz' }, { label: 'RAIDZ2', value: 'raidz2' }, { label: 'RAIDZ3', value: 'raidz3' }, { label: 'dRAID', value: 'draid' }, { label: 'dRAID2', value: 'draid2' }, { label: 'dRAID3', value: 'draid3' }] },
-  { name: 'compression', label: gettext('Compression'), type: 'select', required: true, options: [{ label: 'on', value: 'on' }, { label: 'off', value: 'off' }, { label: 'gzip', value: 'gzip' }, { label: 'lz4', value: 'lz4' }, { label: 'lzjb', value: 'lzjb' }, { label: 'zle', value: 'zle' }, { label: 'zstd', value: 'zstd' }] }, { name: 'ashift', label: 'ashift', type: 'number', required: true },
-  { name: 'draidData', label: gettext('Data Devs'), type: 'number', required: true, visible: (values) => textValue(values.raidlevel).startsWith('draid') }, { name: 'draidSpares', label: gettext('Spares'), type: 'number', required: true, visible: (values) => textValue(values.raidlevel).startsWith('draid') }, { name: 'add_storage', label: gettext('Add as storage'), type: 'checkbox' },
+  { name: 'name', label: gettext('Name'), required: true },
+  {
+    name: 'devices',
+    label: gettext('Disk'),
+    type: 'select',
+    options: diskOptions.value,
+    multiple: true,
+    required: true,
+  },
+  {
+    name: 'raidlevel',
+    label: gettext('RAID Level'),
+    type: 'select',
+    required: true,
+    options: [
+      { label: 'Single Disk', value: 'single' },
+      { label: 'Mirror', value: 'mirror' },
+      { label: 'RAID10', value: 'raid10' },
+      { label: 'RAIDZ', value: 'raidz' },
+      { label: 'RAIDZ2', value: 'raidz2' },
+      { label: 'RAIDZ3', value: 'raidz3' },
+      { label: 'dRAID', value: 'draid' },
+      { label: 'dRAID2', value: 'draid2' },
+      { label: 'dRAID3', value: 'draid3' },
+    ],
+  },
+  {
+    name: 'compression',
+    label: gettext('Compression'),
+    type: 'select',
+    required: true,
+    options: [
+      { label: 'on', value: 'on' },
+      { label: 'off', value: 'off' },
+      { label: 'gzip', value: 'gzip' },
+      { label: 'lz4', value: 'lz4' },
+      { label: 'lzjb', value: 'lzjb' },
+      { label: 'zle', value: 'zle' },
+      { label: 'zstd', value: 'zstd' },
+    ],
+  },
+  { name: 'ashift', label: 'ashift', type: 'number', required: true },
+  {
+    name: 'draidData',
+    label: gettext('Data Devs'),
+    type: 'number',
+    required: true,
+    visible: (values) => textValue(values.raidlevel).startsWith('draid'),
+  },
+  {
+    name: 'draidSpares',
+    label: gettext('Spares'),
+    type: 'number',
+    required: true,
+    visible: (values) => textValue(values.raidlevel).startsWith('draid'),
+  },
+  { name: 'add_storage', label: gettext('Add as storage'), type: 'checkbox' },
 ]);
 
 const columns: QTableColumn<PveRecord>[] = [
@@ -56,8 +125,20 @@ const columns: QTableColumn<PveRecord>[] = [
     align: 'left',
     sortable: true,
   },
-  { name: 'frag', label: gettext('Fragmentation'), field: (row) => row.frag === undefined ? '-' : `${textValue(row.frag)}%`, align: 'left', sortable: true },
-  { name: 'health', label: gettext('Status'), field: (row) => textValue(row.health, '-').toUpperCase(), align: 'left', sortable: true },
+  {
+    name: 'frag',
+    label: gettext('Fragmentation'),
+    field: (row) => (row.frag === undefined ? '-' : `${textValue(row.frag)}%`),
+    align: 'left',
+    sortable: true,
+  },
+  {
+    name: 'health',
+    label: gettext('Status'),
+    field: (row) => textValue(row.health, '-').toUpperCase(),
+    align: 'left',
+    sortable: true,
+  },
 ];
 
 async function loadRows(node: string) {
@@ -70,18 +151,113 @@ async function loadRows(node: string) {
 }
 
 async function showDetail(row?: PveRecord) {
-  const pool = textValue(row?.name); const node = textValue(row?.node || props.node); if (!node || !pool) return;
-  detailVisible.value = true; detailLoading.value = true;
-  try { detail.value = (await getNodeZfsDetail(node, pool)).data || {}; }
-  finally { detailLoading.value = false; }
+  const pool = textValue(row?.name);
+  const node = textValue(row?.node || props.node);
+  if (!node || !pool) return;
+  detailVisible.value = true;
+  detailLoading.value = true;
+  try {
+    detail.value = (await getNodeZfsDetail(node, pool)).data || {};
+  } finally {
+    detailLoading.value = false;
+  }
 }
-function openTask(upid: unknown) { taskUpid.value = textValue(upid); taskVisible.value = taskUpid.value.startsWith('UPID:'); if (!taskVisible.value) void table.value?.reload(); }
-function validPoolName(value: unknown) { const name = textValue(value); return name.length <= 128 && !/^(mirror|raidz|draid|spare)/i.test(name) && name.toLowerCase() !== 'log' && /^[a-zA-Z][a-zA-Z0-9\-_.]*$/.test(name); }
-async function create(values: Record<string, unknown>) { if (!operationNode.value) return; const ashift = Number(values.ashift); const draid = textValue(values.raidlevel).startsWith('draid'); const data = Number(values.draidData); const spares = Number(values.draidSpares); const devices = Array.isArray(values.devices) ? values.devices : []; const raid = textValue(values.raidlevel); const minimumDisks: Record<string, number> = { mirror: 2, raid10: 4, raidz: 3, raidz2: 6, raidz3: 7 }; const invalidCount = (minimumDisks[raid] && devices.length < minimumDisks[raid]) || (raid === 'raid10' && devices.length % 2 !== 0); if (!validPoolName(values.name) || !Number.isInteger(ashift) || ashift < 9 || ashift > 16 || !devices.length || invalidCount || (draid && (!Number.isInteger(data) || data < 1 || !Number.isInteger(spares) || spares < 0))) { Notify.create({ type: 'negative', message: gettext('Invalid ZFS configuration') }); return; } const payload = { ...values }; if (draid) payload['draid-config'] = `data=${data},spares=${spares}`; delete payload.draidData; delete payload.draidSpares; saving.value = true; try { const result = await createNodeZfs(operationNode.value, payload); createVisible.value = false; openTask(result.data); } finally { saving.value = false; } }
-function destroy(row?: PveRecord, node = '') { destroyPool.value = textValue(row?.name); operationNode.value = textValue(row?.node || node || props.node); destroyVisible.value = Boolean(operationNode.value && destroyPool.value); }
-async function confirmDestroy(params: PveRecord) { if (!operationNode.value || !destroyPool.value) return; destroying.value = true; try { const result = await deleteNodeZfs(operationNode.value, destroyPool.value, params); destroyVisible.value = false; openTask(result.data); } finally { destroying.value = false; } }
-async function action(name: string, row?: PveRecord, node = '') { const targetNode = textValue(row?.node || node || props.node); if (name === 'create' && targetNode) { operationNode.value = targetNode; const result = await getNodeUnusedDisks(targetNode); diskOptions.value = (result.data || []).map((disk) => ({ label: String(disk.devpath || disk.name), value: String(disk.devpath || disk.name) })); createVisible.value = true; } else if (name === 'detail') void showDetail(row); else if (name === 'destroy') destroy(row, targetNode); }
-function healthClass(value: unknown) { const health = textValue(value).toUpperCase(); return health === 'ONLINE' ? 'good' : health === 'DEGRADED' ? 'warning' : health === 'FAULTED' || health === 'UNAVAIL' ? 'critical' : 'faded'; }
+function openTask(upid: unknown) {
+  taskUpid.value = textValue(upid);
+  taskVisible.value = taskUpid.value.startsWith('UPID:');
+  if (!taskVisible.value) void table.value?.reload();
+}
+function validPoolName(value: unknown) {
+  const name = textValue(value);
+  return (
+    name.length <= 128 &&
+    !/^(mirror|raidz|draid|spare)/i.test(name) &&
+    name.toLowerCase() !== 'log' &&
+    /^[a-zA-Z][a-zA-Z0-9\-_.]*$/.test(name)
+  );
+}
+async function create(values: Record<string, unknown>) {
+  if (!operationNode.value) return;
+  const ashift = Number(values.ashift);
+  const draid = textValue(values.raidlevel).startsWith('draid');
+  const data = Number(values.draidData);
+  const spares = Number(values.draidSpares);
+  const devices = Array.isArray(values.devices) ? values.devices : [];
+  const raid = textValue(values.raidlevel);
+  const minimumDisks: Record<string, number> = {
+    mirror: 2,
+    raid10: 4,
+    raidz: 3,
+    raidz2: 6,
+    raidz3: 7,
+  };
+  const invalidCount =
+    (minimumDisks[raid] && devices.length < minimumDisks[raid]) ||
+    (raid === 'raid10' && devices.length % 2 !== 0);
+  if (
+    !validPoolName(values.name) ||
+    !Number.isInteger(ashift) ||
+    ashift < 9 ||
+    ashift > 16 ||
+    !devices.length ||
+    invalidCount ||
+    (draid && (!Number.isInteger(data) || data < 1 || !Number.isInteger(spares) || spares < 0))
+  ) {
+    Notify.create({ type: 'negative', message: gettext('Invalid ZFS configuration') });
+    return;
+  }
+  const payload = { ...values };
+  if (draid) payload['draid-config'] = `data=${data},spares=${spares}`;
+  delete payload.draidData;
+  delete payload.draidSpares;
+  saving.value = true;
+  try {
+    const result = await createNodeZfs(operationNode.value, payload);
+    createVisible.value = false;
+    openTask(result.data);
+  } finally {
+    saving.value = false;
+  }
+}
+function destroy(row?: PveRecord, node = '') {
+  destroyPool.value = textValue(row?.name);
+  operationNode.value = textValue(row?.node || node || props.node);
+  destroyVisible.value = Boolean(operationNode.value && destroyPool.value);
+}
+async function confirmDestroy(params: PveRecord) {
+  if (!operationNode.value || !destroyPool.value) return;
+  destroying.value = true;
+  try {
+    const result = await deleteNodeZfs(operationNode.value, destroyPool.value, params);
+    destroyVisible.value = false;
+    openTask(result.data);
+  } finally {
+    destroying.value = false;
+  }
+}
+async function action(name: string, row?: PveRecord, node = '') {
+  const targetNode = textValue(row?.node || node || props.node);
+  if (name === 'create' && targetNode) {
+    operationNode.value = targetNode;
+    const result = await getNodeUnusedDisks(targetNode);
+    diskOptions.value = (result.data || []).map((disk) => ({
+      label: String(disk.devpath || disk.name),
+      value: String(disk.devpath || disk.name),
+    }));
+    createVisible.value = true;
+  } else if (name === 'detail') void showDetail(row);
+  else if (name === 'destroy') destroy(row, targetNode);
+}
+function healthClass(value: unknown) {
+  const health = textValue(value).toUpperCase();
+  return health === 'ONLINE'
+    ? 'good'
+    : health === 'DEGRADED'
+    ? 'warning'
+    : health === 'FAULTED' || health === 'UNAVAIL'
+    ? 'critical'
+    : 'faded';
+}
 </script>
 
 <template>
@@ -95,21 +271,84 @@ function healthClass(value: unknown) { const health = textValue(value).toUpperCa
     :actions="actions"
     @action="action"
     @row-dblclick="showDetail"
-  ><template #body-cell-health="scope"><q-td :props="scope"><span :class="healthClass(scope.value)">{{ scope.value }}</span></q-td></template></NodeDiskTablePage>
-  <q-dialog v-model="detailVisible" persistent transition-show="scale" transition-hide="scale">
-    <UWindow :title="gettext('ZFS Status')" width="760px" :loading="detailLoading">
-      <q-list dense separator class="q-pa-sm">
-        <q-item v-for="(value, key) in detail" :key="String(key)"><q-item-section>{{ key }}</q-item-section><q-item-section side class="zfs-detail-value">{{ typeof value === 'object' ? JSON.stringify(value) : value }}</q-item-section></q-item>
-        <q-item v-if="!detailLoading && !Object.keys(detail).length"><q-item-section>{{ gettext('no record can be found') }}</q-item-section></q-item>
+  >
+    <template #body-cell-health="scope">
+      <q-td :props="scope">
+        <span :class="healthClass(scope.value)">{{ scope.value }}</span>
+      </q-td>
+    </template>
+  </NodeDiskTablePage>
+  <q-dialog
+    v-model="detailVisible"
+    persistent
+    transition-show="scale"
+    transition-hide="scale"
+  >
+    <UWindow
+      :title="gettext('ZFS Status')"
+      width="760px"
+      :loading="detailLoading"
+    >
+      <q-list
+        dense
+        separator
+        class="q-pa-sm"
+      >
+        <q-item
+          v-for="(value, key) in detail"
+          :key="String(key)"
+        >
+          <q-item-section>{{ key }}</q-item-section>
+          <q-item-section
+            side
+            class="zfs-detail-value"
+          >
+            {{ typeof value === 'object' ? JSON.stringify(value) : value }}
+          </q-item-section>
+        </q-item>
+        <q-item v-if="!detailLoading && !Object.keys(detail).length">
+          <q-item-section>{{ gettext('no record can be found') }}</q-item-section>
+        </q-item>
       </q-list>
-      <template #foot><q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Close')" /></template>
+      <template #foot>
+        <q-btn
+          v-close-popup
+          no-caps
+          outline
+          size="12px"
+          class="u-button"
+          :label="gettext('Close')"
+        />
+      </template>
     </UWindow>
   </q-dialog>
-  <NodeDiskFormDialog v-model="createVisible" :title="`${gettext('Create')}: ZFS`" :fields="fields" :defaults="{ raidlevel: 'single', compression: 'on', ashift: '12', add_storage: true }" :loading="saving" @submit="create" />
-  <NodeDiskDestroyDialog v-model="destroyVisible" :item="destroyPool" :loading="destroying" @submit="confirmDestroy" />
-  <TaskOutputDialog v-model="taskVisible" :node="operationNode" :upid="taskUpid" :title="gettext('Create')" @finished="table?.reload()" />
+  <NodeDiskFormDialog
+    v-model="createVisible"
+    :title="`${gettext('Create')}: ZFS`"
+    :fields="fields"
+    :defaults="{ raidlevel: 'single', compression: 'on', ashift: '12', add_storage: true }"
+    :loading="saving"
+    @submit="create"
+  />
+  <NodeDiskDestroyDialog
+    v-model="destroyVisible"
+    :item="destroyPool"
+    :loading="destroying"
+    @submit="confirmDestroy"
+  />
+  <TaskOutputDialog
+    v-model="taskVisible"
+    :node="operationNode"
+    :upid="taskUpid"
+    :title="gettext('Create')"
+    @finished="table?.reload()"
+  />
 </template>
 
 <style scoped>
-.zfs-detail-value { max-width: 520px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.zfs-detail-value {
+  max-width: 520px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 </style>

@@ -16,16 +16,24 @@ watch(
     form.appid = textValue(value?.appid);
     form.origin = textValue(value?.origin);
   },
-  { immediate: true, deep: true },
+  { immediate: true, deep: true }
 );
 watch(form, (value) => emit('update:modelValue', { ...value }), { deep: true });
 </script>
 
 <template>
   <div class="column q-gutter-sm">
-    <q-input v-model="form.appid" dense :label="gettext('U2F AppID URL')" />
+    <q-input
+      v-model="form.appid"
+      dense
+      :label="gettext('U2F AppID URL')"
+    />
     <OptionFormHint>{{ gettext('Defaults to origin') }}</OptionFormHint>
-    <q-input v-model="form.origin" dense :label="gettext('U2F Origin')" />
+    <q-input
+      v-model="form.origin"
+      dense
+      :label="gettext('U2F Origin')"
+    />
     <OptionFormHint>{{ gettext('Defaults to requesting host URI') }}</OptionFormHint>
     <OptionFormHint>
       <div>{{ gettext('Note: U2F is deprecated, use WebAuthn') }}</div>

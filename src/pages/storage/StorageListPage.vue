@@ -2,10 +2,11 @@
 import type { QTableColumn } from 'quasar';
 import { Dialog } from 'quasar';
 import { computed, onMounted, ref, shallowRef } from 'vue';
+import NodeSelectTable from '@/components/NodeSelectTable.vue';
 import StorageDetailPage from '@/pages/storage/modules/storage/StorageDetailPage.vue';
 import StorageEditDialog from '@/pages/storage/modules/storage/StorageEditDialog.vue';
 import type { PveNode, PveRecord } from '@/api/resources';
-import { getClusterResources, getNodes } from '@/api/resources';
+import { getClusterResources } from '@/api/resources';
 import { deleteStorage, getStorages } from '@/api/storage';
 import { gettext } from '@/locale';
 import { formatContent, textValue } from '@/utils/pveFormat';
@@ -15,7 +16,7 @@ const filter = ref('');
 const selected = ref<PveRecord[]>([]);
 const rows = shallowRef<PveRecord[]>([]);
 const current = ref<PveRecord | null>(null);
-const storageNodes = shallowRef<Record<string, string>>({});
+const selectedNode = shallowRef('');
 const treeSelected = ref('all');
 const treeExpanded = ref<string[]>([]);
 type StorageType = 'dir' | 'lvm' | 'lvmthin' | 'btrfs' | 'nfs' | 'cifs' | 'iscsi' | 'cephfs' | 'rbd' | 'zfs' | 'zfspool' | 'pbs' | 'esxi';
@@ -58,6 +59,13 @@ function storageTypeLabel(type: StorageType) {
 }
 
 const columns: QTableColumn<PveRecord>[] = [
+  {
+    name: 'node',
+    label: gettext('Node'),
+    align: 'left',
+    field: (row) => row.node || '-',
+    sortable: true,
+  },
   {
     name: 'storage',
     required: true,
@@ -110,9 +118,13 @@ const columns: QTableColumn<PveRecord>[] = [
   },
 ];
 
+const nodeRows = computed(() => selectedNode.value
+  ? rows.value.filter((row) => row.node === selectedNode.value)
+  : rows.value);
+
 const treeNodes = computed(() => {
   const byType = new Map<string, PveRecord[]>();
-  rows.value.forEach((row) => {
+  nodeRows.value.forEach((row) => {
     const type = textValue(row.type) || gettext('Unknown');
     byType.set(type, [...(byType.get(type) || []), row]);
   });
@@ -127,8 +139,8 @@ const treeNodes = computed(() => {
         id: `type:${type}`,
         icon: 'folder',
         children: items.map((item) => ({
-          label: textValue(item.storage),
-          id: `storage:${textValue(item.storage)}`,
+          label: `${textValue(item.storage)} (${textValue(item.node)})`,
+          id: `storage:${textValue(item.id)}`,
           icon: 'dns',
         })),
       })),
@@ -136,41 +148,45 @@ const treeNodes = computed(() => {
   ];
 });
 
-const detailNode = computed(() => {
-  const storage = textValue(current.value?.storage);
-  return storageNodes.value[storage] || textValue(current.value?.node) || 'localhost';
-});
+const detailNode = computed(() => textValue(current.value?.node));
 
 const tableRows = computed(() => {
-  if (!treeSelected.value.startsWith('type:')) return rows.value;
+  if (!treeSelected.value.startsWith('type:')) return nodeRows.value;
   const type = treeSelected.value.replace(/^type:/, '');
-  return rows.value.filter((row) => (textValue(row.type) || gettext('Unknown')) === type);
+  return nodeRows.value.filter((row) => (textValue(row.type) || gettext('Unknown')) === type);
 });
+
+function onNodeChange() {
+  backToStorageList();
+}
 
 async function refreshData() {
   loading.value = true;
   try {
-    const configResponse = await getStorages();
-    rows.value = [...(configResponse.data || [])].sort((a, b) =>
-      textValue(a.storage).localeCompare(textValue(b.storage)),
+    const [resourceResponse, configResponse] = await Promise.all([
+      getClusterResources({ type: 'storage' }),
+      getStorages().catch(() => null),
+    ]);
+    const configs = new Map((configResponse?.data || []).map((item) => [textValue(item.storage), item]));
+    rows.value = (resourceResponse.data || []).map<PveRecord>((resource) => {
+      const config = configs.get(textValue(resource.storage));
+      return {
+        ...config,
+        ...resource,
+        id: resource.id || `storage/${textValue(resource.node)}/${textValue(resource.storage)}`,
+        type: resource.plugintype || config?.type || '',
+      };
+    }).sort((a, b) =>
+      textValue(a.storage).localeCompare(textValue(b.storage)) ||
+      textValue(a.node).localeCompare(textValue(b.node)),
     );
-
-    // The detail page is a project extension, so its node lookup must never prevent
-    // the PVE-compatible storage configuration list from loading.
-    const resourceResponse = await getClusterResources({ type: 'storage' }).catch(() => null);
-    const resourceNodeMap: Record<string, string> = {};
-    (resourceResponse?.data || []).forEach((item) => {
-      const storageName = textValue(item.storage);
-      if (storageName && item.node) resourceNodeMap[storageName] = textValue(item.node);
-    });
-    storageNodes.value = resourceNodeMap;
     treeExpanded.value = [
       'all',
       ...new Set(rows.value.map((item) => `type:${textValue(item.type) || gettext('Unknown')}`)),
     ];
     selected.value = [];
     if (current.value) {
-      current.value = rows.value.find((item) => item.storage === current.value?.storage) || null;
+      current.value = rows.value.find((item) => item.id === current.value?.id) || null;
     }
   } finally {
     loading.value = false;
@@ -185,7 +201,7 @@ function openDetail(row?: PveRecord) {
   const target = row || selected.value[0];
   if (!target) return;
   current.value = target;
-  treeSelected.value = `storage:${textValue(target.storage)}`;
+  treeSelected.value = `storage:${textValue(target.id)}`;
 }
 
 function removeSelected() {
@@ -226,8 +242,8 @@ function onTreeSelect(id: string) {
     selected.value = [];
     return;
   }
-  const storage = id.replace(/^storage:/, '');
-  const row = rows.value.find((item) => textValue(item.storage) === storage);
+  const resourceId = id.replace(/^storage:/, '');
+  const row = nodeRows.value.find((item) => textValue(item.id) === resourceId);
   if (row) openDetail(row);
 }
 
@@ -239,13 +255,6 @@ function backToStorageList() {
 
 onMounted(() => {
   void refreshData();
-  void getNodes()
-    .then((response) => {
-      clusterNodes.value = response.data || [];
-    })
-    .catch(() => {
-      clusterNodes.value = [];
-    });
 });
 </script>
 
@@ -258,7 +267,6 @@ onMounted(() => {
         class="storage-tree__control"
         :nodes="treeNodes"
         node-key="id"
-        no-connectors
         selected-color="primary"
         @update:selected="onTreeSelect"
       >
@@ -293,7 +301,7 @@ onMounted(() => {
       <q-table
         v-else
         flat
-        row-key="storage"
+        row-key="id"
         table-header-class="u-table-header"
         selection="single"
         :rows="tableRows"
@@ -309,7 +317,17 @@ onMounted(() => {
         @update:selected="selected = [...$event]"
       >
         <template #top>
-          <div class="row q-gutter-sm">
+          <div class="row items-center q-gutter-sm">
+            <NodeSelectTable
+              v-model="selectedNode"
+              clearable
+              field-style="outlined"
+              class="storage-node-filter"
+              :auto-select="false"
+              :label="selectedNode ? '' : `${gettext('Node')}: ${gettext('All')}`"
+              @loaded="clusterNodes = $event"
+              @update:model-value="onNodeChange"
+            />
             <q-btn
               no-caps
               outline
@@ -317,6 +335,7 @@ onMounted(() => {
               color="primary"
               class="u-button"
               :label="gettext('Add')"
+              icon-right="arrow_drop_down"
             >
               <q-menu>
                 <q-list dense style="min-width: 220px">
@@ -398,6 +417,29 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.storage-node-filter {
+  min-width: 180px;
+}
+
+.storage-node-filter :deep(.q-field__label) {
+  top: 50%;
+  font-size: 12px;
+  line-height: 18px;
+  transform: translateY(-50%);
+}
+
+.storage-node-filter :deep(.q-field__native) {
+  min-height: 28px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 12px;
+  align-items: center;
+}
+
+.storage-node-filter :deep(.q-field__focusable-action) {
+  font-size: 16px;
+}
+
 .storage-page {
   min-height: calc(100vh - 96px);
 }

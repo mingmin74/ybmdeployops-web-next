@@ -5,5 +5,9 @@ const { node = 'localhost' } = defineProps<{ node?: string }>();
 </script>
 
 <template>
-  <LogViewer source="ceph" :node="node" :show-node-selector="false" />
+  <LogViewer
+    source="ceph"
+    :node="node"
+    :show-node-selector="false"
+  />
 </template>

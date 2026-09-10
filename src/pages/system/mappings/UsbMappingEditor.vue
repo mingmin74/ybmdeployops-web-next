@@ -156,71 +156,70 @@ if (selectedNode.value) void loadDevices();
           />
         </div>
       </div>
-         <section
-      v-if="!entryOnly"
-      class="mapping-editor__device-section q-mt-sm"
-    >
-      <div class="mapping-editor__choice">
-        <q-radio
-          v-model="mode"
-          val="id"
-          dense
-          color="primary"
-          :label="gettext('Use USB Vendor/Device ID')"
-        />
-        <SelectTable
-          v-model="deviceValue"
-          class="q-field--with-bottom"
-          field-style="standard"
-          row-key="deviceKey"
-          :rows="rows"
-          :columns="columns"
-          :display-value="deviceValue"
-          :loading="loading"
-          :get-row-value="(row) => textValue(row.deviceKey)"
-          :disable="mode !== 'id'"
-          :label="gettext('Choose Device')"
-          @selected="selectedDevice"
-        />
-        <div
-          v-if="submitted && mode === 'id' && !deviceValue"
-          class="mapping-editor__validation-error"
-        >
-          {{ gettext('This field is required') }}
+      <section
+        v-if="!entryOnly"
+        class="mapping-editor__device-section q-mt-sm"
+      >
+        <div class="mapping-editor__choice">
+          <q-radio
+            v-model="mode"
+            val="id"
+            dense
+            color="primary"
+            :label="gettext('Use USB Vendor/Device ID')"
+          />
+          <SelectTable
+            v-model="deviceValue"
+            class="q-field--with-bottom"
+            field-style="standard"
+            row-key="deviceKey"
+            :rows="rows"
+            :columns="columns"
+            :display-value="deviceValue"
+            :loading="loading"
+            :get-row-value="(row) => textValue(row.deviceKey)"
+            :disable="mode !== 'id'"
+            :label="gettext('Choose Device')"
+            @selected="selectedDevice"
+          />
+          <div
+            v-if="submitted && mode === 'id' && !deviceValue"
+            class="mapping-editor__validation-error"
+          >
+            {{ gettext('This field is required') }}
+          </div>
         </div>
-      </div>
-      <div class="mapping-editor__choice">
-        <q-radio
-          v-model="mode"
-          val="path"
-          dense
-          color="primary"
-          :label="gettext('Use USB Port')"
-        />
-        <SelectTable
-          v-model="pathValue"
-          class="q-field--with-bottom"
-          field-style="standard"
-          row-key="portKey"
-          :rows="rows"
-          :columns="columns"
-          :display-value="pathValue"
-          :loading="loading"
-          :get-row-value="(row) => textValue(row.portKey)"
-          :disable="mode !== 'path'"
-          :label="gettext('Choose Port')"
-          @selected="selectedDevice"
-        />
-        <div
-          v-if="submitted && mode === 'path' && !pathValue"
-          class="mapping-editor__validation-error"
-        >
-          {{ gettext('This field is required') }}
+        <div class="mapping-editor__choice">
+          <q-radio
+            v-model="mode"
+            val="path"
+            dense
+            color="primary"
+            :label="gettext('Use USB Port')"
+          />
+          <SelectTable
+            v-model="pathValue"
+            class="q-field--with-bottom"
+            field-style="standard"
+            row-key="portKey"
+            :rows="rows"
+            :columns="columns"
+            :display-value="pathValue"
+            :loading="loading"
+            :get-row-value="(row) => textValue(row.portKey)"
+            :disable="mode !== 'path'"
+            :label="gettext('Choose Port')"
+            @selected="selectedDevice"
+          />
+          <div
+            v-if="submitted && mode === 'path' && !pathValue"
+            class="mapping-editor__validation-error"
+          >
+            {{ gettext('This field is required') }}
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
     </div>
- 
   </div>
 </template>
 

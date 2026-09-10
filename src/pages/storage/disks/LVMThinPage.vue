@@ -5,7 +5,13 @@ import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 import NodeDiskTablePage from '@/components/NodeDiskTablePage.vue';
 import NodeDiskFormDialog, { type NodeDiskFormField } from './NodeDiskFormDialog.vue';
 import NodeDiskDestroyDialog from './NodeDiskDestroyDialog.vue';
-import { createNodeLvmThin, deleteNodeLvmThin, getNodeUnusedDisks, getNodeLvmThin, type PveRecord } from '@/api/resources';
+import {
+  createNodeLvmThin,
+  deleteNodeLvmThin,
+  getNodeUnusedDisks,
+  getNodeLvmThin,
+  type PveRecord,
+} from '@/api/resources';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 import { formatBytes, formatPercent } from '@/utils/format';
@@ -14,18 +20,44 @@ const props = defineProps<{
   embedded?: boolean;
   node?: string;
 }>();
-const table = shallowRef<InstanceType<typeof NodeDiskTablePage>>(); const createVisible = shallowRef(false); const saving = shallowRef(false); const taskVisible = shallowRef(false); const taskUpid = shallowRef('');
+const table = shallowRef<InstanceType<typeof NodeDiskTablePage>>();
+const createVisible = shallowRef(false);
+const saving = shallowRef(false);
+const taskVisible = shallowRef(false);
+const taskUpid = shallowRef('');
 const operationNode = shallowRef('');
-const destroyVisible = shallowRef(false); const destroying = shallowRef(false); const destroyPool = shallowRef(''); const destroyVg = shallowRef('');
+const destroyVisible = shallowRef(false);
+const destroying = shallowRef(false);
+const destroyPool = shallowRef('');
+const destroyVg = shallowRef('');
 const diskOptions = shallowRef<Array<{ label: string; value: string }>>([]);
-const actions = computed(() => [{ name: 'create', label: `${gettext('Create')}: ${gettext('Thinpool')}` }, { name: 'destroy', label: gettext('Destroy'), color: 'negative', requiresSelection: true }]);
-const fields = computed<NodeDiskFormField[]>(() => [{ name: 'device', label: gettext('Disk'), type: 'select', options: diskOptions.value, required: true }, { name: 'name', label: gettext('Name'), required: true }, { name: 'add_storage', label: gettext('Add as storage'), type: 'checkbox' }]);
+const actions = computed(() => [
+  { name: 'create', label: `${gettext('Create')}: ${gettext('Thinpool')}` },
+  { name: 'destroy', label: gettext('Destroy'), color: 'negative', requiresSelection: true },
+]);
+const fields = computed<NodeDiskFormField[]>(() => [
+  {
+    name: 'device',
+    label: gettext('Disk'),
+    type: 'select',
+    options: diskOptions.value,
+    required: true,
+  },
+  { name: 'name', label: gettext('Name'), required: true },
+  { name: 'add_storage', label: gettext('Add as storage'), type: 'checkbox' },
+]);
 
 const columns: QTableColumn<PveRecord>[] = [
   { name: 'lv', label: gettext('Name'), field: 'lv', align: 'left', sortable: true },
   { name: 'vg', label: gettext('Volume Group'), field: 'vg', align: 'left', sortable: true },
   { name: 'node', label: gettext('Node'), field: 'node', align: 'left', sortable: true },
-  { name: 'usage', label: gettext('Usage'), field: (row) => formatPercent(Number(row.used) / Number(row.lv_size) * 100), align: 'left', sortable: true },
+  {
+    name: 'usage',
+    label: gettext('Usage'),
+    field: (row) => formatPercent((Number(row.used) / Number(row.lv_size)) * 100),
+    align: 'left',
+    sortable: true,
+  },
   {
     name: 'lv_size',
     label: gettext('Size'),
@@ -43,7 +75,7 @@ const columns: QTableColumn<PveRecord>[] = [
   {
     name: 'metadata_usage',
     label: gettext('Metadata Usage'),
-    field: (row) => formatPercent(Number(row.metadata_used) / Number(row.metadata_size) * 100),
+    field: (row) => formatPercent((Number(row.metadata_used) / Number(row.metadata_size)) * 100),
     align: 'left',
     sortable: true,
   },
@@ -71,11 +103,56 @@ async function loadRows(node: string) {
     lv: item.lv || `${node}-${index}`,
   }));
 }
-function openTask(upid: unknown) { taskUpid.value = textValue(upid); taskVisible.value = taskUpid.value.startsWith('UPID:'); if (!taskVisible.value) void table.value?.reload(); }
-async function create(values: Record<string, unknown>) { if (!operationNode.value) return; saving.value = true; try { const result = await createNodeLvmThin(operationNode.value, values); createVisible.value = false; openTask(result.data); } finally { saving.value = false; } }
-function destroy(row?: PveRecord, node = '') { destroyPool.value = textValue(row?.lv); destroyVg.value = textValue(row?.vg || row?.['volume-group']); operationNode.value = textValue(row?.node || node || props.node); destroyVisible.value = Boolean(operationNode.value && destroyPool.value && destroyVg.value); }
-async function confirmDestroy(params: PveRecord) { if (!operationNode.value || !destroyPool.value || !destroyVg.value) return; destroying.value = true; try { const result = await deleteNodeLvmThin(operationNode.value, destroyVg.value, destroyPool.value, params); destroyVisible.value = false; openTask(result.data); } finally { destroying.value = false; } }
-async function action(name: string, row?: PveRecord, node = '') { const targetNode = textValue(row?.node || node || props.node); if (name === 'create' && targetNode) { operationNode.value = targetNode; const result = await getNodeUnusedDisks(targetNode); diskOptions.value = (result.data || []).map((disk) => ({ label: String(disk.devpath || disk.name), value: String(disk.devpath || disk.name) })); createVisible.value = true; } else if (name === 'destroy') destroy(row, targetNode); }
+function openTask(upid: unknown) {
+  taskUpid.value = textValue(upid);
+  taskVisible.value = taskUpid.value.startsWith('UPID:');
+  if (!taskVisible.value) void table.value?.reload();
+}
+async function create(values: Record<string, unknown>) {
+  if (!operationNode.value) return;
+  saving.value = true;
+  try {
+    const result = await createNodeLvmThin(operationNode.value, values);
+    createVisible.value = false;
+    openTask(result.data);
+  } finally {
+    saving.value = false;
+  }
+}
+function destroy(row?: PveRecord, node = '') {
+  destroyPool.value = textValue(row?.lv);
+  destroyVg.value = textValue(row?.vg || row?.['volume-group']);
+  operationNode.value = textValue(row?.node || node || props.node);
+  destroyVisible.value = Boolean(operationNode.value && destroyPool.value && destroyVg.value);
+}
+async function confirmDestroy(params: PveRecord) {
+  if (!operationNode.value || !destroyPool.value || !destroyVg.value) return;
+  destroying.value = true;
+  try {
+    const result = await deleteNodeLvmThin(
+      operationNode.value,
+      destroyVg.value,
+      destroyPool.value,
+      params
+    );
+    destroyVisible.value = false;
+    openTask(result.data);
+  } finally {
+    destroying.value = false;
+  }
+}
+async function action(name: string, row?: PveRecord, node = '') {
+  const targetNode = textValue(row?.node || node || props.node);
+  if (name === 'create' && targetNode) {
+    operationNode.value = targetNode;
+    const result = await getNodeUnusedDisks(targetNode);
+    diskOptions.value = (result.data || []).map((disk) => ({
+      label: String(disk.devpath || disk.name),
+      value: String(disk.devpath || disk.name),
+    }));
+    createVisible.value = true;
+  } else if (name === 'destroy') destroy(row, targetNode);
+}
 </script>
 
 <template>
@@ -89,7 +166,25 @@ async function action(name: string, row?: PveRecord, node = '') { const targetNo
     :actions="actions"
     @action="action"
   />
-  <NodeDiskFormDialog v-model="createVisible" :title="`${gettext('Create')}: ${gettext('Thinpool')}`" :fields="fields" :defaults="{ add_storage: true }" :loading="saving" @submit="create" />
-  <NodeDiskDestroyDialog v-model="destroyVisible" :item="`${destroyVg}/${destroyPool}`" :loading="destroying" @submit="confirmDestroy" />
-  <TaskOutputDialog v-model="taskVisible" :node="operationNode" :upid="taskUpid" :title="gettext('Create')" @finished="table?.reload()" />
+  <NodeDiskFormDialog
+    v-model="createVisible"
+    :title="`${gettext('Create')}: ${gettext('Thinpool')}`"
+    :fields="fields"
+    :defaults="{ add_storage: true }"
+    :loading="saving"
+    @submit="create"
+  />
+  <NodeDiskDestroyDialog
+    v-model="destroyVisible"
+    :item="`${destroyVg}/${destroyPool}`"
+    :loading="destroying"
+    @submit="confirmDestroy"
+  />
+  <TaskOutputDialog
+    v-model="taskVisible"
+    :node="operationNode"
+    :upid="taskUpid"
+    :title="gettext('Create')"
+    @finished="table?.reload()"
+  />
 </template>

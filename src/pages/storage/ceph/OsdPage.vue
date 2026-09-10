@@ -87,10 +87,10 @@ const visibleRows = computed(() =>
 const isOsd = computed(() =>
   Boolean(
     current.value &&
-    current.value.type === 'osd' &&
-    textValue(current.value.host) &&
-    Number.isInteger(Number(current.value.id)) &&
-    Number(current.value.id) >= 0
+      current.value.type === 'osd' &&
+      textValue(current.value.host) &&
+      Number.isInteger(Number(current.value.id)) &&
+      Number(current.value.id) >= 0
   )
 );
 const osdId = computed(() => textValue(current.value?.id ?? current.value?.osd));

@@ -19,7 +19,7 @@ watch(
     form.origin = textValue(value?.origin);
     form.id = textValue(value?.id);
   },
-  { immediate: true, deep: true },
+  { immediate: true, deep: true }
 );
 watch(form, (value) => emit('update:modelValue', { ...value }), { deep: true });
 
@@ -32,14 +32,41 @@ function autoFill() {
 
 <template>
   <div class="column q-gutter-sm">
-    <q-input v-model="form.rp" dense :label="gettext('Name')" :rules="[(value) => Boolean(value) || gettext('Required')]" />
-    <q-input v-model="form.origin" dense :label="gettext('Origin')" />
-    <OptionFormHint>{{ gettext('Domain Lockdown (e.g., {0})').replace('{0}', origin) }}</OptionFormHint>
-    <q-input v-model="form.id" dense label="ID" :rules="[(value) => Boolean(value) || gettext('Required')]" />
-    <div class="row justify-end"><q-btn dense flat no-caps color="primary" :label="gettext('Auto-fill')" @click="autoFill" /></div>
+    <q-input
+      v-model="form.rp"
+      dense
+      :label="gettext('Name')"
+      :rules="[(value) => Boolean(value) || gettext('Required')]"
+    />
+    <q-input
+      v-model="form.origin"
+      dense
+      :label="gettext('Origin')"
+    />
+    <OptionFormHint>
+      {{ gettext('Domain Lockdown (e.g., {0})').replace('{0}', origin) }}
+    </OptionFormHint>
+    <q-input
+      v-model="form.id"
+      dense
+      label="ID"
+      :rules="[(value) => Boolean(value) || gettext('Required')]"
+    />
+    <div class="row justify-end">
+      <q-btn
+        dense
+        flat
+        no-caps
+        color="primary"
+        :label="gettext('Auto-fill')"
+        @click="autoFill"
+      />
+    </div>
     <OptionFormHint>
       <div>{{ gettext('Note: WebAuthn requires using a trusted certificate.') }}</div>
-      <div v-if="idChanged">{{ gettext('Changing the ID breaks existing WebAuthn TFA entries.') }}</div>
+      <div v-if="idChanged">
+        {{ gettext('Changing the ID breaks existing WebAuthn TFA entries.') }}
+      </div>
     </OptionFormHint>
   </div>
 </template>

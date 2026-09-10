@@ -39,8 +39,9 @@ const visible = defineModel<boolean>({ required: true });
 const emit = defineEmits<{ saved: [] }>();
 
 const loading = reactive({ form: false, save: false });
+const advanced = shallowRef(false);
+const submitted = shallowRef(false);
 const scanLoading = shallowRef(false);
-const scanNode = shallowRef('localhost');
 const baseLoading = shallowRef(false);
 const baseStorages = shallowRef<string[]>([]);
 const baseVolumes = shallowRef<string[]>([]);
@@ -68,6 +69,11 @@ const tab = defineModel<string>('tab', { default: 'general' });
 const form = reactive<Record<string, any>>({});
 const original = shallowRef<PveRecord>({});
 const isCreate = computed(() => !props.storage);
+const storageScanNode = computed(() =>
+  isCreate.value && ['lvm', 'lvmthin', 'iscsi', 'zfspool'].includes(props.type)
+    ? textValue(form.nodes?.[0]) || 'localhost'
+    : 'localhost'
+);
 const canDoBackups = computed(() =>
   ['dir', 'btrfs', 'nfs', 'cifs', 'cephfs', 'pbs'].includes(props.type)
 );
@@ -75,6 +81,9 @@ const isPbs = computed(() => props.type === 'pbs');
 const hasEncryptionKey = computed(() => Boolean(textValue(original.value['encryption-key'])));
 const hasPreallocation = computed(() => ['dir', 'btrfs', 'nfs', 'cifs'].includes(props.type));
 const hasVolumeChain = computed(() => ['dir', 'nfs', 'cifs', 'lvm'].includes(props.type));
+const hasAdvanced = computed(
+  () => hasPreallocation.value || hasVolumeChain.value || props.type === 'rbd'
+);
 const title = computed(
   () => `${gettext(isCreate.value ? 'Add' : 'Edit')}: ${storageTypeLabel(props.type)}`
 );
@@ -220,6 +229,7 @@ function reset(values: PveRecord = {}) {
   Object.keys(form).forEach((key) => delete form[key]);
   const defaults = {
     storage: '',
+    username: isCephStorage.value ? 'admin' : '',
     nodes: [],
     enable: true,
     content: defaultContent[props.type],
@@ -274,6 +284,10 @@ function reset(values: PveRecord = {}) {
     maxProtectedBackups: textValue(values['max-protected-backups']),
     cryptMode: textValue(values['encryption-key']) ? 'keep' : 'none',
   });
+  if (['pbs', 'esxi'].includes(props.type) && values.port !== undefined) {
+    const server = textValue(values.server);
+    form.server = `${server.includes(':') ? `[${server}]` : server}:${textValue(values.port)}`;
+  }
   generatedEncryptionKey.value = '';
   encryptionKeyVisible.value = false;
   allowEncryptionEdit.value = false;
@@ -326,7 +340,10 @@ async function loadBaseVolumes() {
   if (!form.basesel) return;
   baseLoading.value = true;
   try {
-    const response = await getStorageContent(scanNode.value, textValue(form.basesel), 'images');
+    const node = storageScanNode.value;
+    const baseStorage = textValue(form.basesel);
+    const response = await getStorageContent(node, baseStorage, 'images');
+    if (node !== storageScanNode.value || baseStorage !== textValue(form.basesel)) return;
     baseVolumes.value = (response.data || [])
       .map((volume) => textValue(volume.volid))
       .filter(Boolean)
@@ -389,16 +406,38 @@ function fieldVisible(name: string) {
       'writecache',
     ],
     zfspool: ['pool', 'sparse', 'blocksize'],
-    pbs: ['server', 'port', 'username', 'password', 'datastore', 'namespace', 'fingerprint'],
-    esxi: ['server', 'port', 'username', 'password', 'skip-cert-verification'],
+    pbs: ['server', 'username', 'password', 'datastore', 'namespace', 'fingerprint'],
+    esxi: ['server', 'username', 'password', 'skip-cert-verification'],
   };
   if (!fields[props.type].includes(name)) return false;
+  if (props.type !== 'zfs' || isCreate.value) return true;
+  if (['comstar_tg', 'comstar_hg'].includes(name)) return form.iscsiprovider === 'comstar';
+  if (name === 'lio_tpg') return form.iscsiprovider === 'LIO';
+  if (name === 'writecache') return ['comstar', 'istgt'].includes(textValue(form.iscsiprovider));
+  return true;
+}
+function providerFieldEnabled(name: string) {
   if (props.type !== 'zfs') return true;
   if (['comstar_tg', 'comstar_hg'].includes(name)) return form.iscsiprovider === 'comstar';
   if (name === 'lio_tpg') return form.iscsiprovider === 'LIO';
   if (name === 'writecache') return ['comstar', 'istgt'].includes(textValue(form.iscsiprovider));
   return true;
 }
+
+function fieldDisabled(name: string) {
+  return (
+    isFixed(name) ||
+    !providerFieldEnabled(name) ||
+    (isCephStorage.value && managedCeph.value && name === 'username')
+  );
+}
+
+function parseServerAddress(value: string) {
+  const address = value.trim();
+  const match = address.match(/^\[([^\]]+)\](?::(\d+))?$/) || address.match(/^([^:]+):(\d+)$/);
+  return { server: match?.[1] || address, port: match?.[2] || '' };
+}
+
 function label(name: string) {
   return (
     (
@@ -437,25 +476,56 @@ function label(name: string) {
     )[name] || name
   );
 }
-function valid() {
+const requiredFields = computed(() => {
   const required = [...requires.value];
   if (props.type === 'lvm' && form.basesel) required.push('base');
   if (props.type === 'zfs' && form.iscsiprovider === 'LIO') required.push('lio_tpg');
   if (externalCeph.value) required.push('monhost', 'keyring');
-  const requiredValid = required.every((name) => {
-    if (!isCreate.value && isFixed(name)) return true;
-    const value = form[name];
-    return Array.isArray(value) ? value.length > 0 : Boolean(value);
-  });
-  const hasValidEncryptionUpload =
-    !isPbs.value || form.cryptMode !== 'upload' || Boolean(form.encryptionUpload);
-  return (
-    requiredValid &&
-    hasValidEncryptionUpload &&
-    validZfsBlockSize(textValue(form.blocksize), props.type === 'zfs')
-  );
-}
+  return required;
+});
 
+const validationErrors = computed(() => {
+  const errors: Record<string, string> = {};
+  if (!submitted.value) return errors;
+  for (const name of requiredFields.value) {
+    if (!isCreate.value && isFixed(name)) continue;
+    const value = form[name];
+    if (Array.isArray(value) ? !value.length : !textValue(value).trim()) {
+      errors[name] = `${gettext(label(name))}: ${gettext('This field is required')}`;
+    }
+  }
+  if (
+    ['zfs', 'zfspool'].includes(props.type) &&
+    !validZfsBlockSize(textValue(form.blocksize), props.type === 'zfs')
+  ) {
+    errors.blocksize = `${gettext('Block Size')}: ${gettext('Invalid value')}`;
+  }
+  if (isCreate.value && ['pbs', 'esxi'].includes(props.type)) {
+    const address = parseServerAddress(textValue(form.server));
+    if (address.port && (Number(address.port) < 1 || Number(address.port) > 65535)) {
+      errors.server = `${gettext('Server')}: ${gettext('Invalid value')}`;
+    }
+  }
+  if (isPbs.value && form.cryptMode === 'upload' && !form.encryptionUpload) {
+    errors.encryptionUpload = `${gettext('Encryption key')}: ${gettext('This field is required')}`;
+  }
+  return errors;
+});
+
+function fieldProps(name: string) {
+  return {
+    class: [
+      'q-field--with-bottom',
+      {
+        'storage-required':
+          requiredFields.value.includes(name) ||
+          (name === 'encryptionUpload' && form.cryptMode === 'upload'),
+      },
+    ],
+    error: Boolean(validationErrors.value[name]),
+    errorMessage: validationErrors.value[name],
+  };
+}
 function validZfsBlockSize(value: string, required: boolean) {
   if (!value) return !required;
   const match = value.match(/^([1-9][0-9]*)([km])?$/i);
@@ -515,8 +585,15 @@ async function scan(field: string) {
   if (!spec || (spec.kind === 'lvmthin' && !spec.params?.vg)) return;
   scanLoading.value = true;
   try {
-    const node = ['nfs', 'cifs'].includes(props.type) ? 'localhost' : scanNode.value;
+    const node = ['nfs', 'cifs'].includes(props.type) ? 'localhost' : storageScanNode.value;
     const response = await getStorageScan(node, spec.kind, spec.params);
+    if (
+      ['lvm', 'lvmthin', 'iscsi', 'zfspool'].includes(props.type) &&
+      node !== storageScanNode.value
+    )
+      return;
+    if (spec.kind === 'iscsi' && spec.params?.portal !== form.portal) return;
+    if (spec.kind === 'lvmthin' && spec.params?.vg !== form.vgname) return;
     scanOptions[field] = (response.data || [])
       .map((item) => textValue(item[spec.value]))
       .filter(Boolean)
@@ -641,6 +718,7 @@ function payload() {
   };
   fields[props.type].forEach((name) => {
     if (managedCeph.value && ['monhost', 'username', 'keyring'].includes(name)) return;
+    if (!providerFieldEnabled(name)) return;
     if (
       !isCreate.value &&
       (isFixed(name) || (name === 'snapshot-as-volume-chain' && props.type !== 'lvm'))
@@ -667,6 +745,12 @@ function payload() {
     if (name === 'nowritecache') return add(name, form.writecache ? 0 : 1);
     add(name, form[name]);
   });
+  if (isCreate.value && ['pbs', 'esxi'].includes(props.type)) {
+    const address = parseServerAddress(textValue(form.server));
+    data.server = address.server;
+    delete data.port;
+    if (address.port) data.port = address.port;
+  }
   if (props.type === 'iscsi') data.content = form.luns ? 'images' : 'none';
   if (props.type === 'zfs') data.content = 'images';
   if (props.type === 'nfs') {
@@ -710,6 +794,8 @@ function payload() {
 async function load() {
   if (!visible.value) return;
   tab.value = 'general';
+  advanced.value = false;
+  submitted.value = false;
   if (!props.storage) {
     original.value = {};
     reset();
@@ -731,7 +817,13 @@ async function load() {
   }
 }
 async function save() {
-  if (!valid()) return;
+  if (loading.save || loading.form) return;
+  submitted.value = true;
+  const errors = Object.keys(validationErrors.value);
+  if (errors.length) {
+    tab.value = errors.some((name) => name !== 'encryptionUpload') ? 'general' : 'encryption';
+    return;
+  }
   loading.save = true;
   try {
     const response = isCreate.value
@@ -752,11 +844,29 @@ async function save() {
   }
 }
 watch([visible, () => props.storage, () => props.type], load, { immediate: true });
-watch(scanNode, (node) => {
-  if (isCreate.value && ['lvm', 'lvmthin', 'iscsi', 'zfspool'].includes(props.type)) {
-    form.nodes = node ? [node] : [];
+watch(storageScanNode, () => {
+  if (!visible.value || !isCreate.value) return;
+  if (props.type === 'iscsi') {
+    form.target = '';
+    scanOptions.target = [];
+    if (form.portal) void scan('target');
+    return;
   }
-  if (isCreate.value && props.type === 'lvm' && form.basesel) void loadBaseVolumes();
+  if (props.type === 'zfspool') {
+    form.pool = '';
+    scanOptions.pool = [];
+    void scan('pool');
+    return;
+  }
+  if (!['lvm', 'lvmthin'].includes(props.type)) return;
+  form.vgname = '';
+  form.thinpool = '';
+  scanOptions.thinpool = [];
+  form.base = '';
+  scanOptions.vgname = [];
+  baseVolumes.value = [];
+  if (form.basesel) void loadBaseVolumes();
+  else void scan('vgname');
 });
 watch(
   () => form.vgname,
@@ -813,21 +923,24 @@ watch(encryptionFileRef, (file) => {
 <template>
   <q-dialog
     v-model="visible"
+    transition-show="scale"
+    transition-hide="scale"
     persistent
   >
     <UWindow
       :title="title"
-      width="720px"
+      width="800px"
       :loading="loading.form"
     >
       <q-form
-        class="storage-editor"
+        class="storage-editor q-ma-sm bg-grey-1"
         @submit="save"
       >
         <q-tabs
           v-model="tab"
           dense
-          align="justify"
+          align="left"
+          class="bg-white"
           active-color="primary"
           indicator-color="primary"
         >
@@ -853,272 +966,329 @@ watch(encryptionFileRef, (file) => {
         <q-tab-panels
           v-model="tab"
           animated
+          class="bg-grey-1"
         >
           <q-tab-panel name="general">
-            <div class="row q-col-gutter-lg">
-              <div class="col-12 col-sm-6">
-                <q-input
-                  v-model="form.storage"
-                  dense
-                  :label="gettext('ID')"
-                  :disable="isFixed('storage')"
-                />
-                <q-select
-                  v-if="contentMode === 'multi'"
-                  v-model="form.content"
-                  dense
-                  multiple
-                  options-dense
-                  :options="contentOptions"
-                  :label="gettext('Content')"
-                />
-                <q-input
-                  v-else-if="contentMode === 'fixed'"
-                  :model-value="gettext('backup')"
-                  dense
-                  readonly
-                  :label="gettext('Content')"
-                />
-                <q-checkbox
-                  v-model="form.enable"
-                  dense
-                  :label="gettext('Enable')"
-                />
-                <q-checkbox
-                  v-if="['dir', 'lvm'].includes(type)"
-                  v-model="form.shared"
-                  dense
-                  :label="gettext('Shared')"
-                />
-                <q-checkbox
-                  v-if="fieldVisible('saferemove')"
-                  v-model="form.saferemove"
-                  dense
-                  :label="gettext('Wipe Removed Volumes')"
-                />
-                <q-checkbox
-                  v-if="fieldVisible('luns')"
-                  v-model="form.luns"
-                  dense
-                  :label="gettext('Use LUNs directly')"
-                />
-                <q-checkbox
-                  v-if="fieldVisible('krbd')"
-                  v-model="form.krbd"
-                  dense
-                  label="KRBD"
-                />
-                <q-checkbox
-                  v-if="fieldVisible('sparse')"
-                  v-model="form.sparse"
-                  dense
-                  :label="gettext('Thin provision')"
-                />
-                <q-checkbox
-                  v-if="fieldVisible('writecache')"
-                  v-model="form.writecache"
-                  dense
-                  :label="gettext('Write cache')"
-                />
-              </div>
-              <div class="col-12 col-sm-6">
-                <q-select
-                  v-model="form.nodes"
-                  dense
-                  multiple
-                  options-dense
-                  emit-value
-                  map-options
-                  option-value="node"
-                  option-label="node"
-                  :options="nodes"
-                  :disable="storage === 'local'"
-                  :label="gettext('Nodes')"
-                />
-                <q-checkbox
-                  v-if="isCreate && isCephStorage"
-                  v-model="managedCeph"
-                  dense
-                  :loading="cephLoading"
-                  :disable="!pveCephPossible"
-                  :label="
-                    gettext(
-                      type === 'rbd'
-                        ? 'Use Proxmox VE managed hyper-converged ceph pool'
-                        : 'Use Proxmox VE managed hyper-converged cephFS'
-                    )
-                  "
-                />
-                <q-select
-                  v-if="isCreate && type === 'rbd' && managedCeph"
-                  v-model="form.pool"
-                  dense
-                  :options="managedPools"
-                  :label="gettext('Pool')"
-                />
-                <q-select
-                  v-if="isCreate && type === 'cephfs' && managedCeph"
-                  v-model="form['fs-name']"
-                  dense
-                  :options="managedFilesystems"
-                  :label="gettext('FS Name')"
-                />
-                <q-input
-                  v-if="isCephStorage && managedCeph"
-                  :model-value="managedMonitors"
-                  dense
-                  readonly
-                  :label="gettext('Monitor(s)')"
-                />
-                <q-input
-                  v-if="!isCreate && type === 'rbd' && managedCeph"
-                  :model-value="form.pool"
-                  dense
-                  readonly
-                  :label="gettext('Pool')"
-                />
-                <q-input
-                  v-if="!isCreate && type === 'cephfs' && managedCeph"
-                  :model-value="form['fs-name']"
-                  dense
-                  readonly
-                  :label="gettext('FS Name')"
-                />
-                <q-select
-                  v-if="isCreate && ['lvm', 'lvmthin', 'iscsi', 'zfspool'].includes(type)"
-                  v-model="scanNode"
-                  dense
-                  emit-value
-                  map-options
-                  option-value="node"
-                  option-label="node"
-                  :options="nodes"
-                  :label="gettext('Node to scan')"
-                />
-                <q-select
-                  v-if="isCreate && type === 'lvm'"
-                  v-model="form.basesel"
-                  dense
-                  clearable
-                  :options="baseStorages"
-                  :label="gettext('Base storage')"
-                />
-                <q-select
-                  v-if="isCreate && type === 'lvm' && form.basesel"
-                  v-model="form.base"
-                  dense
-                  use-input
-                  new-value-mode="add-unique"
-                  :loading="baseLoading"
-                  :options="baseVolumes"
-                  :label="gettext('Base volume')"
-                  @popup-show="loadBaseVolumes"
-                />
-                <q-select
-                  v-for="name in ['vgname', 'thinpool', 'export', 'share', 'target', 'pool']"
-                  v-show="fieldVisible(name) && isScannable(name)"
-                  :key="`scan-${name}`"
-                  v-model="form[name]"
-                  dense
-                  :use-input="scanAllowsCustomValue(name)"
-                  :new-value-mode="scanAllowsCustomValue(name) ? 'add-unique' : undefined"
-                  :disable="scanDisabled(name)"
-                  :options="scanOptions[name]"
-                  :label="gettext(label(name))"
-                  @popup-show="scan(name)"
-                >
-                  <template #append>
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="refresh"
-                      :loading="scanLoading"
-                      :aria-label="gettext('Refresh')"
-                      @click.stop="scan(name)"
-                    />
-                  </template>
-                </q-select>
-                <q-input
-                  v-for="name in [
-                    'path',
-                    'vgname',
-                    'thinpool',
-                    'base',
-                    'server',
-                    'export',
-                    'share',
-                    'portal',
-                    'target',
-                    'pool',
-                    'fs-name',
-                    'monhost',
-                    'username',
-                    'password',
-                    'keyring',
-                    'namespace',
-                    'datastore',
-                    'fingerprint',
-                    'domain',
-                    'subdir',
-                    'blocksize',
-                    'comstar_tg',
-                    'comstar_hg',
-                    'lio_tpg',
-                    'port',
-                  ]"
-                  :key="name"
-                  v-show="
-                    fieldVisible(name) &&
-                    !isScannable(name) &&
-                    !(name === 'base' && isCreate && type === 'lvm') &&
-                    !(
-                      isCephStorage &&
-                      managedCeph &&
-                      ['pool', 'fs-name', 'monhost', 'username', 'keyring'].includes(name)
-                    )
-                  "
-                  v-model="form[name]"
-                  dense
-                  :type="['password', 'keyring'].includes(name) ? 'password' : 'text'"
-                  :label="gettext(label(name))"
-                  :disable="isFixed(name)"
-                />
-                <q-select
-                  v-if="fieldVisible('iscsiprovider')"
-                  v-model="form.iscsiprovider"
-                  dense
-                  emit-value
-                  map-options
-                  :options="[
-                    { label: 'LIO', value: 'LIO' },
-                    { label: 'COMSTAR', value: 'comstar' },
-                    { label: 'istgt', value: 'istgt' },
-                  ]"
-                  :label="gettext('iSCSI Provider')"
-                  :disable="isFixed('iscsiprovider')"
-                />
-                <q-select
-                  v-if="fieldVisible('nfsversion')"
-                  v-model="form.nfsversion"
-                  dense
-                  :options="['__default__', '3', '4', '4.1', '4.2']"
-                  :label="gettext('NFS Version')"
-                />
-                <q-checkbox
-                  v-if="fieldVisible('skip-cert-verification')"
-                  v-model="form['skip-cert-verification']"
-                  dense
-                  :label="gettext('Skip Certificate Verification')"
-                />
+            <div class="q-px-md q-py-sm u-border-dotted-blue bg-white">
+              <div class="row q-gutter-lg">
+                <div class="col">
+                  <q-input
+                    v-bind="fieldProps('storage')"
+                    v-model="form.storage"
+                    dense
+                    :label="gettext('ID')"
+                    :disable="isFixed('storage')"
+                  />
+                  <q-select
+                    v-bind="fieldProps('content')"
+                    v-if="contentMode === 'multi'"
+                    v-model="form.content"
+                    dense
+                    multiple
+                    options-dense
+                    :options="contentOptions"
+                    :label="gettext('Content')"
+                  />
+                  <q-input
+                    class="q-field--with-bottom"
+                    v-else-if="contentMode === 'fixed'"
+                    :model-value="gettext('backup')"
+                    dense
+                    readonly
+                    :label="gettext('Content')"
+                  />
+                  <q-checkbox
+                    v-model="form.enable"
+                    dense
+                    right-label
+                    color="primary"
+                    :label="gettext('Enable')"
+                  />
+                  <q-checkbox
+                    v-if="['dir', 'lvm'].includes(type)"
+                    v-model="form.shared"
+                    dense
+                    right-label
+                    color="primary"
+                    :label="gettext('Shared')"
+                  />
+                  <q-checkbox
+                    v-if="fieldVisible('saferemove')"
+                    v-model="form.saferemove"
+                    dense
+                    right-label
+                    color="primary"
+                    :label="gettext('Wipe Removed Volumes')"
+                  />
+                  <q-checkbox
+                    v-if="fieldVisible('luns')"
+                    v-model="form.luns"
+                    dense
+                    right-label
+                    color="primary"
+                    :label="gettext('Use LUNs directly')"
+                  />
+                  <q-checkbox
+                    v-if="fieldVisible('krbd')"
+                    v-model="form.krbd"
+                    dense
+                    right-label
+                    color="primary"
+                    :label="gettext('Use kernel RBD driver')"
+                  />
+                  <q-checkbox
+                    v-if="fieldVisible('sparse')"
+                    v-model="form.sparse"
+                    dense
+                    right-label
+                    color="primary"
+                    :label="gettext('Thin provision')"
+                  />
+                  <q-checkbox
+                    v-if="fieldVisible('writecache')"
+                    v-model="form.writecache"
+                    :disable="!providerFieldEnabled('writecache')"
+                    dense
+                    right-label
+                    color="primary"
+                    :label="gettext('Write cache')"
+                  />
+                </div>
+                <div class="col">
+                  <q-select
+                    v-bind="fieldProps('nodes')"
+                    v-model="form.nodes"
+                    dense
+                    multiple
+                    options-dense
+                    emit-value
+                    map-options
+                    option-value="node"
+                    option-label="node"
+                    :options="nodes"
+                    :disable="storage === 'local'"
+                    :label="gettext('Nodes')"
+                  />
+                  <q-checkbox
+                    v-if="isCreate && isCephStorage"
+                    v-model="managedCeph"
+                    dense
+                    right-label
+                    color="primary"
+                    :loading="cephLoading"
+                    :disable="!pveCephPossible"
+                    :label="
+                      gettext(
+                        type === 'rbd'
+                          ? 'Use Proxmox VE managed hyper-converged ceph pool'
+                          : 'Use Proxmox VE managed hyper-converged cephFS'
+                      )
+                    "
+                  />
+                  <q-select
+                    options-dense
+                    v-bind="fieldProps('pool')"
+                    v-if="isCreate && type === 'rbd' && managedCeph"
+                    v-model="form.pool"
+                    dense
+                    :options="managedPools"
+                    :label="gettext('Pool')"
+                  />
+                  <q-select
+                    options-dense
+                    v-bind="fieldProps('fs-name')"
+                    v-if="isCreate && type === 'cephfs' && managedCeph"
+                    v-model="form['fs-name']"
+                    dense
+                    :options="managedFilesystems"
+                    :label="gettext('FS Name')"
+                  />
+                  <q-input
+                    class="q-field--with-bottom"
+                    v-if="isCephStorage && managedCeph"
+                    :model-value="managedMonitors"
+                    dense
+                    readonly
+                    :label="gettext('Monitor(s)')"
+                  />
+                  <q-input
+                    class="q-field--with-bottom"
+                    v-if="!isCreate && type === 'rbd' && managedCeph"
+                    :model-value="form.pool"
+                    dense
+                    readonly
+                    :label="gettext('Pool')"
+                  />
+                  <q-input
+                    class="q-field--with-bottom"
+                    v-if="!isCreate && type === 'cephfs' && managedCeph"
+                    :model-value="form['fs-name']"
+                    dense
+                    readonly
+                    :label="gettext('FS Name')"
+                  />
+                  <q-select
+                    options-dense
+                    v-bind="fieldProps('basesel')"
+                    v-if="isCreate && type === 'lvm'"
+                    v-model="form.basesel"
+                    dense
+                    clearable
+                    :options="baseStorages"
+                    :label="gettext('Base storage')"
+                  />
+                  <q-select
+                    options-dense
+                    v-bind="fieldProps('base')"
+                    v-if="isCreate && type === 'lvm' && form.basesel"
+                    v-model="form.base"
+                    dense
+                    use-input
+                    new-value-mode="add-unique"
+                    :loading="baseLoading"
+                    :options="baseVolumes"
+                    :label="gettext('Base volume')"
+                    @popup-show="loadBaseVolumes"
+                  />
+                  <q-select
+                    options-dense
+                    v-bind="fieldProps(name)"
+                    v-for="name in ['vgname', 'thinpool', 'export', 'share', 'target', 'pool']"
+                    v-show="fieldVisible(name) && isScannable(name)"
+                    :key="`scan-${name}`"
+                    v-model="form[name]"
+                    dense
+                    :use-input="scanAllowsCustomValue(name)"
+                    :new-value-mode="scanAllowsCustomValue(name) ? 'add-unique' : undefined"
+                    :disable="scanDisabled(name)"
+                    :options="scanOptions[name]"
+                    :label="gettext(label(name))"
+                    @popup-show="scan(name)"
+                  >
+                    <template #append>
+                      <q-btn
+                        flat
+                        round
+                        dense
+                        icon="refresh"
+                        :loading="scanLoading"
+                        :aria-label="gettext('Refresh')"
+                        @click.stop="scan(name)"
+                      />
+                    </template>
+                  </q-select>
+                  <q-input
+                    v-bind="fieldProps(name)"
+                    v-for="name in [
+                      'path',
+                      'vgname',
+                      'thinpool',
+                      'base',
+                      'server',
+                      'export',
+                      'share',
+                      'portal',
+                      'target',
+                      'pool',
+                      'fs-name',
+                      'monhost',
+                      'username',
+                      'password',
+                      'keyring',
+                      'namespace',
+                      'datastore',
+                      'fingerprint',
+                      'domain',
+                      'subdir',
+                      'blocksize',
+                      'comstar_tg',
+                      'comstar_hg',
+                      'lio_tpg',
+                      'port',
+                    ]"
+                    :key="name"
+                    v-show="
+                      fieldVisible(name) &&
+                      !isScannable(name) &&
+                      !(type === 'rbd' && name === 'namespace') &&
+                      !(name === 'base' && isCreate && type === 'lvm') &&
+                      !(
+                        isCephStorage &&
+                        managedCeph &&
+                        ['pool', 'fs-name', 'monhost', 'keyring'].includes(name)
+                      )
+                    "
+                    v-model="form[name]"
+                    dense
+                    :type="['password', 'keyring'].includes(name) ? 'password' : 'text'"
+                    :label="gettext(label(name))"
+                    :disable="fieldDisabled(name)"
+                  />
+                  <q-select
+                    options-dense
+                    v-bind="fieldProps('iscsiprovider')"
+                    v-if="fieldVisible('iscsiprovider')"
+                    v-model="form.iscsiprovider"
+                    dense
+                    emit-value
+                    map-options
+                    :options="[
+                      { label: 'LIO', value: 'LIO' },
+                      { label: 'COMSTAR', value: 'comstar' },
+                      { label: 'istgt', value: 'istgt' },
+                    ]"
+                    :label="gettext('iSCSI Provider')"
+                    :disable="isFixed('iscsiprovider')"
+                  />
+                  <q-checkbox
+                    v-if="fieldVisible('skip-cert-verification')"
+                    v-model="form['skip-cert-verification']"
+                    dense
+                    right-label
+                    color="primary"
+                    :label="gettext('Skip Certificate Verification')"
+                  />
+                </div>
               </div>
             </div>
-            <q-expansion-item
-              v-if="hasPreallocation || hasVolumeChain"
-              dense
-              :label="gettext('Advanced')"
+            <div
+              v-if="advanced && hasAdvanced"
+              class="q-mt-sm u-border-dotted-blue q-px-md q-py-sm bg-white"
             >
+              <q-input
+                v-if="type === 'rbd'"
+                v-model="form.namespace"
+                v-bind="fieldProps('namespace')"
+                dense
+                :readonly="!isCreate"
+                :label="gettext('Namespace')"
+              />
+              <q-banner
+                dense
+                role="note"
+                v-if="type === 'rbd' && form.namespace"
+                class="storage-notice storage-notice--info q-mt-sm"
+              >
+                <template #avatar>
+                  <q-icon
+                    name="info_outline"
+                    size="18px"
+                  />
+                </template>
+                {{ gettext('RBD namespaces must be created manually!') }}
+              </q-banner>
               <q-select
+                options-dense
+                v-bind="fieldProps('nfsversion')"
+                v-if="fieldVisible('nfsversion')"
+                v-model="form.nfsversion"
+                dense
+                :options="['__default__', '3', '4', '4.1', '4.2']"
+                :label="gettext('NFS Version')"
+              />
+              <q-select
+                options-dense
+                v-bind="fieldProps('preallocation')"
                 v-if="hasPreallocation"
                 v-model="form.preallocation"
                 dense
@@ -1129,183 +1299,258 @@ watch(encryptionFileRef, (file) => {
                 v-if="hasVolumeChain"
                 v-model="form['snapshot-as-volume-chain']"
                 dense
+                right-label
+                color="primary"
                 :disable="!isCreate && type !== 'lvm'"
                 :label="gettext('Allow Snapshots as Volume-Chain')"
               />
-              <div
+              <q-banner
+                dense
+                role="note"
                 v-if="hasVolumeChain"
-                class="text-caption text-grey-7"
+                class="storage-notice storage-notice--warning q-mt-sm"
               >
+                <template #avatar>
+                  <q-icon
+                    name="warning_amber"
+                    size="18px"
+                  />
+                </template>
                 {{ gettext('Snapshots as Volume-Chain are a technology preview.') }}
-              </div>
-              <div
+              </q-banner>
+              <q-banner
+                dense
+                role="note"
                 v-if="type === 'lvm' && hasVolumeChain"
-                class="text-caption text-grey-7"
+                class="storage-notice storage-notice--warning q-mt-sm"
               >
+                <template #avatar>
+                  <q-icon
+                    name="warning_amber"
+                    size="18px"
+                  />
+                </template>
                 {{ gettext('Keep Snapshots as Volume - Chain enabled if qcow2 images exist!') }}
-              </div>
-            </q-expansion-item>
-            <div
+              </q-banner>
+            </div>
+            <q-banner
+              dense
+              role="note"
               v-if="type === 'btrfs'"
-              class="text-caption text-grey-7 q-mt-sm"
+              class="storage-notice storage-notice--warning q-mt-sm"
             >
+              <template #avatar>
+                <q-icon
+                  name="warning_amber"
+                  size="18px"
+                />
+              </template>
               {{ gettext('BTRFS integration is currently a technology preview.') }}
-            </div>
-            <div
-              v-if="type === 'rbd' && form.namespace"
-              class="text-caption text-grey-7 q-mt-sm"
-            >
-              {{ gettext('RBD namespaces must be created manually!') }}
-            </div>
+            </q-banner>
           </q-tab-panel>
           <q-tab-panel
             v-if="canDoBackups"
             name="retention"
           >
-            <q-checkbox
-              v-model="form.keepAll"
-              dense
-              :label="gettext('Keep all backups')"
-            />
-            <div
-              v-if="!form.keepAll"
-              class="row q-col-gutter-lg q-mt-xs"
-            >
-              <div class="col-12 col-sm-6">
-                <q-input
-                  v-model="form.keepLast"
-                  dense
-                  type="number"
-                  min="0"
-                  :label="gettext('Keep last')"
-                />
-                <q-input
-                  v-model="form.keepHourly"
-                  dense
-                  type="number"
-                  min="0"
-                  :label="gettext('Keep hourly')"
-                />
-                <q-input
-                  v-model="form.keepDaily"
-                  dense
-                  type="number"
-                  min="0"
-                  :label="gettext('Keep daily')"
-                />
+            <div class="q-px-md q-py-sm u-border-dotted-blue bg-white">
+              <q-checkbox
+                v-model="form.keepAll"
+                dense
+                right-label
+                color="primary"
+                :label="gettext('Keep all backups')"
+              />
+              <div
+                v-if="!form.keepAll"
+                class="row q-col-gutter-lg q-mt-xs"
+              >
+                <div class="col-12 col-sm-6">
+                  <q-input
+                    v-bind="fieldProps('keepLast')"
+                    v-model="form.keepLast"
+                    dense
+                    type="number"
+                    min="0"
+                    :label="gettext('Keep last')"
+                  />
+                  <q-input
+                    v-bind="fieldProps('keepHourly')"
+                    v-model="form.keepHourly"
+                    dense
+                    type="number"
+                    min="0"
+                    :label="gettext('Keep hourly')"
+                  />
+                  <q-input
+                    v-bind="fieldProps('keepDaily')"
+                    v-model="form.keepDaily"
+                    dense
+                    type="number"
+                    min="0"
+                    :label="gettext('Keep daily')"
+                  />
+                </div>
+                <div class="col-12 col-sm-6">
+                  <q-input
+                    v-bind="fieldProps('keepWeekly')"
+                    v-model="form.keepWeekly"
+                    dense
+                    type="number"
+                    min="0"
+                    :label="gettext('Keep weekly')"
+                  />
+                  <q-input
+                    v-bind="fieldProps('keepMonthly')"
+                    v-model="form.keepMonthly"
+                    dense
+                    type="number"
+                    min="0"
+                    :label="gettext('Keep monthly')"
+                  />
+                  <q-input
+                    v-bind="fieldProps('keepYearly')"
+                    v-model="form.keepYearly"
+                    dense
+                    type="number"
+                    min="0"
+                    :label="gettext('Keep yearly')"
+                  />
+                </div>
               </div>
-              <div class="col-12 col-sm-6">
-                <q-input
-                  v-model="form.keepWeekly"
-                  dense
-                  type="number"
-                  min="0"
-                  :label="gettext('Keep weekly')"
-                />
-                <q-input
-                  v-model="form.keepMonthly"
-                  dense
-                  type="number"
-                  min="0"
-                  :label="gettext('Keep monthly')"
-                />
-                <q-input
-                  v-model="form.keepYearly"
-                  dense
-                  type="number"
-                  min="0"
-                  :label="gettext('Keep yearly')"
-                />
-              </div>
-            </div>
-            <q-input
-              v-model="form.maxProtectedBackups"
-              dense
-              type="number"
-              min="0"
-              class="q-mt-sm"
-              :label="gettext('Max protected backups')"
-            />
-            <div
-              v-if="isPbs"
-              class="text-caption text-grey-7 q-mt-sm"
-            >
-              {{ gettext('Retention settings are used when pruning backups on this server.') }}
+              <q-input
+                v-bind="fieldProps('maxProtectedBackups')"
+                v-model="form.maxProtectedBackups"
+                dense
+                type="number"
+                min="0"
+                class="q-mt-sm"
+                :label="gettext('Max protected backups')"
+              />
+              <q-banner
+                dense
+                role="note"
+                v-if="isPbs"
+                class="storage-notice storage-notice--info q-mt-sm"
+              >
+                <template #avatar>
+                  <q-icon
+                    name="info_outline"
+                    size="18px"
+                  />
+                </template>
+                {{ gettext('Retention settings are used when pruning backups on this server.') }}
+              </q-banner>
             </div>
           </q-tab-panel>
           <q-tab-panel
             v-if="isPbs"
             name="encryption"
           >
-            <q-checkbox
-              v-if="!isCreate && hasEncryptionKey"
-              v-model="allowEncryptionEdit"
-              dense
-              :label="gettext('Edit existing encryption key (dangerous!)')"
-            />
-            <div
-              v-if="!isCreate && hasEncryptionKey && allowEncryptionEdit"
-              class="text-negative q-mt-sm"
-            >
-              {{
-                gettext(
-                  'Deleting or replacing the encryption key will break restoring backups created with it!'
-                )
-              }}
-            </div>
-            <q-option-group
-              v-model="form.cryptMode"
-              type="radio"
-              :options="[
-                {
-                  label: gettext('Do not encrypt backups'),
-                  value: 'none',
-                  disable: !isCreate && hasEncryptionKey && !allowEncryptionEdit,
-                },
-                {
-                  label: gettext('Keep encryption key'),
-                  value: 'keep',
-                  disable: isCreate || !hasEncryptionKey,
-                },
-                {
-                  label: gettext('Auto-generate a client encryption key'),
-                  value: 'autogenerate',
-                  disable: !isCreate || (!allowEncryptionEdit && hasEncryptionKey),
-                },
-                {
-                  label: gettext('Upload an existing client encryption key'),
-                  value: 'upload',
-                  disable: !isCreate || (!allowEncryptionEdit && hasEncryptionKey),
-                },
-              ]"
-            />
-            <q-file
-              v-if="form.cryptMode === 'upload'"
-              v-model="encryptionFileRef"
-              dense
-              clearable
-              accept="application/json,.json"
-              class="q-mt-md"
-              :label="gettext('Encryption key')"
-            />
-            <div class="text-caption text-grey-7 q-mt-sm">
-              {{ gettext('The client encryption key is required to restore encrypted backups.') }}
+            <div class="q-px-md q-py-sm u-border-dotted-blue bg-white">
+              <q-checkbox
+                v-if="!isCreate && hasEncryptionKey"
+                v-model="allowEncryptionEdit"
+                dense
+                right-label
+                color="primary"
+                :label="gettext('Edit existing encryption key (dangerous!)')"
+              />
+              <q-banner
+                dense
+                role="note"
+                v-if="!isCreate && hasEncryptionKey && allowEncryptionEdit"
+                class="storage-notice storage-notice--danger q-mt-sm"
+              >
+                <template #avatar>
+                  <q-icon
+                    name="warning_amber"
+                    size="18px"
+                  />
+                </template>
+                {{
+                  gettext(
+                    'Deleting or replacing the encryption key will break restoring backups created with it!'
+                  )
+                }}
+              </q-banner>
+              <q-option-group
+                v-model="form.cryptMode"
+                type="radio"
+                :options="
+                  [
+                    {
+                      label: gettext('Do not encrypt backups'),
+                      value: 'none',
+                      disable: !isCreate && hasEncryptionKey && !allowEncryptionEdit,
+                    },
+                    {
+                      label: gettext('Keep encryption key'),
+                      value: 'keep',
+                      disable: isCreate || !hasEncryptionKey,
+                    },
+                    {
+                      label: gettext('Auto-generate a client encryption key'),
+                      value: 'autogenerate',
+                      disable: !isCreate || (!allowEncryptionEdit && hasEncryptionKey),
+                    },
+                    {
+                      label: gettext('Upload an existing client encryption key'),
+                      value: 'upload',
+                      disable: !isCreate || (!allowEncryptionEdit && hasEncryptionKey),
+                    },
+                  ].filter((option) => option.value !== 'keep' || (!isCreate && hasEncryptionKey))
+                "
+              />
+              <q-file
+                v-bind="fieldProps('encryptionUpload')"
+                v-if="form.cryptMode === 'upload'"
+                v-model="encryptionFileRef"
+                dense
+                clearable
+                accept="application/json,.json"
+                class="q-mt-md"
+                :label="gettext('Encryption key')"
+              />
+              <q-banner
+                dense
+                role="note"
+                class="storage-notice storage-notice--info q-mt-sm"
+              >
+                <template #avatar>
+                  <q-icon
+                    name="info_outline"
+                    size="18px"
+                  />
+                </template>
+                {{ gettext('The client encryption key is required to restore encrypted backups.') }}
+              </q-banner>
             </div>
           </q-tab-panel>
         </q-tab-panels>
       </q-form>
       <template #foot>
+        <q-checkbox
+          v-if="tab === 'general' && hasAdvanced"
+          v-model="advanced"
+          dense
+          right-label
+          color="primary"
+          :label="gettext('Advanced')"
+        />
+        <q-space />
         <q-btn
           v-close-popup
           no-caps
           flat
+          size="12px"
+          class="u-button u-border-button text-grey-8"
           :label="gettext('Cancel')"
         />
         <q-btn
           no-caps
           flat
-          color="primary"
-          :disable="!valid() || loading.save"
+          size="12px"
+          class="bg-primary text-grey-1 u-button q-ml-sm"
           :loading="loading.save"
           :label="gettext(isCreate ? 'Add' : 'Save')"
           @click="save"
@@ -1326,6 +1571,7 @@ watch(encryptionFileRef, (file) => {
       </q-card-section>
       <q-card-section>
         <q-input
+          class="q-field--with-bottom"
           :model-value="generatedEncryptionKey"
           type="textarea"
           readonly
@@ -1363,11 +1609,58 @@ watch(encryptionFileRef, (file) => {
 </template>
 
 <style scoped>
+.storage-notice {
+  min-height: 0;
+  padding: 8px 10px;
+  border: 1px solid #b8d7f5;
+  border-left: 3px solid #1976d2;
+  border-radius: 0;
+  background: #e6f1fc;
+  color: #333333;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.storage-notice :deep(.q-banner__avatar) {
+  min-width: 26px;
+  padding-right: 8px;
+  color: #1976d2;
+}
+
+.storage-notice--warning {
+  border-color: #ffcc00;
+  background: #fff8e1;
+}
+
+.storage-notice--warning :deep(.q-banner__avatar) {
+  color: #946200;
+}
+
+.storage-notice--danger {
+  border-color: #ffb7aa;
+  border-left-color: #cf4c35;
+  background: #fff4f2;
+  color: #cf4c35;
+}
+
+.storage-notice--danger :deep(.q-banner__avatar) {
+  color: #cf4c35;
+}
+
+.storage-editor :deep(.q-checkbox) {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  margin: 0 0 15px;
+  align-items: center;
+}
+
 .storage-editor :deep(.q-tab-panel) {
   min-height: 420px;
 }
 
-.storage-editor :deep(.q-field) {
-  padding-bottom: 10px;
+.storage-editor :deep(.storage-required .q-field__label)::after {
+  content: ' *';
+  color: #cf4c35;
 }
 </style>

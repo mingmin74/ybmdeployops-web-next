@@ -162,8 +162,8 @@ const refOptions = computed(() =>
       type === 'alias'
         ? `${scope}/${name}`
         : type === 'ipset'
-          ? `+${scope}/${name}`
-          : textValue(item.ref);
+        ? `+${scope}/${name}`
+        : textValue(item.ref);
     return {
       label: `${textValue(item.ref)}${item.comment ? ` — ${textValue(item.comment)}` : ''}`,
       value,

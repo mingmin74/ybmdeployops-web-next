@@ -13,33 +13,87 @@ const props = defineProps<{
 const emit = defineEmits<{ submit: [] }>();
 
 function diskUsage(value: unknown) {
-  return ({ bios: gettext('BIOS boot'), zfsreserved: gettext('ZFS reserved'), efi: 'EFI', lvm: 'LVM', zfs: 'ZFS' } as Record<string, string>)[String(value)] || textValue(value, '-');
+  return (
+    (
+      {
+        bios: gettext('BIOS boot'),
+        zfsreserved: gettext('ZFS reserved'),
+        efi: 'EFI',
+        lvm: 'LVM',
+        zfs: 'ZFS',
+      } as Record<string, string>
+    )[String(value)] || textValue(value, '-')
+  );
 }
 </script>
 
 <template>
-  <q-dialog v-model="visible" persistent transition-show="scale" transition-hide="scale">
-    <UWindow :title="gettext('Wipe Disk')" width="520px" :loading="loading">
+  <q-dialog
+    v-model="visible"
+    persistent
+    transition-show="scale"
+    transition-hide="scale"
+  >
+    <UWindow
+      :title="gettext('Wipe Disk')"
+      width="520px"
+      :loading="loading"
+    >
       <div class="q-pa-md">
         <div class="wipe-warning row no-wrap items-start q-pa-sm q-mb-md">
-          <q-icon name="warning" color="negative" size="22px" class="q-mr-sm" />
+          <q-icon
+            name="warning"
+            color="negative"
+            size="22px"
+            class="q-mr-sm"
+          />
           <div>
-            <div class="text-weight-medium">{{ gettext('All data on the device will be lost!') }}</div>
+            <div class="text-weight-medium">
+              {{ gettext('All data on the device will be lost!') }}
+            </div>
             <div class="text-grey-7 q-mt-xs">{{ gettext('This action cannot be undone.') }}</div>
           </div>
         </div>
 
         <div class="wipe-details">
-          <div class="wipe-detail-row"><span>{{ gettext('Device') }}</span><strong>{{ textValue(props.disk.devpath || props.disk.name, '-') }}</strong></div>
-          <div class="wipe-detail-row"><span>{{ gettext('Usage') }}</span><span>{{ diskUsage(props.disk.used) }}</span></div>
-          <div class="wipe-detail-row"><span>{{ gettext('Size') }}</span><span>{{ formatBytes(props.disk.size) }}</span></div>
-          <div class="wipe-detail-row"><span>{{ gettext('Serial') }}</span><span>{{ textValue(props.disk.serial, '-') }}</span></div>
+          <div class="wipe-detail-row">
+            <span>{{ gettext('Device') }}</span>
+            <strong>{{ textValue(props.disk.devpath || props.disk.name, '-') }}</strong>
+          </div>
+          <div class="wipe-detail-row">
+            <span>{{ gettext('Usage') }}</span>
+            <span>{{ diskUsage(props.disk.used) }}</span>
+          </div>
+          <div class="wipe-detail-row">
+            <span>{{ gettext('Size') }}</span>
+            <span>{{ formatBytes(props.disk.size) }}</span>
+          </div>
+          <div class="wipe-detail-row">
+            <span>{{ gettext('Serial') }}</span>
+            <span>{{ textValue(props.disk.serial, '-') }}</span>
+          </div>
         </div>
       </div>
 
       <template #foot>
-        <q-btn v-close-popup no-caps outline size="12px" class="u-button u-border-button" :disable="loading" :label="gettext('Cancel')" />
-        <q-btn no-caps flat size="12px" class="bg-negative text-grey-1 u-button" :disable="loading" :label="gettext('Wipe Disk')" @click="emit('submit')" />
+        <q-btn
+          v-close-popup
+          no-caps
+          outline
+          size="12px"
+          class="u-button u-border-button"
+          :disable="loading"
+          :label="gettext('Cancel')"
+        />
+        <q-btn
+          no-caps
+          flat
+          size="12px"
+          class="bg-negative text-grey-1 u-button"
+          :disable="loading"
+          :label="gettext('Wipe Disk')"
+          @click="emit('submit')"
+        />
       </template>
     </UWindow>
   </q-dialog>

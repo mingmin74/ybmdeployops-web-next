@@ -7,5 +7,8 @@ defineExpose({ reload: () => groupsPage.value?.reload() ?? Promise.resolve() });
 </script>
 
 <template>
-  <GroupsPage ref="groupsPage" embedded />
+  <GroupsPage
+    ref="groupsPage"
+    embedded
+  />
 </template>
