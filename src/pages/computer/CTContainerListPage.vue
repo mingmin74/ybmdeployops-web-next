@@ -15,6 +15,7 @@ import { getNodeStorage } from '@/api/storageContent';
 import { getNodes } from '@/api/resources';
 import CreateCtDialog from '@/pages/computer/ct/CreateCtDialog.vue';
 import CtResourceOperationDialog from '@/pages/computer/ct/CtResourceOperationDialog.vue';
+import HaResourceDialog from '@/components/HaResourceDialog.vue';
 import UWindow from '@/components/UWindow.vue';
 import BulkActionDialog, { type ClusterBulkAction } from '@/components/BulkActionDialog.vue';
 import UsageProgress from '@/components/UsageProgress.vue';
@@ -24,8 +25,12 @@ import { useSessionStore } from '@/stores/session';
 import { usagePercent } from '@/utils/format';
 import { textValue } from '@/utils/pveFormat';
 import { toChineseStr } from '@/utils/unicode';
-import { getVmConfig, updateVmConfig } from '@/api/overview';
-import { createHaResource, getHaResource, updateHaResource } from '@/api/ha';
+import {
+  createVmSnapshot,
+  getVmConfig,
+  getVmSnapshotFeature,
+  updateVmConfig,
+} from '@/api/overview';
 
 type ContainerTreeNode = QTreeNode & {
   kind: 'node' | 'category' | 'container';
@@ -43,6 +48,7 @@ const selectedTreeNode = shallowRef('');
 const search = shallowRef('');
 const treeSearch = shallowRef('');
 const treeExpanded = shallowRef<string[]>([]);
+let treeExpansionInitialized = false;
 const pagination = shallowRef({ page: 1, rowsPerPage: 20 });
 const confirmVisible = shallowRef(false);
 const pendingCommand = shallowRef<VmPowerCommand>();
@@ -83,6 +89,12 @@ const backupPruneAvailable = computed(() => backupRetention.value.length > 0);
  */
 const backupInitialDefaultsLoaded = shallowRef(false);
 const createDialogVisible = shallowRef(false);
+const snapshotVisible = shallowRef(false);
+const snapshotLoading = shallowRef(false);
+const snapshotName = shallowRef('');
+const snapshotDescription = shallowRef('');
+const snapshotSupported = shallowRef(false);
+const configIdPattern = /^[a-z][a-z0-9_-]+$/i;
 const defaultVisibleColumns = ['vmid', 'name', 'status', 'node', 'cpu', 'memory', 'disk', 'uptime'];
 
 const canCreateCt = computed(() => hasCapability('VM.Allocate'));
@@ -204,6 +216,9 @@ const canReboot = computed(
     !isTemplate.value
 );
 const canBackup = computed(() => hasSingleSelection.value && hasCapability('VM.Backup'));
+const canSnapshot = computed(
+  () => hasSingleSelection.value && hasCapability('VM.Snapshot') && snapshotSupported.value
+);
 const canMigrate = computed(
   () => hasSingleSelection.value && hasCapability('VM.Migrate') && !standalone.value
 );
@@ -218,7 +233,21 @@ const canRemove = computed(
   () => hasSingleSelection.value && hasCapability('VM.Allocate') && isStopped.value
 );
 const canTags = computed(() => hasSingleSelection.value && hasCapability('VM.Config.Options'));
-const canManageHa = computed(() => hasSingleSelection.value && hasCapability('Sys.Console'));
+const canManageHa = computed(() => hasSingleSelection.value && hasNodeCapability('Sys.Console'));
+
+let snapshotFeatureRequest = 0;
+watch(selectedContainer, async (container) => {
+  const request = ++snapshotFeatureRequest;
+  snapshotSupported.value = false;
+  if (!container?.node || container.vmid === undefined || !hasCapability('VM.Snapshot')) return;
+
+  const response = await getVmSnapshotFeature(String(container.node), container.vmid, 'lxc').catch(
+    () => null
+  );
+  if (request !== snapshotFeatureRequest) return;
+  snapshotSupported.value = Boolean(response?.data?.hasFeature);
+});
+
 const pendingCommandLabel = computed(
   () => pendingCommandTitle.value || commandLabel(pendingCommand.value)
 );
@@ -235,14 +264,6 @@ const stopCanOverrule = shallowRef(false);
 const operationVisible = shallowRef(false);
 const operation = shallowRef<'migrate' | 'clone' | 'template' | 'delete'>('migrate');
 const haVisible = shallowRef(false);
-const haLoading = shallowRef(false);
-const haState = shallowRef<'started' | 'stopped'>('started');
-const haResourceExists = shallowRef(false);
-const haMaxRestart = shallowRef(1);
-const haMaxRelocate = shallowRef(1);
-const haFailback = shallowRef(true);
-const haAutoRebalance = shallowRef(true);
-const haComment = shallowRef('');
 
 const filteredRows = computed(() => {
   const keyword = search.value.trim().toLocaleLowerCase();
@@ -420,7 +441,13 @@ function unEscapeNotesTemplate(value: string) {
 }
 
 function onTreeSelection(key: string) {
-  selectedTreeNode.value = selectedTreeNode.value === key ? '' : key;
+  // v-model:selected has already written the new key when this listener runs.
+  // Toggling it here cleared category selections immediately, so their table
+  // filters never took effect.
+  selectedTreeNode.value = key;
+  if (!key.startsWith('ct:')) {
+    selectedRows.value = [];
+  }
 }
 
 function openDetail(row: VmResource) {
@@ -570,6 +597,39 @@ function openOperation(value: 'migrate' | 'clone' | 'template' | 'delete') {
   operation.value = value;
   operationVisible.value = true;
 }
+
+function openSnapshot() {
+  if (!canSnapshot.value) return;
+  snapshotName.value = `snapshot-${new Date().toISOString().slice(0, 16).replace(/[-T:]/g, '')}`;
+  snapshotDescription.value = '';
+  snapshotVisible.value = true;
+}
+
+async function createSnapshot() {
+  const container = selectedContainer.value;
+  const snapname = snapshotName.value.trim();
+  if (!canSnapshot.value || !container?.node || !configIdPattern.test(snapname)) return;
+
+  snapshotLoading.value = true;
+  try {
+    const response = await createVmSnapshot(
+      String(container.node),
+      container.vmid,
+      {
+        snapname,
+        ...(snapshotDescription.value.trim()
+          ? { description: snapshotDescription.value.trim() }
+          : {}),
+      },
+      'lxc'
+    );
+    snapshotVisible.value = false;
+    if (response.data) openTask(String(container.node), response.data, gettext('Take Snapshot'));
+  } finally {
+    snapshotLoading.value = false;
+  }
+}
+
 function openConsole() {
   const vm = selectedContainer.value;
   if (!canConsole.value || !vm?.node || vm.vmid === undefined) return;
@@ -584,48 +644,6 @@ function openConsole() {
   });
   window.open(`/?${params.toString()}`, `ct-console-${vm.vmid}`, 'innerWidth=745,innerHeight=427');
 }
-async function openHa() {
-  const vm = selectedContainer.value;
-  if (!canManageHa.value || vm?.vmid === undefined) return;
-  haLoading.value = true;
-  try {
-    const response = await getHaResource(`ct:${vm.vmid}`).catch(() => null);
-    haResourceExists.value = Boolean(response?.data);
-    haState.value = textValue(response?.data?.state) === 'stopped' ? 'stopped' : 'started';
-    haMaxRestart.value = Number(response?.data?.max_restart ?? 1);
-    haMaxRelocate.value = Number(response?.data?.max_relocate ?? 1);
-    haFailback.value = response?.data?.failback !== 0;
-    haAutoRebalance.value = response?.data?.['auto-rebalance'] !== 0;
-    haComment.value = textValue(response?.data?.comment);
-    haVisible.value = true;
-  } finally {
-    haLoading.value = false;
-  }
-}
-async function saveHa() {
-  const vm = selectedContainer.value;
-  if (!canManageHa.value || vm?.vmid === undefined) return;
-  haLoading.value = true;
-  try {
-    const id = `ct:${vm.vmid}`;
-    const data = {
-      sid: id,
-      type: 'ct',
-      state: haState.value,
-      max_restart: haMaxRestart.value,
-      max_relocate: haMaxRelocate.value,
-      failback: haFailback.value ? 1 : 0,
-      'auto-rebalance': haAutoRebalance.value ? 1 : 0,
-      comment: haComment.value,
-    };
-    if (haResourceExists.value) await updateHaResource(id, data);
-    else await createHaResource(data);
-    haVisible.value = false;
-  } finally {
-    haLoading.value = false;
-  }
-}
-
 async function openBackup() {
   const vm = selectedContainer.value;
   if (!canBackup.value || !vm?.node) return;
@@ -734,10 +752,18 @@ async function reload() {
     resources.value = (response.data || [])
       .filter((row) => row.type === 'lxc')
       .map(mergeContainerDisplayName);
-    treeExpanded.value = resources.value.flatMap((row) => {
-      const node = textValue(row.node) || gettext('Unknown');
-      return [`node:${node}`, `node:${node}:containers`, `node:${node}:templates`];
-    });
+    const availableTreeKeys = new Set(
+      resources.value.flatMap((row) => {
+        const node = textValue(row.node) || gettext('Unknown');
+        return [`node:${node}`, `node:${node}:containers`, `node:${node}:templates`];
+      })
+    );
+    if (!treeExpansionInitialized && availableTreeKeys.size) {
+      treeExpanded.value = [...availableTreeKeys];
+      treeExpansionInitialized = true;
+    } else {
+      treeExpanded.value = treeExpanded.value.filter((key) => availableTreeKeys.has(key));
+    }
     selectedRows.value = selectedRows.value
       .map((selected) =>
         resources.value.find((row) => containerKey(row) === containerKey(selected))
@@ -929,10 +955,26 @@ onMounted(() => {
                       <q-item
                         v-close-popup
                         clickable
+                        :disable="!canMigrate"
+                        @click="openOperation('migrate')"
+                      >
+                        <q-item-section>{{ gettext('Migrate') }}</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
                         :disable="!canTags"
                         @click="openTags"
                       >
                         <q-item-section>{{ gettext('Edit Tags') }}</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canSnapshot"
+                        @click="openSnapshot"
+                      >
+                        <q-item-section>{{ gettext('Take Snapshot') }}</q-item-section>
                       </q-item>
                       <q-item
                         v-close-popup
@@ -962,7 +1004,7 @@ onMounted(() => {
                         v-close-popup
                         clickable
                         :disable="!canManageHa"
-                        @click="openHa"
+                        @click="haVisible = true"
                       >
                         <q-item-section>{{ gettext('Manage HA') }}</q-item-section>
                       </q-item>
@@ -976,16 +1018,6 @@ onMounted(() => {
                       </q-item>
                     </q-list>
                   </q-btn-dropdown>
-                  <q-btn
-                    no-caps
-                    outline
-                    size="12px"
-                    color="primary"
-                    class="u-button"
-                    :label="gettext('Migrate')"
-                    :disable="!canMigrate || commandLoading"
-                    @click="openOperation('migrate')"
-                  />
                   <q-btn
                     no-caps
                     outline
@@ -1344,79 +1376,61 @@ onMounted(() => {
       @task="openTask($event.node, $event.upid, $event.title)"
     />
     <q-dialog
-      v-model="haVisible"
+      v-model="snapshotVisible"
       persistent
+      transition-show="scale"
+      transition-hide="scale"
     >
       <UWindow
-        :title="gettext('Manage HA')"
-        width="420px"
-        :loading="haLoading"
+        :title="gettext('Take Snapshot')"
+        width="520px"
+        :loading="snapshotLoading"
       >
         <div class="q-pa-md">
-          <q-select
-            v-model="haState"
+          <q-input
+            v-model="snapshotName"
             dense
-            outlined
-            emit-value
-            map-options
-            :options="[
-              { label: gettext('Started'), value: 'started' },
-              { label: gettext('Stopped'), value: 'stopped' },
-            ]"
-            :label="gettext('Requested State')"
-          />
-          <div class="row q-col-gutter-sm q-mt-sm">
-            <q-input
-              v-model.number="haMaxRestart"
-              class="col"
-              dense
-              outlined
-              type="number"
-              min="0"
-              :label="gettext('Max Restart')"
-            />
-            <q-input
-              v-model.number="haMaxRelocate"
-              class="col"
-              dense
-              outlined
-              type="number"
-              min="0"
-              :label="gettext('Max Relocate')"
-            />
-          </div>
-          <q-checkbox
-            v-model="haFailback"
-            dense
-            :label="gettext('Failback')"
-          />
-          <q-checkbox
-            v-model="haAutoRebalance"
-            dense
-            :label="gettext('Auto Rebalance')"
+            class="q-field--with-bottom"
+            :label="gettext('Name')"
           />
           <q-input
-            v-model="haComment"
+            v-model="snapshotDescription"
             dense
-            outlined
-            :label="gettext('Comment')"
+            type="textarea"
+            autogrow
+            class="q-field--with-bottom"
+            :label="gettext('Description')"
           />
         </div>
         <template #foot>
           <q-btn
             v-close-popup
-            flat
+            no-caps
+            outline
+            size="12px"
+            class="u-button"
             :label="gettext('Cancel')"
+            :disable="snapshotLoading"
           />
           <q-btn
-            color="primary"
-            :loading="haLoading"
-            :label="gettext('Save')"
-            @click="saveHa"
+            no-caps
+            flat
+            size="12px"
+            class="bg-primary text-grey-1 u-button"
+            :disable="!configIdPattern.test(snapshotName.trim())"
+            :loading="snapshotLoading"
+            :label="gettext('Take Snapshot')"
+            @click="createSnapshot"
           />
         </template>
       </UWindow>
     </q-dialog>
+    <HaResourceDialog
+      v-model="haVisible"
+      resource-type="ct"
+      :vmid="selectedContainer?.vmid"
+      @completed="reload"
+    />
   </div>
 </template>
 

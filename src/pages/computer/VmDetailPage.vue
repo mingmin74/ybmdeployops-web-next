@@ -129,8 +129,8 @@ const canViewSnapshots = computed(
     !isTemplate.value &&
     Boolean(
       vmCaps.value['VM.Snapshot'] ||
-        vmCaps.value['VM.Snapshot.Rollback'] ||
-        vmCaps.value['VM.Audit']
+      vmCaps.value['VM.Snapshot.Rollback'] ||
+      vmCaps.value['VM.Audit']
     )
 );
 const canViewFirewall = computed(() => Boolean(vmCaps.value['VM.Audit']));
@@ -421,10 +421,6 @@ function openConsole(type: 'noVNC' | 'xterm.js') {
   );
 }
 
-function openDefaultConsole() {
-  openConsole('noVNC');
-}
-
 async function downloadSpice() {
   loading.value = true;
   try {
@@ -496,9 +492,10 @@ onUnmounted(() => {
           <q-btn-dropdown
             no-caps
             outline
+            dense
             size="12px"
             color="primary"
-            class="u-button"
+            class="vm-detail__action"
             :label="gettext('Power')"
             :disable="!canPowerManage || powerCommandLoading"
           >
@@ -571,15 +568,14 @@ onUnmounted(() => {
             </q-list>
           </q-btn-dropdown>
           <q-btn-dropdown
-            split
             no-caps
             outline
+            dense
             size="12px"
             color="primary"
-            class="u-button"
+            class="vm-detail__action"
             :label="gettext('Console')"
             :disable="!canViewConsole || powerCommandLoading"
-            @click="openDefaultConsole"
           >
             <q-list dense>
               <q-item
@@ -610,9 +606,10 @@ onUnmounted(() => {
           <q-btn-dropdown
             no-caps
             outline
+            dense
             size="12px"
             color="primary"
-            class="u-button"
+            class="vm-detail__action"
             :label="gettext('More')"
           >
             <q-list dense>
@@ -1203,14 +1200,18 @@ onUnmounted(() => {
   color: var(--q-primary);
   font-weight: 500;
 }
+.vm-detail__action {
+  min-height: 28px;
+  padding: 0 10px;
+}
 .vm-detail-tabs {
-  padding: 2px 8px 0;
+  padding: 4px 8px 0;
 }
 .vm-detail-tabs :deep(.q-tabs__arrow) {
   display: none !important;
 }
 .vm-detail-tabs :deep(.q-tab) {
-  padding: 0 10px;
+  padding: 0 15px;
   min-height: 40px;
 }
 .vm-detail-tabs :deep(.q-tab__content) {

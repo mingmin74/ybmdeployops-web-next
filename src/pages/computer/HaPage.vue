@@ -47,7 +47,8 @@ const resourceForm = reactive({
   max_restart: 1,
   max_relocate: 1,
   failback: true,
-  autoRebalance: true,
+  // The currently connected PVE API schema does not support this newer HA resource option.
+  // autoRebalance: true,
   comment: '',
 });
 const crsForm = reactive({
@@ -93,12 +94,12 @@ const resourceColumns: QTableColumn<PveRecord>[] = [
     field: (row) => (row.failback === false ? gettext('No') : gettext('Yes')),
     align: 'left',
   },
-  {
-    name: 'auto-rebalance',
-    label: gettext('Auto-Rebalance'),
-    field: (row) => (row['auto-rebalance'] === false ? gettext('No') : gettext('Yes')),
-    align: 'left',
-  },
+  // {
+  //   name: 'auto-rebalance',
+  //   label: gettext('Auto-Rebalance'),
+  //   field: (row) => (row['auto-rebalance'] === false ? gettext('No') : gettext('Yes')),
+  //   align: 'left',
+  // },
   { name: 'vname', label: gettext('Name'), field: 'vname', align: 'left' },
   { name: 'comment', label: gettext('Comment'), field: 'comment', align: 'left' },
 ];
@@ -211,7 +212,7 @@ function resetResourceForm() {
     max_restart: 1,
     max_relocate: 1,
     failback: true,
-    autoRebalance: true,
+    // autoRebalance: true,
     comment: '',
   });
 }
@@ -234,7 +235,7 @@ async function openResource(action: 'add' | 'edit') {
       max_restart: Number(resource.max_restart ?? 1),
       max_relocate: Number(resource.max_relocate ?? 1),
       failback: resource.failback !== false,
-      autoRebalance: resource['auto-rebalance'] !== false,
+      // autoRebalance: resource['auto-rebalance'] !== false,
       comment: textValue(resource.comment),
     });
   }
@@ -266,7 +267,7 @@ async function saveResource() {
       max_restart: resourceForm.max_restart,
       max_relocate: resourceForm.max_relocate,
       failback: resourceForm.failback ? 1 : 0,
-      'auto-rebalance': resourceForm.autoRebalance ? 1 : 0,
+      // 'auto-rebalance': resourceForm.autoRebalance ? 1 : 0,
       comment: resourceForm.comment,
     };
     if (resourceAction.value === 'add')
@@ -839,6 +840,8 @@ onBeforeUnmount(() => {
             color="primary"
             :label="gettext('Failback')"
           />
+          <!--
+          The current backend rejects the newer `auto-rebalance` HA resource property.
           <q-checkbox
             v-model="resourceForm.autoRebalance"
             dense
@@ -846,6 +849,7 @@ onBeforeUnmount(() => {
             color="primary"
             :label="gettext('Auto-Rebalance')"
           />
+          -->
         </div>
         <q-input
           v-model="resourceForm.comment"

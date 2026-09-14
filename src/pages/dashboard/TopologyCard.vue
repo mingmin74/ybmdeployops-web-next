@@ -1,6 +1,10 @@
 ```vue
 <template>
-  <q-card flat bordered class="topology-card">
+  <q-card
+    flat
+    bordered
+    class="topology-card"
+  >
     <!-- 标题栏 -->
     <q-card-section class="topology-card__header">
       <div class="row items-center justify-between">
@@ -67,7 +71,7 @@
 .topology-image {
   width: 100%;
   overflow: hidden;
-  background: #f6f9fd;
+  /* background: #f6f9fd; */
   border-radius: 6px;
 }
 

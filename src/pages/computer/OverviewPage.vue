@@ -19,6 +19,7 @@ import { gettext } from '@/locale';
 import { formatBytes, textValue, usedPercent } from '@/utils/pveFormat';
 import { resourceProgressColor } from '@/utils/format';
 import { useSessionStore } from '@/stores/session';
+import { toChineseStr } from '@/utils/unicode';
 
 type TimeOption = {
   label: string;
@@ -133,31 +134,40 @@ const selectedVm = computed(
     (isFixedVm.value && fixedVm.value) ||
     vmOptions.value.find((item) => resourceId(item) === selectedId.value) ||
     vmOptions.value[0] ||
-    {},
+    {}
 );
 const selectedType = computed(() =>
   isFixedVm.value
     ? props.fixedResourceType || 'qemu'
     : selectedVm.value.type === 'lxc'
       ? 'lxc'
-      : 'qemu',
+      : 'qemu'
 );
 const isTemplate = computed(() =>
-  Boolean(props.template || current.value.template || configIsTemplate.value),
+  Boolean(props.template || current.value.template || configIsTemplate.value)
 );
 const vmCaps = computed(
-  () => (session.caps as unknown as { vms?: Record<string, unknown> }).vms || {},
+  () => (session.caps as unknown as { vms?: Record<string, unknown> }).vms || {}
 );
 const canAuditGuestAgent = computed(() => Boolean(vmCaps.value['VM.GuestAgent.Audit']));
 const basicInformationTitle = computed(() =>
   selectedType.value === 'lxc'
     ? gettext('Container Basic Information')
-    : gettext('Virtual Machine Basic Information'),
+    : gettext('Virtual Machine Basic Information')
 );
 const overviewIllustration = computed(() =>
-  selectedType.value === 'lxc' ? lxcOverviewIcon : vmOverviewIcon,
+  selectedType.value === 'lxc' ? lxcOverviewIcon : vmOverviewIcon
 );
-const vmName = computed(() => textValue(current.value.name || selectedVm.value.name, '-'));
+function decodeVmName(name: unknown) {
+  const value = textValue(name, '-');
+  try {
+    return toChineseStr(value);
+  } catch {
+    return value;
+  }
+}
+
+const vmName = computed(() => decodeVmName(current.value.name || selectedVm.value.name));
 const vmid = computed(() => textValue(current.value.vmid || selectedVm.value.vmid, '-'));
 const nodeName = computed(() => textValue(selectedVm.value.node || current.value.node, '-'));
 const currentStatusText = computed(() =>
@@ -165,23 +175,23 @@ const currentStatusText = computed(() =>
     current.value.qmpstatus && current.value.qmpstatus !== current.value.status
       ? `${textValue(current.value.status)}(${textValue(current.value.qmpstatus)})`
       : current.value.status || selectedVm.value.status,
-    '-',
-  ),
+    '-'
+  )
 );
 const cpuPercent = computed(() =>
-  Number((Number(current.value.cpu || selectedVm.value.cpu || 0) * 100).toFixed(2)),
+  Number((Number(current.value.cpu || selectedVm.value.cpu || 0) * 100).toFixed(2))
 );
 const memPercent = computed(() =>
   usedPercent(
     current.value.mem as number,
-    (current.value.maxmem || selectedVm.value.maxmem) as number,
-  ),
+    (current.value.maxmem || selectedVm.value.maxmem) as number
+  )
 );
 const diskPercent = computed(() =>
   usedPercent(
     current.value.disk as number,
-    (current.value.maxdisk || selectedVm.value.maxdisk) as number,
-  ),
+    (current.value.maxdisk || selectedVm.value.maxdisk) as number
+  )
 );
 const primaryIp = computed(() => {
   if (Array.isArray(agentText.value)) return agentText.value[0] || '-';
@@ -193,7 +203,7 @@ const haStatus = computed(() => {
   if (!ha || !ha.managed) return gettext('None');
   return `${textValue(ha.state, gettext('None'))}, ${gettext('Group')}:${textValue(
     ha.group,
-    gettext('None'),
+    gettext('None')
   )}`;
 });
 const agentHasMore = computed(() => networkList.value.length > 0);
@@ -206,29 +216,29 @@ const netOutValues = computed(() => rrdRows.value.map((item) => Number(item.neto
 const diskReadValues = computed(() => rrdRows.value.map((item) => Number(item.diskread || 0)));
 const diskWriteValues = computed(() => rrdRows.value.map((item) => Number(item.diskwrite || 0)));
 const cpuPressureSomeValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.pressurecpusome || 0)),
+  rrdRows.value.map((item) => Number(item.pressurecpusome || 0))
 );
 const cpuPressureFullValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.pressurecpufull || 0)),
+  rrdRows.value.map((item) => Number(item.pressurecpufull || 0))
 );
 const ioPressureSomeValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.pressureiosome || 0)),
+  rrdRows.value.map((item) => Number(item.pressureiosome || 0))
 );
 const ioPressureFullValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.pressureiofull || 0)),
+  rrdRows.value.map((item) => Number(item.pressureiofull || 0))
 );
 const memoryPressureSomeValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.pressurememorysome || 0)),
+  rrdRows.value.map((item) => Number(item.pressurememorysome || 0))
 );
 const memoryPressureFullValues = computed(() =>
-  rrdRows.value.map((item) => Number(item.pressurememoryfull || 0)),
+  rrdRows.value.map((item) => Number(item.pressurememoryfull || 0))
 );
 const latestTime = computed(() => {
   const row = rrdRows.value[rrdRows.value.length - 1];
   return row?.time ? timestampToMinute(Number(row.time) * 1000) : '-';
 });
 const chartXAxis = computed(() =>
-  rrdRows.value.map((item) => (item.time ? timestampToMinute(Number(item.time) * 1000) : '')),
+  rrdRows.value.map((item) => (item.time ? timestampToMinute(Number(item.time) * 1000) : ''))
 );
 const cpuSeries = computed(() => [
   { name: gettext('CPU Usage'), data: cpuValues.value, color: '#1976d2' },
@@ -438,7 +448,7 @@ async function loadVmConfig() {
     const response = await getVmConfig(
       textValue(row.node),
       textValue(row.vmid),
-      selectedType.value,
+      selectedType.value
     );
     remarkText.value = textValue(response.data?.description, '');
     configDigest.value = textValue(response.data?.digest, '');
@@ -458,7 +468,7 @@ async function loadVMInfo(fromTimer = false) {
       const response = await getVmCurrent(
         textValue(row.node),
         textValue(row.vmid),
-        selectedType.value,
+        selectedType.value
       );
       fetchedCurrent.value = response.data || {};
     }
@@ -495,7 +505,7 @@ async function loadGuestAgentInfo() {
     const response = await getVmGuestAgentInterfaces(
       textValue(row.node),
       textValue(row.vmid),
-      selectedType.value,
+      selectedType.value
     );
     const result = (response.data?.result || []) as PveRecord[];
     networkList.value = parseAgentInterfaces(result);
@@ -521,7 +531,7 @@ async function loadChartData(fromTimer = false) {
       textValue(row.vmid),
       timeType.value,
       rrdConsolidation.value,
-      selectedType.value,
+      selectedType.value
     );
     rrdRows.value = response.data || [];
   } finally {
@@ -554,8 +564,16 @@ onUnmounted(clearTimers);
 
 <template>
   <div class="q-ma-md computer-overview">
-    <div v-if="!isExistVM" class="empty-warning">
-      <q-icon name="warning" class="text-red q-mr-sm" size="24px" />{{ gettext('Not found VM') }}
+    <div
+      v-if="!isExistVM"
+      class="empty-warning"
+    >
+      <q-icon
+        name="warning"
+        class="text-red q-mr-sm"
+        size="24px"
+      />
+      {{ gettext('Not found VM') }}
     </div>
 
     <div class="overview-toolbar">
@@ -623,7 +641,8 @@ onUnmounted(clearTimers);
         />
       </div>
       <div class="toolbar-meta">
-        {{ gettext('Time') }}: <span>{{ latestTime }}</span>
+        {{ gettext('Time') }}:
+        <span>{{ latestTime }}</span>
       </div>
     </div>
 
@@ -647,10 +666,17 @@ onUnmounted(clearTimers);
           </div>
           <div class="base-info-content">
             <div class="vm-illustration">
-              <img :src="overviewIllustration" alt="" />
+              <img
+                :src="overviewIllustration"
+                alt=""
+              />
             </div>
             <div class="info-list">
-              <div v-for="item in basicInfoRows" :key="item.label" class="info-row">
+              <div
+                v-for="item in basicInfoRows"
+                :key="item.label"
+                class="info-row"
+              >
                 <span>{{ item.label }}</span>
                 <q-badge
                   v-if="item.tone"
@@ -658,7 +684,10 @@ onUnmounted(clearTimers);
                   class="info-badge"
                   :label="item.value"
                 />
-                <div v-else-if="item.network" class="network-info-value">
+                <div
+                  v-else-if="item.network"
+                  class="network-info-value"
+                >
                   <strong>{{ item.value }}</strong>
                   <button
                     v-if="agentHasMore"
@@ -686,8 +715,8 @@ onUnmounted(clearTimers);
               <div class="resource-card-title">{{ gettext('CPU Usage') }}</div>
               <strong>{{ textValue(current.cpus, '0') }} Core</strong>
               <div class="resource-card-meta">
-                <span>{{ gettext('Used') }}</span
-                ><span>{{ cpuPercent.toFixed(2) }}%</span>
+                <span>{{ gettext('Used') }}</span>
+                <span>{{ cpuPercent.toFixed(2) }}%</span>
               </div>
               <q-circular-progress
                 show-value
@@ -705,8 +734,8 @@ onUnmounted(clearTimers);
               <div class="resource-card-title">{{ gettext('RAM Usage') }}</div>
               <strong>{{ dataSize(current.maxmem || selectedVm.maxmem) }}</strong>
               <div class="resource-card-meta">
-                <span>{{ gettext('Used') }}</span
-                ><span>{{ dataSize(current.mem) }}</span>
+                <span>{{ gettext('Used') }}</span>
+                <span>{{ dataSize(current.mem) }}</span>
               </div>
               <q-circular-progress
                 show-value
@@ -724,8 +753,8 @@ onUnmounted(clearTimers);
               <div class="resource-card-title">{{ gettext('Bootdisk Size') }}</div>
               <strong>{{ dataSize(current.maxdisk || selectedVm.maxdisk) }}</strong>
               <div class="resource-card-meta">
-                <span>{{ gettext('Used') }}</span
-                ><span>{{ dataSize(current.disk) }}</span>
+                <span>{{ gettext('Used') }}</span>
+                <span>{{ dataSize(current.disk) }}</span>
               </div>
               <q-circular-progress
                 show-value
@@ -778,12 +807,20 @@ onUnmounted(clearTimers);
               />
             </div>
           </div>
-          <div v-show="!remarkCollapsed" class="remark-content">{{ remark }}</div>
+          <div
+            v-show="!remarkCollapsed"
+            class="remark-content"
+          >
+            {{ remark }}
+          </div>
         </q-card-section>
       </q-card>
     </div>
 
-    <div v-if="!isTemplate" class="row q-col-gutter-sm chart-grid">
+    <div
+      v-if="!isTemplate"
+      class="row q-col-gutter-sm chart-grid"
+    >
       <div class="col-12 col-md-6">
         <q-card class="chart-panel no-shadow no-border-radius">
           <q-card-section class="chart-card-section">
@@ -821,7 +858,11 @@ onUnmounted(clearTimers);
             <div class="chart-header">
               <strong>{{ gettext('Network Traffic') }}</strong>
             </div>
-            <LineMetricChart :x-data="chartXAxis" :series="networkSeries" :height="260" />
+            <LineMetricChart
+              :x-data="chartXAxis"
+              :series="networkSeries"
+              :height="260"
+            />
           </q-card-section>
         </q-card>
       </div>
@@ -831,7 +872,11 @@ onUnmounted(clearTimers);
             <div class="chart-header">
               <strong>{{ gettext('Disk IO') }}</strong>
             </div>
-            <LineMetricChart :x-data="chartXAxis" :series="diskSeries" :height="260" />
+            <LineMetricChart
+              :x-data="chartXAxis"
+              :series="diskSeries"
+              :height="260"
+            />
           </q-card-section>
         </q-card>
       </div>
@@ -882,7 +927,12 @@ onUnmounted(clearTimers);
       </div>
     </div>
 
-    <q-dialog v-model="agentWin" persistent transition-show="scale" transition-hide="scale">
+    <q-dialog
+      v-model="agentWin"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
       <UWindow
         width="680px"
         :title="`${gettext('View')}: ${gettext('Guest Agent Network Information')}`"
@@ -901,14 +951,24 @@ onUnmounted(clearTimers);
           :no-data-label="gettext('no record can be found')"
         >
           <template #body-cell-name="props">
-            <q-td :props="props"
-              ><div class="network-name" :title="props.value">{{ props.value }}</div></q-td
-            >
+            <q-td :props="props">
+              <div
+                class="network-name"
+                :title="props.value"
+              >
+                {{ props.value }}
+              </div>
+            </q-td>
           </template>
           <template #body-cell-ip_address="props">
-            <q-td :props="props"
-              ><div v-for="item in props.row.ipInfo" :key="item">{{ item }}</div></q-td
-            >
+            <q-td :props="props">
+              <div
+                v-for="item in props.row.ipInfo"
+                :key="item"
+              >
+                {{ item }}
+              </div>
+            </q-td>
           </template>
         </q-table>
       </UWindow>
@@ -921,8 +981,14 @@ onUnmounted(clearTimers);
       transition-hide="scale"
       @hide="cancelRemarkEdit"
     >
-      <UWindow width="520px" :title="gettext('Edit Remark')">
-        <q-form class="remark-dialog-form u-dense q-ma-sm q-pa-md u-border" @submit="saveRemark">
+      <UWindow
+        width="520px"
+        :title="gettext('Edit Remark')"
+      >
+        <q-form
+          class="remark-dialog-form u-dense q-ma-sm q-pa-md u-border"
+          @submit="saveRemark"
+        >
           <q-input
             v-model="remarkDraft"
             class="q-field--with-bottom"
@@ -935,7 +1001,13 @@ onUnmounted(clearTimers);
           />
         </q-form>
         <template #foot>
-          <q-btn no-caps flat size="12px" :label="gettext('Cancel')" @click="cancelRemarkEdit" />
+          <q-btn
+            no-caps
+            flat
+            size="12px"
+            :label="gettext('Cancel')"
+            @click="cancelRemarkEdit"
+          />
           <q-btn
             no-caps
             flat
