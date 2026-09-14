@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { shallowRef } from 'vue';
+import CephAvailability from '@/pages/storage/ceph/CephAvailability.vue';
 import { gettext } from '@/locale';
 import CephConfigurationPage from '@/pages/storage/ceph/ConfigurationPage.vue';
 import CephFilesystemPage from '@/pages/storage/ceph/FilesystemPage.vue';
@@ -24,46 +25,83 @@ const tabs = [
 </script>
 
 <template>
-  <q-splitter
-    :model-value="146"
-    unit="px"
-    disable
-    class="node-ceph-panel full-height"
-  >
-    <template #before>
-      <q-tabs
-        v-model="activeTab"
-        align="left"
-        vertical
-        dense
-        inline-label
-        active-bg-color="blue-1"
-        active-color="primary"
-        class="node-ceph-panel__tabs"
-      >
-        <q-tab
-          v-for="tab in tabs"
-          :key="tab.name"
-          v-bind="tab"
-        />
-      </q-tabs>
-    </template>
+  <CephAvailability :node="node">
+    <q-splitter
+      :model-value="146"
+      unit="px"
+      disable
+      class="node-ceph-panel full-height"
+    >
+      <template #before>
+        <q-tabs
+          v-model="activeTab"
+          align="left"
+          vertical
+          dense
+          inline-label
+          active-bg-color="blue-1"
+          active-color="primary"
+          class="node-ceph-panel__tabs"
+        >
+          <q-tab
+            v-for="tab in tabs"
+            :key="tab.name"
+            v-bind="tab"
+          />
+        </q-tabs>
+      </template>
 
-    <template #after>
-      <q-tab-panels
-        v-model="activeTab"
-        class="bg-transparent full-height q-pa-md"
-      >
-        <q-tab-panel name="summary" class="q-pa-none"><CephSummaryPage /></q-tab-panel>
-        <q-tab-panel name="monitor" class="q-pa-none"><CephMonitorPage :node="node" /></q-tab-panel>
-        <q-tab-panel name="osd" class="q-pa-none"><CephOsdPage :node="node" /></q-tab-panel>
-        <q-tab-panel name="cephfs" class="q-pa-none"><CephFilesystemPage /></q-tab-panel>
-        <q-tab-panel name="pools" class="q-pa-none"><CephStoragePoolsPage :node="node" /></q-tab-panel>
-        <q-tab-panel name="config" class="q-pa-none"><CephConfigurationPage :node="node" /></q-tab-panel>
-        <q-tab-panel name="logs" class="q-pa-none"><CephLogsPage :node="node" /></q-tab-panel>
-      </q-tab-panels>
-    </template>
-  </q-splitter>
+      <template #after>
+        <q-tab-panels
+          v-model="activeTab"
+          class="bg-transparent full-height q-pa-md"
+        >
+          <q-tab-panel
+            name="summary"
+            class="q-pa-none"
+          >
+            <CephSummaryPage />
+          </q-tab-panel>
+          <q-tab-panel
+            name="monitor"
+            class="q-pa-none"
+          >
+            <CephMonitorPage :node="node" />
+          </q-tab-panel>
+          <q-tab-panel
+            name="osd"
+            class="q-pa-none"
+          >
+            <CephOsdPage :node="node" />
+          </q-tab-panel>
+          <q-tab-panel
+            name="cephfs"
+            class="q-pa-none"
+          >
+            <CephFilesystemPage />
+          </q-tab-panel>
+          <q-tab-panel
+            name="pools"
+            class="q-pa-none"
+          >
+            <CephStoragePoolsPage :node="node" />
+          </q-tab-panel>
+          <q-tab-panel
+            name="config"
+            class="q-pa-none"
+          >
+            <CephConfigurationPage :node="node" />
+          </q-tab-panel>
+          <q-tab-panel
+            name="logs"
+            class="q-pa-none"
+          >
+            <CephLogsPage :node="node" />
+          </q-tab-panel>
+        </q-tab-panels>
+      </template>
+    </q-splitter>
+  </CephAvailability>
 </template>
 
 <style scoped>

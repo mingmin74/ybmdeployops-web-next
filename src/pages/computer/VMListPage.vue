@@ -6,16 +6,17 @@ import {
   getVmResources,
   getVmBackupDefaults,
   getVmSpiceProxy,
-  runVmBulkAction,
   runVmPowerCommand,
   runVmBackup,
   type VmPowerCommand,
   type VmResource,
 } from '@/api/vm';
-import { getNodes, type PveNode } from '@/api/resources';
+import { getNodes } from '@/api/resources';
 import { getTaskLogs } from '@/api/maintenance';
 import { getNodeStorage } from '@/api/storageContent';
 import UWindow from '@/components/UWindow.vue';
+import BulkActionDialog, { type ClusterBulkAction } from '@/components/BulkActionDialog.vue';
+import HaResourceDialog from '@/components/HaResourceDialog.vue';
 import UsageProgress from '@/components/UsageProgress.vue';
 import VmResourceOperationDialog from '@/pages/computer/vm/VmResourceOperationDialog.vue';
 import CreateVmDialog from '@/pages/computer/vm/CreateVmDialog.vue';
@@ -66,6 +67,7 @@ const session = useSessionStore();
 const router = useRouter();
 const operationDialogVisible = shallowRef(false);
 const operation = shallowRef<'migrate' | 'clone' | 'delete' | 'template'>();
+const operationVm = shallowRef<VmResource>();
 const taskDialogVisible = shallowRef(false);
 const taskNode = shallowRef('');
 const taskUpid = shallowRef('');
@@ -74,18 +76,9 @@ const createDialogVisible = shallowRef(false);
 const tagsDialogVisible = shallowRef(false);
 const tagsSaving = shallowRef(false);
 const tagValue = shallowRef('');
-const bulkMigrateVisible = shallowRef(false);
 const bulkActionVisible = shallowRef(false);
-const bulkActionLoading = shallowRef(false);
-const bulkAction = shallowRef<'start' | 'shutdown' | 'suspend'>('start');
-const bulkParallel = shallowRef(1);
-const bulkForce = shallowRef(true);
-const bulkTimeout = shallowRef(180);
-const bulkMigrateLoading = shallowRef(false);
-const bulkMigrateTarget = shallowRef('');
-const bulkMigrateParallel = shallowRef(1);
-const bulkMigrateLocalDisks = shallowRef(true);
-const migrationNodes = shallowRef<PveNode[]>([]);
+const bulkAction = shallowRef<ClusterBulkAction>('start');
+const haVisible = shallowRef(false);
 const snapshotVisible = shallowRef(false);
 const snapshotLoading = shallowRef(false);
 const snapshotName = shallowRef('');
@@ -100,7 +93,9 @@ const backupStorage = shallowRef('');
 const backupMode = shallowRef<'snapshot' | 'suspend' | 'stop'>('snapshot');
 const backupCompression = shallowRef<'zstd' | 'lzo' | 'gzip' | '0'>('zstd');
 const backupProtected = shallowRef(false);
-const backupNotificationMode = shallowRef<'notification-system' | 'legacy-sendmail'>('notification-system');
+const backupNotificationMode = shallowRef<'notification-system' | 'legacy-sendmail'>(
+  'notification-system'
+);
 const backupMailto = shallowRef('');
 const backupNotesTemplate = shallowRef('');
 const backupPruneEnabled = shallowRef(false);
@@ -118,7 +113,7 @@ const visibleColumnNames = shallowRef<string[]>(
     } catch {
       return defaultVisibleColumns;
     }
-  })(),
+  })()
 );
 
 const treeNodes = computed<VmTreeNode[]>(() => {
@@ -144,8 +139,8 @@ const treeNodes = computed<VmTreeNode[]>(() => {
       });
       const sortedRows = [...rows].sort((left, right) =>
         (textValue(left.name) || textValue(left.vmid)).localeCompare(
-          textValue(right.name) || textValue(right.vmid),
-        ),
+          textValue(right.name) || textValue(right.vmid)
+        )
       );
       return {
         key: `node:${node}`,
@@ -190,87 +185,94 @@ const selectedCategory = computed(() =>
   selectedTreeNode.value.endsWith(':vms')
     ? 'vms'
     : selectedTreeNode.value.endsWith(':templates')
-      ? 'templates'
-      : '',
+    ? 'templates'
+    : ''
 );
 
 const selectedVm = computed(() => selectedRows.value[0]);
 const hasSingleSelection = computed(() => selectedRows.value.length === 1);
 const isStopped = computed(() => selectedVm.value?.status === 'stopped');
 const isSuspended = computed(() =>
-  ['paused', 'suspended'].includes(String(selectedVm.value?.status || '')),
+  ['paused', 'suspended'].includes(String(selectedVm.value?.status || ''))
 );
 const isTemplate = computed(() => Boolean(selectedVm.value?.template));
 const canPowerManage = computed(() => hasCapability('VM.PowerMgmt'));
 const canUseConsole = computed(
-  () => hasSingleSelection.value && hasCapability('VM.Console') && !isTemplate.value,
+  () => hasSingleSelection.value && hasCapability('VM.Console') && !isTemplate.value
 );
 const canStart = computed(
-  () => hasSingleSelection.value && canPowerManage.value && isStopped.value && !isTemplate.value,
+  () => hasSingleSelection.value && canPowerManage.value && isStopped.value && !isTemplate.value
 );
 const canStop = computed(
-  () => hasSingleSelection.value && canPowerManage.value && !isStopped.value && !isTemplate.value,
+  () => hasSingleSelection.value && canPowerManage.value && !isStopped.value && !isTemplate.value
 );
 const canShutdown = computed(
   () =>
     hasSingleSelection.value &&
     canPowerManage.value &&
     selectedVm.value?.status === 'running' &&
-    !isTemplate.value,
+    !isTemplate.value
 );
 const canReboot = computed(
   () =>
     hasSingleSelection.value &&
     canPowerManage.value &&
     ['running', 'paused', 'suspended'].includes(String(selectedVm.value?.status || '')) &&
-    !isTemplate.value,
+    !isTemplate.value
 );
 const canSuspend = computed(
   () =>
     hasSingleSelection.value &&
     canPowerManage.value &&
     selectedVm.value?.status === 'running' &&
-    !isTemplate.value,
+    !isTemplate.value
 );
 const canResume = computed(
-  () => hasSingleSelection.value && canPowerManage.value && isSuspended.value && !isTemplate.value,
+  () => hasSingleSelection.value && canPowerManage.value && isSuspended.value && !isTemplate.value
 );
 const canMigrate = computed(
-  () => hasSingleSelection.value && hasCapability('VM.Migrate') && !standalone.value,
+  () => hasSingleSelection.value && hasCapability('VM.Migrate') && !standalone.value
 );
 const canClone = computed(() => hasSingleSelection.value && hasCapability('VM.Clone'));
 const canDelete = computed(
-  () => hasSingleSelection.value && hasCapability('VM.Allocate') && isStopped.value,
+  () => hasSingleSelection.value && hasCapability('VM.Allocate') && isStopped.value
 );
 const canConvertTemplate = computed(
-  () => hasSingleSelection.value && hasCapability('VM.Allocate') && !isTemplate.value,
+  () => hasSingleSelection.value && hasCapability('VM.Allocate') && !isTemplate.value
 );
 const canCreate = computed(() => hasCapability('VM.Allocate'));
 const canSnapshot = computed(
-  () => hasSingleSelection.value && hasCapability('VM.Snapshot') && snapshotSupported.value,
+  () => hasSingleSelection.value && hasCapability('VM.Snapshot') && snapshotSupported.value
 );
-const canBackup = computed(
-  () => hasSingleSelection.value && hasCapability('VM.Backup'),
-);
+const canBackup = computed(() => hasSingleSelection.value && hasCapability('VM.Backup'));
+const canManageHa = computed(() => hasSingleSelection.value && hasNodeCapability('Sys.Console'));
 const pendingCommandLabel = computed(
-  () => pendingCommandTitle.value || commandLabel(pendingCommand.value),
+  () => pendingCommandTitle.value || commandLabel(pendingCommand.value)
 );
 const confirmationText = computed(() => {
   const vm = selectedVm.value;
   if (!vm || !pendingCommand.value) return '';
-  return `${gettext('Are you sure you want to')} ${pendingCommandLabel.value}: ${vmDisplayName(vm) || vm.vmid} ?`;
+  return `${gettext('Are you sure you want to')} ${pendingCommandLabel.value}: ${
+    vmDisplayName(vm) || vm.vmid
+  } ?`;
 });
 const canBulkStart = computed(
-  () => canPowerManage.value && selectedRows.value.some((row) => !row.template && row.status === 'stopped'),
+  () =>
+    canPowerManage.value &&
+    selectedRows.value.some((row) => !row.template && row.status === 'stopped')
 );
 const canBulkShutdown = computed(
-  () => canPowerManage.value && selectedRows.value.some((row) => !row.template && row.status === 'running'),
+  () =>
+    canPowerManage.value &&
+    selectedRows.value.some((row) => !row.template && row.status === 'running')
 );
 const canBulkSuspend = computed(
-  () => canPowerManage.value && selectedRows.value.some((row) => !row.template && row.status === 'running'),
+  () =>
+    canPowerManage.value &&
+    selectedRows.value.some((row) => !row.template && row.status === 'running')
 );
 const canBulkMigrate = computed(
-  () => selectedRows.value.length > 0 && hasCapability('VM.Migrate') && !standalone.value,
+  () => selectedRows.value.length > 0 && hasCapability('VM.Migrate') && !standalone.value
 );
 
 const filteredRows = computed(() => {
@@ -348,7 +350,7 @@ watch(
   (value) => {
     window.localStorage.setItem('vm-list-visible-columns', JSON.stringify(value));
   },
-  { deep: true },
+  { deep: true }
 );
 
 function vmKey(row: VmResource) {
@@ -437,7 +439,7 @@ function parseBackupRetention(value: unknown) {
     textValue(value)
       .split(',')
       .map((part) => part.trim().split('=', 2))
-      .filter(([key, item]) => Boolean(key) && item !== undefined),
+      .filter(([key, item]) => Boolean(key) && item !== undefined)
   );
   if (entries['keep-all'] === '1') return [];
   return ['keep-last', 'keep-hourly', 'keep-daily', 'keep-weekly', 'keep-monthly', 'keep-yearly']
@@ -492,7 +494,7 @@ async function runCommand(
   command?: VmPowerCommand,
   data?: Record<string, unknown>,
   title = '',
-  closeConfirm = false,
+  closeConfirm = false
 ) {
   const vm = selectedVm.value;
   if (!hasSingleSelection.value || !vm?.node || !vm.vmid || !command) return false;
@@ -530,8 +532,8 @@ async function openStop() {
         String(task.id) === String(vm.vmid) &&
         task.status === undefined &&
         task.type === 'qmshutdown' &&
-        (canManageNode || task.user === session.userid),
-    ),
+        (canManageNode || task.user === session.userid)
+    )
   );
   stopOverruleAvailable.value = canManageNode || hasActiveShutdown;
   stopOverruleDisabled.value = haEnabled;
@@ -545,48 +547,14 @@ async function confirmStop() {
     stopOverruleAvailable.value && stopOverruleShutdown.value
       ? { 'overrule-shutdown': 1 }
       : undefined,
-    gettext('Stop'),
+    gettext('Stop')
   );
   if (completed) stopVisible.value = false;
 }
 
-function bulkCommand(command: 'start' | 'shutdown' | 'suspend') {
+function bulkCommand(command: ClusterBulkAction) {
   bulkAction.value = command;
-  bulkParallel.value = 1;
-  bulkForce.value = command === 'shutdown';
-  bulkTimeout.value = 180;
   bulkActionVisible.value = true;
-}
-
-async function submitBulkCommand() {
-  const command = bulkAction.value;
-  const targets = selectedRows.value.filter(
-    (row) =>
-      !row.template &&
-      row.node &&
-      row.vmid &&
-      (command === 'start'
-        ? row.status === 'stopped'
-        : command === 'shutdown'
-          ? row.status === 'running'
-          : command === 'suspend'
-            ? row.status === 'running'
-            : ['running', 'paused', 'suspended'].includes(String(row.status || ''))),
-  );
-  if (!targets.length) return;
-  bulkActionLoading.value = true;
-  try {
-    const response = await runVmBulkAction(command, {
-      vms: targets.map((row) => row.vmid),
-      'max-workers': bulkParallel.value,
-      ...(command === 'shutdown' ? { 'force-stop': bulkForce.value ? 1 : 0, timeout: bulkTimeout.value } : {}),
-    });
-    bulkActionVisible.value = false;
-    await reload();
-    if (response.data) openTask('', response.data, `${gettext('Bulk')} ${commandLabel(command)}`);
-  } finally {
-    bulkActionLoading.value = false;
-  }
 }
 
 function openTags() {
@@ -606,7 +574,7 @@ async function saveTags() {
           digest: config.data?.digest,
           tags: tagValue.value.trim() || undefined,
         });
-      }),
+      })
     );
     tagsDialogVisible.value = false;
     await reload();
@@ -615,47 +583,10 @@ async function saveTags() {
   }
 }
 
-async function openBulkMigrate() {
-  if (!canBulkMigrate.value) return;
-  bulkMigrateLoading.value = true;
-  try {
-    const response = await getNodes();
-    migrationNodes.value = (response.data || []).filter((node) => node.status === 'online');
-    bulkMigrateTarget.value =
-      migrationNodes.value.find(
-        (node) => !selectedRows.value.every((row) => row.node === node.node),
-      )?.node || '';
-    bulkMigrateParallel.value = 1;
-    bulkMigrateLocalDisks.value = true;
-    bulkMigrateVisible.value = true;
-  } finally {
-    bulkMigrateLoading.value = false;
-  }
-}
-async function runBulkMigrate() {
-  const targets = selectedRows.value.filter(
-    (row) => row.node && row.vmid && !row.template && row.node !== bulkMigrateTarget.value,
-  );
-  if (!bulkMigrateTarget.value || !targets.length) return;
-  bulkMigrateLoading.value = true;
-  try {
-    const response = await runVmBulkAction('migrate', {
-      vms: targets.map((row) => row.vmid),
-      target: bulkMigrateTarget.value,
-      'max-workers': bulkMigrateParallel.value,
-      online: 1,
-      'with-local-disks': bulkMigrateLocalDisks.value ? 1 : 0,
-    });
-    bulkMigrateVisible.value = false;
-    await reload();
-    if (response.data) openTask('', response.data, gettext('Bulk Migrate'));
-  } finally {
-    bulkMigrateLoading.value = false;
-  }
-}
-
 function openOperation(nextOperation: 'migrate' | 'clone' | 'delete' | 'template') {
-  if (!selectedVm.value) return;
+  const vm = selectedVm.value;
+  if (!vm) return;
+  operationVm.value = { ...vm };
   operation.value = nextOperation;
   operationDialogVisible.value = true;
 }
@@ -703,7 +634,9 @@ async function openBackup() {
     backupStorages.value = (response.data || [])
       .map((item) => textValue(item.storage))
       .filter(Boolean);
-    backupStorageTypes.value = Object.fromEntries((response.data || []).map((item) => [textValue(item.storage), textValue(item.type)]));
+    backupStorageTypes.value = Object.fromEntries(
+      (response.data || []).map((item) => [textValue(item.storage), textValue(item.type)])
+    );
     backupStorage.value = backupStorages.value[0] || '';
     await applyBackupDefaults(String(vm.node), backupStorage.value);
     backupProtected.value = false;
@@ -725,12 +658,14 @@ async function applyBackupDefaults(node: string, storage: string) {
   if (!storage) return;
   const response = await getVmBackupDefaults(node, storage);
   const defaults = response.data || {};
-  if (['snapshot', 'suspend', 'stop'].includes(String(defaults.mode))) backupMode.value = defaults.mode as typeof backupMode.value;
+  if (['snapshot', 'suspend', 'stop'].includes(String(defaults.mode)))
+    backupMode.value = defaults.mode as typeof backupMode.value;
   backupMailto.value = textValue(defaults.mailto);
   const notificationMode = textValue(defaults['notification-mode']);
-  backupNotificationMode.value = notificationMode === 'legacy-sendmail' || (notificationMode === 'auto' && backupMailto.value)
-    ? 'legacy-sendmail'
-    : 'notification-system';
+  backupNotificationMode.value =
+    notificationMode === 'legacy-sendmail' || (notificationMode === 'auto' && backupMailto.value)
+      ? 'legacy-sendmail'
+      : 'notification-system';
   backupNotesTemplate.value = textValue(defaults['notes-template']);
   backupRetention.value = parseBackupRetention(defaults['prune-backups']);
   if (backupStorageTypes.value[storage] === 'pbs') backupCompression.value = 'zstd';
@@ -746,9 +681,13 @@ async function backupNow() {
       mode: backupMode.value,
       compress: backupCompression.value,
       protected: backupProtected.value ? 1 : 0,
-      ...(backupNotificationMode.value ? { 'notification-mode': backupNotificationMode.value } : {}),
+      ...(backupNotificationMode.value
+        ? { 'notification-mode': backupNotificationMode.value }
+        : {}),
       ...(backupMailto.value.trim() ? { mailto: backupMailto.value.trim() } : {}),
-      ...(backupNotesTemplate.value.trim() ? { 'notes-template': backupNotesTemplate.value.trim() } : {}),
+      ...(backupNotesTemplate.value.trim()
+        ? { 'notes-template': backupNotesTemplate.value.trim() }
+        : {}),
       remove: backupPruneAvailable.value && backupPruneEnabled.value ? 1 : 0,
     });
     backupVisible.value = false;
@@ -801,7 +740,7 @@ async function openConsole(type: 'noVNC' | 'xterm.js' = 'noVNC') {
     window.open(
       `/?${params.toString()}`,
       `vm-console-${vm.vmid}`,
-      'innerWidth=745,innerHeight=427',
+      'innerWidth=745,innerHeight=427'
     );
     return;
   }
@@ -809,7 +748,7 @@ async function openConsole(type: 'noVNC' | 'xterm.js' = 'noVNC') {
   window.open(
     `/?${params.toString()}`,
     '_blank',
-    'toolbar=no,location=no,status=no,menubar=no,resizable=yes,width=1024,height=600',
+    'toolbar=no,location=no,status=no,menubar=no,resizable=yes,width=1024,height=600'
   );
 }
 
@@ -867,7 +806,7 @@ function scheduleRefresh() {
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => {
     if (disposed) return;
-    if (commandLoading.value) {
+    if (commandLoading.value || operationDialogVisible.value) {
       scheduleRefresh();
       return;
     }
@@ -898,7 +837,9 @@ watch(
     if (!vm?.node || vm.vmid === undefined || vm.vmid === null) return;
 
     const [featureResponse, statusResponse] = await Promise.all([
-      hasCapability('VM.Snapshot') ? getVmSnapshotFeature(vm.node, vm.vmid).catch(() => null) : null,
+      hasCapability('VM.Snapshot')
+        ? getVmSnapshotFeature(vm.node, vm.vmid).catch(() => null)
+        : null,
       getVmCurrent(vm.node, vm.vmid).catch(() => null),
     ]);
     if (cancelled) return;
@@ -906,7 +847,7 @@ watch(
     consoleSpiceAvailable.value = Boolean(statusResponse?.data?.spice);
     consoleXtermAvailable.value = Boolean(statusResponse?.data?.serial);
   },
-  { immediate: true },
+  { immediate: true }
 );
 
 onMounted(() => {
@@ -952,17 +893,17 @@ onBeforeUnmount(() => {
                       scope.node.kind === 'node'
                         ? 'dns'
                         : scope.node.kind === 'category'
-                          ? 'folder'
-                          : scope.node.template
-                            ? 'article'
-                            : 'desktop_windows'
+                        ? 'folder'
+                        : scope.node.template
+                        ? 'article'
+                        : 'desktop_windows'
                     "
                     :color="
                       scope.node.kind === 'node'
                         ? 'primary'
                         : scope.node.kind === 'category'
-                          ? 'grey-7'
-                          : statusColor(scope.node.status)
+                        ? 'grey-7'
+                        : statusColor(scope.node.status)
                     "
                     size="16px"
                     class="q-mr-xs"
@@ -1010,59 +951,72 @@ onBeforeUnmount(() => {
                     :label="gettext('Power')"
                     :disable="!selectedVm || commandLoading"
                   >
-                    <q-list dense
-                      ><q-item
+                    <q-list dense>
+                      <q-item
                         v-close-popup
                         clickable
                         :disable="!canStart"
                         @click="requestCommand('start')"
-                        ><q-item-section>{{ gettext('Start') }}</q-item-section></q-item
-                      ><q-item
+                      >
+                        <q-item-section>{{ gettext('Start') }}</q-item-section>
+                      </q-item>
+                      <q-item
                         v-close-popup
                         clickable
                         :disable="!canShutdown"
                         @click="requestCommand('shutdown')"
-                        ><q-item-section>{{ gettext('Shutdown') }}</q-item-section></q-item
-                      ><q-item
+                      >
+                        <q-item-section>{{ gettext('Shutdown') }}</q-item-section>
+                      </q-item>
+                      <q-item
                         v-close-popup
                         clickable
                         :disable="!canStop"
                         @click="openStop"
-                        ><q-item-section class="text-red">{{
-                          gettext('Stop')
-                        }}</q-item-section></q-item
-                      ><q-item
+                      >
+                        <q-item-section class="text-red">{{ gettext('Stop') }}</q-item-section>
+                      </q-item>
+                      <q-item
                         v-close-popup
                         clickable
                         :disable="!canReboot"
                         @click="requestCommand('reboot')"
-                        ><q-item-section>{{ gettext('Reboot') }}</q-item-section></q-item
-                      ><q-item
+                      >
+                        <q-item-section>{{ gettext('Reboot') }}</q-item-section>
+                      </q-item>
+                      <q-item
                         v-close-popup
                         clickable
                         :disable="!canSuspend"
                         @click="requestCommand('suspend')"
-                        ><q-item-section>{{ gettext('Pause') }}</q-item-section></q-item
-                      ><q-item
+                      >
+                        <q-item-section>{{ gettext('Pause') }}</q-item-section>
+                      </q-item>
+                      <q-item
                         v-close-popup
                         clickable
                         :disable="!canSuspend"
                         @click="requestCommand('suspend', { todisk: 1 }, gettext('Hibernate'))"
-                        ><q-item-section>{{ gettext('Hibernate') }}</q-item-section></q-item
-                      ><q-item
+                      >
+                        <q-item-section>{{ gettext('Hibernate') }}</q-item-section>
+                      </q-item>
+                      <q-item
                         v-close-popup
                         clickable
                         :disable="!canResume"
                         @click="requestCommand('resume')"
-                        ><q-item-section>{{ gettext('Resume') }}</q-item-section></q-item
-                      ><q-item
+                      >
+                        <q-item-section>{{ gettext('Resume') }}</q-item-section>
+                      </q-item>
+                      <q-item
                         v-close-popup
                         clickable
                         :disable="!canStop"
                         @click="requestCommand('reset')"
-                        ><q-item-section>{{ gettext('Reset') }}</q-item-section></q-item
-                      ></q-list
-                    >
+                      >
+                        <q-item-section>{{ gettext('Reset') }}</q-item-section>
+                      </q-item>
+                    </q-list>
                   </q-btn-dropdown>
                   <q-btn-dropdown
                     no-caps
@@ -1072,16 +1026,33 @@ onBeforeUnmount(() => {
                     class="u-button"
                     :label="gettext('Console')"
                     :disable="!canUseConsole || commandLoading"
-                    ><q-list dense
-                      ><q-item v-close-popup clickable @click="openConsole('noVNC')"
-                        ><q-item-section>noVNC</q-item-section></q-item
-                      ><q-item v-close-popup clickable :disable="!consoleSpiceAvailable" @click="downloadSpice"
-                        ><q-item-section>SPICE</q-item-section></q-item
-                      ><q-item v-close-popup clickable :disable="!consoleXtermAvailable" @click="openConsole('xterm.js')"
-                        ><q-item-section>xterm.js</q-item-section></q-item
-                      ></q-list
-                    ></q-btn-dropdown
                   >
+                    <q-list dense>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        @click="openConsole('noVNC')"
+                      >
+                        <q-item-section>noVNC</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!consoleSpiceAvailable"
+                        @click="downloadSpice"
+                      >
+                        <q-item-section>SPICE</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!consoleXtermAvailable"
+                        @click="openConsole('xterm.js')"
+                      >
+                        <q-item-section>xterm.js</q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-btn-dropdown>
                   <q-btn-dropdown
                     no-caps
                     outline
@@ -1089,35 +1060,43 @@ onBeforeUnmount(() => {
                     color="primary"
                     class="u-button"
                     :label="`${gettext('Bulk')} ${gettext('Actions')}`"
-                    :disable="!selectedRows.length || commandLoading"
-                    ><q-list dense
-                      ><q-item
-                        v-close-popup
-                        clickable
-                        :disable="!canBulkStart"
-                        @click="bulkCommand('start')"
-                        ><q-item-section>{{ gettext('Bulk Start') }}</q-item-section></q-item
-                      ><q-item
-                        v-close-popup
-                        clickable
-                        :disable="!canBulkShutdown"
-                        @click="bulkCommand('shutdown')"
-                        ><q-item-section>{{ gettext('Bulk Shutdown') }}</q-item-section></q-item
-                      ><q-item
-                        v-close-popup
-                        clickable
-                        :disable="!canBulkSuspend"
-                        @click="bulkCommand('suspend')"
-                        ><q-item-section>{{ gettext('Bulk Suspend') }}</q-item-section></q-item
-                      ><q-item
-                        v-close-popup
-                        clickable
-                        :disable="!canBulkMigrate"
-                        @click="openBulkMigrate"
-                        ><q-item-section>{{ gettext('Bulk Migrate') }}</q-item-section></q-item
-                      ></q-list
-                    ></q-btn-dropdown
+                    :disable="(!canPowerManage && !hasCapability('VM.Migrate')) || commandLoading"
                   >
+                    <q-list dense>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canPowerManage"
+                        @click="bulkCommand('start')"
+                      >
+                        <q-item-section>{{ gettext('Bulk Start') }}</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canPowerManage"
+                        @click="bulkCommand('shutdown')"
+                      >
+                        <q-item-section>{{ gettext('Bulk Shutdown') }}</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canPowerManage"
+                        @click="bulkCommand('suspend')"
+                      >
+                        <q-item-section>{{ gettext('Bulk Suspend') }}</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!hasCapability('VM.Migrate') || standalone"
+                        @click="bulkCommand('migrate')"
+                      >
+                        <q-item-section>{{ gettext('Bulk Migrate') }}</q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-btn-dropdown>
                   <div v-show="false">
                     <q-btn
                       no-caps
@@ -1242,7 +1221,7 @@ onBeforeUnmount(() => {
                       class="u-button"
                       :label="gettext('Bulk Migrate')"
                       :disable="!canBulkMigrate"
-                      @click="openBulkMigrate"
+                      @click="bulkCommand('migrate')"
                     />
                     <q-btn
                       no-caps
@@ -1292,21 +1271,46 @@ onBeforeUnmount(() => {
                       >
                         <q-item-section>{{ gettext('Clone') }}</q-item-section>
                       </q-item>
-                      <q-item v-close-popup clickable :disable="!canSnapshot" @click="openSnapshot">
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canSnapshot"
+                        @click="openSnapshot"
+                      >
                         <q-item-section>{{ gettext('Take Snapshot') }}</q-item-section>
                       </q-item>
-                      <q-item v-close-popup clickable :disable="!canBackup" @click="openBackup">
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canBackup"
+                        @click="openBackup"
+                      >
                         <q-item-section>{{ gettext('Backup now') }}</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canUseConsole"
+                        @click="openConsole('noVNC')"
+                      >
+                        <q-item-section>{{ gettext('Console') }}</q-item-section>
                       </q-item>
                       <q-item
                         v-close-popup
                         clickable
                         :disable="!canConvertTemplate"
                         @click="openOperation('template')"
-                        ><q-item-section>{{
-                          gettext('Convert to template')
-                        }}</q-item-section></q-item
                       >
+                        <q-item-section>{{ gettext('Convert to template') }}</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-close-popup
+                        clickable
+                        :disable="!canManageHa"
+                        @click="haVisible = true"
+                      >
+                        <q-item-section>{{ gettext('Manage HA') }}</q-item-section>
+                      </q-item>
                       <q-separator />
                       <q-item
                         v-close-popup
@@ -1347,17 +1351,24 @@ onBeforeUnmount(() => {
                     icon="settings"
                     class="q-ml-sm column-settings-btn"
                     :aria-label="gettext('Columns')"
-                    ><q-list dense
-                      ><q-item v-for="column in columns" :key="column.name" tag="label"
-                        ><q-item-section avatar
-                          ><q-checkbox
+                  >
+                    <q-list dense>
+                      <q-item
+                        v-for="column in columns"
+                        :key="column.name"
+                        tag="label"
+                      >
+                        <q-item-section avatar>
+                          <q-checkbox
                             v-model="visibleColumnNames"
                             :val="column.name"
-                            dense /></q-item-section
-                        ><q-item-section>{{ column.label }}</q-item-section></q-item
-                      ></q-list
-                    ></q-btn-dropdown
-                  >
+                            dense
+                          />
+                        </q-item-section>
+                        <q-item-section>{{ column.label }}</q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-btn-dropdown>
                 </div>
               </template>
 
@@ -1370,14 +1381,15 @@ onBeforeUnmount(() => {
                 </q-td>
               </template>
               <template #body-cell-name="scope">
-                <q-td :props="scope"
-                  ><q-icon
+                <q-td :props="scope">
+                  <q-icon
                     :name="scope.row.template ? 'article' : 'desktop_windows'"
                     :color="scope.row.template ? 'grey-7' : 'primary'"
                     size="16px"
                     class="q-mr-xs"
-                  /><span>{{ textValue(scope.value) || '-' }}</span></q-td
-                >
+                  />
+                  <span>{{ textValue(scope.value) || '-' }}</span>
+                </q-td>
               </template>
               <template #body-cell-cpu="scope">
                 <q-td :props="scope"><UsageProgress :percent="Number(scope.value)" /></q-td>
@@ -1394,12 +1406,23 @@ onBeforeUnmount(() => {
       </q-card-section>
     </q-card>
 
-    <q-dialog v-model="stopVisible" persistent transition-show="scale" transition-hide="scale">
-      <UWindow :title="gettext('Confirm')" width="420px" :loading="commandLoading">
+    <q-dialog
+      v-model="stopVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <UWindow
+        :title="gettext('Confirm')"
+        width="420px"
+        :loading="commandLoading"
+      >
         <div class="q-pa-md q-gutter-md">
           <div class="u-size-12">
             {{
-              `${gettext('Are you sure you want to')} ${gettext('Stop')}: ${selectedVm ? vmDisplayName(selectedVm) || selectedVm.vmid : '-'} ?`
+              `${gettext('Are you sure you want to')} ${gettext('Stop')}: ${
+                selectedVm ? vmDisplayName(selectedVm) || selectedVm.vmid : '-'
+              } ?`
             }}
           </div>
           <q-checkbox
@@ -1412,7 +1435,14 @@ onBeforeUnmount(() => {
           />
         </div>
         <template #foot>
-          <q-btn v-close-popup no-caps flat size="12px" class="u-button" :label="gettext('Cancel')" />
+          <q-btn
+            v-close-popup
+            no-caps
+            flat
+            size="12px"
+            class="u-button"
+            :label="gettext('Cancel')"
+          />
           <q-btn
             no-caps
             flat
@@ -1426,8 +1456,17 @@ onBeforeUnmount(() => {
       </UWindow>
     </q-dialog>
 
-    <q-dialog v-model="confirmVisible" persistent transition-show="scale" transition-hide="scale">
-      <UWindow :title="gettext('Confirm')" width="420px" :loading="commandLoading">
+    <q-dialog
+      v-model="confirmVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <UWindow
+        :title="gettext('Confirm')"
+        width="420px"
+        :loading="commandLoading"
+      >
         <div class="q-pa-md u-size-12">{{ confirmationText }}</div>
         <template #foot>
           <q-btn
@@ -1455,7 +1494,7 @@ onBeforeUnmount(() => {
     <VmResourceOperationDialog
       v-model="operationDialogVisible"
       :operation="operation"
-      :vm="selectedVm"
+      :vm="operationVm"
       @completed="reload"
       @task="openTask($event.node, $event.upid, $event.title)"
     />
@@ -1464,38 +1503,64 @@ onBeforeUnmount(() => {
       @completed="reload"
       @task="openTask($event.node, $event.upid, $event.title)"
     />
-    <q-dialog v-model="snapshotVisible" persistent
-      ><UWindow :title="gettext('Take Snapshot')" width="520px" :loading="snapshotLoading"
-        ><div class="q-pa-md q-gutter-md">
-          <q-input v-model="snapshotName" dense square outlined :label="gettext('Name')" /><q-input
+    <q-dialog
+      v-model="snapshotVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <UWindow
+        :title="gettext('Take Snapshot')"
+        width="520px"
+        :loading="snapshotLoading"
+      >
+        <div class="q-pa-md u-hidden-error">
+          <q-input
+            v-model="snapshotName"
+            dense
+            class="q-field--with-bottom"
+            :label="gettext('Name')"
+          />
+          <q-input
             v-model="snapshotDescription"
             dense
-            square
-            outlined
             type="textarea"
             autogrow
+            class="q-field--with-bottom"
             :label="gettext('Description')"
-          /><q-checkbox
+          />
+          <q-checkbox
             v-if="selectedVm?.status === 'running'"
             v-model="snapshotIncludeRam"
             dense
+            right-label
             color="primary"
             :label="gettext('Include RAM')"
           />
           <div
-            v-if="selectedVm?.status === 'running' && !snapshotIncludeRam && !snapshotGuestAgentEnabled"
-            class="text-warning text-caption"
-          >{{ gettext('It is recommended to either include the RAM or use the QEMU Guest Agent when taking a snapshot of a running VM to avoid inconsistencies.') }}</div>
+            v-if="
+              selectedVm?.status === 'running' && !snapshotIncludeRam && !snapshotGuestAgentEnabled
+            "
+            class="snapshot-warning text-caption q-mt-sm q-pa-sm"
+          >
+            {{
+              gettext(
+                'It is recommended to either include the RAM or use the QEMU Guest Agent when taking a snapshot of a running VM to avoid inconsistencies.'
+              )
+            }}
+          </div>
         </div>
-        <template #foot
-          ><q-btn
+        <template #foot>
+          <q-btn
             v-close-popup
             no-caps
             outline
             size="12px"
             class="u-button"
             :label="gettext('Cancel')"
-            :disable="snapshotLoading" /><q-btn
+            :disable="snapshotLoading"
+          />
+          <q-btn
             no-caps
             flat
             size="12px"
@@ -1503,82 +1568,145 @@ onBeforeUnmount(() => {
             :disable="!configIdPattern.test(snapshotName.trim())"
             :loading="snapshotLoading"
             :label="gettext('Take Snapshot')"
-            @click="createSnapshot" /></template></UWindow
-    ></q-dialog>
-    <q-dialog v-model="backupVisible" persistent
-      ><UWindow :title="gettext('Backup')" width="560px" :loading="backupLoading"
-        ><div class="q-pa-md q-gutter-md">
-          <q-select
-            v-model="backupStorage"
-            dense
-            outlined
-            square
-            :options="backupStorages"
-            @update:model-value="applyBackupDefaults(String(selectedVm?.node || ''), backupStorage)"
-            :label="gettext('Storage')"
-          /><q-select
-            v-model="backupMode"
-            dense
-            outlined
-            square
-            emit-value
-            map-options
-            :options="[
-              { label: gettext('Snapshot'), value: 'snapshot' },
-              { label: gettext('Pause'), value: 'suspend' },
-              { label: gettext('Stop'), value: 'stop' },
-            ]"
-            :label="gettext('Mode')"
-          /><q-select
-            v-model="backupCompression"
-            dense
-            outlined
-            square
-            :disable="backupStorageTypes[backupStorage] === 'pbs'"
-            emit-value
-            map-options
-            :options="[
-              { label: 'ZSTD', value: 'zstd' },
-              { label: 'LZO', value: 'lzo' },
-              { label: 'GZIP', value: 'gzip' },
-              { label: gettext('None'), value: '0' },
-            ]"
-            :label="gettext('Compression')"
-          /><q-checkbox
-            v-model="backupProtected"
-            dense
-            color="primary"
-            :label="gettext('Protected')"
+            @click="createSnapshot"
           />
-          <q-select
-            v-model="backupNotificationMode"
-            dense
-            square
-            outlined
-            emit-value
-            map-options
-            :options="[
-              { label: gettext('Notification System'), value: 'notification-system' },
-              { label: gettext('Legacy sendmail'), value: 'legacy-sendmail' },
-            ]"
-            :label="gettext('Notification')"
-          />
-          <q-input v-model="backupMailto" dense square outlined :label="gettext('Send email to')" />
-          <q-checkbox v-if="backupPruneAvailable" v-model="backupPruneEnabled" dense color="primary" :label="gettext('Prune')" />
-          <div v-if="backupPruneAvailable" class="text-caption text-grey-7">
-            <div v-for="entry in backupRetention" :key="entry.key">{{ `${entry.key}: ${entry.value}` }}</div>
+        </template>
+      </UWindow>
+    </q-dialog>
+    <q-dialog
+      v-model="backupVisible"
+      persistent
+      transition-show="scale"
+      transition-hide="scale"
+    >
+      <UWindow
+        :title="gettext('Backup')"
+        width="560px"
+        :loading="backupLoading"
+      >
+        <q-form class="backup-form q-pa-md u-dense" @submit.prevent="backupNow">
+          <div class="row q-col-gutter-lg">
+            <div class="col-12 col-sm-6">
+              <q-select
+                v-model="backupStorage"
+                dense
+                options-dense
+                class="q-field--with-bottom"
+                :options="backupStorages"
+                @update:model-value="applyBackupDefaults(String(selectedVm?.node || ''), backupStorage)"
+                :label="gettext('Storage')"
+              />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-select
+                v-model="backupMode"
+                dense
+                options-dense
+                class="q-field--with-bottom"
+                emit-value
+                map-options
+                :options="[
+                  { label: gettext('Snapshot'), value: 'snapshot' },
+                  { label: gettext('Pause'), value: 'suspend' },
+                  { label: gettext('Stop'), value: 'stop' },
+                ]"
+                :label="gettext('Mode')"
+              />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-select
+                v-model="backupCompression"
+                dense
+                options-dense
+                class="q-field--with-bottom"
+                :disable="backupStorageTypes[backupStorage] === 'pbs'"
+                emit-value
+                map-options
+                :options="[
+                  { label: 'ZSTD', value: 'zstd' },
+                  { label: 'LZO', value: 'lzo' },
+                  { label: 'GZIP', value: 'gzip' },
+                  { label: gettext('None'), value: '0' },
+                ]"
+                :label="gettext('Compression')"
+              />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-select
+                v-model="backupNotificationMode"
+                dense
+                options-dense
+                class="q-field--with-bottom"
+                emit-value
+                map-options
+                :options="[
+                  { label: gettext('Notification System'), value: 'notification-system' },
+                  { label: gettext('Legacy sendmail'), value: 'legacy-sendmail' },
+                ]"
+                :label="gettext('Notification')"
+              />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-input
+                v-model="backupMailto"
+                dense
+                class="q-field--with-bottom"
+                :label="gettext('Send email to')"
+              />
+            </div>
+            <div class="col-12 col-sm-6 flex items-center">
+              <q-checkbox
+                v-model="backupProtected"
+                dense
+                right-label
+                color="primary"
+                :label="gettext('Protected')"
+              />
+            </div>
+            <div v-if="backupPruneAvailable" class="col-12">
+              <q-checkbox
+                v-model="backupPruneEnabled"
+                dense
+                right-label
+                color="primary"
+                :label="gettext('Prune')"
+              />
+              <div class="backup-retention q-mt-sm">
+                <div class="row q-col-gutter-sm">
+                  <div
+                    v-for="entry in backupRetention"
+                    :key="entry.key"
+                    class="col-6 col-sm-4 backup-retention__item"
+                  >
+                    <span class="text-grey-7">{{ entry.key }}</span>
+                    <strong>{{ entry.value }}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-12">
+              <q-input
+                v-model="backupNotesTemplate"
+                dense
+                type="textarea"
+                autogrow
+                class="q-field--with-bottom"
+                :label="gettext('Notes')"
+              />
+            </div>
           </div>
-          <q-input v-model="backupNotesTemplate" dense square outlined type="textarea" autogrow :label="gettext('Notes')" />
-        </div>
-        <template #foot
-          ><q-btn
+        </q-form>
+        <template #foot>
+          <q-btn
             v-close-popup
             no-caps
             outline
             size="12px"
             class="u-button"
             :label="gettext('Cancel')"
-            :disable="backupLoading" /><q-btn
+            :disable="backupLoading"
+          />
+          <q-btn
             no-caps
             flat
             size="12px"
@@ -1586,28 +1714,33 @@ onBeforeUnmount(() => {
             :disable="!backupStorage"
             :loading="backupLoading"
             :label="gettext('Backup')"
-            @click="backupNow" /></template></UWindow
-    ></q-dialog>
+            @click="backupNow"
+          />
+        </template>
+      </UWindow>
+    </q-dialog>
     <TaskOutputDialog
       v-model="taskDialogVisible"
       :node="taskNode"
       :upid="taskUpid"
       :title="taskTitle"
     />
-    <q-dialog v-model="bulkActionVisible" persistent>
-      <UWindow :title="`${gettext('Bulk')} ${commandLabel(bulkAction)}`" width="460px" :loading="bulkActionLoading">
-        <div class="q-pa-md q-gutter-md">
-          <q-checkbox v-if="bulkAction === 'shutdown'" v-model="bulkForce" dense color="primary" :label="gettext('Force Stop')" />
-          <q-input v-if="bulkAction === 'shutdown'" v-model.number="bulkTimeout" dense outlined square type="number" min="0" max="7200" :label="gettext('Timeout (s)')" />
-          <q-input v-model.number="bulkParallel" dense outlined square type="number" min="1" max="64" :label="gettext('Parallel jobs')" />
-        </div>
-        <template #foot><q-btn v-close-popup no-caps outline size="12px" class="u-button" :label="gettext('Cancel')" />
-          <q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :loading="bulkActionLoading" :label="gettext('Start')" @click="submitBulkCommand" /></template>
-      </UWindow>
-    </q-dialog>
-    <q-dialog v-model="tagsDialogVisible" persistent
-      ><UWindow :title="gettext('Tags')" width="460px" :loading="tagsSaving"
-        ><div class="q-pa-md">
+    <HaResourceDialog
+      v-model="haVisible"
+      resource-type="vm"
+      :vmid="selectedVm?.vmid"
+      @completed="reload"
+    />
+    <q-dialog
+      v-model="tagsDialogVisible"
+      persistent
+    >
+      <UWindow
+        :title="gettext('Tags')"
+        width="460px"
+        :loading="tagsSaving"
+      >
+        <div class="q-pa-md">
           <q-input
             v-model="tagValue"
             dense
@@ -1617,55 +1750,33 @@ onBeforeUnmount(() => {
             hint="tag1;tag2"
           />
         </div>
-        <template #foot
-          ><q-btn
+        <template #foot>
+          <q-btn
             v-close-popup
             no-caps
             outline
             size="12px"
             class="u-button"
-            :label="gettext('Cancel')" /><q-btn
+            :label="gettext('Cancel')"
+          />
+          <q-btn
             no-caps
             flat
             size="12px"
             class="bg-primary text-grey-1 u-button"
             :loading="tagsSaving"
             :label="gettext('Save')"
-            @click="saveTags" /></template></UWindow
-    ></q-dialog>
-    <q-dialog v-model="bulkMigrateVisible" persistent
-      ><UWindow :title="gettext('Bulk Migrate')" width="460px" :loading="bulkMigrateLoading"
-        ><div class="q-pa-md">
-          <q-select
-            v-model="bulkMigrateTarget"
-            dense
-            square
-            outlined
-            emit-value
-            map-options
-            :label="gettext('Target Node')"
-            :options="migrationNodes.map((node) => ({ label: node.node, value: node.node }))"
+            @click="saveTags"
           />
-          <q-input v-model.number="bulkMigrateParallel" dense square outlined type="number" min="1" max="64" class="q-mt-md" :label="gettext('Parallel jobs')" />
-          <q-checkbox v-model="bulkMigrateLocalDisks" dense color="primary" class="q-mt-md" :label="gettext('Allow local disk migration')" />
-        </div>
-        <template #foot
-          ><q-btn
-            v-close-popup
-            no-caps
-            outline
-            size="12px"
-            class="u-button"
-            :label="gettext('Cancel')" /><q-btn
-            no-caps
-            flat
-            size="12px"
-            class="bg-primary text-grey-1 u-button"
-            :disable="!bulkMigrateTarget"
-            :loading="bulkMigrateLoading"
-            :label="gettext('Migrate')"
-            @click="runBulkMigrate" /></template></UWindow
-    ></q-dialog>
+        </template>
+      </UWindow>
+    </q-dialog>
+    <BulkActionDialog
+      v-model="bulkActionVisible"
+      :action="bulkAction"
+      :resource-types="['qemu']"
+      @completed="reload"
+    />
   </div>
 </template>
 
@@ -1723,6 +1834,23 @@ onBeforeUnmount(() => {
 
 .vm-search {
   width: 210px;
+}
+
+.snapshot-warning {
+  border-left: 3px solid #fc0;
+  background: #fffbe6;
+  color: #666666;
+  line-height: 1.5;
+}
+
+.backup-retention {
+  border: 1px solid #cccccc;
+  padding: 8px 10px;
+}
+
+.backup-retention__item {
+  display: flex;
+  gap: 6px;
 }
 
 :deep(.column-settings-btn .q-btn-dropdown__arrow-container) {

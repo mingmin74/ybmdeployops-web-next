@@ -1,4 +1,25 @@
 export default {
+  // Ceph installation and initial configuration.
+  'Could not resolve the local node name.': '无法确定本机节点名称。',
+  'Ceph is not installed on this node.': '此节点上未安装 Ceph。',
+  'Would you like to install it now?': '想现在安装吗？',
+  'Ceph is not initialized.': 'Ceph 尚未初始化。',
+  'You need to create an initial config once.': '您需要创建一次初始配置。',
+  'This wizard installs Ceph on this node and creates the initial cluster configuration if needed.':
+    '此向导将在本节点安装 Ceph，并在需要时创建集群初始配置。',
+  'Follow the instructions in the terminal to complete the installation.':
+    '请按照终端中的提示完成安装。',
+  'Ceph installation detected. Click Next to continue.': '已检测到 Ceph 安装，点击“下一步”继续。',
+  'Public Network IP/CIDR': '公共网络 IP/CIDR',
+  'Cluster Network IP/CIDR': '集群网络 IP/CIDR',
+  'Invalid IP/CIDR': 'IP/CIDR 格式无效',
+  'Number of replicas': '副本数量',
+  'Minimum replicas': '最小副本数量',
+  'Create Monitor': '创建监视器',
+  'Configuration already initialized': '配置已初始化',
+  'Installation successful!': '安装成功！',
+  'Install Ceph on other nodes, create additional monitors, then create OSDs and pools to start using Ceph.':
+    '请在其他节点安装 Ceph，添加监视器，再创建 OSD 和存储池，即可开始使用 Ceph。',
   // Storage editor labels and feedback.
   'Encryption key': '加密密钥',
   'Monitor(s)': '监视器',
@@ -16,10 +37,13 @@ export default {
   'Invalid value': '输入值无效',
   'Storage saved successfully': '存储保存成功',
   'The encryption key must be a valid JSON file.': '加密密钥必须是有效的 JSON 文件。',
-  'Keep Snapshots as Volume - Chain enabled if qcow2 images exist!': '存在 qcow2 镜像时，请保持启用卷链快照！',
+  'Keep Snapshots as Volume - Chain enabled if qcow2 images exist!':
+    '存在 qcow2 镜像时，请保持启用卷链快照！',
   'BTRFS integration is currently a technology preview.': 'BTRFS 集成目前处于技术预览阶段。',
-  'Retention settings are used when pruning backups on this server.': '清理此服务器上的备份时，将使用这些保留设置。',
-  'The client encryption key is required to restore encrypted backups.': '恢复加密备份时需要客户端加密密钥。',
+  'Retention settings are used when pruning backups on this server.':
+    '清理此服务器上的备份时，将使用这些保留设置。',
+  'The client encryption key is required to restore encrypted backups.':
+    '恢复加密备份时需要客户端加密密钥。',
   'This key is required to restore encrypted backups.': '恢复加密备份时需要此密钥。',
   'I have saved the key': '我已保存密钥',
   'Bulk Restart OSDs': '批量重启 OSD',
@@ -180,6 +204,10 @@ export default {
   'Are you sure you want to': '确定要',
   Migrate: '迁移',
   Clone: '克隆',
+  'Convert to template': '转换为模板',
+  'Are you sure you want to convert': '确定要将',
+  'to template': '转换为模板吗',
+  'Are you sure you want to convert this container to a template?': '确定要将此容器转换为模板吗？',
   'Source Node': '源节点',
   'Target Node': '目标节点',
   'New VM ID': '新虚拟机 ID',
@@ -403,7 +431,7 @@ export default {
   Offline: '离线',
   Unknown: '未知',
   Status: '状态',
- Type: '类型',
+  Type: '类型',
   'Built-In': '内置',
   Yes: '是',
   No: '否',

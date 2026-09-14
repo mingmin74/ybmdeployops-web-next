@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import CephAvailability from './ceph/CephAvailability.vue';
 import CephConfigurationPage from './ceph/ConfigurationPage.vue';
 import CephFilesystemPage from './ceph/FilesystemPage.vue';
 import CephLogsPage from './ceph/LogsPage.vue';
@@ -15,60 +16,92 @@ const { node = 'localhost' } = defineProps<{ node?: string }>();
 
 <template>
   <div class="ceph-page q-ma-md bg-white">
-    <q-tabs
-      v-model="tab"
-      dense
-      active-color="primary"
-      indicator-color="primary"
-      align="left"
-      class="bg-grey-2 text-grey-8"
-    >
-      <q-tab
-        name="summary"
-        :label="gettext('Summary')"
-      />
-      <q-tab
-        name="monitor"
-        :label="gettext('Monitor')"
-      />
-      <q-tab
-        name="osd"
-        label="OSD"
-      />
-      <q-tab
-        name="cephfs"
-        label="CephFS"
-      />
-      <q-tab
-        name="pools"
-        :label="gettext('Resource Pool')"
-      />
-      <q-tab
-        name="config"
-        :label="gettext('Configuration')"
-      />
-      <q-tab
-        name="logs"
-        :label="gettext('Logs')"
-      />
-    </q-tabs>
-    <q-separator />
-    <q-tab-panels
-      v-model="tab"
-      animated
-    >
-      <q-tab-panel
-        name="summary"
-        class="q-pa-none"
+    <CephAvailability :node="node">
+      <q-tabs
+        v-model="tab"
+        dense
+        active-color="primary"
+        indicator-color="primary"
+        align="left"
+        class="bg-grey-2 text-grey-8"
       >
-        <CephSummaryPage />
-      </q-tab-panel>
-      <q-tab-panel name="monitor" class="q-pa-none"><CephMonitorPage :node="node" /></q-tab-panel>
-      <q-tab-panel name="osd" class="q-pa-none"><CephOsdPage :node="node" /></q-tab-panel>
-      <q-tab-panel name="cephfs" class="q-pa-none"><CephFilesystemPage /></q-tab-panel>
-      <q-tab-panel name="pools" class="q-pa-none"><CephStoragePoolsPage :node="node" /></q-tab-panel>
-      <q-tab-panel name="config" class="q-pa-none"><CephConfigurationPage :node="node" /></q-tab-panel>
-      <q-tab-panel name="logs" class="q-pa-none"><CephLogsPage :node="node" /></q-tab-panel>
-    </q-tab-panels>
+        <q-tab
+          name="summary"
+          :label="gettext('Summary')"
+        />
+        <q-tab
+          name="monitor"
+          :label="gettext('Monitor')"
+        />
+        <q-tab
+          name="osd"
+          label="OSD"
+        />
+        <q-tab
+          name="cephfs"
+          label="CephFS"
+        />
+        <q-tab
+          name="pools"
+          :label="gettext('Resource Pool')"
+        />
+        <q-tab
+          name="config"
+          :label="gettext('Configuration')"
+        />
+        <q-tab
+          name="logs"
+          :label="gettext('Logs')"
+        />
+      </q-tabs>
+      <q-separator />
+      <q-tab-panels
+        v-model="tab"
+        animated
+      >
+        <q-tab-panel
+          name="summary"
+          class="q-pa-none"
+        >
+          <CephSummaryPage />
+        </q-tab-panel>
+        <q-tab-panel
+          name="monitor"
+          class="q-pa-none"
+        >
+          <CephMonitorPage :node="node" />
+        </q-tab-panel>
+        <q-tab-panel
+          name="osd"
+          class="q-pa-none"
+        >
+          <CephOsdPage :node="node" />
+        </q-tab-panel>
+        <q-tab-panel
+          name="cephfs"
+          class="q-pa-none"
+        >
+          <CephFilesystemPage />
+        </q-tab-panel>
+        <q-tab-panel
+          name="pools"
+          class="q-pa-none"
+        >
+          <CephStoragePoolsPage :node="node" />
+        </q-tab-panel>
+        <q-tab-panel
+          name="config"
+          class="q-pa-none"
+        >
+          <CephConfigurationPage :node="node" />
+        </q-tab-panel>
+        <q-tab-panel
+          name="logs"
+          class="q-pa-none"
+        >
+          <CephLogsPage :node="node" />
+        </q-tab-panel>
+      </q-tab-panels>
+    </CephAvailability>
   </div>
 </template>

@@ -267,13 +267,15 @@ watch(target, async (node) => {
   <q-dialog
     v-model="model"
     persistent
+    transition-show="scale"
+    transition-hide="scale"
   >
     <UWindow
       :title="label"
-      width="520px"
+      width="580px"
       :loading="loading"
     >
-      <div class="q-pa-md q-gutter-md">
+      <div class="q-pa-md u-hidden-error">
         <template v-if="operation === 'delete' || operation === 'template'">
           <div>
             {{
@@ -301,13 +303,29 @@ watch(target, async (node) => {
             />
           </template>
         </template>
-        <template v-else>
+        <div
+          v-else
+          class="row q-gutter-lg"
+        >
+          <q-input
+            v-if="operation === 'clone'"
+            dense
+            readonly
+            class="col-12 col-sm-6 q-field--with-bottom"
+            :model-value="vm?.node || ''"
+            :label="gettext('Source Node')"
+          />
           <q-select
             v-model="target"
             dense
-            outlined
+            options-dense
             emit-value
             map-options
+            :class="
+              operation === 'clone'
+                ? 'col-12 col-sm-6 q-field--with-bottom'
+                : 'col q-field--with-bottom'
+            "
             :options="nodes.map((node) => ({ label: node, value: node }))"
             :label="gettext('Target Node')"
           />
@@ -315,20 +333,21 @@ watch(target, async (node) => {
             <q-input
               v-model="newid"
               dense
-              outlined
+              class="col-12 col-sm-6 q-field--with-bottom"
               :label="gettext('New VM ID')"
             />
             <q-input
               v-model="hostname"
               dense
-              outlined
+              class="col-12 col-sm-6 q-field--with-bottom"
               :label="gettext('Hostname')"
             />
             <q-select
               v-if="snapshots.length > 1"
               v-model="cloneSnapshot"
               dense
-              outlined
+              options-dense
+              class="col-12 col-sm-6 q-field--with-bottom"
               :options="snapshots"
               :label="gettext('Snapshot')"
             />
@@ -336,9 +355,10 @@ watch(target, async (node) => {
               v-if="vm?.template"
               v-model="cloneMode"
               dense
-              outlined
+              options-dense
               emit-value
               map-options
+              class="col-12 col-sm-6 q-field--with-bottom"
               :options="[
                 { label: gettext('Full Clone'), value: 'copy' },
                 { label: gettext('Linked Clone'), value: 'clone' },
@@ -349,22 +369,24 @@ watch(target, async (node) => {
               v-if="cloneMode === 'copy'"
               v-model="cloneStorage"
               dense
-              outlined
+              options-dense
               clearable
+              class="col-12 col-sm-6 q-field--with-bottom"
               :options="targetStorages"
               :label="gettext('Target Storage')"
             />
             <q-select
               v-model="clonePool"
               dense
-              outlined
+              options-dense
               clearable
+              class="col-12 col-sm-6 q-field--with-bottom"
               :options="pools"
               :label="gettext('Resource Pool')"
             />
             <div
               v-if="!cloneFeatureAllowed && cloneFeatureMessage"
-              class="text-negative text-caption"
+              class="col-12 text-negative text-caption"
             >
               {{ cloneFeatureMessage }}
             </div>
@@ -373,8 +395,9 @@ watch(target, async (node) => {
             v-if="operation === 'migrate' && vm?.status === 'running' && migrationHasLocalDisks"
             v-model="targetStorage"
             dense
-            outlined
+            options-dense
             clearable
+            class="col q-field--with-bottom"
             :options="targetStorages"
             :label="gettext('Target Storage')"
           />
@@ -385,16 +408,23 @@ watch(target, async (node) => {
           >
             {{ migrationMessage }}
           </div>
-        </template>
+        </div>
       </div>
       <template #foot>
         <q-btn
           v-close-popup
+          no-caps
           flat
+          size="12px"
+          class="u-button u-border-button q-mr-sm"
+          :disable="loading"
           :label="gettext('Cancel')"
         />
         <q-btn
-          color="primary"
+          no-caps
+          flat
+          size="12px"
+          class="bg-primary text-grey-1 u-button"
           :disable="!canSubmit"
           :loading="loading"
           :label="label"

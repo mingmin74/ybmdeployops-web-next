@@ -61,6 +61,8 @@ const bothHaveDbusVmstate = shallowRef(false);
 const deleteConfirmation = shallowRef('');
 const purge = shallowRef(false);
 const destroyUnreferencedDisks = shallowRef(false);
+let targetStorageRequest = 0;
+let cloneFeatureRequest = 0;
 
 function textValue(value: unknown) {
   return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
@@ -95,6 +97,9 @@ const canSubmit = computed(() => {
 });
 const cloneSnapshotVisible = computed(
   () => !props.vm?.template && snapshots.value.some((snapshot) => snapshot !== 'current'),
+);
+const cloneFormatDisabled = computed(
+  () => cloneMode.value === 'clone' || !cloneStorage.value || storageFormats.value.length <= 1,
 );
 const cloneNameValid = computed(() => !cloneName.value.trim() || /^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*$/.test(cloneName.value.trim()));
 const showForceMigration = computed(
@@ -148,8 +153,6 @@ async function initialize() {
     purge.value = false;
     destroyUnreferencedDisks.value = false;
     deleteConfirmation.value = '';
-    const targetNode = target.value;
-    if (targetNode) await refreshTarget(targetNode);
     if (props.operation === 'clone') {
       const snapshotsResponse = await getVmSnapshots(props.vm.node!, props.vm.vmid);
       snapshots.value = (snapshotsResponse.data || [])
@@ -158,30 +161,43 @@ async function initialize() {
       if (!snapshots.value.includes('current')) snapshots.value.unshift('current');
       await verifyCloneFeature();
     }
+    if (target.value) await refreshTarget(target.value);
   } finally {
     loading.value = false;
   }
 }
 
-async function refreshTarget(targetNode = target.value) {
-  targetStorage.value = '';
-  cloneStorage.value = '';
-  cloneFormat.value = '';
+async function refreshTarget(targetNode = target.value, resetStorageSelection = false) {
+  const request = ++targetStorageRequest;
+  if (resetStorageSelection) {
+    targetStorage.value = '';
+    cloneStorage.value = '';
+    cloneFormat.value = '';
+  }
   storageOptions.value = [];
   storageFormats.value = [];
   storageFormatOptions.value = {};
   if (!targetNode) return;
   const storageResponse = await getNodeStorage(targetNode, 'images');
+  if (request !== targetStorageRequest || targetNode !== target.value) return;
   const entries = storageResponse.data || [];
   storageOptions.value = entries.map((item) => textValue(item.storage)).filter(Boolean);
   storageFormatOptions.value = Object.fromEntries(entries.map((item) => {
     const record = item as Record<string, unknown>;
     const formats = record.formats as Record<string, unknown> | undefined;
     const legacy = record.format;
-    const values = Array.isArray(formats?.supported)
+    const rawValues = Array.isArray(formats?.supported)
       ? formats.supported.map(textValue).filter(Boolean)
-      : Array.isArray(legacy) ? legacy.map(textValue).filter(Boolean) : textValue(legacy).split(',').filter(Boolean);
-    const preferred = values.includes('qcow2') ? 'qcow2' : values.includes('raw') ? 'raw' : textValue(formats?.default);
+      : Array.isArray(legacy) && legacy[0] && typeof legacy[0] === 'object'
+        ? Object.entries(legacy[0] as Record<string, unknown>)
+            .filter(([, enabled]) => Boolean(enabled))
+            .map(([format]) => format)
+        : Array.isArray(legacy)
+          ? legacy.map(textValue).filter(Boolean)
+          : textValue(legacy).split(',').filter(Boolean);
+    const values = rawValues.filter((format) => format !== 'subvol');
+    const defaultFormat = textValue(formats?.default) || (Array.isArray(legacy) ? textValue(legacy[1]) : '');
+    const preferred = values.includes('qcow2') ? 'qcow2' : values.includes('raw') ? 'raw' : defaultFormat;
     return [textValue(record.storage), preferred ? [preferred, ...values.filter((value) => value !== preferred)] : values];
   }));
   storageFormats.value = storageFormatOptions.value[cloneStorage.value] || [];
@@ -191,21 +207,24 @@ async function refreshTarget(targetNode = target.value) {
 async function verifyCloneFeature() {
   const vm = props.vm;
   if (props.operation !== 'clone' || !vm?.node || !vm.vmid) return;
+  const request = ++cloneFeatureRequest;
   checking.value = true;
   try {
     const response = await getVmCloneFeature(vm.node, vm.vmid, {
       feature: cloneMode.value,
       ...(cloneSnapshot.value !== 'current' ? { snapname: cloneSnapshot.value } : {}),
     });
+    if (request !== cloneFeatureRequest) return;
     allowedCloneNodes.value = response.data?.nodes || [];
     cloneFeatureReady.value = true;
     if (!allowedCloneNodes.value.includes(target.value)) target.value = targetNodes.value[0]?.node || '';
   } catch {
+    if (request !== cloneFeatureRequest) return;
     allowedCloneNodes.value = [];
     cloneFeatureReady.value = false;
     target.value = '';
   } finally {
-    checking.value = false;
+    if (request === cloneFeatureRequest) checking.value = false;
   }
 }
 
@@ -326,8 +345,19 @@ watch(
     void initialize();
   },
 );
-watch(target, (value) => { if (model.value) void refreshTarget(value); });
-watch([cloneMode, cloneSnapshot], () => { if (model.value && props.operation === 'clone') void verifyCloneFeature(); });
+watch(target, (value) => {
+  if (model.value && !loading.value) void refreshTarget(value, true);
+});
+watch(cloneMode, (value) => {
+  if (value === 'clone') {
+    cloneStorage.value = '';
+    cloneFormat.value = '';
+  }
+  if (model.value && !loading.value && props.operation === 'clone') void verifyCloneFeature();
+});
+watch(cloneSnapshot, () => {
+  if (model.value && !loading.value && props.operation === 'clone') void verifyCloneFeature();
+});
 watch(cloneStorage, (storage) => {
   storageFormats.value = storageFormatOptions.value[storage] || [];
   cloneFormat.value = storageFormats.value[0] || '';
@@ -339,6 +369,7 @@ watch(nextId, async (vmid) => {
     cloneIdAvailable.value = false;
     return;
   }
+  if (loading.value) return;
   cloneIdAvailable.value = false;
   try {
     const response = await getNextVmId(vmid);
@@ -379,13 +410,12 @@ watch(nextId, async (vmid) => {
             </div>
           </div>
         </template>
-        <div v-else class="row q-col-gutter-md">
+        <div v-else :class="operation === 'clone' ? 'row q-col-gutter-sm' : 'row q-col-gutter-md'">
           <div class="col-12 col-sm-6">
             <q-input
               dense
-              outlined
-              square
               readonly
+              class="q-field--with-bottom"
               :model-value="vm?.node || ''"
               :label="gettext('Source Node')"
             />
@@ -394,30 +424,29 @@ watch(nextId, async (vmid) => {
             <q-select
               v-model="target"
               dense
-              outlined
-              square
               options-dense
               emit-value
               map-options
+              class="q-field--with-bottom"
               :options="targetNodes.map((node) => ({ label: node.node, value: node.node }))"
               :label="gettext('Target Node')"
             />
           </div>
           <template v-if="operation === 'clone'">
             <div class="col-12 col-sm-6">
-              <q-input v-model="nextId" dense outlined square :label="gettext('New VM ID')" />
+              <q-input v-model="nextId" dense class="q-field--with-bottom" :label="gettext('New VM ID')" />
             </div>
             <div class="col-12 col-sm-6">
-              <q-input v-model="cloneName" dense outlined square :label="gettext('Name')" :error="!cloneNameValid" :error-message="gettext('Invalid DNS name')" />
+              <q-input v-model="cloneName" dense class="q-field--with-bottom" :label="gettext('Name')" :error="!cloneNameValid" :error-message="gettext('Invalid DNS name')" />
             </div>
-            <div v-if="canCreateLinkedClone" class="col-12">
+            <div v-if="canCreateLinkedClone" class="col-12 col-sm-6">
               <q-select
                 v-model="cloneMode"
                 dense
-                outlined
-                square
+                options-dense
                 emit-value
                 map-options
+                class="q-field--with-bottom"
                 :label="gettext('Mode')"
                 :options="[
                   { label: gettext('Full Clone'), value: 'copy' },
@@ -429,8 +458,8 @@ watch(nextId, async (vmid) => {
               <q-select
                 v-model="cloneSnapshot"
                 dense
-                outlined
-                square
+                options-dense
+                class="q-field--with-bottom"
                 :options="snapshots"
                 :label="gettext('Snapshot')"
               />
@@ -439,9 +468,9 @@ watch(nextId, async (vmid) => {
               <q-select
                 v-model="cloneStorage"
                 dense
-                outlined
-                square
+                options-dense
                 clearable
+                class="q-field--with-bottom"
                 :options="storageOptions"
                 :label="gettext('Target Storage')"
                 :disable="cloneMode === 'clone'"
@@ -451,23 +480,23 @@ watch(nextId, async (vmid) => {
               <q-select
                 v-model="cloneFormat"
                 dense
-                outlined
-                square
+                options-dense
                 clearable
+                class="q-field--with-bottom"
                 :options="storageFormats"
                 :label="gettext('Disk Format')"
-                :disable="cloneMode === 'clone' || !cloneStorage"
+                :disable="cloneFormatDisabled"
               />
             </div>
             <div class="col-12 col-sm-6">
               <q-select
                 v-model="clonePool"
                 dense
-                outlined
-                square
+                options-dense
                 clearable
                 emit-value
                 map-options
+                class="q-field--with-bottom"
                 :options="pools.map((pool) => ({ label: pool.poolid, value: pool.poolid }))"
                 :label="gettext('Resource Pool')"
               />

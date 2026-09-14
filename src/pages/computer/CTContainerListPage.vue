@@ -6,7 +6,6 @@ import {
   getVmResources,
   getVmBackupDefaults,
   getVmTaskHistory,
-  runVmBulkAction,
   runCtPowerCommand,
   runVmBackup,
   type VmPowerCommand,
@@ -17,6 +16,7 @@ import { getNodes } from '@/api/resources';
 import CreateCtDialog from '@/pages/computer/ct/CreateCtDialog.vue';
 import CtResourceOperationDialog from '@/pages/computer/ct/CtResourceOperationDialog.vue';
 import UWindow from '@/components/UWindow.vue';
+import BulkActionDialog, { type ClusterBulkAction } from '@/components/BulkActionDialog.vue';
 import UsageProgress from '@/components/UsageProgress.vue';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 import { gettext } from '@/locale';
@@ -227,30 +227,8 @@ const confirmationText = computed(() => {
   if (!vm || !pendingCommand.value) return '';
   return `${gettext('Are you sure you want to')} ${pendingCommandLabel.value}: ${containerDisplayName(vm) || vm.vmid} ?`;
 });
-const canBulkStart = computed(
-  () =>
-    canPowerManage.value &&
-    selectedRows.value.some((row) => !row.template && row.status === 'stopped')
-);
-const canBulkShutdown = computed(
-  () =>
-    canPowerManage.value &&
-    selectedRows.value.some((row) => !row.template && row.status === 'running')
-);
 const bulkVisible = shallowRef(false);
-const bulkAction = shallowRef<'start' | 'shutdown'>('start');
-// PVE BulkAction: max-workers is optional (default "auto"), only submitted when
-// the user fills it in, and must be an integer in 1..64.
-const bulkParallel = shallowRef('');
-const bulkParallelValid = computed(
-  () =>
-    bulkParallel.value === '' ||
-    (/^\d+$/.test(bulkParallel.value) &&
-      Number(bulkParallel.value) >= 1 &&
-      Number(bulkParallel.value) <= 64)
-);
-const bulkForce = shallowRef(true);
-const bulkTimeout = shallowRef(180);
+const bulkAction = shallowRef<ClusterBulkAction>('start');
 const stopVisible = shallowRef(false);
 const stopOverrule = shallowRef(false);
 const stopCanOverrule = shallowRef(false);
@@ -546,42 +524,7 @@ async function confirmStop() {
 
 function bulkCommand(command: 'start' | 'shutdown') {
   bulkAction.value = command;
-  bulkParallel.value = '';
-  bulkForce.value = true;
-  bulkTimeout.value = 180;
   bulkVisible.value = true;
-}
-async function submitBulkCommand() {
-  const command = bulkAction.value;
-  if (!bulkParallelValid.value) return;
-  const targets = selectedRows.value.filter(
-    (row) =>
-      !row.template &&
-      row.node &&
-      row.vmid &&
-      (command === 'start'
-        ? row.status === 'stopped'
-        : command === 'shutdown'
-          ? row.status === 'running'
-          : row.status !== 'stopped')
-  );
-  if (!targets.length) return;
-
-  commandLoading.value = true;
-  try {
-    const response = await runVmBulkAction(command, {
-      vms: targets.map((row) => row.vmid),
-      ...(bulkParallel.value !== '' ? { 'max-workers': Number(bulkParallel.value) } : {}),
-      ...(command !== 'start'
-        ? { 'force-stop': bulkForce.value ? 1 : 0, timeout: bulkTimeout.value }
-        : {}),
-    });
-    bulkVisible.value = false;
-    await reload();
-    if (response.data) openTask('', response.data, `${gettext('Bulk')} ${commandLabel(command)}`);
-  } finally {
-    commandLoading.value = false;
-  }
 }
 
 function openTags() {
@@ -952,13 +895,13 @@ onMounted(() => {
                     color="primary"
                     class="u-button"
                     :label="`${gettext('Bulk')} ${gettext('Actions')}`"
-                    :disable="!selectedRows.length || commandLoading"
+                    :disable="!canPowerManage || commandLoading"
                   >
                     <q-list dense>
                       <q-item
                         v-close-popup
                         clickable
-                        :disable="!canBulkStart"
+                        :disable="!canPowerManage"
                         @click="bulkCommand('start')"
                       >
                         <q-item-section>{{ gettext('Bulk Start') }}</q-item-section>
@@ -966,7 +909,7 @@ onMounted(() => {
                       <q-item
                         v-close-popup
                         clickable
-                        :disable="!canBulkShutdown"
+                        :disable="!canPowerManage"
                         @click="bulkCommand('shutdown')"
                       >
                         <q-item-section>{{ gettext('Bulk Shutdown') }}</q-item-section>
@@ -1374,61 +1317,12 @@ onMounted(() => {
         </template>
       </UWindow>
     </q-dialog>
-    <q-dialog
+    <BulkActionDialog
       v-model="bulkVisible"
-      persistent
-    >
-      <UWindow
-        :title="`${gettext('Bulk')} ${commandLabel(bulkAction)}`"
-        width="440px"
-        :loading="commandLoading"
-      >
-        <div class="q-pa-md q-gutter-md">
-          <q-input
-            v-model="bulkParallel"
-            dense
-            outlined
-            type="number"
-            min="1"
-            max="64"
-            :label="gettext('Parallel jobs')"
-            :placeholder="gettext('auto')"
-            :error="!bulkParallelValid"
-            :error-message="gettext('Value must be an integer between 1 and 64')"
-          />
-          <template v-if="bulkAction !== 'start'">
-            <q-checkbox
-              v-model="bulkForce"
-              dense
-              :label="gettext('Force Stop')"
-            />
-            <q-input
-              v-model.number="bulkTimeout"
-              dense
-              outlined
-              type="number"
-              min="0"
-              max="7200"
-              :label="gettext('Timeout (s)')"
-            />
-          </template>
-        </div>
-        <template #foot>
-          <q-btn
-            v-close-popup
-            flat
-            :label="gettext('Cancel')"
-          />
-          <q-btn
-            color="primary"
-            :loading="commandLoading"
-            :disable="!bulkParallelValid"
-            :label="commandLabel(bulkAction)"
-            @click="submitBulkCommand"
-          />
-        </template>
-      </UWindow>
-    </q-dialog>
+      :action="bulkAction"
+      :resource-types="['lxc']"
+      @completed="reload"
+    />
 
     <TaskOutputDialog
       v-model="taskDialogVisible"

@@ -3,15 +3,25 @@ import type { QTableColumn } from 'quasar';
 import { computed, shallowRef, watch } from 'vue';
 import { runNodeBulkAction } from '@/api/host';
 import { getNodes, type PveNode } from '@/api/resources';
-import { getVmResources, type VmResource } from '@/api/vm';
+import { getVmResources, runVmBulkAction, type VmResource } from '@/api/vm';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
+import { toChineseStr } from '@/utils/unicode';
 
 export type NodeBulkAction = 'startall' | 'stopall' | 'suspendall' | 'migrateall';
+export type ClusterBulkAction = 'start' | 'shutdown' | 'suspend' | 'migrate';
+export type BulkAction = NodeBulkAction | ClusterBulkAction;
 
 const visible = defineModel<boolean>({ required: true });
-const props = defineProps<{ node: string; action: NodeBulkAction }>();
+const props = withDefaults(
+  defineProps<{
+    node?: string;
+    action: BulkAction;
+    resourceTypes?: Array<'qemu' | 'lxc'>;
+  }>(),
+  { node: '', resourceTypes: () => ['qemu', 'lxc'] },
+);
 const emit = defineEmits<{ completed: [] }>();
 
 const loading = shallowRef(false);
@@ -33,27 +43,52 @@ const localDiskMigration = shallowRef(true);
 const timeout = shallowRef(180);
 const taskVisible = shallowRef(false);
 const taskUpid = shallowRef('');
+const taskNode = computed(() => props.node || taskUpid.value.match(/^UPID:([^:]+):/)?.[1] || '');
 
-const actionLabels: Record<NodeBulkAction, string> = {
+const actionLabels: Record<BulkAction, string> = {
   startall: gettext('Bulk Start'),
   stopall: gettext('Bulk Shutdown'),
   suspendall: gettext('Bulk Suspend'),
   migrateall: gettext('Bulk Migrate'),
+  start: gettext('Bulk Start'),
+  shutdown: gettext('Bulk Shutdown'),
+  suspend: gettext('Bulk Suspend'),
+  migrate: gettext('Bulk Migrate'),
 };
-const actionButtonLabels: Record<NodeBulkAction, string> = {
+const actionButtonLabels: Record<BulkAction, string> = {
   startall: gettext('Start'),
   stopall: gettext('Shutdown'),
   suspendall: gettext('Suspend'),
   migrateall: gettext('Migrate'),
+  start: gettext('Start'),
+  shutdown: gettext('Shutdown'),
+  suspend: gettext('Suspend'),
+  migrate: gettext('Migrate'),
 };
-const defaultStatus = computed(() => (props.action === 'startall' ? 'stopped' : props.action === 'migrateall' ? '' : 'running'));
-const isMigrate = computed(() => props.action === 'migrateall');
+const isNodeScoped = computed(() => Boolean(props.node));
+const defaultStatus = computed(() =>
+  ['startall', 'start'].includes(props.action) ? 'stopped' : ['migrateall', 'migrate'].includes(props.action) ? '' : 'running',
+);
+const isMigrate = computed(() => ['migrateall', 'migrate'].includes(props.action));
+const isShutdown = computed(() => ['stopall', 'shutdown'].includes(props.action));
 const title = computed(() => actionLabels[props.action]);
+
+function resourceDisplayName(resource: VmResource) {
+  const rawName = String(resource.rawName || resource.name || '');
+  if (!rawName) return '';
+  try {
+    return toChineseStr(rawName);
+  } catch {
+    return rawName;
+  }
+}
+
 const filteredResources = computed(() => {
   const query = nameFilter.value.trim().toLowerCase();
   return resources.value.filter((resource) => {
-    if (resource.node !== props.node || resource.template || !resource.vmid) return false;
-    if (query && !`${resource.name || ''} ${resource.vmid}`.toLowerCase().includes(query)) return false;
+    if ((props.node && resource.node !== props.node) || resource.template || !resource.vmid) return false;
+    if (!props.resourceTypes.includes(resource.type as 'qemu' | 'lxc')) return false;
+    if (query && !`${resourceDisplayName(resource)} ${resource.name || ''} ${resource.vmid}`.toLowerCase().includes(query)) return false;
     if (statusFilter.value && resource.status !== statusFilter.value) return false;
     if (typeFilter.value && resource.type !== typeFilter.value) return false;
     if (poolFilter.value.length && !poolFilter.value.includes(String(resource.pool || ''))) return false;
@@ -65,7 +100,7 @@ const filteredResources = computed(() => {
 });
 const selectedVmids = computed(() => selected.value.map((resource) => resource.vmid));
 const targetOptions = computed(() =>
-  nodes.value.filter((item) => item.status === 'online' && item.node !== props.node).map((item) => item.node)
+  nodes.value.filter((item) => item.status === 'online' && (!props.node || item.node !== props.node)).map((item) => item.node)
 );
 const maxWorkersValid = computed(() => maxWorkers.value === '' || (/^\d+$/.test(maxWorkers.value) && Number(maxWorkers.value) >= 1 && Number(maxWorkers.value) <= 64));
 const canSubmit = computed(() => selectedVmids.value.length > 0 && maxWorkersValid.value && (!isMigrate.value || !!target.value));
@@ -80,7 +115,15 @@ const filterCount = computed(() => [
 ].filter(Boolean).length);
 const filterTitle = computed(() => filterCount.value ? `${gettext('Filters')} (${filterCount.value})` : gettext('Filters'));
 const selectedSummary = computed(() => `${selectedVmids.value.length} ${gettext('Selected')}`);
-const filterResources = computed(() => resources.value.filter((resource) => resource.node === props.node && !resource.template && resource.vmid));
+const filterResources = computed(() =>
+  resources.value.filter(
+    (resource) =>
+      (!props.node || resource.node === props.node) &&
+      !resource.template &&
+      resource.vmid &&
+      props.resourceTypes.includes(resource.type as 'qemu' | 'lxc'),
+  ),
+);
 function uniqueOptions(values: Array<string | undefined>) {
   return [...new Set(values.filter((value): value is string => !!value))]
     .sort((left, right) => left.localeCompare(right))
@@ -90,14 +133,47 @@ const statusOptions = computed(() => [
   { label: gettext('All'), value: '' },
   ...uniqueOptions(filterResources.value.map((resource) => resource.status)),
 ]);
+const typeOptions = computed(() => [
+  { label: gettext('All'), value: '' },
+  ...(props.resourceTypes.includes('qemu') ? [{ label: gettext('VM'), value: 'qemu' }] : []),
+  ...(props.resourceTypes.includes('lxc') ? [{ label: gettext('CT'), value: 'lxc' }] : []),
+]);
 const poolOptions = computed(() => uniqueOptions(filterResources.value.map((resource) => resource.pool)));
 const haStatusOptions = computed(() => uniqueOptions(filterResources.value.map((resource) => resource.hastate)));
 const tagOptions = computed(() => uniqueOptions(filterResources.value.flatMap((resource) => String(resource.tags || '').split(/[,; ]/).filter(Boolean))));
 const columns: QTableColumn<VmResource>[] = [
-  { name: 'vmid', label: gettext('VM ID'), field: 'vmid', align: 'left', sortable: true },
-  { name: 'name', label: gettext('Name'), field: (row) => row.name || '-', align: 'left', sortable: true },
-  { name: 'type', label: gettext('Type'), field: (row) => row.type === 'lxc' ? gettext('CT') : gettext('VM'), align: 'left' },
-  { name: 'status', label: gettext('Status'), field: (row) => row.status || '-', align: 'left' },
+  {
+    name: 'vmid',
+    label: gettext('VM ID'),
+    field: 'vmid',
+    align: 'left',
+    sortable: true,
+    style: 'width: 90px',
+    headerStyle: 'width: 90px',
+  },
+  {
+    name: 'name',
+    label: gettext('Name'),
+    field: (row) => resourceDisplayName(row) || '-',
+    align: 'left',
+    sortable: true,
+  },
+  {
+    name: 'type',
+    label: gettext('Type'),
+    field: (row) => (row.type === 'lxc' ? gettext('CT') : gettext('VM')),
+    align: 'left',
+    style: 'width: 90px',
+    headerStyle: 'width: 90px',
+  },
+  {
+    name: 'status',
+    label: gettext('Status'),
+    field: (row) => row.status || '-',
+    align: 'left',
+    style: 'width: 100px',
+    headerStyle: 'width: 100px',
+  },
 ];
 
 function selectAllFiltered() {
@@ -115,7 +191,6 @@ function clearFilters() {
 }
 
 async function loadData() {
-  if (!props.node) return;
   loading.value = true;
   try {
     const [resourceResponse, nodeResponse] = await Promise.all([getVmResources(), getNodes()]);
@@ -123,7 +198,7 @@ async function loadData() {
     nodes.value = nodeResponse.data || [];
     statusFilter.value = defaultStatus.value;
     nameFilter.value = '';
-    typeFilter.value = props.action === 'suspendall' ? 'qemu' : '';
+    typeFilter.value = ['suspendall', 'suspend'].includes(props.action) ? 'qemu' : '';
     poolFilter.value = [];
     haStatusFilter.value = [];
     includeTagFilter.value = [];
@@ -140,19 +215,21 @@ async function loadData() {
 }
 
 async function submit() {
-  if (!canSubmit.value || !props.node) return;
+  if (!canSubmit.value) return;
   submitting.value = true;
   try {
     const data: Record<string, unknown> = {
-      vms: selectedVmids.value.join(','),
+      vms: isNodeScoped.value ? selectedVmids.value.join(',') : selectedVmids.value,
       ...(maxWorkers.value !== '' ? { [isMigrate.value ? 'maxworkers' : 'max-workers']: Number(maxWorkers.value) } : {}),
     };
     if (props.action === 'startall') data.force = 1;
-    if (props.action === 'stopall') Object.assign(data, { 'force-stop': forceStop.value ? 1 : 0, timeout: timeout.value });
+    if (['stopall', 'shutdown'].includes(props.action)) Object.assign(data, { 'force-stop': forceStop.value ? 1 : 0, timeout: timeout.value });
     if (isMigrate.value) {
       Object.assign(data, { target: target.value, 'with-local-disks': localDiskMigration.value ? 1 : 0 });
     }
-    const response = await runNodeBulkAction(props.node, props.action, data);
+    const response = isNodeScoped.value
+      ? await runNodeBulkAction(props.node, props.action as NodeBulkAction, data)
+      : await runVmBulkAction(props.action as ClusterBulkAction, data as Record<string, unknown> & { vms: Array<number | string> });
     visible.value = false;
     taskUpid.value = response.data || '';
     taskVisible.value = Boolean(taskUpid.value);
@@ -180,12 +257,12 @@ watch(
             <div v-if="isMigrate" class="col-6 bulk-checkbox-field">
               <q-checkbox v-model="localDiskMigration" dense right-label color="primary" :label="gettext('Allow local disk migration')" />
             </div>
-            <div v-if="action === 'stopall'" class="col-6 bulk-checkbox-field">
+            <div v-if="isShutdown" class="col-6 bulk-checkbox-field">
               <q-checkbox v-model="forceStop" dense right-label color="primary" :label="gettext('Force Stop')" />
               <div class="bulk-field-hint">{{ gettext('Force stop guest if shutdown times out.') }}</div>
             </div>
-            <q-input v-if="action === 'stopall'" v-model.number="timeout" dense type="number" min="0" max="7200" class="q-field--with-bottom bulk-parameter-field col-3" :label="gettext('Timeout (s)')" />
-            <q-input v-model="maxWorkers" dense type="number" min="1" max="64" class="q-field--with-bottom bulk-parameter-field" :class="action === 'stopall' ? 'col-3' : isMigrate ? 'col-6' : 'col-6'" :label="gettext('Parallel jobs')" :placeholder="gettext('auto')" :error="!maxWorkersValid" :error-message="gettext('Value must be an integer between 1 and 64')" />
+            <q-input v-if="isShutdown" v-model.number="timeout" dense type="number" min="0" max="7200" class="q-field--with-bottom bulk-parameter-field col-3" :label="gettext('Timeout (s)')" />
+            <q-input v-model="maxWorkers" dense type="number" min="1" max="64" class="q-field--with-bottom bulk-parameter-field" :class="isShutdown ? 'col-3' : isMigrate ? 'col-6' : 'col-6'" :label="gettext('Parallel jobs')" :placeholder="gettext('auto')" :error="!maxWorkersValid" :error-message="gettext('Value must be an integer between 1 and 64')" />
           </div>
         </section>
         <q-expansion-item default-opened dense icon="filter_list" :label="filterTitle" header-class="bulk-filter-header">
@@ -193,7 +270,7 @@ watch(
             <q-input v-model="nameFilter" dense class="q-field--with-bottom bulk-filter-field col-4" :label="gettext('Name')" />
             <q-select v-model="statusFilter" dense options-dense class="q-field--with-bottom bulk-filter-field col-4" emit-value map-options :options="statusOptions" :label="gettext('Status')" />
             <q-select v-model="poolFilter" dense options-dense multiple emit-value map-options class="q-field--with-bottom bulk-filter-field col-4" :options="poolOptions" :label="gettext('Pool')" />
-            <q-select v-model="typeFilter" dense options-dense class="q-field--with-bottom bulk-filter-field col-4" emit-value map-options :options="[{ label: gettext('All'), value: '' }, { label: gettext('VM'), value: 'qemu' }, { label: gettext('CT'), value: 'lxc' }]" :label="gettext('Type')" />
+            <q-select v-model="typeFilter" dense options-dense class="q-field--with-bottom bulk-filter-field col-4" emit-value map-options :options="typeOptions" :label="gettext('Type')" />
             <q-select v-model="includeTagFilter" dense options-dense multiple emit-value map-options class="q-field--with-bottom bulk-filter-field col-4" :options="tagOptions" :label="gettext('Include Tags')" />
             <q-select v-model="excludeTagFilter" dense options-dense multiple emit-value map-options class="q-field--with-bottom bulk-filter-field col-4" :options="tagOptions" :label="gettext('Exclude Tags')" />
             <q-select v-model="haStatusFilter" dense options-dense multiple emit-value map-options class="q-field--with-bottom bulk-filter-field col-4" :options="haStatusOptions" :label="gettext('HA status')" />
@@ -207,7 +284,13 @@ watch(
             <span>{{ gettext('Resources') }}</span>
             <span class="bulk-selection-count">{{ selectedSummary }}</span>
           </div>
-          <q-table flat dense row-key="vmid" table-header-class="u-table-header" selection="multiple" hide-bottom :rows="filteredResources" :columns="columns" :selected="selected" :rows-per-page-options="[0]" :no-data-label="gettext('no record can be found')" @update:selected="selected = [...$event]" />
+          <q-table flat dense row-key="vmid" table-header-class="u-table-header" selection="multiple" hide-bottom :rows="filteredResources" :columns="columns" :selected="selected" :rows-per-page-options="[0]" :table-style="{ tableLayout: 'fixed', width: '100%' }" :no-data-label="gettext('no record can be found')" @update:selected="selected = [...$event]">
+            <template #body-cell-name="scope">
+              <q-td :props="scope" class="bulk-resource-name" :title="resourceDisplayName(scope.row)">
+                <span>{{ resourceDisplayName(scope.row) || '-' }}</span>
+              </q-td>
+            </template>
+          </q-table>
         </section>
       </div>
       <template #foot>
@@ -216,14 +299,20 @@ watch(
       </template>
     </UWindow>
   </q-dialog>
-  <TaskOutputDialog v-model="taskVisible" :node="node" :upid="taskUpid" :title="title" @finished="emit('completed')" />
+  <TaskOutputDialog v-model="taskVisible" :node="taskNode" :upid="taskUpid" :title="title" @finished="emit('completed')" />
 </template>
 
 <style scoped>
 .bulk-action-content {
   display: grid;
   gap: 12px;
+  min-width: 0;
   padding: 12px;
+  overflow-x: hidden;
+}
+
+.bulk-action-content > * {
+  min-width: 0;
 }
 
 .bulk-parameters {
@@ -266,6 +355,7 @@ watch(
   padding: 6px 12px 8px;
   border: 1px solid #dfe1e6;
   border-top: 0;
+  overflow-x: hidden;
 }
 
 .bulk-filter-actions {
@@ -293,6 +383,17 @@ watch(
 
 :deep(.bulk-resource-section .q-table__middle) {
   max-height: 260px;
+}
+
+.bulk-resource-name {
+  max-width: 0;
+}
+
+.bulk-resource-name > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 :deep(.bulk-filter-field.q-field--with-bottom) {

@@ -54,6 +54,11 @@ export default defineConfig(() => {
           secure: false,
           changeOrigin: true,
         },
+        '/xtermjs': {
+          target: pveProxyTarget,
+          secure: false,
+          changeOrigin: true,
+        },
         '/shell': {
           target: pveProxyTarget,
           secure: false,
