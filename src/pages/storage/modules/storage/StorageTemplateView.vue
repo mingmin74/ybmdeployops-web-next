@@ -31,6 +31,7 @@ const rows = shallowRef<PveRecord[]>([]);
 const selected = ref<PveRecord[]>([]);
 const templates = shallowRef<PveRecord[]>([]);
 const templateFilter = ref('');
+const templateSection = shallowRef('');
 const showAllArchitectures = ref(false);
 const nodeArchitecture = ref('');
 const selectedTemplate = ref<PveRecord>();
@@ -64,6 +65,17 @@ const templateSections = computed(() => {
     groups.set(section, [...(groups.get(section) || []), template]);
   });
   return [...groups.entries()].map(([section, rows]) => ({ section, rows }));
+});
+const activeTemplateRows = computed(
+  () => templateSections.value.find((group) => group.section === templateSection.value)?.rows || []
+);
+watch(templateSections, (groups) => {
+  if (!groups.some((group) => group.section === templateSection.value)) {
+    templateSection.value = groups[0]?.section || '';
+  }
+});
+watch([templateSection, templateFilter, showAllArchitectures], () => {
+  selectedTemplate.value = undefined;
 });
 function normalizeArchitecture(value: string) {
   if (value === 'amd64') return 'x86_64';
@@ -144,6 +156,7 @@ async function openTemplates() {
     );
     selectedTemplate.value = undefined;
     showAllArchitectures.value = false;
+    templateSection.value = templateSections.value[0]?.section || '';
     templatesVisible.value = true;
   } finally {
     loading.value = false;
@@ -312,6 +325,8 @@ watch(
   <q-dialog
     v-model="templatesVisible"
     persistent
+    transition-show="scale"
+    transition-hide="scale"
   >
     <UWindow
       :title="gettext('Templates')"
@@ -319,18 +334,27 @@ watch(
       :loading="loading"
     >
       <div class="q-pa-md">
-        <div class="row items-center q-mb-sm">
+        <div class="template-toolbar">
           <q-input
             v-model="templateFilter"
-            outlined
+            borderless
             dense
-            class="col"
+            class="template-search"
             :placeholder="gettext('Search')"
-          />
+            :aria-label="gettext('Search')"
+          >
+            <template #prepend>
+              <q-icon
+                name="search"
+                size="18px"
+              />
+            </template>
+          </q-input>
           <q-checkbox
             v-model="showAllArchitectures"
             dense
-            class="q-ml-md"
+            color="primary"
+            right-label
             :label="gettext('Show all architectures')"
           />
         </div>
@@ -340,20 +364,39 @@ watch(
         >
           {{ gettext('Showing templates for architecture') }}: {{ nodeArchitecture }}
         </div>
-        <div
-          v-for="group in templateSections"
-          :key="group.section"
-          class="q-mb-md"
+        <q-tabs
+          v-model="templateSection"
+          dense
+          no-caps
+          align="left"
+          active-color="primary"
+          indicator-color="primary"
+          narrow-indicator
+          class="template-section-tabs"
         >
-          <div class="text-subtitle2 q-mb-xs">{{ group.section }}</div>
+          <q-tab
+            v-for="group in templateSections"
+            :key="group.section"
+            :name="group.section"
+            :label="`${group.section} (${group.rows.length})`"
+          />
+        </q-tabs>
+        <div class="template-table-container">
           <q-table
             flat
-            dense
+            :key="templateSection"
+            class="template-table"
+            table-header-class="u-table-header"
             row-key="template"
-            :rows="group.rows"
+            :rows="activeTemplateRows"
             :columns="templateColumns"
             :filter="templateFilter"
             :pagination="{ rowsPerPage: 10 }"
+            :rows-per-page-options="[10, 20, 50]"
+            :no-data-label="gettext('no record can be found')"
+            selection="single"
+            :selected="selectedTemplate ? [selectedTemplate] : []"
+            @update:selected="selectedTemplate = $event[0]"
             @row-click="templateRowClick"
           >
             <template #body-cell-architecture="scope">
@@ -384,12 +427,15 @@ watch(
           v-close-popup
           no-caps
           flat
+          size="12px"
+          class="u-button u-border-button"
           :label="gettext('Cancel')"
         />
         <q-btn
           no-caps
           flat
-          color="primary"
+          size="12px"
+          class="bg-primary text-grey-1 u-button"
           :disable="!selectedTemplate"
           :label="gettext('Download')"
           @click="downloadTemplate"
@@ -400,19 +446,20 @@ watch(
   <q-dialog
     v-model="ociVisible"
     persistent
+    transition-show="scale"
+    transition-hide="scale"
   >
     <UWindow
       :title="gettext('Pull from OCI Registry')"
-      width="450px"
+      width="560px"
       :loading="loading"
     >
-      <div class="q-pa-md q-gutter-md">
-        <div class="row no-wrap q-gutter-sm">
+      <div class="q-pa-md">
+        <div class="oci-reference-row">
           <q-input
             v-model="oci.reference"
             dense
-            outlined
-            class="col"
+            class="q-field--with-bottom"
             :label="gettext('Reference')"
             :error="!!oci.reference && !validOciReference"
             :error-message="gettext('Invalid OCI reference')"
@@ -420,6 +467,9 @@ watch(
           <q-btn
             no-caps
             outline
+            size="12px"
+            color="primary"
+            class="u-button oci-query-button"
             :disable="!validOciReference"
             :label="gettext('Query Tags')"
             @click="queryTags"
@@ -428,7 +478,8 @@ watch(
         <q-select
           v-model="oci.tag"
           dense
-          outlined
+          class="q-field--with-bottom"
+          options-dense
           use-input
           input-debounce="0"
           new-value-mode="add-unique"
@@ -438,7 +489,7 @@ watch(
         <q-input
           v-model="oci.filename"
           dense
-          outlined
+          class="q-field--with-bottom"
           :label="gettext('File name')"
         />
       </div>
@@ -447,12 +498,15 @@ watch(
           v-close-popup
           no-caps
           flat
+          size="12px"
+          class="u-button u-border-button"
           :label="gettext('Cancel')"
         />
         <q-btn
           no-caps
           flat
-          color="primary"
+          size="12px"
+          class="bg-primary text-grey-1 u-button"
           :disable="!validOciReference || !oci.tag.trim()"
           :label="gettext('Download')"
           @click="pullOci"
@@ -494,3 +548,72 @@ watch(
     "
   />
 </template>
+
+<style scoped>
+.oci-reference-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.oci-query-button {
+  margin-top: 8px;
+}
+
+@media (max-width: 400px) {
+  .oci-reference-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .oci-query-button {
+    justify-self: end;
+    margin: 0 0 12px;
+  }
+}
+
+.template-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+
+.template-search {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.template-section-tabs {
+  background: #f2f5fc;
+  border: 1px solid #dfe1e6;
+}
+
+.template-section-tabs :deep(.q-tab) {
+  min-height: 40px;
+  padding: 0 16px;
+}
+
+.template-table-container {
+  border: 1px solid #dfe1e6;
+  border-top: 0;
+}
+
+.template-table {
+  border-radius: 0;
+}
+
+.template-table :deep(.q-table__middle) {
+  max-height: min(440px, 50vh);
+}
+
+.template-table :deep(thead tr th) {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f2f5fc;
+}
+</style>

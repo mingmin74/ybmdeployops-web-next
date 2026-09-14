@@ -92,35 +92,53 @@ watch(model, (visible) => {
   <q-dialog
     v-model="model"
     persistent
+    transition-show="scale"
+    transition-hide="scale"
   >
     <UWindow
       :title="gettext('Upload')"
-      width="440px"
+      width="520px"
       :loading="uploading"
     >
-      <div class="q-pa-md q-gutter-md">
+      <div class="q-pa-md">
         <q-file
           :model-value="file"
           dense
-          outlined
+          class="q-field--with-bottom"
           :accept="accept"
           :label="gettext('File')"
           @update:model-value="selectFile"
-        />
+        >
+          <template #prepend>
+            <q-icon
+              name="attach_file"
+              size="18px"
+            />
+          </template>
+        </q-file>
         <q-input
           v-model="filename"
           dense
-          outlined
+          class="q-field--with-bottom"
           :label="gettext('File name')"
           :error="!!filename && !validFilename"
           :error-message="gettext('Wrong file extension')"
         />
-        <div>{{ gettext('File size') }}: {{ formatBytes(file?.size) }}</div>
-        <div>{{ gettext('MIME type') }}: {{ file?.type || '-' }}</div>
+        <dl class="file-metadata">
+          <div>
+            <dt>{{ gettext('File size') }}</dt>
+            <dd>{{ formatBytes(file?.size) }}</dd>
+          </div>
+          <div>
+            <dt>{{ gettext('MIME type') }}</dt>
+            <dd>{{ file?.type || '-' }}</dd>
+          </div>
+        </dl>
         <q-select
           v-model="checksumAlgorithm"
           dense
-          outlined
+          class="q-field--with-bottom"
+          options-dense
           emit-value
           map-options
           :label="gettext('Hash algorithm')"
@@ -134,11 +152,11 @@ watch(model, (visible) => {
         <q-input
           v-model="checksum"
           dense
-          outlined
+          class="q-field--with-bottom"
           :disable="checksumAlgorithm === '__default__'"
           :label="gettext('Checksum')"
         />
-        <div class="text-caption text-grey-7">
+        <div class="upload-hint text-caption text-grey-7">
           {{
             gettext(
               "Uploads are stored temporarily in '/var/tmp/', make sure there is enough free space."
@@ -147,6 +165,7 @@ watch(model, (visible) => {
         </div>
         <q-linear-progress
           v-if="uploading"
+          class="q-mt-md"
           :value="progress"
           color="primary"
         />
@@ -155,13 +174,16 @@ watch(model, (visible) => {
         <q-btn
           no-caps
           flat
+          size="12px"
+          class="u-button u-border-button"
           :label="uploading ? gettext('Abort') : gettext('Cancel')"
           @click="cancel"
         />
         <q-btn
           no-caps
           flat
-          color="primary"
+          size="12px"
+          class="bg-primary text-grey-1 u-button"
           :disable="
             !file ||
             !validFilename ||
@@ -175,3 +197,34 @@ watch(model, (visible) => {
     </UWindow>
   </q-dialog>
 </template>
+
+<style scoped>
+.file-metadata {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 12px;
+  background: #f2f5fc;
+  border-left: 2px solid #1976d2;
+  font-size: 12px;
+}
+
+.file-metadata dt {
+  margin-bottom: 4px;
+  color: #666;
+}
+
+.file-metadata dd {
+  margin: 0;
+  color: #333;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.upload-hint {
+  padding-top: 12px;
+  border-top: 1px solid #dfe1e6;
+  line-height: 1.7;
+}
+</style>

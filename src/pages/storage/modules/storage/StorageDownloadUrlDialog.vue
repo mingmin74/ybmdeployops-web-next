@@ -88,24 +88,28 @@ watch([() => form.url, () => form.verifyCertificates], clearMetadata);
   <q-dialog
     v-model="model"
     persistent
+    transition-show="scale"
+    transition-hide="scale"
   >
     <UWindow
       :title="gettext('Download from URL')"
-      width="480px"
+      width="560px"
       :loading="loading"
     >
-      <div class="q-pa-md q-gutter-md">
-        <div class="row no-wrap q-gutter-sm">
+      <div class="q-pa-md">
+        <div class="url-query-row">
           <q-input
             v-model="form.url"
             dense
-            outlined
-            class="col"
+            class="q-field--with-bottom"
             :label="gettext('URL')"
           />
           <q-btn
             no-caps
             outline
+            size="12px"
+            color="primary"
+            class="u-button url-query-button"
             :label="gettext('Query URL')"
             @click="query"
           />
@@ -113,15 +117,24 @@ watch([() => form.url, () => form.verifyCertificates], clearMetadata);
         <q-input
           v-model="form.filename"
           dense
-          outlined
+          class="q-field--with-bottom"
           :label="gettext('File name')"
         />
-        <div>{{ gettext('File size') }}: {{ form.size ? formatBytes(form.size) : '-' }}</div>
-        <div>{{ gettext('MIME type') }}: {{ form.mimetype || '-' }}</div>
+        <dl class="file-metadata">
+          <div>
+            <dt>{{ gettext('File size') }}</dt>
+            <dd>{{ form.size ? formatBytes(form.size) : '-' }}</dd>
+          </div>
+          <div>
+            <dt>{{ gettext('MIME type') }}</dt>
+            <dd>{{ form.mimetype || '-' }}</dd>
+          </div>
+        </dl>
         <q-select
           v-model="form.checksumAlgorithm"
           dense
-          outlined
+          class="q-field--with-bottom"
+          options-dense
           emit-value
           map-options
           :label="gettext('Hash algorithm')"
@@ -135,12 +148,15 @@ watch([() => form.url, () => form.verifyCertificates], clearMetadata);
         <q-input
           v-model="form.checksum"
           dense
-          outlined
+          class="q-field--with-bottom"
           :disable="form.checksumAlgorithm === '__default__'"
           :label="gettext('Checksum')"
         />
         <q-checkbox
           v-model="form.verifyCertificates"
+          class="q-mb-md"
+          color="primary"
+          right-label
           dense
           :label="gettext('Verify certificates')"
         />
@@ -148,7 +164,8 @@ watch([() => form.url, () => form.verifyCertificates], clearMetadata);
           v-if="content === 'iso'"
           v-model="form.compression"
           dense
-          outlined
+          class="q-field--with-bottom"
+          options-dense
           emit-value
           map-options
           :label="gettext('Decompression algorithm')"
@@ -166,12 +183,15 @@ watch([() => form.url, () => form.verifyCertificates], clearMetadata);
           v-close-popup
           no-caps
           flat
+          size="12px"
+          class="u-button u-border-button"
           :label="gettext('Cancel')"
         />
         <q-btn
           no-caps
           flat
-          color="primary"
+          size="12px"
+          class="bg-primary text-grey-1 u-button"
           :disable="
             !form.url.trim() ||
             !form.filename.trim() ||
@@ -184,3 +204,51 @@ watch([() => form.url, () => form.verifyCertificates], clearMetadata);
     </UWindow>
   </q-dialog>
 </template>
+
+<style scoped>
+.file-metadata {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 12px;
+  background: #f2f5fc;
+  border-left: 2px solid #1976d2;
+  font-size: 12px;
+}
+
+.file-metadata dt {
+  margin-bottom: 4px;
+  color: #666;
+}
+
+.file-metadata dd {
+  margin: 0;
+  color: #333;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.url-query-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.url-query-button {
+  margin-top: 8px;
+}
+
+@media (max-width: 400px) {
+  .url-query-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .url-query-button {
+    justify-self: end;
+    margin: 0 0 12px;
+  }
+}
+</style>

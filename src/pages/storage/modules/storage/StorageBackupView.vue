@@ -575,6 +575,8 @@ watch(
   <q-dialog
     v-model="notesVisible"
     persistent
+    transition-show="scale"
+    transition-hide="scale"
   >
     <UWindow
       :title="gettext('Notes')"
@@ -582,11 +584,16 @@ watch(
       :loading="loading"
     >
       <div class="q-pa-md">
+        <div class="backup-dialog-context">
+          <span class="backup-context-label">{{ gettext('Backup') }}</span>
+          <span class="backup-context-value">{{ selectedVolid }}</span>
+        </div>
         <q-input
           v-model="notes"
           type="textarea"
-          autogrow
-          outlined
+          rows="5"
+          class="q-field--with-bottom backup-notes-input"
+          :label="gettext('Notes')"
           dense
         />
       </div>
@@ -595,12 +602,15 @@ watch(
           v-close-popup
           no-caps
           flat
+          size="12px"
+          class="u-button u-border-button"
           :label="gettext('Cancel')"
         />
         <q-btn
           no-caps
           flat
-          color="primary"
+          size="12px"
+          class="bg-primary text-grey-1 u-button"
           :label="gettext('OK')"
           @click="saveNotes"
         />
@@ -788,78 +798,82 @@ watch(
   <q-dialog
     v-model="pruneVisible"
     persistent
+    transition-show="scale"
+    transition-hide="scale"
   >
     <UWindow
       :title="pruneTitle"
       width="760px"
       :loading="loading"
     >
-      <div class="q-pa-md q-gutter-md">
-        <div class="row q-col-gutter-sm">
+      <div class="q-pa-md">
+        <div class="backup-dialog-context">
+          <span class="backup-context-label">{{ gettext('Storage') }}</span>
+          <span class="backup-context-value">{{ storage }}</span>
+          <span class="backup-context-label">{{ gettext('Backup') }}</span>
+          <span class="backup-context-value">{{ guestType }}/{{ selectedRow?.vmid }}</span>
+        </div>
+        <div class="prune-fields">
           <q-input
             v-model="pruneForm.last"
-            class="col-4"
+            class="q-field--with-bottom"
             type="number"
             min="1"
             dense
-            outlined
             :label="gettext('keep-last')"
             @update:model-value="previewPrune"
           />
           <q-input
             v-model="pruneForm.hourly"
-            class="col-4"
+            class="q-field--with-bottom"
             type="number"
             min="1"
             dense
-            outlined
             :label="gettext('keep-hourly')"
             @update:model-value="previewPrune"
           />
           <q-input
             v-model="pruneForm.daily"
-            class="col-4"
+            class="q-field--with-bottom"
             type="number"
             min="1"
             dense
-            outlined
             :label="gettext('keep-daily')"
             @update:model-value="previewPrune"
           />
           <q-input
             v-model="pruneForm.weekly"
-            class="col-4"
+            class="q-field--with-bottom"
             type="number"
             min="1"
             dense
-            outlined
             :label="gettext('keep-weekly')"
             @update:model-value="previewPrune"
           />
           <q-input
             v-model="pruneForm.monthly"
-            class="col-4"
+            class="q-field--with-bottom"
             type="number"
             min="1"
             dense
-            outlined
             :label="gettext('keep-monthly')"
             @update:model-value="previewPrune"
           />
           <q-input
             v-model="pruneForm.yearly"
-            class="col-4"
+            class="q-field--with-bottom"
             type="number"
             min="1"
             dense
-            outlined
             :label="gettext('keep-yearly')"
             @update:model-value="previewPrune"
           />
         </div>
         <q-table
           flat
-          dense
+          class="prune-preview-table"
+          table-header-class="u-table-header"
+          :no-data-label="gettext('no record can be found')"
           row-key="volid"
           :rows="pruneRows"
           :columns="pruneColumns"
@@ -871,12 +885,15 @@ watch(
           v-close-popup
           no-caps
           flat
+          size="12px"
+          class="u-button u-border-button"
           :label="gettext('Cancel')"
         />
         <q-btn
           no-caps
           flat
-          color="primary"
+          size="12px"
+          class="bg-primary text-grey-1 u-button"
           :label="gettext('Prune')"
           @click="prune"
         />
@@ -898,6 +915,54 @@ watch(
 </template>
 
 <style scoped>
+.backup-dialog-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: #f2f5fc;
+  border-left: 2px solid #1976d2;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.backup-context-label {
+  flex-shrink: 0;
+  color: #666;
+}
+
+.backup-context-value {
+  min-width: 0;
+  color: #333;
+  overflow-wrap: anywhere;
+}
+
+.backup-notes-input :deep(textarea) {
+  line-height: 1.7;
+  resize: vertical;
+}
+
+.prune-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 24px;
+  margin-bottom: 8px;
+}
+
+.prune-preview-table {
+  border: 1px solid #dfe1e6;
+  border-radius: 0;
+}
+
+@media (max-width: 600px) {
+  .prune-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+  }
+}
+
 .backup-config {
   max-height: 520px;
   margin: 0;

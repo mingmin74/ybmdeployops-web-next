@@ -20,6 +20,7 @@ import { textValue } from '@/utils/pveFormat';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 import HaRuleDialog from '@/pages/computer/ha/HaRuleDialog.vue';
+import HaDisarmDialog from '@/pages/computer/ha/HaDisarmDialog.vue';
 
 const $q = useQuasar();
 const loading = shallowRef(false);
@@ -187,34 +188,21 @@ function arm() {
   });
 }
 function disarm(mode: 'freeze' | 'ignore') {
-  confirm(
-    [
-      gettext("Are you sure you want to disarm HA with resource mode '{0}'?").replace(
-        '{0}',
-        gettext(mode === 'freeze' ? 'Freeze' : 'Ignore')
-      ),
-      gettext(
-        mode === 'freeze'
-          ? 'This will freeze all services allowing no change to their operational state.'
-          : 'The HA stack will be completely bypassed when the operational state of a service changes.'
-      ),
-      gettext(
-        'While disarmed, HA does not protect your services. Failures during this period are not automatically recovered.'
-      ),
-    ].join('<br><br>'),
-    () => {
-      void (async () => {
-        actionLoading.value = true;
-        try {
-          await disarmHa(mode);
-          pendingArmState.value = 'disarmed';
-          await loadStatus();
-        } finally {
-          actionLoading.value = false;
-        }
-      })();
-    }
-  );
+  $q.dialog({
+    component: HaDisarmDialog,
+    componentProps: { mode },
+  }).onOk(() => {
+    void (async () => {
+      actionLoading.value = true;
+      try {
+        await disarmHa(mode);
+        pendingArmState.value = 'disarmed';
+        await loadStatus();
+      } finally {
+        actionLoading.value = false;
+      }
+    })();
+  });
 }
 function resetResourceForm() {
   Object.assign(resourceForm, {
@@ -375,10 +363,16 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="q-ma-md ha-module">
-    <q-card class="q-mt-sm no-border-radius no-shadow">
+    <q-card
+      flat
+      bordered
+      class="ha-shell no-border-radius"
+    >
       <q-tabs
         v-model="activeTab"
-        class="text-grey"
+        dense
+        no-caps
+        class="ha-tabs text-grey"
         active-color="primary"
         indicator-color="primary"
         align="left"
@@ -404,9 +398,9 @@ onBeforeUnmount(() => {
       >
         <q-tab-panel
           name="status"
-          class="q-pa-md"
+          class="ha-tab-panel"
         >
-          <div class="row q-gutter-sm items-center q-mb-md">
+          <div class="ha-toolbar">
             <q-btn
               no-caps
               outline
@@ -457,10 +451,18 @@ onBeforeUnmount(() => {
           <q-card
             flat
             bordered
-            class="no-border-radius q-mb-md"
+            class="ha-section no-border-radius q-mb-md"
           >
-            <div class="ha-section-title">{{ gettext('Status') }}</div>
+            <h2 class="ha-section-title">
+              <q-icon
+                name="monitor_heart"
+                size="18px"
+                color="primary"
+              />
+              {{ gettext('Status') }}
+            </h2>
             <q-table
+              class="ha-table"
               flat
               row-key="type"
               table-header-class="u-table-header"
@@ -487,10 +489,10 @@ onBeforeUnmount(() => {
           <q-card
             flat
             bordered
-            class="no-border-radius"
+            class="ha-section no-border-radius"
           >
-            <div class="ha-section-title">{{ gettext('Resources') }}</div>
             <q-table
+              class="ha-table"
               flat
               row-key="sid"
               table-header-class="u-table-header"
@@ -503,6 +505,16 @@ onBeforeUnmount(() => {
               :no-data-label="gettext('no record can be found')"
             >
               <template #top>
+                <h2 class="ha-section-heading">
+                  <q-icon
+                    name="dns"
+                    size="18px"
+                    color="primary"
+                  />
+                  {{ gettext('Resources') }}
+                  <span class="ha-count">{{ resourceRows.length }}</span>
+                </h2>
+                <q-space />
                 <q-btn
                   no-caps
                   outline
@@ -538,15 +550,15 @@ onBeforeUnmount(() => {
         </q-tab-panel>
         <q-tab-panel
           name="rules"
-          class="q-pa-md"
+          class="ha-tab-panel"
         >
           <q-card
             flat
             bordered
-            class="no-border-radius q-mb-md"
+            class="ha-section no-border-radius q-mb-md"
           >
-            <div class="ha-section-title">{{ gettext('HA Node Affinity Rules') }}</div>
             <q-table
+              class="ha-table"
               flat
               row-key="rule"
               table-header-class="u-table-header"
@@ -559,6 +571,16 @@ onBeforeUnmount(() => {
               :no-data-label="gettext('No HA Node Affinity rules configured.')"
             >
               <template #top>
+                <h2 class="ha-section-heading">
+                  <q-icon
+                    name="account_tree"
+                    size="18px"
+                    color="primary"
+                  />
+                  {{ gettext('HA Node Affinity Rules') }}
+                  <span class="ha-count">{{ nodeRules.length }}</span>
+                </h2>
+                <q-space />
                 <q-btn
                   no-caps
                   outline
@@ -603,11 +625,11 @@ onBeforeUnmount(() => {
                   <q-btn
                     dense
                     flat
-                    round
                     size="sm"
                     icon="delete"
                     color="red"
-                    class="q-ml-sm"
+                    class="q-ml-sm u-button"
+                    :aria-label="gettext('Delete')"
                     @click="removeRule(props.row)"
                   />
                 </q-td>
@@ -617,10 +639,10 @@ onBeforeUnmount(() => {
           <q-card
             flat
             bordered
-            class="no-border-radius"
+            class="ha-section no-border-radius"
           >
-            <div class="ha-section-title">{{ gettext('HA Resource Affinity Rules') }}</div>
             <q-table
+              class="ha-table"
               flat
               row-key="rule"
               table-header-class="u-table-header"
@@ -633,6 +655,16 @@ onBeforeUnmount(() => {
               :no-data-label="gettext('No HA Resource Affinity rules configured.')"
             >
               <template #top>
+                <h2 class="ha-section-heading">
+                  <q-icon
+                    name="hub"
+                    size="18px"
+                    color="primary"
+                  />
+                  {{ gettext('HA Resource Affinity Rules') }}
+                  <span class="ha-count">{{ resourceRules.length }}</span>
+                </h2>
+                <q-space />
                 <q-btn
                   no-caps
                   outline
@@ -677,11 +709,11 @@ onBeforeUnmount(() => {
                   <q-btn
                     dense
                     flat
-                    round
                     size="sm"
                     icon="delete"
                     color="red"
-                    class="q-ml-sm"
+                    class="q-ml-sm u-button"
+                    :aria-label="gettext('Delete')"
                     @click="removeRule(props.row)"
                   />
                 </q-td>
@@ -691,20 +723,19 @@ onBeforeUnmount(() => {
         </q-tab-panel>
         <q-tab-panel
           name="fencing"
-          class="q-pa-md"
+          class="ha-tab-panel"
         >
-          <q-table
-            flat
-            row-key="node"
-            table-header-class="u-table-header"
-            :rows="[]"
-            :columns="[
-              { name: 'node', label: gettext('Node'), field: 'node', align: 'left' },
-              { name: 'command', label: gettext('Command'), field: 'command', align: 'left' },
-            ]"
-            :rows-per-page-options="[0]"
-            :no-data-label="gettext('Use watchdog based fencing.')"
-          />
+          <section class="ha-fencing">
+            <q-icon
+              name="security"
+              size="28px"
+              color="primary"
+            />
+            <div>
+              <h2 class="ha-section-heading">{{ gettext('Fencing') }}</h2>
+              <p>{{ gettext('Use watchdog based fencing.') }}</p>
+            </div>
+          </section>
         </q-tab-panel>
       </q-tab-panels>
       <q-inner-loading :showing="loading || actionLoading" />
@@ -726,11 +757,11 @@ onBeforeUnmount(() => {
       width="620px"
       :title="`${gettext(resourceAction === 'add' ? 'Add' : 'Edit')}: ${gettext('HA Resource')}`"
     >
-      <div class="u-border q-ma-sm q-pa-md">
+      <div class="ha-resource-form q-pa-md">
         <q-banner
           v-if="resourceAction === 'add'"
           dense
-          class="q-mb-md"
+          class="ha-resource-notice q-mb-md"
         >
           <template #avatar>
             <q-icon
@@ -740,13 +771,13 @@ onBeforeUnmount(() => {
           </template>
           {{ gettext('At least three quorum votes are recommended for reliable HA.') }}
         </q-banner>
-        <div class="row q-col-gutter-lg">
+        <div class="row q-col-gutter-x-lg">
           <q-input
             v-if="resourceAction === 'edit'"
             v-model="resourceForm.sid"
             dense
             readonly
-            class="col-6 q-field--with-bottom"
+            class="col-12 col-sm-6 q-field--with-bottom"
             :label="gettext('VMID')"
           />
           <q-select
@@ -756,7 +787,7 @@ onBeforeUnmount(() => {
             options-dense
             emit-value
             map-options
-            class="col-6 q-field--with-bottom"
+            class="col-12 col-sm-6 q-field--with-bottom"
             :options="
               addableResources.map((resource) => ({
                 label: `${textValue(resource.type) === 'lxc' ? 'CT' : 'VM'} ${textValue(resource.vmid)}${textValue(resource.name) ? ` (${textValue(resource.name)})` : ''}`,
@@ -771,7 +802,7 @@ onBeforeUnmount(() => {
             options-dense
             emit-value
             map-options
-            class="col-6 q-field--with-bottom"
+            class="col-12 col-sm-6 q-field--with-bottom"
             :options="[
               { label: gettext('Started'), value: 'started' },
               { label: gettext('Stopped'), value: 'stopped' },
@@ -780,14 +811,14 @@ onBeforeUnmount(() => {
             :label="gettext('Request State')"
           />
         </div>
-        <div class="row q-col-gutter-lg">
+        <div class="row q-col-gutter-x-lg">
           <q-input
             v-model.number="resourceForm.max_restart"
             dense
             type="number"
             min="0"
             max="10"
-            class="col-6 q-field--with-bottom"
+            class="col-12 col-sm-6 q-field--with-bottom"
             :label="gettext('Max. Restart')"
           />
           <q-input
@@ -796,17 +827,23 @@ onBeforeUnmount(() => {
             type="number"
             min="0"
             max="10"
-            class="col-6 q-field--with-bottom"
+            class="col-12 col-sm-6 q-field--with-bottom"
             :label="gettext('Max. Relocate')"
           />
         </div>
-        <div class="row q-gutter-lg q-mb-sm">
+        <div class="ha-resource-options">
           <q-checkbox
             v-model="resourceForm.failback"
+            dense
+            right-label
+            color="primary"
             :label="gettext('Failback')"
           />
           <q-checkbox
             v-model="resourceForm.autoRebalance"
+            dense
+            right-label
+            color="primary"
             :label="gettext('Auto-Rebalance')"
           />
         </div>
@@ -818,6 +855,14 @@ onBeforeUnmount(() => {
         />
       </div>
       <template #foot>
+        <q-btn
+          v-close-popup
+          no-caps
+          outline
+          size="12px"
+          class="u-button"
+          :label="gettext('Cancel')"
+        />
         <q-btn
           no-caps
           flat
@@ -859,10 +904,16 @@ onBeforeUnmount(() => {
         <div class="column q-gutter-sm q-mb-sm">
           <q-checkbox
             v-model="crsForm.rebalanceOnStart"
+            dense
+            right-label
+            color="primary"
             :label="gettext('Rebalance on Start')"
           />
           <q-checkbox
             v-model="crsForm.autoRebalance"
+            dense
+            right-label
+            color="primary"
             :disable="!canUseAutoRebalancing"
             :label="gettext('Automatic Rebalance')"
           />
@@ -925,22 +976,127 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped lang="scss">
-.ha-section-title {
-  display: flex;
-  align-items: center;
-  min-height: 34px;
-  padding: 8px 14px;
-  color: #263445;
-  font-size: 13px;
-  font-weight: 600;
-  background: #f8fafd;
-  border-bottom: 1px solid #e4e8f0;
+.ha-resource-form {
+  color: #333;
+  font-size: 12px;
 }
-.ha-section-title::before {
-  width: 3px;
-  height: 14px;
-  margin-right: 8px;
-  content: '';
-  background: #1976d2;
+.ha-resource-notice {
+  padding: 10px 12px;
+  border-left: 3px solid #1976d2;
+  background: #e6f1fc;
+  color: #333;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ha-resource-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  margin: 4px 0 16px;
+  padding: 12px 0;
+  border-top: 1px solid #dfe1e6;
+  border-bottom: 1px solid #dfe1e6;
+}
+.ha-module {
+  min-width: 0;
+}
+.ha-shell {
+  border-color: #dfe1e6;
+}
+.ha-tabs {
+  padding: 0 8px;
+  background: #f8fafd;
+}
+.ha-tabs :deep(.q-tab) {
+  min-height: 42px;
+  padding: 0 20px;
+}
+.ha-tabs :deep(.q-tab__label) {
+  font-size: 13px;
+}
+.ha-tabs :deep(.q-tab--active) {
+  background: #e6f1fc;
+}
+.ha-tab-panel {
+  padding: 16px;
+}
+.ha-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.ha-section {
+  overflow: hidden;
+  border-color: #dfe1e6;
+}
+.ha-section-title,
+.ha-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #333;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.ha-section-title {
+  min-height: 48px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #dfe1e6;
+}
+.ha-count {
+  padding: 0 6px;
+  color: #666;
+  background: #f2f5fc;
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.ha-table :deep(.q-table__top) {
+  gap: 8px;
+  min-height: 48px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #dfe1e6;
+}
+.ha-table :deep(.q-table__top .q-btn) {
+  margin-right: 0;
+}
+.ha-table :deep(.q-table__bottom) {
+  min-height: 36px;
+  padding: 6px 14px;
+  color: #666;
+}
+.ha-table :deep(tbody tr.selected td) {
+  background: #e6f1fc;
+}
+.ha-fencing {
+  background: #f2f5fc;
+}
+.ha-fencing {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid #dfe1e6;
+}
+.ha-fencing p {
+  margin: 6px 0 0;
+  color: #666;
+  font-size: 13px;
+}
+@media (max-width: 600px) {
+  .ha-module {
+    margin: 8px;
+  }
+  .ha-tab-panel {
+    padding: 10px;
+  }
+  .ha-table :deep(.q-table__top .ha-section-heading) {
+    flex-basis: 100%;
+  }
 }
 </style>
