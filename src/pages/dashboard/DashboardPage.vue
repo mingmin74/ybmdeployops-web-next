@@ -3,42 +3,36 @@
     <!-- KPI -->
     <KpiCards />
 
-    <!-- 拓扑 + 健康状态 / 虚拟机 -->
+    <!-- 拓扑 + 资源 / 状态 -->
     <div class="dashboard-row">
-      <div class="dashboard-row__column">
+      <div class="dashboard-row__topology">
         <TopologyCard />
       </div>
 
-      <div class="dashboard-row__column">
-        <div class="column dashboard-row__side">
-          <div class="dashboard-row__panel">
-            <HealthPanel />
-          </div>
-          <div class="dashboard-row__panel">
-            <GuestsPanel />
-          </div>
+      <div class="dashboard-row__overview">
+        <div class="dashboard-row__resources">
+          <ResourcesPanel />
         </div>
+
+        <div class="dashboard-row__ceph-status">
+          <CephStatusPanel />
+        </div>
+
+        <!-- 客户模块暂时隐藏
+        <div class="dashboard-row__guests">
+          <GuestsPanel />
+        </div>
+        -->
       </div>
     </div>
 
-    <!-- 资源使用 + 节点 -->
+    <!-- 节点 + Ceph 服务 -->
     <div class="row q-col-gutter-sm">
-      <div class="col-12 col-lg-5">
-        <ResourcesPanel />
-      </div>
-
-      <div class="col-12 col-lg-7">
+      <div class="col-12 col-lg-6">
         <NodesTable />
       </div>
-    </div>
 
-    <!-- Ceph 状态 + Ceph 服务 -->
-    <div class="row q-col-gutter-sm">
-      <div class="col-12 col-lg-5">
-        <CephStatusPanel />
-      </div>
-
-      <div class="col-12 col-lg-7">
+      <div class="col-12 col-lg-6">
         <CephServicesPanel />
       </div>
     </div>
@@ -50,10 +44,7 @@
 
 <script setup lang="ts">
 import KpiCards from './KpiCards.vue';
-
 import TopologyCard from './TopologyCard.vue';
-import HealthPanel from './HealthPanel.vue';
-import GuestsPanel from './GuestsPanel.vue';
 import ResourcesPanel from './ResourcesPanel.vue';
 import NodesTable from './NodesTable.vue';
 import CephStatusPanel from './CephStatusPanel.vue';
@@ -68,17 +59,18 @@ import PerformancePanel from './PerformancePanel.vue';
   gap: 8px;
 }
 
-.dashboard-row__column {
+.dashboard-row__overview {
   display: flex;
   flex-direction: column;
-}
-
-.dashboard-row__side {
   gap: 8px;
 }
 
-.dashboard-row__panel {
-  min-height: 0;
+.dashboard-row__resources {
+  order: 1;
+}
+
+.dashboard-row__ceph-status {
+  order: 2;
 }
 
 .dashboard-layout {
@@ -90,21 +82,48 @@ import PerformancePanel from './PerformancePanel.vue';
 @media (min-width: 1440px) {
   .dashboard-row {
     display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 3fr) minmax(0, 1.5fr) minmax(0, 1.5fr);
   }
 
-  .dashboard-row__side {
-    flex: 1 1 auto;
+  .dashboard-row__topology {
+    grid-column: 1;
+    grid-row: span 2;
+  }
+
+  .dashboard-row__overview {
+    display: grid;
+    grid-column: span 2;
+    grid-row: span 2;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .dashboard-row__resources,
+  .dashboard-row__ceph-status {
+    order: initial;
+  }
+
+  .dashboard-row__resources {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .dashboard-row__ceph-status {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+}
+
+@media (min-width: 1904px) {
+  .dashboard-layout {
+    height: calc(100vh - 54px);
+    height: calc(100dvh - 54px);
+    overflow: hidden;
+  }
+
+  .dashboard-layout > :deep(.performance-card) {
     min-height: 0;
-  }
-
-  .dashboard-row__panel:first-child {
-    display: flex;
-    flex: 1 1 auto;
-  }
-
-  .dashboard-row__panel:first-child :deep(.q-card) {
-    flex: 1 1 auto;
+    flex: 1 1 0;
   }
 }
 </style>

@@ -1,16 +1,15 @@
 <template>
   <q-card flat bordered class="performance-card">
-    <!-- 标题栏 -->
     <q-card-section class="performance-card__header">
       <div class="row items-center justify-between">
-        <div class="performance-card__title">性能</div>
+        <div class="performance-card__title">{{ gettext('性能') }}</div>
 
         <q-btn
           flat
           dense
           no-caps
           color="primary"
-          label="近 24 小时"
+          :label="gettext('近 24 小时')"
           icon-right="chevron_right"
           class="performance-card__action"
         />
@@ -19,174 +18,80 @@
 
     <q-separator />
 
-    <!-- 主体 -->
     <q-card-section class="performance-card__body">
-      <div class="row">
-        <!-- Ceph 使用率 -->
-        <div class="col-3 usage-section">
-          <div class="usage-section__title">使用率</div>
+      <div class="performance-layout">
+        <div class="usage-column">
+          <div class="usage-section">
+            <div class="usage-section__title">{{ gettext('使用率') }}</div>
 
-          <div class="half-gauge">
-            <div class="half-gauge__track">
-              <div class="half-gauge__progress"></div>
+            <div class="half-gauge">
+              <div class="half-gauge__track">
+                <div
+                  class="half-gauge__progress"
+                  :style="{
+                    background: `conic-gradient(from 270deg, #1976d2 0deg, #1976d2 ${
+                      usage * 1.8
+                    }deg, transparent ${usage * 1.8}deg, transparent 360deg)`,
+                  }"
+                ></div>
 
-              <div class="half-gauge__center">
-                <div class="half-gauge__value">55<span>%</span></div>
+                <div class="half-gauge__center">
+                  <div class="half-gauge__value">
+                    {{ usage.toFixed(0) }}<span>%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="usage-section__label">{{ gettext('Ceph 使用率') }}</div>
+
+            <div class="usage-section__caption">
+              {{ gettext('已使用') }} {{ formatBytes(pgmap.bytes_used as number) }} /
+              {{ gettext('总容量') }} {{ formatBytes(pgmap.bytes_total as number) }}
+            </div>
+
+            <div
+              v-if="recovery"
+              class="recovery-section"
+            >
+              <div class="recovery-heading">
+                <span>{{ gettext('Recovery') }} / {{ gettext('Rebalance') }}</span>
+                <strong>{{ recovery.recovered }} / {{ recovery.total }}</strong>
+              </div>
+              <q-linear-progress
+                size="6px"
+                :value="recovery.percent / 100"
+                color="info"
+                track-color="blue-grey-1"
+              />
+              <div
+                v-if="recovery.speed"
+                class="recovery-meta"
+              >
+                <span>{{ formatBytes(recovery.speed) }}/s</span>
+                <span>{{ formatDuration(recovery.remainingSeconds) }} {{ gettext('left') }}</span>
               </div>
             </div>
           </div>
-
-          <div class="usage-section__label">Ceph 使用率</div>
-
-          <div class="usage-section__caption">已使用 11 TB / 总容量 20 TB</div>
         </div>
 
-        <!-- 性能指标 -->
-        <div class="col-9 metrics-section">
-          <div class="row q-col-gutter-sm q-row-gutter-sm">
-            <!-- 读取带宽 -->
-            <div class="col-6">
-              <div class="metric-card">
-                <div class="metric-card__header">
-                  <span class="metric-card__label"> 读取带宽 </span>
-
-                  <span class="metric-card__value"> 428 MB/s </span>
-                </div>
-
-                <div class="sparkline">
-                  <svg viewBox="0 0 220 42" preserveAspectRatio="none" class="sparkline__svg">
-                    <defs>
-                      <linearGradient id="readGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="#1976d2" stop-opacity="0.16" />
-                        <stop offset="100%" stop-color="#1976d2" stop-opacity="0" />
-                      </linearGradient>
-                    </defs>
-
-                    <path
-                      d="M0 32 L18 29 L36 31 L54 22 L72 25 L90 18 L108 21 L126 13 L144 17 L162 10 L180 15 L198 8 L220 11 L220 42 L0 42 Z"
-                      fill="url(#readGradient)"
-                    />
-
-                    <path
-                      d="M0 32 L18 29 L36 31 L54 22 L72 25 L90 18 L108 21 L126 13 L144 17 L162 10 L180 15 L198 8 L220 11"
-                      fill="none"
-                      stroke="#1976d2"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            <!-- 写入带宽 -->
-            <div class="col-6">
-              <div class="metric-card">
-                <div class="metric-card__header">
-                  <span class="metric-card__label"> 写入带宽 </span>
-
-                  <span class="metric-card__value"> 186 MB/s </span>
-                </div>
-
-                <div class="sparkline">
-                  <svg viewBox="0 0 220 42" preserveAspectRatio="none" class="sparkline__svg">
-                    <defs>
-                      <linearGradient id="writeGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="#27a474" stop-opacity="0.16" />
-                        <stop offset="100%" stop-color="#27a474" stop-opacity="0" />
-                      </linearGradient>
-                    </defs>
-
-                    <path
-                      d="M0 27 L18 30 L36 25 L54 28 L72 20 L90 24 L108 17 L126 22 L144 15 L162 19 L180 11 L198 16 L220 13 L220 42 L0 42 Z"
-                      fill="url(#writeGradient)"
-                    />
-
-                    <path
-                      d="M0 27 L18 30 L36 25 L54 28 L72 20 L90 24 L108 17 L126 22 L144 15 L162 19 L180 11 L198 16 L220 13"
-                      fill="none"
-                      stroke="#27a474"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            <!-- 读取 IOPS -->
-            <div class="col-6">
-              <div class="metric-card">
-                <div class="metric-card__header">
-                  <span class="metric-card__label"> 读取 IOPS </span>
-
-                  <span class="metric-card__value"> 3,842 </span>
-                </div>
-
-                <div class="sparkline">
-                  <svg viewBox="0 0 220 42" preserveAspectRatio="none" class="sparkline__svg">
-                    <defs>
-                      <linearGradient id="readIopsGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="#6f73d9" stop-opacity="0.16" />
-                        <stop offset="100%" stop-color="#6f73d9" stop-opacity="0" />
-                      </linearGradient>
-                    </defs>
-
-                    <path
-                      d="M0 31 L18 23 L36 26 L54 18 L72 22 L90 12 L108 19 L126 15 L144 20 L162 9 L180 13 L198 7 L220 12 L220 42 L0 42 Z"
-                      fill="url(#readIopsGradient)"
-                    />
-
-                    <path
-                      d="M0 31 L18 23 L36 26 L54 18 L72 22 L90 12 L108 19 L126 15 L144 20 L162 9 L180 13 L198 7 L220 12"
-                      fill="none"
-                      stroke="#6f73d9"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            <!-- 写入 IOPS -->
-            <div class="col-6">
-              <div class="metric-card">
-                <div class="metric-card__header">
-                  <span class="metric-card__label"> 写入 IOPS </span>
-
-                  <span class="metric-card__value"> 1,926 </span>
-                </div>
-
-                <div class="sparkline">
-                  <svg viewBox="0 0 220 42" preserveAspectRatio="none" class="sparkline__svg">
-                    <defs>
-                      <linearGradient id="writeIopsGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="#e59b3a" stop-opacity="0.16" />
-                        <stop offset="100%" stop-color="#e59b3a" stop-opacity="0" />
-                      </linearGradient>
-                    </defs>
-
-                    <path
-                      d="M0 29 L18 27 L36 30 L54 24 L72 26 L90 19 L108 22 L126 16 L144 18 L162 14 L180 17 L198 11 L220 15 L220 42 L0 42 Z"
-                      fill="url(#writeIopsGradient)"
-                    />
-
-                    <path
-                      d="M0 29 L18 27 L36 30 L54 24 L72 26 L90 19 L108 22 L126 16 L144 18 L162 14 L180 17 L198 11 L220 15"
-                      fill="none"
-                      stroke="#e59b3a"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </div>
-              </div>
-            </div>
+        <div class="performance-charts">
+          <div class="chart-block">
+            <LineMetricChart
+              :x-data="chartXAxis"
+              :series="bandwidthSeries"
+              unit-type="bytespersecond"
+              power-of-two
+              :height="212"
+            />
+          </div>
+          <div class="chart-block">
+            <LineMetricChart
+              :x-data="chartXAxis"
+              :series="iopsSeries"
+              y-unit="IOPS"
+              :height="212"
+            />
           </div>
         </div>
       </div>
@@ -194,18 +99,132 @@
   </q-card>
 </template>
 
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, shallowRef } from 'vue';
+import LineMetricChart from '@/components/LineMetricChart.vue';
+import type { PveRecord } from '@/api/resources';
+import { getCephStatus } from '@/api/ceph';
+import { gettext } from '@/locale';
+import { formatBytes, usedPercent } from '@/utils/pveFormat';
+
+type PerformancePoint = {
+  time: string;
+  reads: number;
+  writes: number;
+  readIops: number;
+  writeIops: number;
+};
+
+const status = shallowRef<PveRecord>({});
+const performanceHistory = shallowRef<PerformancePoint[]>([]);
+const { node = 'localhost' } = defineProps<{ node?: string }>();
+let statusTimer: ReturnType<typeof setInterval> | undefined;
+
+const pgmap = computed(() => (status.value.pgmap || {}) as PveRecord);
+const usage = computed(() =>
+  usedPercent(Number(pgmap.value.bytes_used), Number(pgmap.value.bytes_total))
+);
+const chartXAxis = computed(() => performanceHistory.value.map((item) => item.time));
+const bandwidthSeries = computed(() => [
+  {
+    name: gettext('Reads'),
+    data: performanceHistory.value.map((item) => item.reads),
+    color: '#ef6c00',
+  },
+  {
+    name: gettext('Writes'),
+    data: performanceHistory.value.map((item) => item.writes),
+    color: '#c62828',
+  },
+]);
+const iopsSeries = computed(() => [
+  {
+    name: `IOPS: ${gettext('Reads')}`,
+    data: performanceHistory.value.map((item) => item.readIops),
+    color: '#00838f',
+  },
+  {
+    name: `IOPS: ${gettext('Writes')}`,
+    data: performanceHistory.value.map((item) => item.writeIops),
+    color: '#1976d2',
+  },
+]);
+const recovery = computed(() => {
+  const total =
+    Number(
+      pgmap.value.misplaced_total || pgmap.value.unfound_total || pgmap.value.degraded_total
+    ) || 0;
+  const unhealthy =
+    Number(pgmap.value.degraded_objects || 0) +
+    Number(pgmap.value.misplaced_objects || 0) +
+    Number(pgmap.value.unfound_objects || 0);
+  return total > 0
+    ? {
+        total,
+        recovered: Math.max(0, total - unhealthy),
+        percent: Math.max(0, Math.min(100, ((total - unhealthy) / total) * 100)),
+        speed: Number(pgmap.value.recovering_bytes_per_sec) || 0,
+        remainingSeconds:
+          Number(pgmap.value.recovering_bytes_per_sec) > 0
+            ? unhealthy / (Number(pgmap.value.recovering_bytes_per_sec) / (4 * 1024 * 1024))
+            : 0,
+      }
+    : null;
+});
+
+function formatDuration(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '-';
+  const value = Math.round(seconds);
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  const remaining = value % 60;
+  return [hours && `${hours}h`, minutes && `${minutes}m`, `${remaining}s`]
+    .filter(Boolean)
+    .join(' ');
+}
+
+async function refreshStatus() {
+  const response = await getCephStatus(node);
+  status.value = response.data || {};
+  const latestPgmap = (status.value.pgmap || {}) as PveRecord;
+  const now = new Date();
+  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(
+    2,
+    '0'
+  )}:${String(now.getSeconds()).padStart(2, '0')}`;
+  performanceHistory.value = [
+    ...performanceHistory.value,
+    {
+      time,
+      reads: Number(latestPgmap.read_bytes_sec) || 0,
+      writes: Number(latestPgmap.write_bytes_sec) || 0,
+      readIops: Number(latestPgmap.read_op_per_sec) || 0,
+      writeIops: Number(latestPgmap.write_op_per_sec) || 0,
+    },
+  ].slice(-30);
+}
+
+onMounted(() => {
+  void refreshStatus();
+  statusTimer = setInterval(() => void refreshStatus(), 5000);
+});
+
+onUnmounted(() => {
+  if (statusTimer) clearInterval(statusTimer);
+});
+</script>
 
 <style scoped>
 .performance-card {
+  display: flex;
   width: 100%;
+  min-height: 0;
+  flex-direction: column;
   background: #ffffff;
   border-color: #e5e7eb;
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(37, 99, 235, 0.04);
 }
-
-/* ---------------- header ---------------- */
 
 .performance-card__header {
   padding: 10px 14px;
@@ -224,22 +243,28 @@
   font-size: 12px;
 }
 
-/* ---------------- body ---------------- */
-
 .performance-card__body {
-  padding: 14px;
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 0;
 }
 
-/* ---------------- usage ---------------- */
+.performance-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+}
+
+.usage-column {}
 
 .usage-section {
   display: flex;
-  min-width: 220px;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 4px 22px 6px 8px;
-  border-right: 1px solid #edf0f3;
+  justify-content: flex-start;
+  min-height: 212px;
+  padding: 16px 28px;
+  text-align: center;
+  box-sizing: border-box;
 }
 
 .usage-section__title {
@@ -252,26 +277,26 @@
 
 .usage-section__label {
   margin-top: 3px;
-  color: #4c5564;
+  color: #333;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 18px;
 }
 
 .usage-section__caption {
   margin-top: 2px;
-  color: #929baa;
-  font-size: 11px;
-  line-height: 16px;
+  color: #333;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
 }
-
-/* ---------------- half gauge ---------------- */
 
 .half-gauge {
   position: relative;
   width: 140px;
   height: 82px;
   overflow: hidden;
+  margin: 10px 0 12px;
 }
 
 .half-gauge__track {
@@ -326,96 +351,76 @@
   font-weight: 400;
 }
 
-/* ---------------- metrics ---------------- */
-
-.metrics-section {
-  padding-left: 18px;
+.recovery-section {
+  align-self: stretch;
+  display: grid;
+  gap: 9px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #dfe1e6;
+  text-align: left;
 }
 
-.metric-card {
-  height: 88px;
-  overflow: hidden;
-  padding: 9px 11px 0;
-  background: #f8fafc;
-  border: 1px solid #e8edf3;
-  border-radius: 6px;
-  transition:
-    background-color 0.2s ease,
-    border-color 0.2s ease;
-}
-
-.metric-card:hover {
-  background: #f6f9fd;
-  border-color: #d7e3f1;
-}
-
-.metric-card__header {
-  display: flex;
-  min-width: 0;
+.recovery-heading,
+.recovery-meta {
   align-items: center;
+  display: flex;
   justify-content: space-between;
-  gap: 12px;
 }
 
-.metric-card__label {
-  overflow: hidden;
-  color: #7b8494;
-  font-size: 11px;
-  line-height: 18px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.recovery-heading span,
+.recovery-meta {
+  color: #666;
+  font-size: 12px;
 }
 
-.metric-card__value {
-  flex-shrink: 0;
-  color: #303846;
+.recovery-heading strong {
+  color: #333;
   font-size: 13px;
-  font-weight: 600;
-  line-height: 18px;
-  font-variant-numeric: tabular-nums;
 }
 
-/* ---------------- sparkline ---------------- */
-
-.sparkline {
-  width: 100%;
-  height: 48px;
-  margin-top: 2px;
+.recovery-meta {
+  gap: 10px;
 }
 
-.sparkline__svg {
-  display: block;
-  width: 100%;
-  height: 100%;
+.performance-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 0;
 }
 
-/* ---------------- responsive ---------------- */
-
-@media (max-width: 1023px) {
-  .usage-section {
-    min-width: 0;
-  }
+.chart-block {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
-@media (max-width: 767px) {
-  .performance-card__body > .row {
-    display: block;
-  }
+.chart-block + .chart-block {}
 
-  .usage-section,
-  .metrics-section {
-    width: 100%;
-    max-width: 100%;
+@media (max-width: 900px) {
+  .performance-layout {
+    grid-template-columns: 1fr;
   }
 
   .usage-section {
-    padding: 0 0 16px;
+    min-height: auto;
+    height: auto;
+  }
+
+  .usage-column {
     border-right: 0;
-    border-bottom: 1px solid #edf0f3;
+  }
+}
+
+@media (max-width: 760px) {
+  .performance-charts {
+    grid-template-columns: 1fr;
   }
 
-  .metrics-section {
-    padding: 16px 0 0;
+  .chart-block + .chart-block {
+    border-left: 0;
   }
 }
 </style>
+
+

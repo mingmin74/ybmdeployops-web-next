@@ -1,11 +1,22 @@
 <template>
-  <q-card flat bordered class="resources-card">
+  <q-card
+    flat
+    bordered
+    class="resources-card"
+  >
     <!-- 标题 -->
     <q-card-section class="resources-card__header">
       <div class="row items-center justify-between">
         <div class="resources-card__title">资源</div>
 
-        <q-btn flat dense round size="sm" icon="chevron_right" color="grey-6" />
+        <q-btn
+          flat
+          dense
+          round
+          size="sm"
+          icon="chevron_right"
+          color="grey-6"
+        />
       </div>
     </q-card-section>
 
@@ -20,15 +31,23 @@
 
           <div class="half-gauge">
             <div class="half-gauge__track">
-              <div class="half-gauge__progress half-gauge__progress--cpu"></div>
+              <div
+                class="half-gauge__progress half-gauge__progress--cpu"
+                :style="gaugeStyle(resources.cpu.percent)"
+              ></div>
 
               <div class="half-gauge__center">
-                <div class="half-gauge__value">42<span>%</span></div>
+                <div class="half-gauge__value">
+                  {{ resources.cpu.percent }}
+                  <span>%</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="resource-item__caption">已使用 42%</div>
+          <div class="resource-item__caption">
+            {{ gettext('已使用') }} {{ resources.cpu.percent }}%
+          </div>
         </div>
 
         <!-- 内存 -->
@@ -37,15 +56,21 @@
 
           <div class="half-gauge">
             <div class="half-gauge__track">
-              <div class="half-gauge__progress half-gauge__progress--memory"></div>
+              <div
+                class="half-gauge__progress half-gauge__progress--memory"
+                :style="gaugeStyle(resources.memory.percent)"
+              ></div>
 
               <div class="half-gauge__center">
-                <div class="half-gauge__value">68<span>%</span></div>
+                <div class="half-gauge__value">
+                  {{ resources.memory.percent }}
+                  <span>%</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="resource-item__caption">174 GB / 256 GB</div>
+          <div class="resource-item__caption">{{ resources.memory.caption }}</div>
         </div>
 
         <!-- 存储 -->
@@ -54,22 +79,129 @@
 
           <div class="half-gauge">
             <div class="half-gauge__track">
-              <div class="half-gauge__progress half-gauge__progress--storage"></div>
+              <div
+                class="half-gauge__progress half-gauge__progress--storage"
+                :style="gaugeStyle(resources.storage.percent)"
+              ></div>
 
               <div class="half-gauge__center">
-                <div class="half-gauge__value">55<span>%</span></div>
+                <div class="half-gauge__value">
+                  {{ resources.storage.percent }}
+                  <span>%</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="resource-item__caption">11 TB / 20 TB</div>
+          <div class="resource-item__caption">{{ resources.storage.caption }}</div>
         </div>
       </div>
     </q-card-section>
   </q-card>
 </template>
 
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, shallowRef } from 'vue';
+import { getClusterResources, type PveRecord } from '@/api/resources';
+import { gettext } from '@/locale';
+import { formatBytes } from '@/utils/pveFormat';
+
+type ResourceRow = PveRecord & {
+  type?: string;
+  id?: string;
+  storage?: string;
+  status?: string;
+  shared?: boolean | number;
+  cpu?: number;
+  maxcpu?: number;
+  mem?: number;
+  maxmem?: number;
+  disk?: number;
+  maxdisk?: number;
+};
+
+type ResourceUsage = {
+  used: number;
+  total: number;
+};
+
+const records = shallowRef<ResourceRow[]>([]);
+let refreshTimer: number | undefined;
+
+const resources = computed(() => {
+  const cpu: ResourceUsage = { used: 0, total: 0 };
+  const memory: ResourceUsage = { used: 0, total: 0 };
+  const storage: ResourceUsage = { used: 0, total: 0 };
+  const countedStorage = new Set<string>();
+
+  for (const record of records.value) {
+    if (record.type === 'node') {
+      const maxCpu = numberValue(record.maxcpu);
+      cpu.used += numberValue(record.cpu) * maxCpu;
+      cpu.total += maxCpu;
+      memory.used += numberValue(record.mem);
+      memory.total += numberValue(record.maxmem);
+      continue;
+    }
+
+    if (record.type !== 'storage' || record.status === 'unknown') continue;
+
+    // Matches PVE dc/Summary.js: shared storage is counted once, whereas local
+    // or non-shared storage is counted separately for each node.
+    const storageId = !record.shared || record.storage === 'local' ? record.id : record.storage;
+    if (!storageId || countedStorage.has(storageId)) continue;
+
+    storage.used += numberValue(record.disk);
+    storage.total += numberValue(record.maxdisk);
+    countedStorage.add(storageId);
+  }
+
+  return {
+    cpu: toDisplayUsage(cpu, `${gettext('已使用')} ${usagePercent(cpu)}%`),
+    memory: toDisplayUsage(memory),
+    storage: toDisplayUsage(storage),
+  };
+});
+
+function numberValue(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function usagePercent(usage: ResourceUsage) {
+  if (usage.total <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((usage.used / usage.total) * 100)));
+}
+
+function toDisplayUsage(usage: ResourceUsage, caption?: string) {
+  return {
+    percent: usagePercent(usage),
+    caption: caption || `${formatBytes(usage.used)} / ${formatBytes(usage.total)}`,
+  };
+}
+
+function gaugeStyle(percent: number) {
+  return { '--gauge-progress': `${percent * 1.8}deg` };
+}
+
+async function refreshResources() {
+  try {
+    const response = await getClusterResources();
+    records.value = Array.isArray(response.data) ? response.data : [];
+  } catch {
+    // Keep the latest successful snapshot visible while the periodic request retries.
+  }
+}
+
+onMounted(() => {
+  void refreshResources();
+  refreshTimer = window.setInterval(() => void refreshResources(), 3000);
+});
+
+onBeforeUnmount(() => {
+  if (refreshTimer) window.clearInterval(refreshTimer);
+});
+</script>
 
 <style scoped>
 .resources-card {
@@ -153,47 +285,38 @@
   border-radius: 50%;
 }
 
-/*
- * 静态进度。
- * 目前只是调 UI，所以直接通过角度控制。
- * 后面接数据时再改成 style 动态传值。
- */
-
 .half-gauge__progress {
   position: absolute;
   inset: 0;
   border-radius: 50%;
 }
 
-/* CPU 42% */
 .half-gauge__progress--cpu {
   background: conic-gradient(
     from 270deg,
     #1976d2 0deg,
-    #1976d2 75.6deg,
-    transparent 75.6deg,
+    #1976d2 var(--gauge-progress),
+    transparent var(--gauge-progress),
     transparent 360deg
   );
 }
 
-/* 内存 68% */
 .half-gauge__progress--memory {
   background: conic-gradient(
     from 270deg,
     #5b8def 0deg,
-    #5b8def 122.4deg,
-    transparent 122.4deg,
+    #5b8def var(--gauge-progress),
+    transparent var(--gauge-progress),
     transparent 360deg
   );
 }
 
-/* 存储 55% */
 .half-gauge__progress--storage {
   background: conic-gradient(
     from 270deg,
     #27a474 0deg,
-    #27a474 99deg,
-    transparent 99deg,
+    #27a474 var(--gauge-progress),
+    transparent var(--gauge-progress),
     transparent 360deg
   );
 }
