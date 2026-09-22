@@ -60,23 +60,22 @@ onMounted(() => void loadZones());
   <div class="q-ma-md network-page">
     <q-card class="q-mt-sm no-border-radius no-shadow">
       <q-card-section class="q-pb-none">
-        <div class="row items-center q-gutter-md">
+        <div class="network-page__toolbar">
           <NodeSelectTable
             v-model="selectedNode"
             disable-offline
-            field-style="standard"
-            :label="gettext('Node')"
           />
           <q-select
             v-model="selectedZone"
+            square
+            outlined
             dense
             options-dense
             emit-value
             map-options
-            class="network-page__zone q-field--with-bottom"
+            class="u-dense u-size-12 network-page__zone"
             :loading="loadingZones"
             :options="zoneOptions"
-            :label="gettext('Zone')"
           />
           <q-btn
             no-caps
@@ -150,7 +149,33 @@ onMounted(() => void loadZones());
 </template>
 
 <style scoped>
+.network-page__toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .network-page__zone {
   width: 260px;
+}
+
+.network-page__zone :deep(.q-field__control),
+.network-page__zone :deep(.q-field__marginal) {
+  height: 28px !important;
+  min-height: 28px !important;
+}
+
+.network-page__zone :deep(.q-field__native),
+.network-page__zone :deep(.q-field__input) {
+  line-height: 28px;
+  min-height: 28px !important;
+  padding-bottom: 0;
+  padding-top: 0;
+}
+
+.network-page__zone :deep(.q-field--outlined .q-field__control::before),
+.network-page__zone :deep(.q-field--outlined .q-field__control::after) {
+  border: 1px solid #cccccc !important;
 }
 </style>

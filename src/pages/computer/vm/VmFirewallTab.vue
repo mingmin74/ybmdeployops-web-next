@@ -13,5 +13,11 @@ const basePath = computed(
 </script>
 
 <template>
-  <FirewallResourcePanel :base-path="basePath" firewall-type="vm" show-aliases show-ipset />
+  <FirewallResourcePanel
+    :base-path="basePath"
+    firewall-type="vm"
+    show-aliases
+    show-ipset
+    left-navigation
+  />
 </template>

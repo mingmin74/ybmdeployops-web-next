@@ -82,6 +82,7 @@ onBeforeUnmount(() => {
 <template>
   <q-table
     flat
+    dense
     row-key="upid"
     table-header-class="u-table-header"
     class="overlay-log-table"
@@ -164,5 +165,16 @@ onBeforeUnmount(() => {
   z-index: 1;
   top: 0;
   background: #f2f5fc;
+}
+
+.overlay-log-table :deep(thead tr),
+.overlay-log-table :deep(tbody td) {
+  height: 32px;
+  font-size: 12px;
+}
+
+.overlay-log-table :deep(th),
+.overlay-log-table :deep(td) {
+  padding: 0 8px !important;
 }
 </style>

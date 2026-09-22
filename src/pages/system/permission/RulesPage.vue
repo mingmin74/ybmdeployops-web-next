@@ -17,10 +17,14 @@ import { textValue } from '@/utils/pveFormat';
 
 type RuleRow = AccessRule & { index: number; propagateText: string };
 type AclType = 'user' | 'group' | 'apitoken';
-const props = withDefaults(defineProps<{ resourcePath?: string; vnetAcl?: boolean }>(), {
-  resourcePath: '',
-  vnetAcl: false,
-});
+const props = withDefaults(
+  defineProps<{ resourcePath?: string; vnetAcl?: boolean; inactive?: boolean }>(),
+  {
+    resourcePath: '',
+    vnetAcl: false,
+    inactive: false,
+  }
+);
 
 const loading = ref(false);
 const dialogLoading = ref(false);
@@ -49,8 +53,8 @@ const form = reactive({
   vlan: '',
 });
 
-const isFixedPath = computed(() => Boolean(props.resourcePath));
-const isVnetAcl = computed(() => Boolean(props.vnetAcl && props.resourcePath));
+const isFixedPath = computed(() => Boolean(props.resourcePath) || props.inactive);
+const isVnetAcl = computed(() => Boolean(props.vnetAcl));
 const selectedRule = computed(() => selectedRules.value[0]);
 const canRemove = computed(() => selectedRules.value.length === 1);
 const roleRows = computed<PveRecord[]>(() => roleOptions.value.map((role) => ({ ...role })));
@@ -87,6 +91,7 @@ const filteredRules = computed(() => {
   const query = filter.value.trim().toLowerCase();
   return rules.value
     .filter((rule) => {
+      if (props.inactive) return false;
       if (!props.resourcePath) return true;
       if (!isVnetAcl.value) return props.resourcePath === rule.path;
       return (
@@ -258,6 +263,11 @@ function formatPrivileges(privileges?: string) {
     .join(', ');
 }
 async function reload() {
+  if (props.inactive) {
+    rules.value = [];
+    selectedRules.value = [];
+    return;
+  }
   loading.value = true;
   try {
     const response = await getAccessRules();
@@ -380,6 +390,10 @@ watch(
   () => props.resourcePath,
   () => void reload()
 );
+watch(
+  () => props.inactive,
+  () => void reload()
+);
 onMounted(() => void reload());
 defineExpose({ reload });
 </script>
@@ -413,6 +427,7 @@ defineExpose({ reload });
               <q-item
                 v-close-popup
                 clickable
+                :disable="inactive"
                 @click="openForm('group')"
               >
                 <q-item-section>{{ gettext('Group Permission') }}</q-item-section>
@@ -420,6 +435,7 @@ defineExpose({ reload });
               <q-item
                 v-close-popup
                 clickable
+                :disable="inactive"
                 @click="openForm('user')"
               >
                 <q-item-section>{{ gettext('User Permission') }}</q-item-section>
@@ -427,6 +443,7 @@ defineExpose({ reload });
               <q-item
                 v-close-popup
                 clickable
+                :disable="inactive"
                 @click="openForm('apitoken')"
               >
                 <q-item-section>{{ gettext('API Token Permission') }}</q-item-section>

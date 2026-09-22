@@ -18,6 +18,7 @@ const props = defineProps<{
 const emit = defineEmits<{ saved: [] }>();
 
 const isCreate = computed(() => !props.vnetId);
+const showAdvanced = shallowRef(false);
 
 const zoneOptions = shallowRef<{ label: string; value: string; type: SdnZoneType }[]>([]);
 
@@ -189,7 +190,9 @@ async function load() {
 }
 
 watch(visible, (open) => {
-  if (open) void load();
+  if (!open) return;
+  showAdvanced.value = false;
+  void load();
 });
 
 async function save() {
@@ -263,12 +266,17 @@ async function save() {
               />
             </div>
           </div>
-          <q-expansion-item dense :label="gettext('Advanced')">
+          <div
+            v-if="showAdvanced"
+            class="q-mt-sm"
+          >
             <div class="row q-col-gutter-lg">
               <div class="col-6">
                 <q-checkbox
                   v-model="form['isolate-ports']"
                   dense
+                  right-label
+                  color="primary"
                   :label="gettext('Isolate Ports')"
                 />
               </div>
@@ -276,15 +284,25 @@ async function save() {
                 <q-checkbox
                   v-model="form.vlanaware"
                   dense
+                  right-label
+                  color="primary"
                   :disable="vlanAwareDisabled"
                   :label="gettext('VLAN Aware')"
                 />
               </div>
             </div>
-          </q-expansion-item>
+          </div>
         </div>
       </div>
       <template #foot>
+        <q-checkbox
+          v-model="showAdvanced"
+          dense
+          right-label
+          color="primary"
+          class="q-mr-auto"
+          :label="gettext('Advanced')"
+        />
         <q-btn
           v-close-popup
           no-caps

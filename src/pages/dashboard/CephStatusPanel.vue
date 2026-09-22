@@ -69,7 +69,10 @@
 
         <div class="col-6 ceph-section ceph-section--pg">
           <div class="pg-content">
-            <div class="pg-donut" :style="donutStyle">
+            <div
+              class="pg-donut"
+              :style="donutStyle"
+            >
               <div class="pg-donut__inner">
                 <div class="pg-donut__value">{{ totalPgs }}</div>
                 <div class="pg-donut__label">PGs</div>
@@ -82,7 +85,10 @@
                 :key="legend.key"
                 class="pg-legend__item"
               >
-                <span class="pg-legend__dot" :style="{ background: legend.color }"></span>
+                <span
+                  class="pg-legend__dot"
+                  :style="{ background: legend.color }"
+                ></span>
                 <span class="pg-legend__label">{{ legend.label }}：</span>
                 <span class="pg-legend__value">{{ legend.count }}</span>
               </div>
@@ -114,7 +120,9 @@
           <span
             class="health-warnings__severity"
             :class="`health-warnings__severity--${warning.severityClass}`"
-          >{{ warning.severityLabel }}：</span>
+          >
+            {{ warning.severityLabel }}：
+          </span>
           <span class="health-warnings__summary">{{ warning.summary }}</span>
         </div>
       </div>
@@ -123,7 +131,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, shallowRef } from 'vue';
+import { computed, onBeforeUnmount, shallowRef, watch } from 'vue';
 import type { PveRecord } from '@/api/resources';
 import { getCephStatus, getCephMetadata } from '@/api/ceph';
 import { gettext } from '@/locale';
@@ -139,7 +147,10 @@ type WarningRow = {
 
 const status = shallowRef<PveRecord>({});
 const metadata = shallowRef<PveRecord>({});
-const { node = 'localhost' } = defineProps<{ node?: string }>();
+const { node = 'localhost', cephAvailable = true } = defineProps<{
+  node?: string;
+  cephAvailable?: boolean;
+}>();
 let statusTimer: ReturnType<typeof setInterval> | undefined;
 let metadataTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -157,18 +168,18 @@ const warnings = computed<WarningRow[]>(() => {
       const severityClass = rawSeverity.includes('ERR')
         ? 'error'
         : rawSeverity.includes('WARN')
-        ? 'warn'
-        : rawSeverity.includes('OK')
-        ? 'ok'
-        : 'muted';
+          ? 'warn'
+          : rawSeverity.includes('OK')
+            ? 'ok'
+            : 'muted';
       const severityLabel =
         severityClass === 'error'
           ? gettext('错误')
           : severityClass === 'warn'
-          ? gettext('警告')
-          : severityClass === 'ok'
-          ? gettext('正常')
-          : gettext('未知');
+            ? gettext('警告')
+            : severityClass === 'ok'
+              ? gettext('正常')
+              : gettext('未知');
       return {
         id,
         severity: rawSeverity,
@@ -183,9 +194,10 @@ const osdStatus = computed(() => {
   const total = Number(osdmap.value.num_osds) || 0;
   const up = Number(osdmap.value.num_up_osds) || 0;
   const inside = Number(osdmap.value.num_in_osds) || 0;
-  const downInRaw = warnings.value
-    .find((warning) => warning.id === 'OSD_DOWN')
-    ?.summary.match(/(\d+) osds down/)?.[1] || '0';
+  const downInRaw =
+    warnings.value
+      .find((warning) => warning.id === 'OSD_DOWN')
+      ?.summary.match(/(\d+) osds down/)?.[1] || '0';
   const down = total - up;
   const downInCount = Number(downInRaw);
   const upIn = Math.max(0, inside - downInCount);
@@ -285,11 +297,8 @@ const pgLegendItems = computed(() => {
 
 const donutStyle = computed(() => {
   const total = totalPgs.value || 1;
-  const segments = [
-    { count: pgLegendItems.value[0].count, color: pgLegendItems.value[0].color },
-    { count: pgLegendItems.value[1].count, color: pgLegendItems.value[1].color },
-    { count: pgLegendItems.value[2].count, color: pgLegendItems.value[2].color },
-  ];
+  const [clean, warning, critical] = pgLegendItems.value;
+  const segments = [clean, warning, critical].filter((segment) => segment !== undefined);
   let deg = 0;
   const parts: string[] = [];
   segments.forEach((segment) => {
@@ -328,10 +337,11 @@ const health = computed(() => {
     };
   }
   if (warnings.value.length) {
+    const [firstWarning] = warnings.value;
     return {
       icon: 'info',
       iconClass: 'text-primary',
-      summary: warnings.value[0].summary,
+      summary: firstWarning?.summary || gettext('集群存在健康提示，请检查健康警告详情'),
     };
   }
   return {
@@ -353,15 +363,31 @@ async function refreshData() {
   await Promise.allSettled([refreshStatus(), refreshMetadata()]);
 }
 
-onMounted(() => {
+function stopPolling() {
+  if (statusTimer) clearInterval(statusTimer);
+  if (metadataTimer) clearInterval(metadataTimer);
+  statusTimer = undefined;
+  metadataTimer = undefined;
+}
+
+function startPolling() {
+  stopPolling();
   void refreshData();
   statusTimer = setInterval(() => void refreshStatus(), 5000);
   metadataTimer = setInterval(() => void refreshMetadata(), 15000);
-});
+}
+
+watch(
+  () => cephAvailable,
+  (available) => {
+    if (available) startPolling();
+    else stopPolling();
+  },
+  { immediate: true }
+);
 
 onBeforeUnmount(() => {
-  if (statusTimer) clearInterval(statusTimer);
-  if (metadataTimer) clearInterval(metadataTimer);
+  stopPolling();
 });
 </script>
 

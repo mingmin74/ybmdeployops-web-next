@@ -129,8 +129,8 @@ const canViewSnapshots = computed(
     !isTemplate.value &&
     Boolean(
       vmCaps.value['VM.Snapshot'] ||
-      vmCaps.value['VM.Snapshot.Rollback'] ||
-      vmCaps.value['VM.Audit']
+        vmCaps.value['VM.Snapshot.Rollback'] ||
+        vmCaps.value['VM.Audit']
     )
 );
 const canViewFirewall = computed(() => Boolean(vmCaps.value['VM.Audit']));
@@ -887,7 +887,7 @@ onUnmounted(() => {
         <q-tab-panel
           v-if="canManagePermissions"
           name="permissions"
-          class="q-pa-none"
+          class=""
         >
           <VmPermissionsTab :vmid="vmid" />
         </q-tab-panel>

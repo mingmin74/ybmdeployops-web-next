@@ -1,7 +1,7 @@
 <template>
   <div class="q-pa-md dashboard-layout">
     <!-- KPI -->
-    <KpiCards />
+    <KpiCards :ceph-available="cephAvailable" />
 
     <!-- 拓扑 + 资源 / 状态 -->
     <div class="dashboard-row">
@@ -15,7 +15,7 @@
         </div>
 
         <div class="dashboard-row__ceph-status">
-          <CephStatusPanel />
+          <CephStatusPanel :ceph-available="cephAvailable" />
         </div>
 
         <!-- 客户模块暂时隐藏
@@ -33,16 +33,19 @@
       </div>
 
       <div class="col-12 col-lg-6">
-        <CephServicesPanel />
+        <CephServicesPanel :ceph-available="cephAvailable" />
       </div>
     </div>
 
     <!-- 性能 -->
-    <PerformancePanel />
+    <PerformancePanel :ceph-available="cephAvailable" />
   </div>
 </template>
 
 <script setup lang="ts">
+import { onMounted, shallowRef } from 'vue';
+import { probeCeph } from '@/api/cephSetup';
+import { request } from '@/api/request';
 import KpiCards from './KpiCards.vue';
 import TopologyCard from './TopologyCard.vue';
 import ResourcesPanel from './ResourcesPanel.vue';
@@ -50,6 +53,27 @@ import NodesTable from './NodesTable.vue';
 import CephStatusPanel from './CephStatusPanel.vue';
 import CephServicesPanel from './CephServicesPanel.vue';
 import PerformancePanel from './PerformancePanel.vue';
+
+const cephAvailable = shallowRef(false);
+
+async function detectCeph() {
+  try {
+    const response = await request<{ type: string; name: string; local?: number | boolean }[]>(
+      '/cluster/status',
+      { silent: true }
+    );
+    const node = response.data?.find((entry) => entry.type === 'node' && entry.local)?.name;
+    if (!node) return;
+
+    cephAvailable.value = (await probeCeph(node)) === 'ready';
+  } catch {
+    cephAvailable.value = false;
+  }
+}
+
+onMounted(() => {
+  void detectCeph();
+});
 </script>
 
 <style scoped>

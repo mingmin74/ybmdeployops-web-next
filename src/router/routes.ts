@@ -57,6 +57,12 @@ const routes: RouteRecordRaw[] = [
         meta: { auth: true, title: 'Options' },
       },
       {
+        path: 'system/standard-styles',
+        name: 'system-standard-styles',
+        component: () => import('@/pages/system/StandardStylesPage.vue'),
+        meta: { auth: true, title: '标准样式' },
+      },
+      {
         path: 'system/resource-mappings',
         name: 'system-resource-mappings',
         component: () => import('@/pages/system/ResourceMappingsPage.vue'),

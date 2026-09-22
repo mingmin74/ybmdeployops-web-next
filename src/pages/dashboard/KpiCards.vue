@@ -1,11 +1,18 @@
 <template>
   <div class="row q-col-gutter-sm">
     <div class="col-6 col-md-4 col-xl-2">
-      <q-card flat bordered class="kpi-card">
+      <q-card
+        flat
+        bordered
+        class="kpi-card"
+      >
         <q-card-section class="kpi-card__content">
           <div class="row items-center no-wrap">
             <div class="kpi-icon">
-              <q-img src="@/assets/overview/01_cluster_status.png" fit="contain" />
+              <q-img
+                src="@/assets/overview/01_cluster_status.png"
+                fit="contain"
+              />
             </div>
 
             <div class="kpi-main">
@@ -15,19 +22,29 @@
           </div>
 
           <div class="kpi-footer">
-            <span class="status-dot" :class="clusterState.dotClass"></span>
-            <span class="ellipsis"> {{ clusterState.footer }} </span>
+            <span
+              class="status-dot"
+              :class="clusterState.dotClass"
+            ></span>
+            <span class="ellipsis">{{ clusterState.footer }}</span>
           </div>
         </q-card-section>
       </q-card>
     </div>
 
     <div class="col-6 col-md-4 col-xl-2">
-      <q-card flat bordered class="kpi-card">
+      <q-card
+        flat
+        bordered
+        class="kpi-card"
+      >
         <q-card-section class="kpi-card__content">
           <div class="row items-center no-wrap">
             <div class="kpi-icon">
-              <q-img src="@/assets/overview/02_ceph_status.png" fit="contain" />
+              <q-img
+                src="@/assets/overview/02_ceph_status.png"
+                fit="contain"
+              />
             </div>
 
             <div class="kpi-main">
@@ -37,19 +54,29 @@
           </div>
 
           <div class="kpi-footer">
-            <span class="status-dot" :class="cephStateCard.dotClass"></span>
-            <span class="ellipsis"> {{ cephStateCard.footer }} </span>
+            <span
+              class="status-dot"
+              :class="cephStateCard.dotClass"
+            ></span>
+            <span class="ellipsis">{{ cephStateCard.footer }}</span>
           </div>
         </q-card-section>
       </q-card>
     </div>
 
     <div class="col-6 col-md-4 col-xl-2">
-      <q-card flat bordered class="kpi-card">
+      <q-card
+        flat
+        bordered
+        class="kpi-card"
+      >
         <q-card-section class="kpi-card__content">
           <div class="row items-center no-wrap">
             <div class="kpi-icon">
-              <q-img src="@/assets/overview/03_nodes_online.png" fit="contain" />
+              <q-img
+                src="@/assets/overview/03_nodes_online.png"
+                fit="contain"
+              />
             </div>
 
             <div class="kpi-main">
@@ -59,9 +86,13 @@
           </div>
 
           <div class="kpi-footer">
-            <span class="status-dot" :class="nodeStats.offline === 0 ? 'status-dot--success' : 'status-dot--muted'"></span>
+            <span
+              class="status-dot"
+              :class="nodeStats.offline === 0 ? 'status-dot--success' : 'status-dot--muted'"
+            ></span>
             <span class="ellipsis">
-              {{ gettext('离线') }} {{ nodeStats.offline }} · {{ gettext('在线率') }} {{ nodeStats.availability }}
+              {{ gettext('离线') }} {{ nodeStats.offline }} · {{ gettext('在线率') }}
+              {{ nodeStats.availability }}
             </span>
           </div>
         </q-card-section>
@@ -69,11 +100,18 @@
     </div>
 
     <div class="col-6 col-md-4 col-xl-2">
-      <q-card flat bordered class="kpi-card">
+      <q-card
+        flat
+        bordered
+        class="kpi-card"
+      >
         <q-card-section class="kpi-card__content">
           <div class="row items-center no-wrap">
             <div class="kpi-icon">
-              <q-img src="@/assets/overview/04_virtual_machine.png" fit="contain" />
+              <q-img
+                src="@/assets/overview/04_virtual_machine.png"
+                fit="contain"
+              />
             </div>
 
             <div class="kpi-main">
@@ -85,7 +123,8 @@
           <div class="kpi-footer">
             <span class="status-dot status-dot--muted"></span>
             <span class="ellipsis">
-              {{ gettext('运行中') }} {{ vmStats.running }} · {{ gettext('已停止') }} {{ vmStats.stopped }}
+              {{ gettext('运行中') }} {{ vmStats.running }} · {{ gettext('已停止') }}
+              {{ vmStats.stopped }}
             </span>
           </div>
         </q-card-section>
@@ -93,11 +132,18 @@
     </div>
 
     <div class="col-6 col-md-4 col-xl-2">
-      <q-card flat bordered class="kpi-card">
+      <q-card
+        flat
+        bordered
+        class="kpi-card"
+      >
         <q-card-section class="kpi-card__content">
           <div class="row items-center no-wrap">
             <div class="kpi-icon">
-              <q-img src="@/assets/overview/05_lxc_container.png" fit="contain" />
+              <q-img
+                src="@/assets/overview/05_lxc_container.png"
+                fit="contain"
+              />
             </div>
 
             <div class="kpi-main">
@@ -109,7 +155,8 @@
           <div class="kpi-footer">
             <span class="status-dot status-dot--muted"></span>
             <span class="ellipsis">
-              {{ gettext('运行中') }} {{ ctStats.running }} · {{ gettext('已停止') }} {{ ctStats.stopped }}
+              {{ gettext('运行中') }} {{ ctStats.running }} · {{ gettext('已停止') }}
+              {{ ctStats.stopped }}
             </span>
           </div>
         </q-card-section>
@@ -117,11 +164,18 @@
     </div>
 
     <div class="col-6 col-md-4 col-xl-2">
-      <q-card flat bordered class="kpi-card">
+      <q-card
+        flat
+        bordered
+        class="kpi-card"
+      >
         <q-card-section class="kpi-card__content">
           <div class="row items-center no-wrap">
             <div class="kpi-icon">
-              <q-img src="@/assets/overview/06_osd_total.png" fit="contain" />
+              <q-img
+                src="@/assets/overview/06_osd_total.png"
+                fit="contain"
+              />
             </div>
 
             <div class="kpi-main">
@@ -131,9 +185,13 @@
           </div>
 
           <div class="kpi-footer">
-            <span class="status-dot" :class="osdStats.alerting === 0 ? 'status-dot--success' : 'status-dot--muted'"></span>
+            <span
+              class="status-dot"
+              :class="osdStats.alerting === 0 ? 'status-dot--success' : 'status-dot--muted'"
+            ></span>
             <span class="ellipsis">
-              {{ gettext('在线') }} {{ osdStats.online }} · {{ gettext('告警') }} {{ osdStats.alerting }}
+              {{ gettext('在线') }} {{ osdStats.online }} · {{ gettext('告警') }}
+              {{ osdStats.alerting }}
             </span>
           </div>
         </q-card-section>
@@ -142,7 +200,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, shallowRef } from 'vue';
+import { computed, onBeforeUnmount, shallowRef, watch } from 'vue';
 import type { PveRecord } from '@/api/resources';
 import { useResourcesStore } from '@/stores/resources';
 import { getCephMetadata, getCephStatus } from '@/api/ceph';
@@ -151,24 +209,15 @@ import { textValue } from '@/utils/pveFormat';
 
 type WarningRow = { id: string; severity: string; summary: string };
 
-const props = defineProps<{ node?: string }>();
+const props = defineProps<{ node?: string; cephAvailable?: boolean }>();
 const node = props.node || 'localhost';
+const cephAvailable = computed(() => props.cephAvailable ?? true);
 const resources = useResourcesStore();
 resources.usePolling();
 
 function hasStatus(record: PveRecord, ...statuses: string[]) {
   const current = textValue(record.status).toLowerCase();
   return statuses.some((status) => current === status.toLowerCase());
-}
-
-function statusColor(value: string) {
-  const normalized = value.toUpperCase();
-  if (normalized.includes('ERR') || normalized.includes('CRIT') || normalized.includes('DOWN'))
-    return 'negative';
-  if (normalized.includes('WARN') || normalized.includes('OUT') || normalized.includes('UNKNOWN'))
-    return 'warning';
-  if (normalized.includes('OK') || normalized === 'ACTIVE') return 'positive';
-  return 'grey-7';
 }
 
 const nodeStats = computed(() => {
@@ -181,9 +230,7 @@ const nodeStats = computed(() => {
 });
 
 const vmStats = computed(() => {
-  const rows = resources.records.filter(
-    (row) => textValue(row.type) === 'qemu' && !row.template,
-  );
+  const rows = resources.records.filter((row) => textValue(row.type) === 'qemu' && !row.template);
   return {
     total: rows.length,
     running: rows.filter((row) => hasStatus(row, 'running')).length,
@@ -205,17 +252,17 @@ const metadata = shallowRef<PveRecord>({});
 
 const health = computed(() =>
   textValue(
-    (status.value.health as PveRecord | undefined)?.status || status.value.healthstatus || status.value.health,
-    'HEALTH_UNKNOWN',
-  ).toUpperCase(),
+    (status.value.health as PveRecord | undefined)?.status ||
+      status.value.healthstatus ||
+      status.value.health,
+    'HEALTH_UNKNOWN'
+  ).toUpperCase()
 );
-const healthClass = computed(() => statusColor(health.value));
-
 const cephVersion = computed(() => {
   const nodes = (metadata.value.node || {}) as PveRecord;
-  return Object.values(nodes).reduce((latest, item) => {
+  return Object.values(nodes).reduce<string>((latest, item) => {
     const value = item as PveRecord;
-    const version = textValue(value.version && ((value.version as PveRecord).str as PveRecord));
+    const version = textValue((value.version as PveRecord | undefined)?.str);
     return version > latest ? version : latest;
   }, '');
 });
@@ -229,13 +276,12 @@ const clusterName = computed(() => {
     textValue(status.value.cluster_name) ||
     textValue(metadata.value.cluster_name);
   const firstNode = Object.values((metadata.value.node || {}) as PveRecord)[0] as
-    | PveRecord
-    | undefined;
+    PveRecord | undefined;
   const fromNode =
     textValue(firstNode?.cluster) ||
     textValue(firstNode?.['cluster-name']) ||
     textValue(
-      ((firstNode?.config as PveRecord | undefined)?.cluster as PveRecord | undefined)?.name,
+      ((firstNode?.config as PveRecord | undefined)?.cluster as PveRecord | undefined)?.name
     );
   return fromConfig || fromNode || byFsid || gettext('Ceph Cluster');
 });
@@ -248,9 +294,7 @@ const monQuorum = computed(() => {
     : Object.values((metadata.value.mon || {}) as PveRecord);
   const namesArray = Array.isArray(names)
     ? (names as string[]).filter(Boolean)
-    : textValue(names)
-        .split(',')
-        .filter(Boolean);
+    : textValue(names).split(',').filter(Boolean);
   if (mons.length > 0) {
     const required = Math.floor(mons.length / 2) + 1;
     return {
@@ -261,7 +305,10 @@ const monQuorum = computed(() => {
   if (Array.isArray(quorumList)) {
     return { ok: quorumList.length > 0, detail: `${quorumList.length}` };
   }
-  return { ok: Boolean(namesArray.length), detail: namesArray.length ? `${namesArray.length}` : '0' };
+  return {
+    ok: Boolean(namesArray.length),
+    detail: namesArray.length ? `${namesArray.length}` : '0',
+  };
 });
 
 const clusterState = computed(() => {
@@ -271,14 +318,14 @@ const clusterState = computed(() => {
     !monQuorum.value.ok || hasMonErr || warnings.value.some((w) => w.level === 'error')
       ? gettext('异常')
       : badCount > 0
-      ? gettext('警告')
-      : gettext('健康');
+        ? gettext('警告')
+        : gettext('健康');
   const dotClass =
     !monQuorum.value.ok || warnings.value.some((w) => w.level === 'error')
       ? 'status-dot--error'
       : badCount > 0
-      ? 'status-dot--warning'
-      : 'status-dot--success';
+        ? 'status-dot--warning'
+        : 'status-dot--success';
   const footer = `${gettext('集群')} ${clusterName.value} · ${gettext('法定人数')}: ${monQuorum.value.detail}`;
   return { value, dotClass, footer };
 });
@@ -293,10 +340,10 @@ const warnings = computed<(WarningRow & { level: 'ok' | 'warning' | 'error' | 'm
       const level = severity.includes('ERR')
         ? 'error'
         : severity.includes('WARN')
-        ? 'warning'
-        : severity.includes('OK')
-        ? 'ok'
-        : 'muted';
+          ? 'warning'
+          : severity.includes('OK')
+            ? 'ok'
+            : 'muted';
       return {
         id,
         severity,
@@ -307,22 +354,20 @@ const warnings = computed<(WarningRow & { level: 'ok' | 'warning' | 'error' | 'm
 });
 
 const cephStateCard = computed(() => {
-  const value =
-    health.value.includes('ERR')
-      ? gettext('异常')
-      : health.value.includes('WARN')
+  const value = health.value.includes('ERR')
+    ? gettext('异常')
+    : health.value.includes('WARN')
       ? gettext('警告')
       : health.value.includes('OK')
-      ? gettext('健康')
-      : gettext('未知');
-  const dotClass =
-    health.value.includes('ERR')
-      ? 'status-dot--error'
-      : health.value.includes('WARN')
+        ? gettext('健康')
+        : gettext('未知');
+  const dotClass = health.value.includes('ERR')
+    ? 'status-dot--error'
+    : health.value.includes('WARN')
       ? 'status-dot--warning'
       : health.value.includes('OK')
-      ? 'status-dot--success'
-      : 'status-dot--muted';
+        ? 'status-dot--success'
+        : 'status-dot--muted';
   const version = cephVersion.value || '-';
   return {
     value,
@@ -335,16 +380,17 @@ const osdmap = computed(
   () =>
     (((status.value.osdmap as PveRecord | undefined)?.osdmap as PveRecord | undefined) ||
       status.value.osdmap ||
-      {}) as PveRecord,
+      {}) as PveRecord
 );
 
 const osdStatus = computed(() => {
   const total = Number(osdmap.value.num_osds) || 0;
   const up = Number(osdmap.value.num_up_osds) || 0;
   const inside = Number(osdmap.value.num_in_osds) || 0;
-  const downInRaw = warnings.value
-    .find((warning) => warning.id === 'OSD_DOWN')
-    ?.summary.match(/(\d+) osds down/)?.[1] || '0';
+  const downInRaw =
+    warnings.value
+      .find((warning) => warning.id === 'OSD_DOWN')
+      ?.summary.match(/(\d+) osds down/)?.[1] || '0';
   const down = total - up;
   const downInCount = Number(downInRaw);
   const upIn = Math.max(0, inside - downInCount);
@@ -358,7 +404,9 @@ const osdStatus = computed(() => {
 });
 
 const osdStats = computed(() => {
-  const alertCount = warnings.value.filter((w) => w.level === 'error' || w.level === 'warning').length;
+  const alertCount = warnings.value.filter(
+    (w) => w.level === 'error' || w.level === 'warning'
+  ).length;
   const alerting = Math.max(0, osdStatus.value.downIn + osdStatus.value.downOut) + alertCount;
   return {
     total: osdStatus.value.total,
@@ -388,14 +436,32 @@ async function refreshMetadata() {
 async function refreshCeph() {
   await Promise.allSettled([refreshStatus(), refreshMetadata()]);
 }
-onMounted(() => {
+
+function stopCephPolling() {
+  if (statusTimer) clearInterval(statusTimer);
+  if (metadataTimer) clearInterval(metadataTimer);
+  statusTimer = undefined;
+  metadataTimer = undefined;
+}
+
+function startCephPolling() {
+  stopCephPolling();
   void refreshCeph();
   statusTimer = setInterval(() => void refreshStatus(), 5000);
   metadataTimer = setInterval(() => void refreshMetadata(), 15000);
-});
+}
+
+watch(
+  cephAvailable,
+  (available) => {
+    if (available) startCephPolling();
+    else stopCephPolling();
+  },
+  { immediate: true }
+);
+
 onBeforeUnmount(() => {
-  if (statusTimer) clearInterval(statusTimer);
-  if (metadataTimer) clearInterval(metadataTimer);
+  stopCephPolling();
 });
 </script>
 <style scoped>

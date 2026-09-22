@@ -62,6 +62,9 @@ watch(
 <template>
   <div class="row q-col-gutter-md">
     <div class="col-6">
+      <div class="vnet-panel__title text-subtitle2">
+        {{ gettext('VNets') }}
+      </div>
       <q-table
         v-model:selected="selected"
         flat
@@ -76,7 +79,6 @@ watch(
         :no-data-label="gettext('no record can be found')"
       >
         <template #top>
-          <div class="text-subtitle2">{{ gettext('VNets') }}</div>
           <q-space />
           <q-btn
             no-caps
@@ -91,17 +93,21 @@ watch(
       </q-table>
     </div>
     <div class="col-6">
+      <div class="vnet-panel__title text-subtitle2">
+        {{ gettext('VNet Permissions') }}
+      </div>
       <RulesPage
-        v-if="permissionPath"
         :resource-path="permissionPath"
         vnet-acl
+        :inactive="!permissionPath"
       />
-      <div
-        v-else
-        class="u-border q-pa-md text-grey-7"
-      >
-        {{ gettext('Select a VNet to view permissions.') }}
-      </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.vnet-panel__title {
+  min-height: 40px;
+  padding: 12px 16px;
+}
+</style>

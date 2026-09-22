@@ -675,12 +675,18 @@ const pendingKeyMap: Record<string, string[]> = {
 const pendingKeysForOption = (key: string) => pendingKeyMap[key] || [key];
 const selectedPendingKeys = computed(() => pendingKeysForOption(selectedOption.value));
 const canRevertSelected = computed(() =>
-  selectedPendingKeys.value.some((key) => Boolean(pendingByKey.value[key]))
+  selectedPendingKeys.value.some((key) => hasPendingChange(pendingByKey.value[key]))
 );
+
+function hasPendingChange(row?: PveRecord) {
+  if (!row) return false;
+  return (row.pending !== undefined && textValue(row.pending) !== '') || textValue(row.delete) === '1';
+}
+
 function pendingRowForOption(key: string) {
   return pendingKeysForOption(key)
     .map((pendingKey) => pendingByKey.value[pendingKey])
-    .find(Boolean);
+    .find(hasPendingChange);
 }
 /** Extra values the pending formatter needs (e.g. bootdisk for boot). */
 function pendingRelatedForOption(key: string) {
@@ -701,7 +707,15 @@ function pendingValueForOption(key: string) {
   return formatOptionValue(key, raw, pendingRelatedForOption(key));
 }
 function pendingDeleteForOption(key: string) {
-  return Boolean(pendingRowForOption(key)?.delete);
+  return textValue(pendingRowForOption(key)?.delete) === '1';
+}
+
+function hasDistinctPendingValue(key: string, currentValue: string) {
+  return (
+    Boolean(pendingRowForOption(key)) &&
+    !pendingDeleteForOption(key) &&
+    pendingValueForOption(key) !== currentValue
+  );
 }
 const bootSelectionWarning = computed(
   () => bootRows.value.length > 0 && !bootRows.value.some((row) => row.enabled)
@@ -1357,7 +1371,7 @@ void loadEditSnapshot();
 
 <template>
   <q-form
-    class="vm-config-legacy vm-options-tab u-hidden-error"
+    class="vm-config-legacy vm-options-tab q-pa-md u-hidden-error"
     @submit.prevent="save"
   >
     <div class="row q-gutter-sm q-py-sm options-toolbar">
@@ -1392,21 +1406,14 @@ void loadEditSnapshot();
               {{ row.label }}:
             </div>
             <div class="col-8 text-grey-8 options-list-value">
-              <div
-                v-if="!pendingRowForOption(row.key) || pendingDeleteForOption(row.key)"
-                :class="{ 'pending-delete': pendingDeleteForOption(row.key) }"
-              >
+              <div :class="{ 'pending-delete': pendingDeleteForOption(row.key) }">
                 {{ row.value }}
               </div>
               <div
-                v-if="pendingRowForOption(row.key)"
+                v-if="hasDistinctPendingValue(row.key, row.value)"
                 class="pending-value"
               >
-                {{
-                  pendingDeleteForOption(row.key)
-                    ? gettext('Pending deletion')
-                    : pendingValueForOption(row.key)
-                }}
+                {{ pendingValueForOption(row.key) }}
               </div>
             </div>
           </div>
@@ -1441,14 +1448,10 @@ void loadEditSnapshot();
                   {{ row.value }}
                 </div>
                 <div
-                  v-if="pendingRowForOption(row.key)"
+                  v-if="hasDistinctPendingValue(row.key, row.value)"
                   class="pending-value"
                 >
-                  {{
-                    pendingDeleteForOption(row.key)
-                      ? gettext('Pending deletion')
-                      : pendingValueForOption(row.key)
-                  }}
+                  {{ pendingValueForOption(row.key) }}
                 </div>
               </div>
             </div>
@@ -2335,7 +2338,7 @@ void loadEditSnapshot();
 
 <style scoped lang="scss">
 .vm-config-legacy {
-  padding: 8px;
+  padding: 16px;
   font-size: 13px;
 }
 .options-toolbar {

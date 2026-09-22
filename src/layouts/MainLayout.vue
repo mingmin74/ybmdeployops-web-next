@@ -16,7 +16,13 @@
           :aria-label="gettext('Menu')"
           @click="ui.toggleMenuMini"
         />
-        <div class="brand-mark">YBM</div>
+        <div class="brand-mark">
+          <img
+            src="@/assets/logo.png"
+            class="brand-logo"
+            alt=""
+          />
+        </div>
         <q-toolbar-title class="brand-title">{{ appConfig.productName }}</q-toolbar-title>
         <div class="header-resource-search">
           <q-input
@@ -34,9 +40,7 @@
             @keydown.esc.prevent="resourceSearchOpen = false"
           >
             <template #prepend>
-              <q-icon
-                name="search"
-              />
+              <q-icon name="search" />
             </template>
           </q-input>
           <q-menu
@@ -96,6 +100,7 @@
           flat
           dense
           no-caps
+          class="header-user-trigger"
           icon="account_circle"
           :label="session.userid || session.username"
         >
@@ -103,16 +108,38 @@
             dense
             class="user-menu"
           >
-            <q-item>
+            <q-item class="user-menu__profile">
+              <q-item-section avatar>
+                <q-avatar
+                  size="30px"
+                  class="user-menu__avatar"
+                  icon="account_circle"
+                />
+              </q-item-section>
               <q-item-section>
-                <q-item-label>{{ session.userid }}</q-item-label>
-                <q-item-label caption>{{ gettext('Logged in') }}</q-item-label>
+                <q-item-label class="user-menu__username">{{ session.userid }}</q-item-label>
+                <q-item-label
+                  caption
+                  class="user-menu__status"
+                >
+                  {{ gettext('Logged in') }}
+                </q-item-label>
               </q-item-section>
             </q-item>
             <q-separator />
             <q-item
               clickable
               v-close-popup
+              class="user-menu__item"
+              @click="passwordDialogVisible = true"
+            >
+              <q-item-section avatar><q-icon name="password" /></q-item-section>
+              <q-item-section>{{ gettext('Password') }}</q-item-section>
+            </q-item>
+            <q-item
+              clickable
+              v-close-popup
+              class="user-menu__item user-menu__item--logout"
               @click="logout"
             >
               <q-item-section avatar><q-icon name="logout" /></q-item-section>
@@ -237,6 +264,11 @@
         @click="logsPanelOpen = false"
       />
     </Teleport>
+    <ChangePasswordDialog
+      v-model="passwordDialogVisible"
+      :userid="session.userid"
+      :realm-type="session.userid.endsWith('@pam') ? 'pam' : undefined"
+    />
   </q-layout>
 </template>
 
@@ -245,6 +277,7 @@ import type { QTableColumn } from 'quasar';
 import { computed, onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppTagView from '@/components/AppTagView.vue';
+import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue';
 import { getClusterResources, type PveRecord } from '@/api/resources';
 import { appConfig } from '@/config/app';
 import { menuItems, type MenuItem } from '@/config/menu';
@@ -264,6 +297,7 @@ const resourceSearch = shallowRef('');
 const resourceSearchOpen = shallowRef(false);
 const selectedResourceRows = shallowRef<PveRecord[]>([]);
 const logsPanelOpen = shallowRef(false);
+const passwordDialogVisible = shallowRef(false);
 const logsPanelHeight = shallowRef(320);
 const resourceSearchInput = useTemplateRef<{ focus: () => void; blur: () => void }>(
   'resourceSearchInput'
@@ -494,9 +528,7 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.14);
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 18px;
-  transition:
-    background-color 0.2s ease,
-    border-color 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .page-container {
@@ -519,9 +551,9 @@ onBeforeUnmount(() => {
 
 .logs-overlay-splitter :deep(.q-splitter__separator) {
   z-index: 1;
-  height: 7px;
-  background: #dfe1e6;
-  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.18);
+  height: 2px;
+  /* background: #dfe1e6;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.18); */
   cursor: ns-resize;
   pointer-events: auto;
 }
@@ -530,7 +562,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border-top: 1px solid #cccccc;
   background: #fff;
-  box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.2);
+  /* box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.2); */
   pointer-events: auto;
 }
 

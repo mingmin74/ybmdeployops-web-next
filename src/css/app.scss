@@ -35,16 +35,19 @@ body {
 }
 
 .brand-mark {
-  width: 34px;
-  height: 34px;
+  width: 42px;
+  height: 42px;
   margin-left: 10px;
-  border-radius: 4px;
-  display: grid;
-  place-items: center;
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-  font-weight: 700;
-  letter-spacing: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-logo {
+  display: block;
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
 }
 
 .brand-title {
@@ -218,7 +221,64 @@ body {
 }
 
 .user-menu {
-  min-width: 210px;
+  min-width: 224px;
+  padding: 4px 0;
+  color: #333333;
+}
+
+.header-user-trigger {
+  min-height: 32px;
+  margin-left: 4px;
+  padding: 0 8px;
+  border-radius: 0;
+}
+
+.header-user-trigger:hover {
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.user-menu__profile {
+  min-height: 58px;
+  padding: 10px 14px;
+}
+
+.user-menu__profile .q-item__section--avatar,
+.user-menu__item .q-item__section--avatar {
+  min-width: 34px;
+}
+
+.user-menu__avatar {
+  background: #e6f1fc;
+  color: #1976d2;
+}
+
+.user-menu__username {
+  color: #333333;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.user-menu__status {
+  margin-top: 2px;
+  color: #666666;
+}
+
+.user-menu__item {
+  min-height: 36px;
+  padding: 0 14px;
+  color: #333333;
+}
+
+.user-menu__item:hover {
+  background: #e6f1fc;
+}
+
+.user-menu__item--logout {
+  color: #cf4c35;
+}
+
+.user-menu__item--logout:hover {
+  background: #fff1ef;
 }
 
 .q-table__card {

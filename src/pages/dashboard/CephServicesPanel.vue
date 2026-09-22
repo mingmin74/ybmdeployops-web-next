@@ -1,5 +1,9 @@
 <template>
-  <q-card flat bordered class="services-card">
+  <q-card
+    flat
+    bordered
+    class="services-card"
+  >
     <q-card-section class="services-card__header">
       <div class="services-card__title">{{ gettext('服务') }}</div>
     </q-card-section>
@@ -59,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, shallowRef } from 'vue';
+import { computed, onUnmounted, shallowRef, watch } from 'vue';
 import type { PveRecord } from '@/api/resources';
 import { getCephStatus, getCephMetadata } from '@/api/ceph';
 import { gettext } from '@/locale';
@@ -78,7 +82,10 @@ type ServiceRow = {
 
 const status = shallowRef<PveRecord>({});
 const metadata = shallowRef<PveRecord>({});
-const { node = 'localhost' } = defineProps<{ node?: string }>();
+const { node = 'localhost', cephAvailable = true } = defineProps<{
+  node?: string;
+  cephAvailable?: boolean;
+}>();
 let statusTimer: ReturnType<typeof setInterval> | undefined;
 let metadataTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -238,15 +245,31 @@ async function refreshData() {
   await Promise.allSettled([refreshStatus(), refreshMetadata()]);
 }
 
-onMounted(() => {
+function stopPolling() {
+  if (statusTimer) clearInterval(statusTimer);
+  if (metadataTimer) clearInterval(metadataTimer);
+  statusTimer = undefined;
+  metadataTimer = undefined;
+}
+
+function startPolling() {
+  stopPolling();
   void refreshData();
   statusTimer = setInterval(() => void refreshStatus(), 5000);
   metadataTimer = setInterval(() => void refreshMetadata(), 15000);
-});
+}
+
+watch(
+  () => cephAvailable,
+  (available) => {
+    if (available) startPolling();
+    else stopPolling();
+  },
+  { immediate: true }
+);
 
 onUnmounted(() => {
-  if (statusTimer) clearInterval(statusTimer);
-  if (metadataTimer) clearInterval(metadataTimer);
+  stopPolling();
 });
 </script>
 

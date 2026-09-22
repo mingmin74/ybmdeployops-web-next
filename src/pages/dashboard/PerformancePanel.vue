@@ -1,5 +1,9 @@
 <template>
-  <q-card flat bordered class="performance-card">
+  <q-card
+    flat
+    bordered
+    class="performance-card"
+  >
     <q-card-section class="performance-card__header">
       <div class="row items-center justify-between">
         <div class="performance-card__title">{{ gettext('性能') }}</div>
@@ -37,7 +41,8 @@
 
                 <div class="half-gauge__center">
                   <div class="half-gauge__value">
-                    {{ usage.toFixed(0) }}<span>%</span>
+                    {{ usage.toFixed(0) }}
+                    <span>%</span>
                   </div>
                 </div>
               </div>
@@ -100,7 +105,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, shallowRef } from 'vue';
+import { computed, onUnmounted, shallowRef, watch } from 'vue';
 import LineMetricChart from '@/components/LineMetricChart.vue';
 import type { PveRecord } from '@/api/resources';
 import { getCephStatus } from '@/api/ceph';
@@ -117,7 +122,10 @@ type PerformancePoint = {
 
 const status = shallowRef<PveRecord>({});
 const performanceHistory = shallowRef<PerformancePoint[]>([]);
-const { node = 'localhost' } = defineProps<{ node?: string }>();
+const { node = 'localhost', cephAvailable = true } = defineProps<{
+  node?: string;
+  cephAvailable?: boolean;
+}>();
 let statusTimer: ReturnType<typeof setInterval> | undefined;
 
 const pgmap = computed(() => (status.value.pgmap || {}) as PveRecord);
@@ -204,13 +212,28 @@ async function refreshStatus() {
   ].slice(-30);
 }
 
-onMounted(() => {
+function stopPolling() {
+  if (statusTimer) clearInterval(statusTimer);
+  statusTimer = undefined;
+}
+
+function startPolling() {
+  stopPolling();
   void refreshStatus();
   statusTimer = setInterval(() => void refreshStatus(), 5000);
-});
+}
+
+watch(
+  () => cephAvailable,
+  (available) => {
+    if (available) startPolling();
+    else stopPolling();
+  },
+  { immediate: true }
+);
 
 onUnmounted(() => {
-  if (statusTimer) clearInterval(statusTimer);
+  stopPolling();
 });
 </script>
 
@@ -254,7 +277,8 @@ onUnmounted(() => {
   grid-template-columns: 260px minmax(0, 1fr);
 }
 
-.usage-column {}
+.usage-column {
+}
 
 .usage-section {
   display: flex;
@@ -395,7 +419,8 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.chart-block + .chart-block {}
+.chart-block + .chart-block {
+}
 
 @media (max-width: 900px) {
   .performance-layout {
@@ -422,5 +447,3 @@ onUnmounted(() => {
   }
 }
 </style>
-
-

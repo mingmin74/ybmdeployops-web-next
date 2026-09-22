@@ -77,12 +77,14 @@ const endpoint = (name: string) => `${basePath}/${name}`;
           no-caps
           name="alias"
           :label="gettext('Alias')"
+          :icon="leftNavigation ? 'label' : undefined"
         />
         <q-tab
           v-if="showIpset"
           no-caps
           name="ipset"
           :label="gettext('IPSet')"
+          :icon="leftNavigation ? 'format_list_bulleted' : undefined"
         />
         <slot name="tabs" />
       </q-tabs>

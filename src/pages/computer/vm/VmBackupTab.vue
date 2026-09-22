@@ -801,15 +801,47 @@ watch(listStorage, () => {
           @click="toggleProtection"
         />
       </div>
-      <q-space />
-      <div class="col-12 col-sm-auto">
-        <div class="row items-center no-wrap vm-storage-selector">
-          <span class="vm-storage-selector__label">{{ gettext('Storage') }}</span>
+      <div class="col-auto">
+        <q-spinner
+          v-if="loading"
+          color="primary"
+          size="20px"
+        />
+        <q-icon
+          v-else
+          name="refresh"
+          color="primary"
+          size="20px"
+          class="cursor-pointer"
+          role="button"
+          tabindex="0"
+          :aria-label="gettext('Refresh')"
+          @click="() => refreshRows()"
+          @keyup.enter="() => refreshRows()"
+        >
+          <q-tooltip>{{ gettext('Refresh') }}</q-tooltip>
+        </q-icon>
+      </div>
+      <div class="col-auto">
+        <q-checkbox
+          v-model="filterVmid"
+          dense
+          right-label
+          color="primary"
+          :label="gettext('Filter VMID')"
+        />
+      </div>
+    </div>
+    <div class="vm-backup-filter q-px-md q-py-lg q-mb-sm">
+      <div class="row q-col-gutter-md">
+        <div class="col-12 col-md-4 vm-backup-filter-field">
+          <span class="vm-backup-filter-label">{{ gettext('Storage') }}</span>
           <SelectTable
             v-model="listStorage"
             row-key="storage"
             width="560px"
-            class="vm-storage-selector__field"
+            field-style="outlined"
+            class="vm-backup-filter-control"
             :rows="storages"
             :columns="storageColumns"
             :display-value="storageDisplayValue"
@@ -830,35 +862,17 @@ watch(listStorage, () => {
             </template>
           </SelectTable>
         </div>
-      </div>
-      <div class="col-12 col-sm-auto">
-        <q-checkbox
-          v-model="filterVmid"
-          dense
-          :label="gettext('Filter VMID')"
-        />
-      </div>
-      <div class="col-12 col-sm-auto">
-        <q-input
-          v-model="search"
-          dense
-          clearable
-          class="vm-backup-search"
-          :label="gettext('Search')"
-        />
-      </div>
-      <div class="col-auto">
-        <q-btn
-          no-caps
-          outline
-          size="12px"
-          color="primary"
-          class="u-button"
-          icon="refresh"
-          :label="gettext('Refresh')"
-          :loading="loading"
-          @click="() => refreshRows()"
-        />
+        <div class="col-12 col-md-4 vm-backup-filter-field">
+          <span class="vm-backup-filter-label">{{ gettext('Search') }}</span>
+          <q-input
+            v-model="search"
+            square
+            outlined
+            dense
+            clearable
+            class="vm-backup-filter-control"
+          />
+        </div>
       </div>
     </div>
     <q-table
@@ -1512,15 +1526,35 @@ watch(listStorage, () => {
   display: flex;
   gap: 6px;
 }
-.vm-storage-selector {
+.vm-backup-filter-field {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
-.vm-storage-selector__label {
-  color: #333333;
+.vm-backup-filter-label {
+  flex: 0 0 72px;
+  color: #666;
   font-size: 12px;
-  white-space: nowrap;
+  text-align: right;
 }
-.vm-storage-selector__field {
-  min-width: 220px;
+.vm-backup-filter-control {
+  flex: 1;
+  min-width: 0;
+}
+.vm-backup-filter-control :deep(.q-field__control),
+.vm-backup-filter-control :deep(.q-field__marginal) {
+  height: 28px !important;
+  min-height: 28px !important;
+}
+.vm-backup-filter-control :deep(.q-field__native),
+.vm-backup-filter-control :deep(.q-field__input) {
+  min-height: 28px !important;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 28px;
+}
+.vm-backup-filter-control :deep(.q-field--outlined .q-field__control::before),
+.vm-backup-filter-control :deep(.q-field--outlined .q-field__control::after) {
+  border: 1px solid #ccc !important;
 }
 </style>

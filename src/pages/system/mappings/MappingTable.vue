@@ -93,6 +93,11 @@ const canSave = computed(() => {
 const canEditSelected = computed(
   () => selected.value.length === 1 && selected.value[0]?.type !== 'map'
 );
+const noDataLabel = computed(() => {
+  if (props.kind === 'pci') return gettext('No PCI device mappings configured');
+  if (props.kind === 'usb') return gettext('No USB device mappings configured');
+  return gettext('No directory mappings configured');
+});
 
 const columns = computed<QTableColumn<PveRecord>[]>(() => {
   if (isDirectory.value) {
@@ -622,8 +627,8 @@ onMounted(() => {
     :loading="loading"
     :pagination="{ rowsPerPage: 0 }"
     :rows-per-page-options="[0]"
-    hide-bottom
-    :no-data-label="gettext('No Mapping found')"
+    hide-pagination
+    :no-data-label="noDataLabel"
     @update:selected="selected = [...$event]"
     @row-dblclick="(_, row) => void editRow(row)"
   >
@@ -883,6 +888,7 @@ onMounted(() => {
               v-if="!isDirectory || directoryEditMode !== 'edit-node'"
               v-model="form.node"
               dense
+              options-dense
               class="q-field--with-bottom"
               emit-value
               map-options

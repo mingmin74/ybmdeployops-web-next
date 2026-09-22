@@ -13,6 +13,7 @@ const activeTab = shallowRef('operation');
     <q-tabs
       v-model="activeTab"
       dense
+      inline-label
       class="overlay-logs-panel__tabs text-grey"
       active-color="primary"
       indicator-color="primary"
@@ -22,16 +23,19 @@ const activeTab = shallowRef('operation');
       <q-tab
         no-caps
         name="operation"
+        icon="task_alt"
         :label="gettext('Operation Logs')"
       />
       <q-tab
         no-caps
         name="system"
+        icon="terminal"
         :label="gettext('System Logs')"
       />
       <q-tab
         no-caps
         name="cluster"
+        icon="hub"
         :label="gettext('Cluster Logs')"
       />
     </q-tabs>
@@ -70,13 +74,19 @@ const activeTab = shallowRef('operation');
 }
 
 .overlay-logs-panel__tabs {
-  min-height: 32px;
+  min-height: 36px;
   padding-right: 40px;
 }
 
 .overlay-logs-panel__tabs :deep(.q-tab) {
-  min-height: 32px;
+  min-height: 36px;
   padding: 0 12px;
+}
+
+.overlay-logs-panel__tabs :deep(.q-tab__icon) {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
 }
 
 .overlay-logs-panel__content {

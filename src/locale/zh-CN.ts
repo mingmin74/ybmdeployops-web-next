@@ -1,4 +1,10 @@
 export default {
+  'Directory Mapping': '目录映射',
+  'USB mapping': 'USB 映射',
+  'Route Redistribution': '路由重分发',
+  'No PCI device mappings configured': '未配置 PCI 设备映射',
+  'No USB device mappings configured': '未配置 USB 设备映射',
+  'No directory mappings configured': '未配置目录映射',
   // Ceph installation and initial configuration.
   'Could not resolve the local node name.': '无法确定本机节点名称。',
   'Ceph is not installed on this node.': '此节点上未安装 Ceph。',

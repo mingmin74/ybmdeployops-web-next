@@ -213,15 +213,15 @@ function validateForm() {
   formErrors.guest = !form.guest
     ? gettext('CT/VM ID is required')
     : !guestValid.value
-      ? gettext('CT/VM ID must be between 100 and 999999999')
-      : '';
+    ? gettext('CT/VM ID must be between 100 and 999999999')
+    : '';
   formErrors.target = !form.target
     ? gettext('Target is required')
     : action.value === 'add' && !targetValid.value
-      ? form.target === props.node
-        ? gettext('Source and target must not be identical')
-        : gettext('Target node seems to be offline')
-      : '';
+    ? form.target === props.node
+      ? gettext('Source and target must not be identical')
+      : gettext('Target node seems to be offline')
+    : '';
   formErrors.rate = !rateValid.value ? gettext('Rate limit must be at least 1 MB/s') : '';
   return !formErrors.guest && !formErrors.target && !formErrors.rate;
 }
@@ -739,6 +739,7 @@ onBeforeUnmount(() => {
 .replication-tasks-panel {
   position: relative;
   min-height: 160px;
+  padding: 16px;
 }
 
 .replication-standalone-mask {

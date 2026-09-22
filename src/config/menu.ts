@@ -67,6 +67,7 @@ export const menuItems: MenuItem[] = [
         ],
       },
       { titleKey: 'Options', path: '/system/options', icon: 'tune' },
+      { titleKey: '标准样式', path: '/system/standard-styles', icon: 'palette' },
       { titleKey: 'Resource Mappings', path: '/system/resource-mappings', icon: 'device_hub' },
       { titleKey: 'Directory Mappings', path: '/system/directory-mappings', icon: 'folder' },
       { titleKey: 'CPU Types', path: '/system/cpu-types', icon: 'memory' },

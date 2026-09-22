@@ -82,6 +82,21 @@ watch(
 <template>
   <div class="row q-col-gutter-md">
     <div class="col-6">
+      <div class="bridge-panel__title text-subtitle2">
+        {{ gettext('Bridges') }}
+      </div>
+      <div class="bridge-panel__toolbar">
+        <q-space />
+        <q-btn
+          no-caps
+          outline
+          size="12px"
+          color="primary"
+          class="u-button"
+          :label="gettext('Refresh')"
+          @click="load"
+        />
+      </div>
       <q-table
         v-model:selected="selected"
         flat
@@ -94,37 +109,50 @@ watch(
         :rows-per-page-options="[0]"
         hide-pagination
         :no-data-label="gettext('no record can be found')"
-      >
-        <template #top>
-          <div class="text-subtitle2">{{ gettext('Bridges') }}</div>
-          <q-space />
-          <q-btn
-            no-caps
-            outline
-            size="12px"
-            color="primary"
-            class="u-button"
-            :label="gettext('Refresh')"
-            @click="load"
-          />
-        </template>
-      </q-table>
+      />
     </div>
     <div class="col-6">
+      <div class="bridge-panel__title text-subtitle2">
+        {{ gettext('Bridge Ports') }}
+      </div>
+      <div class="bridge-panel__toolbar" />
       <q-table
         flat
         row-key="index"
+        class="bridge-ports-table"
         table-header-class="u-table-header"
         :rows="ports"
         :columns="portColumns"
         :rows-per-page-options="[0]"
         hide-pagination
         :no-data-label="gettext('no record can be found')"
-      >
-        <template #top>
-          <div class="text-subtitle2">{{ gettext('Bridge Ports') }}</div>
-        </template>
-      </q-table>
+      />
     </div>
   </div>
 </template>
+
+<style scoped>
+.bridge-panel__title {
+  min-height: 40px;
+  padding: 12px 16px;
+}
+
+.bridge-panel__toolbar {
+  align-items: center;
+  display: flex;
+  min-height: 40px;
+  padding: 6px 0;
+}
+
+.bridge-ports-table :deep(.q-table__middle) {
+  height: 360px;
+  overflow-y: auto;
+}
+
+.bridge-ports-table :deep(thead tr th) {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f2f5fc;
+}
+</style>

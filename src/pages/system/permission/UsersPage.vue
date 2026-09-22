@@ -13,7 +13,6 @@ import {
   removeUser,
   unlockUserTfa,
   updateUser,
-  updateUserPassword,
   type EditUserPayload,
   type PveGroup,
   type PveRealm,
@@ -21,6 +20,7 @@ import {
 } from '@/api/users';
 import { gettext } from '@/locale';
 import SelectTable from '@/components/SelectTable.vue';
+import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue';
 import GrantedPermissionsDialog from './GrantedPermissionsDialog.vue';
 
 defineProps<{
@@ -123,19 +123,10 @@ const filteredUsers = computed(() => {
 });
 
 const formData = reactive<UserFormModel>(createDefaultForm());
-const passwordForm = reactive({
-  currentPassword: '',
-  password: '',
-  confirmPassword: '',
-});
-
 const useridRef = ref();
 const emailRef = ref();
 const passwordRef = ref();
 const confirmPasswordRef = ref();
-const passwordDialogPasswordRef = ref();
-const passwordDialogConfirmRef = ref();
-const passwordDialogCurrentRef = ref();
 
 const tableColumns: QTableColumn<UserRow>[] = [
   {
@@ -219,12 +210,6 @@ function createDefaultForm(): UserFormModel {
 
 function resetForm(action: UserFormAction) {
   Object.assign(formData, createDefaultForm(), { action });
-}
-
-function resetPasswordForm() {
-  passwordForm.currentPassword = '';
-  passwordForm.password = '';
-  passwordForm.confirmPassword = '';
 }
 
 function rowClick(_: Event, row: UserRow) {
@@ -320,12 +305,6 @@ function validateCreateForm() {
   }
 
   return true;
-}
-
-function validatePasswordForm() {
-  const refs = [passwordDialogPasswordRef.value, passwordDialogConfirmRef.value];
-  if (session.userid !== 'root@pam') refs.unshift(passwordDialogCurrentRef.value);
-  return validateRefs(refs);
 }
 
 function buildSubmitPayload() {
@@ -434,28 +413,11 @@ async function submitUserForm() {
 }
 
 function openPasswordDialog() {
-  resetPasswordForm();
   passwordDialogVisible.value = true;
 }
 
 function openGrantedPermissions() {
   if (selectedUser.value) permissionsDialogVisible.value = true;
-}
-
-async function submitPassword() {
-  if (!selectedUser.value || !validatePasswordForm()) return;
-
-  dialogLoading.value = true;
-  try {
-    await updateUserPassword(
-      selectedUser.value.userid,
-      passwordForm.password,
-      session.userid === 'root@pam' ? undefined : passwordForm.currentPassword
-    );
-    passwordDialogVisible.value = false;
-  } finally {
-    dialogLoading.value = false;
-  }
 }
 
 function confirmRemoveUser() {
@@ -513,12 +475,6 @@ function confirmUnlockSelectedUserTfa() {
 watch(createDialogVisible, (visible) => {
   if (!visible) {
     resetForm('add');
-  }
-});
-
-watch(passwordDialogVisible, (visible) => {
-  if (!visible) {
-    resetPasswordForm();
   }
 });
 
@@ -866,88 +822,11 @@ defineExpose({ reload: loadUsersData });
       </q-card>
     </q-dialog>
 
-    <q-dialog
+    <ChangePasswordDialog
       v-model="passwordDialogVisible"
-      persistent
-      transition-show="scale"
-      transition-hide="scale"
-    >
-      <q-card class="u-window-card users-password-dialog">
-        <q-card-section class="row items-center bg-blue-8 text-grey-1 shadow-down-10 q-pa-sm">
-          <q-spinner-bars
-            size="14px"
-            color="white"
-          />
-          <div class="text-weight-bold q-mx-sm text-overflow">
-            {{ gettext('Setting') }}: {{ gettext('Password') }}
-          </div>
-          <q-space />
-          <q-btn
-            v-close-popup
-            class="bg-negative"
-            icon="close"
-            size="sm"
-            flat
-            dense
-          />
-        </q-card-section>
-        <q-card-section class="q-pa-none u-hidden-error">
-          <div class="u-border q-ma-sm q-pa-md">
-            <q-input
-              v-if="session.userid !== 'root@pam'"
-              ref="passwordDialogCurrentRef"
-              v-model="passwordForm.currentPassword"
-              dense
-              type="password"
-              :label="`${gettext('Your Current Password')} *`"
-              :rules="[(value: string) => value ? true : gettext('This field is required')]"
-            />
-            <div
-              v-if="selectedUser?.['realm-type'] === 'pam'"
-              class="text-caption text-grey-7 q-mb-sm"
-            >
-              {{ gettext('For the PAM realm, this applies only to the connected node.') }}
-            </div>
-            <q-input
-              ref="passwordDialogPasswordRef"
-              v-model="passwordForm.password"
-              dense
-              autofocus
-              type="password"
-              maxlength="64"
-              :label="`${gettext('Password')} *`"
-              :rules="[passwordRules]"
-            />
-            <q-input
-              ref="passwordDialogConfirmRef"
-              v-model="passwordForm.confirmPassword"
-              dense
-              type="password"
-              maxlength="64"
-              :label="`${gettext('Confirm Password')} *`"
-              :rules="[(value: string) => confirmPasswordRules(value, passwordForm.password)]"
-            />
-            <q-inner-loading :showing="dialogLoading" />
-          </div>
-        </q-card-section>
-        <q-card-actions
-          align="right"
-          class="bg-grey-2 overflow-hidden"
-        >
-          <q-btn
-            no-caps
-            flat
-            size="12px"
-            :disable="dialogLoading"
-            :label="gettext('OK')"
-            :class="
-              dialogLoading ? 'bg-grey-4 text-grey-6 u-button' : 'bg-primary text-grey-1 u-button'
-            "
-            @click="submitPassword"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
+      :userid="selectedUser?.userid || ''"
+      :realm-type="selectedUser?.['realm-type']"
+    />
     <GrantedPermissionsDialog
       v-model="permissionsDialogVisible"
       :userid="selectedUser?.userid || ''"
@@ -971,11 +850,6 @@ defineExpose({ reload: loadUsersData });
 .users-dialog-card {
   width: 580px;
   max-width: 580px;
-}
-
-.users-password-dialog {
-  width: 400px;
-  max-width: 400px;
 }
 
 .dialog-body {
