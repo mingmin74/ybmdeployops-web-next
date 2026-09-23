@@ -232,6 +232,12 @@ const routes: RouteRecordRaw[] = [
         meta: { auth: true, title: 'Storage Services' },
       },
       {
+        path: 'storage/list/:node/:storage',
+        name: 'storage-detail',
+        component: () => import('@/pages/storage/StorageDetailPage.vue'),
+        meta: { auth: true, title: 'Storage Details' },
+      },
+      {
         path: 'computer/overview',
         name: 'computer-overview',
         component: () => import('@/pages/computer/OverviewPage.vue'),

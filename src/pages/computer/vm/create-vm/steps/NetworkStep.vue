@@ -8,11 +8,14 @@ const { form, state, errors, options, derived } = useCreateVmWizardContext();
 const { advanced } = state;
 const { validationErrors } = errors;
 const { bridgeColumns } = options;
-const { bridgeRows, stepContentHeight } = derived;
+const { bridgeRows, stepContentHeight, requiredLabel } = derived;
 </script>
 
 <template>
-  <q-scroll-area class="q-pa-sm" :style="{ height: stepContentHeight('network') }">
+  <q-scroll-area
+    class="q-pa-sm"
+    :style="{ height: stepContentHeight('network') }"
+  >
     <div class="q-px-md q-py-sm u-border-dotted-blue bg-white">
       <q-checkbox
         v-model="form.noNetwork"
@@ -37,7 +40,7 @@ const { bridgeRows, stepContentHeight } = derived;
               :columns="bridgeColumns"
               :display-value="form.bridge"
               :get-row-value="(row) => textValue(row.iface)"
-              :label="gettext('Bridge')"
+              :label="requiredLabel(gettext('Bridge'))"
               class="q-field--with-bottom"
             />
             <q-input
@@ -86,7 +89,10 @@ const { bridgeRows, stepContentHeight } = derived;
         </div>
       </div>
     </div>
-    <div v-if="advanced" class="q-mt-sm u-border-dotted-blue q-px-md q-py-sm bg-white">
+    <div
+      v-if="advanced"
+      class="q-mt-sm u-border-dotted-blue q-px-md q-py-sm bg-white"
+    >
       <div class="row q-gutter-lg">
         <div class="col">
           <q-checkbox

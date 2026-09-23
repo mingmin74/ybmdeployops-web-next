@@ -20,9 +20,10 @@ interface AddCdromFormModel {
 }
 
 const form = defineModel<AddCdromFormModel>('form', { required: true });
-const { deviceInUse = false, busOptions } = defineProps<{
+const { deviceInUse = false, busOptions, validationAttempted } = defineProps<{
   deviceInUse?: boolean;
   busOptions: { label: string; value: CdromBus }[];
+  validationAttempted: boolean;
 }>();
 const { node } = useVmHardwareContext();
 
@@ -169,7 +170,7 @@ onMounted(async () => {
             options-dense
             emit-value
             map-options
-            :label="gettext('Bus/Device')"
+            :label="`${gettext('Bus/Device')} *`"
             :options="busOptions"
           />
         </div>
@@ -181,8 +182,8 @@ onMounted(async () => {
             type="number"
             min="0"
             :max="deviceMax"
-            :label="gettext('Device')"
-            :error="deviceError"
+            :label="`${gettext('Device')} *`"
+            :error="validationAttempted && deviceError"
             :error-message="
               deviceInUse
                 ? gettext('This device is already in use')
@@ -212,9 +213,9 @@ onMounted(async () => {
             :loading="storageLoading"
             :get-row-value="(row) => textValue(row.storage)"
             :disable="isoDisabled"
-            :error="storageError"
+            :error="validationAttempted && storageError"
             :error-message="gettext('This field is required')"
-            :label="gettext('Storage')"
+            :label="`${gettext('Storage')} *`"
           />
           <SelectTable
             v-model="form.cdromVolid"
@@ -228,9 +229,9 @@ onMounted(async () => {
             :loading="isoLoading"
             :get-row-value="(row) => textValue(row.volid)"
             :disable="isoDisabled"
-            :error="isoError"
+            :error="validationAttempted && isoError"
             :error-message="gettext('This field is required')"
-            :label="gettext('ISO image')"
+            :label="`${gettext('ISO image')} *`"
           />
         </div>
         <div class="col-12">

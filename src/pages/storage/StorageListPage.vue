@@ -2,8 +2,8 @@
 import type { QTableColumn } from 'quasar';
 import { Dialog } from 'quasar';
 import { computed, onMounted, ref, shallowRef } from 'vue';
+import { useRouter } from 'vue-router';
 import NodeSelectTable from '@/components/NodeSelectTable.vue';
-import StorageDetailPage from '@/pages/storage/modules/storage/StorageDetailPage.vue';
 import StorageEditDialog from '@/pages/storage/modules/storage/StorageEditDialog.vue';
 import type { PveNode, PveRecord } from '@/api/resources';
 import { getClusterResources } from '@/api/resources';
@@ -12,19 +12,46 @@ import { gettext } from '@/locale';
 import { formatContent, textValue } from '@/utils/pveFormat';
 
 const loading = ref(false);
+const router = useRouter();
 const filter = ref('');
 const selected = ref<PveRecord[]>([]);
 const rows = shallowRef<PveRecord[]>([]);
-const current = ref<PveRecord | null>(null);
 const selectedNode = shallowRef('');
 const treeSelected = ref('all');
 const treeExpanded = ref<string[]>([]);
-type StorageType = 'dir' | 'lvm' | 'lvmthin' | 'btrfs' | 'nfs' | 'cifs' | 'iscsi' | 'cephfs' | 'rbd' | 'zfs' | 'zfspool' | 'pbs' | 'esxi';
+type StorageType =
+  | 'dir'
+  | 'lvm'
+  | 'lvmthin'
+  | 'btrfs'
+  | 'nfs'
+  | 'cifs'
+  | 'iscsi'
+  | 'cephfs'
+  | 'rbd'
+  | 'zfs'
+  | 'zfspool'
+  | 'pbs'
+  | 'esxi';
 const editorVisible = shallowRef(false);
 const editorType = shallowRef<StorageType>('dir');
 const editorStorage = shallowRef<string>();
 const clusterNodes = shallowRef<PveNode[]>([]);
-const addTypes: StorageType[] = ['dir', 'lvm', 'lvmthin', 'btrfs', 'nfs', 'cifs', 'iscsi', 'cephfs', 'rbd', 'zfs', 'zfspool', 'pbs', 'esxi'];
+const addTypes: StorageType[] = [
+  'dir',
+  'lvm',
+  'lvmthin',
+  'btrfs',
+  'nfs',
+  'cifs',
+  'iscsi',
+  'cephfs',
+  'rbd',
+  'zfs',
+  'zfspool',
+  'pbs',
+  'esxi',
+];
 
 function formatStorageType(row: PveRecord) {
   const type = textValue(row.type);
@@ -52,9 +79,19 @@ function formatStorageType(row: PveRecord) {
 
 function storageTypeLabel(type: StorageType) {
   return {
-    dir: 'Directory', lvm: 'LVM', lvmthin: 'LVM-Thin', btrfs: 'BTRFS', nfs: 'NFS',
-    cifs: 'SMB/CIFS', iscsi: 'iSCSI', cephfs: 'CephFS', rbd: 'RBD',
-    zfs: 'ZFS over iSCSI', zfspool: 'ZFS', pbs: 'Proxmox Backup Server', esxi: 'ESXi',
+    dir: 'Directory',
+    lvm: 'LVM',
+    lvmthin: 'LVM-Thin',
+    btrfs: 'BTRFS',
+    nfs: 'NFS',
+    cifs: 'SMB/CIFS',
+    iscsi: 'iSCSI',
+    cephfs: 'CephFS',
+    rbd: 'RBD',
+    zfs: 'ZFS over iSCSI',
+    zfspool: 'ZFS',
+    pbs: 'Proxmox Backup Server',
+    esxi: 'ESXi',
   }[type];
 }
 
@@ -118,9 +155,9 @@ const columns: QTableColumn<PveRecord>[] = [
   },
 ];
 
-const nodeRows = computed(() => selectedNode.value
-  ? rows.value.filter((row) => row.node === selectedNode.value)
-  : rows.value);
+const nodeRows = computed(() =>
+  selectedNode.value ? rows.value.filter((row) => row.node === selectedNode.value) : rows.value
+);
 
 const treeNodes = computed(() => {
   const byType = new Map<string, PveRecord[]>();
@@ -148,8 +185,6 @@ const treeNodes = computed(() => {
   ];
 });
 
-const detailNode = computed(() => textValue(current.value?.node));
-
 const tableRows = computed(() => {
   if (!treeSelected.value.startsWith('type:')) return nodeRows.value;
   const type = treeSelected.value.replace(/^type:/, '');
@@ -157,7 +192,8 @@ const tableRows = computed(() => {
 });
 
 function onNodeChange() {
-  backToStorageList();
+  selected.value = [];
+  treeSelected.value = 'all';
 }
 
 async function refreshData() {
@@ -167,27 +203,29 @@ async function refreshData() {
       getClusterResources({ type: 'storage' }),
       getStorages().catch(() => null),
     ]);
-    const configs = new Map((configResponse?.data || []).map((item) => [textValue(item.storage), item]));
-    rows.value = (resourceResponse.data || []).map<PveRecord>((resource) => {
-      const config = configs.get(textValue(resource.storage));
-      return {
-        ...config,
-        ...resource,
-        id: resource.id || `storage/${textValue(resource.node)}/${textValue(resource.storage)}`,
-        type: resource.plugintype || config?.type || '',
-      };
-    }).sort((a, b) =>
-      textValue(a.storage).localeCompare(textValue(b.storage)) ||
-      textValue(a.node).localeCompare(textValue(b.node)),
+    const configs = new Map(
+      (configResponse?.data || []).map((item) => [textValue(item.storage), item])
     );
+    rows.value = (resourceResponse.data || [])
+      .map<PveRecord>((resource) => {
+        const config = configs.get(textValue(resource.storage));
+        return {
+          ...config,
+          ...resource,
+          id: resource.id || `storage/${textValue(resource.node)}/${textValue(resource.storage)}`,
+          type: resource.plugintype || config?.type || '',
+        };
+      })
+      .sort(
+        (a, b) =>
+          textValue(a.storage).localeCompare(textValue(b.storage)) ||
+          textValue(a.node).localeCompare(textValue(b.node))
+      );
     treeExpanded.value = [
       'all',
       ...new Set(rows.value.map((item) => `type:${textValue(item.type) || gettext('Unknown')}`)),
     ];
     selected.value = [];
-    if (current.value) {
-      current.value = rows.value.find((item) => item.id === current.value?.id) || null;
-    }
   } finally {
     loading.value = false;
   }
@@ -200,8 +238,10 @@ function rowClick(_: Event, row: PveRecord) {
 function openDetail(row?: PveRecord) {
   const target = row || selected.value[0];
   if (!target) return;
-  current.value = target;
-  treeSelected.value = `storage:${textValue(target.id)}`;
+  const node = textValue(target.node);
+  const storage = textValue(target.storage);
+  if (!node || !storage) return;
+  void router.push({ name: 'storage-detail', params: { node, storage } });
 }
 
 function removeSelected() {
@@ -236,21 +276,15 @@ function openEdit(row = selected.value[0]) {
   editorVisible.value = true;
 }
 
-function onTreeSelect(id: string) {
-  if (id === 'all' || id.startsWith('type:')) {
-    current.value = null;
+function onTreeSelect(id: string | null | undefined) {
+  if (!id || id === 'all' || id.startsWith('type:')) {
     selected.value = [];
+    treeSelected.value = 'all';
     return;
   }
   const resourceId = id.replace(/^storage:/, '');
   const row = nodeRows.value.find((item) => textValue(item.id) === resourceId);
   if (row) openDetail(row);
-}
-
-function backToStorageList() {
-  current.value = null;
-  selected.value = [];
-  treeSelected.value = 'all';
 }
 
 onMounted(() => {
@@ -283,23 +317,7 @@ onMounted(() => {
       </q-tree>
     </div>
     <div class="col q-ml-md bg-white q-pa-md">
-      <div v-if="current">
-        <div class="row items-center q-mb-sm">
-          <q-btn
-            no-caps
-            outline
-            size="12px"
-            color="primary"
-            class="u-button"
-            :label="gettext('Back')"
-            @click="backToStorageList"
-          />
-          <div class="text-subtitle2 q-ml-sm">{{ current.storage }}</div>
-        </div>
-        <StorageDetailPage :node="detailNode" :storage="current" />
-      </div>
       <q-table
-        v-else
         flat
         row-key="id"
         table-header-class="u-table-header"
@@ -313,7 +331,7 @@ onMounted(() => {
         :loading="loading"
         :no-data-label="gettext('no record can be found')"
         @row-click="rowClick"
-        @row-dblclick="(_, row) => openEdit(row)"
+        @row-dblclick="(_, row) => openDetail(row)"
         @update:selected="selected = [...$event]"
       >
         <template #top>
@@ -338,7 +356,10 @@ onMounted(() => {
               icon-right="arrow_drop_down"
             >
               <q-menu>
-                <q-list dense style="min-width: 220px">
+                <q-list
+                  dense
+                  style="min-width: 220px"
+                >
                   <q-item
                     v-for="type in addTypes"
                     :key="type"

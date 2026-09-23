@@ -26,6 +26,7 @@ const imageStorageRows = shallowRef<PveRecord[]>([]);
 const existingVolumes = shallowRef<PveRecord[]>([]);
 const storageLoading = shallowRef(false);
 const existingVolumeLoading = shallowRef(false);
+const validationAttempted = shallowRef(false);
 let existingVolumeRequest = 0;
 const { loading, node, updateConfig } = useVmHardwareContext();
 
@@ -163,6 +164,7 @@ async function loadImageStorages() {
 
 watch(visible, (isVisible) => {
   if (!isVisible) return;
+  validationAttempted.value = false;
   Object.assign(form, {
     storage: '',
     existingVolume: '',
@@ -200,6 +202,7 @@ async function loadExistingVolumes() {
 
 async function addFirmware() {
   const key = kind === 'efi' ? 'efidisk0' : 'tpmstate0';
+  validationAttempted.value = true;
   if (!canAdd.value) return;
   const volume = selectExisting.value ? form.existingVolume : `${form.storage}:1`;
   await updateConfig(
@@ -221,7 +224,7 @@ async function addFirmware() {
 <template>
   <q-dialog v-model="visible" persistent>
     <UWindow :title="dialogTitle" width="450px" :loading="dialogLoading">
-      <div class="q-pa-md u-dense">
+      <div class="q-pa-md u-dense firmware-dialog-content">
         <template v-if="kind === 'efi'">
           <div class="u-border q-pa-md">
             <SelectTable
@@ -236,9 +239,9 @@ async function addFirmware() {
               :loading="storageLoading"
               :get-row-value="(row) => textValue(row.storage)"
               :can-select="canSelectStorage"
-              :error="!form.storage"
+              :error="validationAttempted && !form.storage"
               :error-message="gettext('This field is required')"
-              :label="storageLabel"
+              :label="`${storageLabel} *`"
             />
             <SelectTable
               v-if="selectExisting"
@@ -252,9 +255,9 @@ async function addFirmware() {
               :display-value="form.existingVolume"
               :loading="existingVolumeLoading"
               :get-row-value="(row) => textValue(row.volid || row.text)"
-              :error="!hasSelectedExistingVolume"
+              :error="validationAttempted && !hasSelectedExistingVolume"
               :error-message="gettext('This field is required')"
-              :label="gettext('Existing disk image')"
+              :label="`${gettext('Existing disk image')} *`"
             />
             <q-select
               v-model="form.format"
@@ -293,9 +296,9 @@ async function addFirmware() {
               :loading="storageLoading"
               :get-row-value="(row) => textValue(row.storage)"
               :can-select="canSelectStorage"
-              :error="!form.storage"
+              :error="validationAttempted && !form.storage"
               :error-message="gettext('This field is required')"
-              :label="storageLabel"
+              :label="`${storageLabel} *`"
             />
             <SelectTable
               v-if="selectExisting"
@@ -309,9 +312,9 @@ async function addFirmware() {
               :display-value="form.existingVolume"
               :loading="existingVolumeLoading"
               :get-row-value="(row) => textValue(row.volid || row.text)"
-              :error="!hasSelectedExistingVolume"
+              :error="validationAttempted && !hasSelectedExistingVolume"
               :error-message="gettext('This field is required')"
-              :label="gettext('Existing disk image')"
+              :label="`${gettext('Existing disk image')} *`"
             />
             <q-select
               v-model="form.format"
@@ -350,7 +353,7 @@ async function addFirmware() {
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :disable="!canAdd"
+          :disable="dialogLoading"
           :label="gettext('Add')"
           @click="addFirmware"
         />
@@ -367,5 +370,9 @@ async function addFirmware() {
   color: #1f5f9f;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.firmware-dialog-content :deep(.q-field__bottom) {
+  display: block !important;
 }
 </style>

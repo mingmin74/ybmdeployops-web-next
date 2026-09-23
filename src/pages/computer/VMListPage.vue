@@ -44,8 +44,9 @@ type VmTreeNode = QTreeNode & {
 
 const loading = shallowRef(false);
 const resources = shallowRef<VmResource[]>([]);
+const availableNodes = shallowRef<string[]>([]);
 const selectedRows = shallowRef<VmResource[]>([]);
-const selectedTreeNode = shallowRef('');
+const selectedTreeNode = shallowRef<string | null>('');
 const search = shallowRef('');
 const treeSearch = shallowRef('');
 const treeExpanded = shallowRef<string[]>([]);
@@ -118,6 +119,17 @@ const visibleColumnNames = shallowRef<string[]>(
   })()
 );
 
+const treeNodeNames = computed(() =>
+  [
+    ...new Set([
+      ...availableNodes.value,
+      ...resources.value.map((row) => textValue(row.node) || gettext('Unknown')),
+    ]),
+  ]
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right))
+);
+
 const treeNodes = computed<VmTreeNode[]>(() => {
   const nodeGroups = new Map<string, VmResource[]>();
   resources.value.forEach((row) => {
@@ -127,46 +139,45 @@ const treeNodes = computed<VmTreeNode[]>(() => {
     nodeGroups.set(node, entries);
   });
 
-  return [...nodeGroups.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([node, rows]) => {
-      const toVmNode = (row: VmResource): VmTreeNode => ({
-        key: vmKey(row),
-        label: `${textValue(row.vmid)} (${vmDisplayName(row) || gettext('No Name')})`,
-        kind: 'vm',
-        node: textValue(row.node),
-        vmid: textValue(row.vmid),
-        status: normalizedVmStatus(row.status) || 'unknown',
-        template: isVmTemplate(row),
-      });
-      const sortedRows = [...rows].sort((left, right) =>
-        (textValue(left.name) || textValue(left.vmid)).localeCompare(
-          textValue(right.name) || textValue(right.vmid)
-        )
-      );
-      return {
-        key: `node:${node}`,
-        label: node,
-        kind: 'node',
-        node,
-        children: [
-          {
-            key: `node:${node}:vms`,
-            label: gettext('Virtual Machine'),
-            kind: 'category' as const,
-            node,
-            children: sortedRows.filter((row) => !isVmTemplate(row)).map(toVmNode),
-          },
-          {
-            key: `node:${node}:templates`,
-            label: gettext('Template'),
-            kind: 'category' as const,
-            node,
-            children: sortedRows.filter(isVmTemplate).map(toVmNode),
-          },
-        ],
-      };
+  return treeNodeNames.value.map((node) => {
+    const rows = nodeGroups.get(node) || [];
+    const toVmNode = (row: VmResource): VmTreeNode => ({
+      key: vmKey(row),
+      label: `${textValue(row.vmid)} (${vmDisplayName(row) || gettext('No Name')})`,
+      kind: 'vm',
+      node: textValue(row.node),
+      vmid: textValue(row.vmid),
+      status: normalizedVmStatus(row.status) || 'unknown',
+      template: isVmTemplate(row),
     });
+    const sortedRows = [...rows].sort((left, right) =>
+      (textValue(left.name) || textValue(left.vmid)).localeCompare(
+        textValue(right.name) || textValue(right.vmid)
+      )
+    );
+    return {
+      key: `node:${node}`,
+      label: node,
+      kind: 'node',
+      node,
+      children: [
+        {
+          key: `node:${node}:vms`,
+          label: gettext('Virtual Machine'),
+          kind: 'category' as const,
+          node,
+          children: sortedRows.filter((row) => !isVmTemplate(row)).map(toVmNode),
+        },
+        {
+          key: `node:${node}:templates`,
+          label: gettext('Template'),
+          kind: 'category' as const,
+          node,
+          children: sortedRows.filter(isVmTemplate).map(toVmNode),
+        },
+      ],
+    };
+  });
 });
 
 const filteredTreeNodes = computed(() => {
@@ -182,11 +193,12 @@ const filteredTreeNodes = computed(() => {
   return filterNodes(treeNodes.value);
 });
 
-const selectedNode = computed(() => selectedTreeNode.value.match(/^node:([^:]+)/)?.[1] || '');
+const selectedTreeNodeKey = computed(() => selectedTreeNode.value || '');
+const selectedNode = computed(() => selectedTreeNodeKey.value.match(/^node:([^:]+)/)?.[1] || '');
 const selectedCategory = computed(() =>
-  selectedTreeNode.value.endsWith(':vms')
+  selectedTreeNodeKey.value.endsWith(':vms')
     ? 'vms'
-    : selectedTreeNode.value.endsWith(':templates')
+    : selectedTreeNodeKey.value.endsWith(':templates')
       ? 'templates'
       : ''
 );
@@ -458,13 +470,14 @@ function formatUptime(value: unknown) {
   return `${days}d ${hours}h ${minutes}m`;
 }
 
-function onTreeSelection(key: string) {
-  selectedTreeNode.value = key;
-  if (!key.startsWith('vm:')) {
+function onTreeSelection(key: string | null) {
+  const selectedKey = key || '';
+  selectedTreeNode.value = selectedKey;
+  if (!selectedKey.startsWith('vm:')) {
     selectedRows.value = [];
     return;
   }
-  const selected = resources.value.find((row) => vmKey(row) === key);
+  const selected = resources.value.find((row) => vmKey(row) === selectedKey);
   selectedRows.value = selected ? [selected] : [];
   if (selected) openDetail(selected);
 }
@@ -788,15 +801,19 @@ async function reload(silent = false) {
       getVmResources(),
       getNodes().catch(() => null),
     ]);
+    availableNodes.value = (nodesResponse?.data || [])
+      .map((node) => textValue(node.node))
+      .filter(Boolean);
     standalone.value = (nodesResponse?.data || []).length < 2;
     resources.value = (response.data || [])
       .filter((row) => row.type === 'qemu')
       .map(mergeVmDisplayName);
     const availableTreeKeys = new Set(
-      resources.value.flatMap((row) => {
-        const node = textValue(row.node) || gettext('Unknown');
-        return [`node:${node}`, `node:${node}:vms`, `node:${node}:templates`];
-      })
+      treeNodeNames.value.flatMap((node) => [
+        `node:${node}`,
+        `node:${node}:vms`,
+        `node:${node}:templates`,
+      ])
     );
     if (!treeExpansionInitialized && availableTreeKeys.size) {
       treeExpanded.value = [...availableTreeKeys];
@@ -880,52 +897,75 @@ onBeforeUnmount(() => {
       <q-card-section class="q-pa-md">
         <div class="row no-wrap vm-list-layout">
           <aside class="vm-resource-tree">
-            <q-input
-              v-model="treeSearch"
-              dense
-              outlined
-              square
-              clearable
-              class="vm-tree-search"
-              :placeholder="gettext('Search')"
+            <template v-if="treeNodeNames.length">
+              <q-input
+                v-model="treeSearch"
+                dense
+                outlined
+                square
+                clearable
+                class="vm-tree-search"
+                :placeholder="gettext('Search')"
+              >
+                <template #append><q-icon name="search" /></template>
+              </q-input>
+              <q-tree
+                v-if="filteredTreeNodes.length"
+                v-model:selected="selectedTreeNode"
+                v-model:expanded="treeExpanded"
+                :nodes="filteredTreeNodes"
+                node-key="key"
+                label-key="label"
+                selected-color="primary"
+                @update:selected="onTreeSelection"
+              >
+                <template #default-header="scope">
+                  <div class="row items-center no-wrap vm-tree-node">
+                    <q-icon
+                      :name="
+                        scope.node.kind === 'node'
+                          ? 'dns'
+                          : scope.node.kind === 'category'
+                            ? 'folder'
+                            : scope.node.template
+                              ? 'article'
+                              : 'desktop_windows'
+                      "
+                      :color="
+                        scope.node.kind === 'node'
+                          ? 'primary'
+                          : scope.node.kind === 'category'
+                            ? 'grey-7'
+                            : statusColor(scope.node.status)
+                      "
+                      size="16px"
+                      class="q-mr-xs"
+                    />
+                    <span class="ellipsis">{{ scope.node.label }}</span>
+                  </div>
+                </template>
+              </q-tree>
+              <div
+                v-else
+                class="vm-tree-empty vm-tree-empty--search"
+              >
+                <q-icon
+                  name="search_off"
+                  size="20px"
+                />
+                <span>{{ gettext('No matching nodes') }}</span>
+              </div>
+            </template>
+            <div
+              v-else
+              class="vm-tree-empty"
             >
-              <template #append><q-icon name="search" /></template>
-            </q-input>
-            <q-tree
-              v-model:selected="selectedTreeNode"
-              v-model:expanded="treeExpanded"
-              :nodes="filteredTreeNodes"
-              node-key="key"
-              label-key="label"
-              selected-color="primary"
-              @update:selected="onTreeSelection"
-            >
-              <template #default-header="scope">
-                <div class="row items-center no-wrap vm-tree-node">
-                  <q-icon
-                    :name="
-                      scope.node.kind === 'node'
-                        ? 'dns'
-                        : scope.node.kind === 'category'
-                          ? 'folder'
-                          : scope.node.template
-                            ? 'article'
-                            : 'desktop_windows'
-                    "
-                    :color="
-                      scope.node.kind === 'node'
-                        ? 'primary'
-                        : scope.node.kind === 'category'
-                          ? 'grey-7'
-                          : statusColor(scope.node.status)
-                    "
-                    size="16px"
-                    class="q-mr-xs"
-                  />
-                  <span class="ellipsis">{{ scope.node.label }}</span>
-                </div>
-              </template>
-            </q-tree>
+              <q-icon
+                name="dns"
+                size="24px"
+              />
+              <span>{{ gettext('No nodes available') }}</span>
+            </div>
           </aside>
 
           <section class="vm-table-panel">
@@ -1627,6 +1667,8 @@ onBeforeUnmount(() => {
     <q-dialog
       v-model="tagsDialogVisible"
       persistent
+      transition-show="scale"
+      transition-hide="scale"
     >
       <UWindow
         :title="gettext('Tags')"
@@ -1637,8 +1679,7 @@ onBeforeUnmount(() => {
           <q-input
             v-model="tagValue"
             dense
-            square
-            outlined
+            class="q-field--with-bottom"
             :label="gettext('Tags')"
             hint="tag1;tag2"
           />
@@ -1713,6 +1754,28 @@ onBeforeUnmount(() => {
   max-width: var(--vm-resource-tree-width);
   min-width: 0;
   font-size: 12px;
+}
+
+.vm-tree-empty {
+  display: flex;
+  min-height: 108px;
+  padding: 20px 12px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #666666;
+  font-size: 12px;
+  text-align: center;
+}
+
+.vm-tree-empty .q-icon {
+  color: #9aa1ad;
+}
+
+.vm-tree-empty--search {
+  min-height: 72px;
+  padding-top: 16px;
 }
 
 .vm-table-panel {

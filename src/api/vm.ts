@@ -281,11 +281,11 @@ export function cloneVm(
 export function deleteVm(
   node: string,
   vmid: number | string,
-  data?: { purge?: 0 | 1; 'destroy-unreferenced-disks'?: 0 | 1 }
+  params?: { purge?: 0 | 1; 'destroy-unreferenced-disks'?: 0 | 1 }
 ) {
   return request<string>(
     `/api2/extjs/nodes/${encodeURIComponent(node)}/qemu/${encodeURIComponent(String(vmid))}`,
-    { method: 'DELETE', ...(data ? { data } : {}), notifyOnError: true }
+    { method: 'DELETE', ...(params ? { params } : {}), notifyOnError: true }
   );
 }
 

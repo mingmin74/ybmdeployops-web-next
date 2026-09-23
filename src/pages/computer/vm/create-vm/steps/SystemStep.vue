@@ -17,11 +17,14 @@ const {
   isoStorageColumns,
 } = options;
 const { efiFormatDisabled, tpmFormatDisabled } = disks;
-const { stepContentHeight } = derived;
+const { stepContentHeight, requiredLabel } = derived;
 </script>
 
 <template>
-  <q-scroll-area class="q-pa-sm" :style="{ height: stepContentHeight('system') }">
+  <q-scroll-area
+    class="q-pa-sm"
+    :style="{ height: stepContentHeight('system') }"
+  >
     <div class="q-px-md q-py-sm u-border-dotted-blue bg-white">
       <div class="row q-gutter-lg">
         <div class="col">
@@ -97,7 +100,7 @@ const { stepContentHeight } = derived;
               options-dense
               class="q-field--with-bottom"
               :options="storageNames"
-              :label="gettext('EFI Storage')"
+              :label="requiredLabel(gettext('EFI Storage'))"
             />
             <q-select
               v-model="form.efiFormat"
@@ -139,10 +142,12 @@ const { stepContentHeight } = derived;
               :get-row-value="(row) => textValue(row.storage)"
               :error="Boolean(validationErrors.tpmStorage)"
               :error-message="validationErrors.tpmStorage || ''"
-              :label="gettext('TPM Storage')"
+              :label="requiredLabel(gettext('TPM Storage'))"
             />
             <q-select
               v-model="form.tpmFormat"
+              :error="Boolean(validationErrors.tpmFormat)"
+              :error-message="validationErrors.tpmFormat"
               dense
               options-dense
               emit-value
@@ -150,7 +155,7 @@ const { stepContentHeight } = derived;
               class="q-field--with-bottom"
               :disable="tpmFormatDisabled(form.tpmStorage)"
               :options="tpmFormatOptions"
-              :label="gettext('Format')"
+              :label="requiredLabel(gettext('Format'))"
             />
             <q-select
               v-model="form.tpmVersion"

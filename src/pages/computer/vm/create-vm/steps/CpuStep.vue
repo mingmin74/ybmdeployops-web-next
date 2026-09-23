@@ -20,11 +20,15 @@ const {
   cpuunitsDefault,
   canEditCpuAffinity,
   stepContentHeight,
+  requiredLabel,
 } = derived;
 </script>
 
 <template>
-  <q-scroll-area class="q-pa-sm" :style="{ height: stepContentHeight('cpu') }">
+  <q-scroll-area
+    class="q-pa-sm"
+    :style="{ height: stepContentHeight('cpu') }"
+  >
     <div class="q-px-md q-py-sm u-border-dotted-blue bg-white">
       <div class="row q-gutter-lg">
         <div class="col">
@@ -36,7 +40,7 @@ const {
             type="number"
             min="1"
             class="q-field--with-bottom"
-            :label="gettext('Sockets')"
+            :label="requiredLabel(gettext('Sockets'))"
           />
           <q-input
             v-model.number="form.cores"
@@ -46,7 +50,7 @@ const {
             type="number"
             min="1"
             max="256"
-            :label="gettext('Cores')"
+            :label="requiredLabel(gettext('Cores'))"
             class="q-field--with-bottom"
           />
         </div>
@@ -73,7 +77,10 @@ const {
         </div>
       </div>
     </div>
-    <div v-if="advanced" class="u-border-dotted-blue q-mt-sm q-px-md q-py-sm bg-white">
+    <div
+      v-if="advanced"
+      class="u-border-dotted-blue q-mt-sm q-px-md q-py-sm bg-white"
+    >
       <div class="row q-gutter-lg">
         <div class="col">
           <q-input

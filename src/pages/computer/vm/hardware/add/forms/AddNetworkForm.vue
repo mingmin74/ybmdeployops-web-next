@@ -21,6 +21,7 @@ export interface AddNetworkFormModel {
 }
 
 const form = defineModel<AddNetworkFormModel>('form', { required: true });
+const { validationAttempted } = defineProps<{ validationAttempted: boolean }>();
 const { node } = useVmHardwareContext();
 
 const bridgeRows = shallowRef<PveRecord[]>([]);
@@ -114,9 +115,9 @@ onMounted(() => {
             :display-value="form.bridge"
             :loading="loading"
             :get-row-value="(row) => textValue(row.iface)"
-            :error="bridgeError"
+            :error="validationAttempted && bridgeError"
             :error-message="gettext('This field is required')"
-            :label="gettext('Bridge')"
+            :label="`${gettext('Bridge')} *`"
           />
           <q-input
             v-model="form.vlanTag"
@@ -125,7 +126,7 @@ onMounted(() => {
             min="1"
             max="4094"
             class="q-field--with-bottom"
-            :error="!tagValid"
+            :error="validationAttempted && !tagValid"
             error-message="[1-4094]"
             :label="gettext('VLAN Tag')"
           />
@@ -146,7 +147,7 @@ onMounted(() => {
             dense
             class="q-field--with-bottom"
             placeholder="auto"
-            :error="!macValid"
+            :error="validationAttempted && !macValid"
             :error-message="gettext('Invalid Value')"
             :label="gettext('MAC address')"
           />
@@ -174,7 +175,7 @@ onMounted(() => {
             max="10240"
             class="q-field--with-bottom"
             placeholder="unlimited"
-            :error="!rateValid"
+            :error="validationAttempted && !rateValid"
             error-message="[0-10240]"
             :label="`${gettext('Rate limit')} (MB/s)`"
           />
@@ -196,7 +197,7 @@ onMounted(() => {
             min="1"
             max="64"
             class="q-field--with-bottom"
-            :error="!queuesValid"
+            :error="validationAttempted && !queuesValid"
             error-message="[1-64]"
             :label="gettext('Multiqueue')"
           />
@@ -208,7 +209,7 @@ onMounted(() => {
             max="65520"
             class="q-field--with-bottom"
             :disable="form.model !== 'virtio'"
-            :error="!mtuValid"
+            :error="validationAttempted && !mtuValid"
             :error-message="
               gettext('MTU needs to be >= 576 or 1 to inherit the MTU from the underlying bridge.')
             "

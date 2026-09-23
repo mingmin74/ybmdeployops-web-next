@@ -5,11 +5,14 @@ import { useCreateVmWizardContext } from '../context/createVmWizardContext';
 const { form, state, errors, derived } = useCreateVmWizardContext();
 const { advanced } = state;
 const { validationErrors } = errors;
-const { stepContentHeight } = derived;
+const { stepContentHeight, requiredLabel } = derived;
 </script>
 
 <template>
-  <q-scroll-area class="q-pa-sm" :style="{ height: stepContentHeight('memory') }">
+  <q-scroll-area
+    class="q-pa-sm"
+    :style="{ height: stepContentHeight('memory') }"
+  >
     <div class="q-px-md q-py-sm u-border-dotted-blue bg-white">
       <div class="row q-gutter-lg">
         <div class="col">
@@ -22,12 +25,15 @@ const { stepContentHeight } = derived;
             min="1"
             step="32"
             class="q-field--with-bottom"
-            :label="gettext('Memory (MiB)')"
+            :label="requiredLabel(gettext('Memory (MiB)'))"
           />
         </div>
       </div>
     </div>
-    <div v-if="advanced" class="q-mt-sm u-border-dotted-blue q-px-md q-py-sm bg-white">
+    <div
+      v-if="advanced"
+      class="q-mt-sm u-border-dotted-blue q-px-md q-py-sm bg-white"
+    >
       <div class="row q-gutter-lg">
         <div class="col">
           <q-input

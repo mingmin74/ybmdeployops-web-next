@@ -8,12 +8,15 @@ const { form, resources, errors, options, derived } = useCreateVmWizardContext()
 const { validationErrors } = errors;
 const { isoStorageRows, isoImageRows, virtioIsoImageRows } = resources;
 const { osBaseOptions, osVersionOptions, isoStorageColumns, isoImageColumns } = options;
-const { isoImageName, stepContentHeight } = derived;
+const { isoImageName, stepContentHeight, requiredLabel } = derived;
 </script>
 
 <template>
   <q-form @submit.prevent>
-    <q-scroll-area class="q-pa-sm u-size-13" :style="{ height: stepContentHeight('os') }">
+    <q-scroll-area
+      class="q-pa-sm u-size-13"
+      :style="{ height: stepContentHeight('os') }"
+    >
       <div class="u-border-dotted-blue bg-white q-px-md q-py-sm">
         <div class="row q-gutter-lg">
           <div class="col column q-ml-md">
@@ -36,7 +39,7 @@ const { isoImageName, stepContentHeight } = derived;
                 :disable="form.mediaType !== 'iso'"
                 :error="Boolean(validationErrors.isoStorage)"
                 :error-message="validationErrors.isoStorage || ''"
-                :label="gettext('Storage')"
+                :label="requiredLabel(gettext('Storage'))"
                 class="q-field--with-bottom"
               />
               <SelectTable
@@ -52,7 +55,7 @@ const { isoImageName, stepContentHeight } = derived;
                 :get-row-value="(row) => textValue(row.volid)"
                 :error="Boolean(validationErrors.cdrom)"
                 :error-message="validationErrors.cdrom || ''"
-                :label="gettext('ISO image')"
+                :label="requiredLabel(gettext('ISO image'))"
                 class="q-field--with-bottom"
               />
               <q-select
@@ -70,7 +73,11 @@ const { isoImageName, stepContentHeight } = derived;
               val="cdrom"
               :label="gettext('Use physical CD/DVD Drive')"
             />
-            <q-radio v-model="form.mediaType" val="none" :label="gettext('Do not use any media')" />
+            <q-radio
+              v-model="form.mediaType"
+              val="none"
+              :label="gettext('Do not use any media')"
+            />
           </div>
           <div class="col column">
             <div style="line-height: 40px">{{ gettext('Guest OS') }}:</div>
@@ -102,7 +109,10 @@ const { isoImageName, stepContentHeight } = derived;
               color="primary"
               :label="gettext('Add additional drive for VirtIO drivers')"
             />
-            <div v-if="form.enableVirtioDrivers" class="q-ml-lg q-pt-md">
+            <div
+              v-if="form.enableVirtioDrivers"
+              class="q-ml-lg q-pt-md"
+            >
               <SelectTable
                 v-model="form.virtioIsoStorage"
                 row-key="storage"
@@ -113,7 +123,7 @@ const { isoImageName, stepContentHeight } = derived;
                 :columns="isoStorageColumns"
                 :display-value="form.virtioIsoStorage"
                 :get-row-value="(row) => textValue(row.storage)"
-                :label="gettext('Storage')"
+                :label="requiredLabel(gettext('Storage'))"
                 class="q-field--with-bottom"
               />
               <SelectTable
@@ -128,7 +138,7 @@ const { isoImageName, stepContentHeight } = derived;
                 :get-row-value="(row) => textValue(row.volid)"
                 :error="Boolean(validationErrors.virtioDriversCdrom)"
                 :error-message="validationErrors.virtioDriversCdrom || ''"
-                :label="gettext('ISO image')"
+                :label="requiredLabel(gettext('ISO image'))"
               />
             </div>
           </div>

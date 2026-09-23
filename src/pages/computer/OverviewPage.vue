@@ -573,7 +573,7 @@ onUnmounted(clearTimers);
         class="text-red q-mr-sm"
         size="24px"
       />
-      {{ gettext('Not found VM') }}
+      {{ gettext('Not found guest') }}
     </div>
 
     <div class="overview-toolbar">

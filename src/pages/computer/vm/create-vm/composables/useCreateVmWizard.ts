@@ -56,7 +56,7 @@ type CreateVmWizardEmit = {
 
 export function useCreateVmWizard(
   model: Ref<boolean>,
-  emit: CreateVmWizardEmit,
+  emit: CreateVmWizardEmit
 ): CreateVmWizardContext {
   const session = useSessionStore();
   const loading = shallowRef(false);
@@ -163,15 +163,14 @@ export function useCreateVmWizard(
   const onlineNodes = computed(() => nodes.value.filter((node) => node.status === 'online'));
   const hostArchitecture = computed(() => {
     const node = nodes.value.find((item) => item.node === form.node) as
-      | (PveNode & { 'host-arch'?: unknown })
-      | undefined;
+      (PveNode & { 'host-arch'?: unknown }) | undefined;
     return textValue(node?.['host-arch']) || 'x86_64';
   });
   const effectiveArch = computed(() =>
-    form.arch === '__default__' ? hostArchitecture.value : form.arch,
+    form.arch === '__default__' ? hostArchitecture.value : form.arch
   );
   const crossArchitecture = computed(
-    () => form.arch !== '__default__' && form.arch !== hostArchitecture.value,
+    () => form.arch !== '__default__' && form.arch !== hostArchitecture.value
   );
   const isoStorageColumns: QTableColumn<PveRecord>[] = [
     {
@@ -309,7 +308,7 @@ export function useCreateVmWizard(
     form.tags
       .split(/[;, ]/)
       .map((tag) => tag.trim())
-      .filter(Boolean),
+      .filter(Boolean)
   );
   const validationErrorEntries = computed(() => Object.entries(validationErrors));
   const osBaseOptions = computed(() => {
@@ -364,12 +363,10 @@ export function useCreateVmWizard(
     virtio: 16,
   };
   const diskStorageRows = computed(() =>
-    imageStorageRows.value.filter((row) =>
-      row.avail === undefined ? true : Number(row.avail) > 0,
-    ),
+    imageStorageRows.value.filter((row) => (row.avail === undefined ? true : Number(row.avail) > 0))
   );
   const diskStorageNames = computed(() =>
-    diskStorageRows.value.map((row) => textValue(row.storage)).filter(Boolean),
+    diskStorageRows.value.map((row) => textValue(row.storage)).filter(Boolean)
   );
   const cacheOptions = [
     { label: `${gettext('Default')} (${gettext('No cache')})`, value: '__default__' },
@@ -406,21 +403,23 @@ export function useCreateVmWizard(
   function diskFormatOptions(storageName: string) {
     const { supported } = storageFormatInfo(storageName);
     const values = supported.length ? supported : ['raw', 'qcow2'];
-    return ['raw', 'qcow2', 'vmdk'].filter((value) => values.includes(value)).map((value) => ({
-      label:
-        value === 'raw'
-          ? `${gettext('Raw disk image')} (raw)`
-          : value === 'qcow2'
-            ? `${gettext('QEMU image format')} (qcow2)`
-            : `${gettext('VMware image format')} (vmdk)`,
-      value,
-    }));
+    return ['raw', 'qcow2', 'vmdk']
+      .filter((value) => values.includes(value))
+      .map((value) => ({
+        label:
+          value === 'raw'
+            ? `${gettext('Raw disk image')} (raw)`
+            : value === 'qcow2'
+              ? `${gettext('QEMU image format')} (qcow2)`
+              : `${gettext('VMware image format')} (vmdk)`,
+        value,
+      }));
   }
   function diskFormatDisabled(storageName: string) {
     if (!storageName) return true;
     return (
       storageFormatInfo(storageName).supported.filter((format) =>
-        ['raw', 'qcow2', 'vmdk'].includes(format),
+        ['raw', 'qcow2', 'vmdk'].includes(format)
       ).length <= 1
     );
   }
@@ -458,7 +457,7 @@ export function useCreateVmWizard(
           { label: gettext('Default'), value: '__default__' },
           { label: 'SeaBIOS', value: 'seabios' },
           { label: 'OVMF (UEFI)', value: 'ovmf' },
-        ],
+        ]
   );
   const machineOptions = computed(() =>
     effectiveArch.value === 'aarch64'
@@ -466,7 +465,7 @@ export function useCreateVmWizard(
       : [
           { label: `${gettext('Default')} (i440fx)`, value: '__default__' },
           { label: 'q35', value: 'q35' },
-        ],
+        ]
   );
   const scsiControllerOptions = computed(() =>
     effectiveArch.value === 'aarch64'
@@ -482,12 +481,12 @@ export function useCreateVmWizard(
           { label: 'VirtIO SCSI', value: 'virtio-scsi-pci' },
           { label: 'VirtIO SCSI single', value: 'virtio-scsi-single' },
           { label: 'VMware PVSCSI', value: 'pvscsi' },
-        ],
+        ]
   );
   const scsiControllerLabel = computed(
     () =>
       scsiControllerOptions.value.find((option) => option.value === form.scsihw)?.label ||
-      form.scsihw,
+      form.scsihw
   );
   const tpmFormatOptions = computed(() => {
     const { supported } = storageFormatInfo(form.tpmStorage, imageStorageRows.value);
@@ -523,7 +522,7 @@ export function useCreateVmWizard(
     if (!storageName) return true;
     return (
       storageFormatInfo(storageName, imageStorageRows.value).supported.filter((format) =>
-        ['raw', 'qcow2', 'vmdk'].includes(format),
+        ['raw', 'qcow2', 'vmdk'].includes(format)
       ).length <= 1
     );
   }
@@ -531,7 +530,7 @@ export function useCreateVmWizard(
     if (!storageName) return true;
     return (
       storageFormatInfo(storageName, imageStorageRows.value).supported.filter((format) =>
-        ['raw', 'qcow2', 'vmdk'].includes(format),
+        ['raw', 'qcow2', 'vmdk'].includes(format)
       ).length <= 1
     );
   }
@@ -570,7 +569,7 @@ export function useCreateVmWizard(
       form.format &&
       hasValidDiskSize(form.diskSize) &&
       hasValidDiskSlot(form.diskSlot, form.diskBus) &&
-      !used.has(primaryDiskKey.value),
+      !used.has(primaryDiskKey.value)
     );
     used.add(primaryDiskKey.value);
     const extras: Record<number, boolean> = {};
@@ -583,7 +582,7 @@ export function useCreateVmWizard(
           ? disk.importSourceStorage && disk.importFrom
           : hasValidDiskSize(disk.size)) &&
         hasValidDiskSlot(disk.slot, disk.bus) &&
-        !used.has(key),
+        !used.has(key)
       );
       extras[disk.id] = valid;
       used.add(key);
@@ -593,8 +592,7 @@ export function useCreateVmWizard(
   const totalCores = computed(() => form.sockets * form.cores);
   const cgroupMode = computed(() => {
     const node = nodes.value.find((item) => item.node === form.node) as
-      | (PveNode & Record<string, unknown>)
-      | undefined;
+      (PveNode & Record<string, unknown>) | undefined;
     return Number(node?.['cgroup-mode'] ?? 2);
   });
   const cpuunitsMin = computed(() => (cgroupMode.value === 1 ? 2 : 1));
@@ -606,13 +604,13 @@ export function useCreateVmWizard(
       name: textValue(cpu.name),
       displayname: textValue(cpu.displayname) || textValue(cpu.name).replace(/^custom-/, ''),
       vendor: cpu.name === 'host' ? 'Host' : textValue(cpu.vendor),
-    })),
+    }))
   );
   const bridgeRows = computed(() => bridges.value);
   const cpuModelDisplayValue = computed(
     () =>
       textValue(cpuModelRows.value.find((row) => textValue(row.name) === form.cpu)?.displayname) ||
-      `${gettext('Default')} (${effectiveArch.value === 'x86_64' ? 'x86-64-v2-AES' : 'host'})`,
+      `${gettext('Default')} (${effectiveArch.value === 'x86_64' ? 'x86-64-v2-AES' : 'host'})`
   );
   const cpuValue = computed(() => {
     const cpu = form.cpu.trim() || (effectiveArch.value === 'x86_64' ? 'x86-64-v2-AES' : '');
@@ -664,7 +662,7 @@ export function useCreateVmWizard(
     storage: string,
     size: number,
     settings: DiskSettings & Partial<Pick<ExtraDisk, 'isImport' | 'importFrom'>>,
-    bus: DiskBus = 'scsi',
+    bus: DiskBus = 'scsi'
   ) {
     const parts = [`${storage.trim()}:${settings.isImport ? 0 : size}`];
     if (settings.isImport && settings.importFrom) parts.push(`import-from=${settings.importFrom}`);
@@ -697,8 +695,8 @@ export function useCreateVmWizard(
       extraDisks.map((disk) => [
         `${disk.bus}${disk.slot}`,
         diskValue(disk.storage, disk.size, disk, disk.bus),
-      ]),
-    ),
+      ])
+    )
   );
   const canCreate = computed(() =>
     Boolean(
@@ -718,7 +716,8 @@ export function useCreateVmWizard(
       (!form.vcpus.trim() || (Number(form.vcpus) >= 1 && Number(form.vcpus) <= totalCores.value)) &&
       (!form.cpulimit.trim() || (Number(form.cpulimit) >= 0 && Number(form.cpulimit) <= 128)) &&
       (!form.cpuunits.trim() ||
-        (Number(form.cpuunits) >= cpuunitsMin.value && Number(form.cpuunits) <= cpuunitsMax.value)) &&
+        (Number(form.cpuunits) >= cpuunitsMin.value &&
+          Number(form.cpuunits) <= cpuunitsMax.value)) &&
       (!form.noNetwork && form.vlanTag.trim()
         ? Number(form.vlanTag) >= 1 && Number(form.vlanTag) <= 4094
         : true) &&
@@ -731,8 +730,8 @@ export function useCreateVmWizard(
       (!form.noNetwork && form.model === 'virtio' && form.mtu.trim()
         ? Number(form.mtu) === 1 || (Number(form.mtu) >= 576 && Number(form.mtu) <= 65520)
         : true) &&
-      (form.noNetwork || form.bridge.trim()),
-    ),
+      (form.noNetwork || form.bridge.trim())
+    )
   );
   const startup = computed(() => {
     const values = [
@@ -804,10 +803,12 @@ export function useCreateVmWizard(
     ...(form.vga !== '__default__' ? { vga: form.vga } : {}),
     ...serialVgaPayload.value,
     ...(form.bios !== '__default__' ? { bios: form.bios } : {}),
-    machine: form.machine,
+    ...(form.machine !== '__default__' ? { machine: form.machine } : {}),
     scsihw: form.scsihw,
     ...(form.bios === 'ovmf' && form.addEfiDisk && form.efiStorage
-      ? { efidisk0: `${form.efiStorage}:1,efitype=4m,format=${form.efiFormat},pre-enrolled-keys=${form.preEnrolledKeys ? 1 : 0}` }
+      ? {
+          efidisk0: `${form.efiStorage}:1,efitype=4m,format=${form.efiFormat},pre-enrolled-keys=${form.preEnrolledKeys ? 1 : 0}`,
+        }
       : {}),
     ...(form.addTpm && form.tpmStorage
       ? { tpmstate0: `${form.tpmStorage}:1,format=${form.tpmFormat},version=${form.tpmVersion}` }
@@ -819,8 +820,12 @@ export function useCreateVmWizard(
     cores: form.cores,
     ...(cpuValue.value ? { cpu: cpuValue.value } : {}),
     ...(form.vcpus.trim() ? { vcpus: form.vcpus.trim() } : {}),
-    ...(form.cpulimit.trim() && Number(form.cpulimit) !== 0 ? { cpulimit: form.cpulimit.trim() } : {}),
-    ...(form.cpuunits.trim() && Number(form.cpuunits) !== cpuunitsDefault.value ? { cpuunits: form.cpuunits.trim() } : {}),
+    ...(form.cpulimit.trim() && Number(form.cpulimit) !== 0
+      ? { cpulimit: form.cpulimit.trim() }
+      : {}),
+    ...(form.cpuunits.trim() && Number(form.cpuunits) !== cpuunitsDefault.value
+      ? { cpuunits: form.cpuunits.trim() }
+      : {}),
     ...(form.affinity.trim() ? { affinity: form.affinity.trim() } : {}),
     ...(form.numa ? { numa: 1 } : {}),
     memory: form.memory,
@@ -833,7 +838,7 @@ export function useCreateVmWizard(
     Object.entries({ node: form.node, ...createPayload.value })
       .filter(([key, value]) => key && value !== '')
       .map(([key, value]) => [key, String(value)] as [string, string])
-      .sort(([left], [right]) => left.localeCompare(right)),
+      .sort(([left], [right]) => left.localeCompare(right))
   );
 
   async function loadStorage() {
@@ -847,7 +852,7 @@ export function useCreateVmWizard(
     const response = await getNodeStorage(node, 'images');
     if (node !== form.node) return;
     imageStorageRows.value = [...(response.data || [])].sort((left, right) =>
-      textValue(left.storage).localeCompare(textValue(right.storage)),
+      textValue(left.storage).localeCompare(textValue(right.storage))
     );
     storageNames.value = imageStorageRows.value
       .map((item) => textValue(item.storage))
@@ -881,7 +886,7 @@ export function useCreateVmWizard(
     const response = await getNodeStorage(node, 'import');
     if (node !== form.node) return;
     importStorageRows.value = [...(response.data || [])].sort((left, right) =>
-      textValue(left.storage).localeCompare(textValue(right.storage)),
+      textValue(left.storage).localeCompare(textValue(right.storage))
     );
   }
 
@@ -910,7 +915,7 @@ export function useCreateVmWizard(
     }
     const response = await getNodeStorage(form.node, 'iso');
     isoStorageRows.value = [...(response.data || [])].sort((left, right) =>
-      textValue(left.storage).localeCompare(textValue(right.storage)),
+      textValue(left.storage).localeCompare(textValue(right.storage))
     );
     isoStorageNames.value = isoStorageRows.value
       .map((item) => textValue(item.storage))
@@ -931,7 +936,7 @@ export function useCreateVmWizard(
     }
     const response = await getStorageContent(form.node, form.isoStorage, 'iso');
     isoImageRows.value = [...(response.data || [])].sort((left, right) =>
-      textValue(left.volid).localeCompare(textValue(right.volid)),
+      textValue(left.volid).localeCompare(textValue(right.volid))
     );
     isoImages.value = isoImageRows.value
       .map((item) => textValue(item.volid))
@@ -948,7 +953,7 @@ export function useCreateVmWizard(
     }
     const response = await getStorageContent(form.node, form.virtioIsoStorage, 'iso');
     virtioIsoImageRows.value = [...(response.data || [])].sort((left, right) =>
-      textValue(left.volid).localeCompare(textValue(right.volid)),
+      textValue(left.volid).localeCompare(textValue(right.volid))
     );
     if (!virtioIsoImageRows.value.some((row) => textValue(row.volid) === form.virtioDriversCdrom)) {
       form.virtioDriversCdrom = '';
@@ -963,8 +968,8 @@ export function useCreateVmWizard(
     ]);
     cpuModels.value = (models.data || []).sort((left, right) =>
       String(left.displayname || left.name || '').localeCompare(
-        String(right.displayname || right.name || ''),
-      ),
+        String(right.displayname || right.name || '')
+      )
     );
     cpuFlags.value = (flags.data || [])
       .map((flag) => (typeof flag === 'string' ? { name: flag } : flag))
@@ -1020,6 +1025,10 @@ export function useCreateVmWizard(
     if (!validationErrors[field]) validationErrors[field] = message;
   }
 
+  function requiredLabel(label: string) {
+    return `${label} *`;
+  }
+
   function isoImageName(value: unknown) {
     return textValue(value).replace(/^.*:(.*\/)?/, '');
   }
@@ -1039,19 +1048,19 @@ export function useCreateVmWizard(
     } ${units[unitIndex]}`;
   }
 
-  function requireValue(field: string, label: string, value: unknown) {
+  function requireValue(field: string, _label: string, value: unknown) {
     if (String(value ?? '').trim()) return;
-    addValidationError(field, `${label}: ${gettext('This field is required')}`);
+    addValidationError(field, gettext('This field is required'));
   }
 
   function validateNumber(
     field: string,
-    label: string,
+    _label: string,
     value: unknown,
     min: number,
     max: number | undefined,
     optional = false,
-    integer = true,
+    integer = true
   ) {
     const raw = String(value ?? '').trim();
     if (!raw) {
@@ -1068,8 +1077,8 @@ export function useCreateVmWizard(
       addValidationError(
         field,
         max === undefined
-          ? `${label}: ${gettext('Value must be at least')} ${min}`
-          : `${label}: ${gettext('Value must be between')} ${min} and ${max}`,
+          ? `${gettext('Value must be at least')} ${min}`
+          : `${gettext('Value must be between')} ${min} and ${max}`
       );
     }
   }
@@ -1126,11 +1135,14 @@ export function useCreateVmWizard(
         gettext('Device ID'),
         form.diskSlot,
         0,
-        diskBusSlotLimits[form.diskBus] - 1,
+        diskBusSlotLimits[form.diskBus] - 1
       );
       const usedDiskKeys = reservedDeviceKeys();
       if (usedDiskKeys.has(primaryDiskKey.value)) {
-        addValidationError('diskSlot', `${gettext('Device ID')}: ${gettext('This value is already in use')}`);
+        addValidationError(
+          'diskSlot',
+          `${gettext('Device ID')}: ${gettext('This value is already in use')}`
+        );
       }
       usedDiskKeys.add(primaryDiskKey.value);
       extraDisks.forEach((disk) => {
@@ -1141,7 +1153,7 @@ export function useCreateVmWizard(
           requireValue(
             `${prefix}-import-storage`,
             gettext('Import Storage'),
-            disk.importSourceStorage,
+            disk.importSourceStorage
           );
           requireValue(`${prefix}-import-from`, gettext('Select Image'), disk.importFrom);
         } else {
@@ -1152,7 +1164,7 @@ export function useCreateVmWizard(
             0.001,
             131072,
             false,
-            false,
+            false
           );
         }
         validateNumber(
@@ -1160,13 +1172,13 @@ export function useCreateVmWizard(
           gettext('Device ID'),
           disk.slot,
           0,
-          diskBusSlotLimits[disk.bus] - 1,
+          diskBusSlotLimits[disk.bus] - 1
         );
         const key = `${disk.bus}${disk.slot}`;
         if (usedDiskKeys.has(key)) {
           addValidationError(
             `${prefix}-slot`,
-            `${gettext('Device ID')}: ${gettext('This value is already in use')}`,
+            `${gettext('Device ID')}: ${gettext('This value is already in use')}`
           );
         }
         usedDiskKeys.add(key);
@@ -1181,7 +1193,15 @@ export function useCreateVmWizard(
           ['iopsWriteMax', gettext('Write max burst IOPS'), 10, true],
         ];
         bandwidthFields.forEach(([field, label, min, integer]) =>
-          validateNumber(`${prefix}-${field}`, label, disk[field], min, Number.MAX_SAFE_INTEGER, true, integer),
+          validateNumber(
+            `${prefix}-${field}`,
+            label,
+            disk[field],
+            min,
+            Number.MAX_SAFE_INTEGER,
+            true,
+            integer
+          )
         );
       });
       const primaryBandwidthFields: Array<[keyof DiskSettings, string, number, boolean]> = [
@@ -1195,7 +1215,7 @@ export function useCreateVmWizard(
         ['iopsWriteMax', gettext('Write max burst IOPS'), 10, true],
       ];
       primaryBandwidthFields.forEach(([field, label, min, integer]) =>
-        validateNumber(field, label, form[field], min, Number.MAX_SAFE_INTEGER, true, integer),
+        validateNumber(field, label, form[field], min, Number.MAX_SAFE_INTEGER, true, integer)
       );
     }
 
@@ -1210,7 +1230,7 @@ export function useCreateVmWizard(
         form.cpuunits,
         cpuunitsMin.value,
         cpuunitsMax.value,
-        true,
+        true
       );
       if (
         effectiveArch.value === 'aarch64' &&
@@ -1237,7 +1257,7 @@ export function useCreateVmWizard(
       if (form.macaddr.trim() && !/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(form.macaddr)) {
         addValidationError(
           'macaddr',
-          `${gettext('MAC address')}: ${gettext('Invalid MAC address')}`,
+          `${gettext('MAC address')}: ${gettext('Invalid MAC address')}`
         );
       }
       if (form.model === 'virtio') {
@@ -1256,9 +1276,8 @@ export function useCreateVmWizard(
     return validationErrorEntries.value.length === 0;
   }
 
-  function stepContentHeight(stepName: string) {
-    const hasValidation = step.value === stepName && validationErrorEntries.value.length > 0;
-    return `${hasValidation ? 394 : 466}px`;
+  function stepContentHeight(_stepName: string) {
+    return '466px';
   }
 
   async function validateAllSteps() {
@@ -1304,10 +1323,10 @@ export function useCreateVmWizard(
         getNextVmId(),
       ]);
       nodes.value = (nodeResponse.data || []).sort((left, right) =>
-        left.node.localeCompare(right.node),
+        left.node.localeCompare(right.node)
       );
       pools.value = (poolResponse.data || []).sort((left, right) =>
-        left.poolid.localeCompare(right.poolid),
+        left.poolid.localeCompare(right.poolid)
       );
       form.node = onlineNodes.value[0]?.node || '';
       form.vmid = String(nextIdResponse.data || '');
@@ -1530,10 +1549,12 @@ export function useCreateVmWizard(
         : ['scsi', 'virtio', 'sata', 'ide'];
     const defaults = getOsDefaults(form.ostype, effectiveArch.value);
     const diskUsage = Object.fromEntries(buses.map((bus) => [bus, 0])) as Record<DiskBus, number>;
-    [primaryDiskKey.value, ...extraDisks.map((disk) => `${disk.bus}${disk.slot}`)].forEach((key) => {
-      const bus = buses.find((candidate) => key.startsWith(candidate));
-      if (bus) diskUsage[bus] += 1;
-    });
+    [primaryDiskKey.value, ...extraDisks.map((disk) => `${disk.bus}${disk.slot}`)].forEach(
+      (key) => {
+        const bus = buses.find((candidate) => key.startsWith(candidate));
+        if (bus) diskUsage[bus] += 1;
+      }
+    );
     const candidates = [...buses].sort((left, right) => {
       const priority = (bus: DiskBus) => defaults.busPriority[bus] ?? 0;
       return diskUsage[left] === diskUsage[right]
@@ -1587,7 +1608,7 @@ export function useCreateVmWizard(
     () => form.memory,
     (memory, previousMemory) => {
       if (form.balloon === previousMemory) form.balloon = memory;
-    },
+    }
   );
   watch(effectiveArch, () => {
     if (model.value && form.node) void loadCpuCapabilities();
@@ -1601,35 +1622,37 @@ export function useCreateVmWizard(
       if (model.value && node) {
         importStorageRows.value = [];
         Object.keys(importImageRows).forEach((storage) => delete importImageRows[storage]);
-        extraDisks.filter((disk) => disk.isImport).forEach((disk) => {
-          disk.importSourceStorage = '';
-          disk.importFrom = '';
-        });
+        extraDisks
+          .filter((disk) => disk.isImport)
+          .forEach((disk) => {
+            disk.importSourceStorage = '';
+            disk.importFrom = '';
+          });
         void loadStorage();
         void loadIsoStorage();
         void loadCpuCapabilities();
         void loadBridges();
       }
-    },
+    }
   );
   watch(
     () => form.isoStorage,
     () => {
       if (model.value) void loadIsoImages();
-    },
+    }
   );
   watch(
     () => form.virtioIsoStorage,
     () => {
       if (model.value) void loadVirtioIsoImages();
-    },
+    }
   );
   watch(
     () => form.osbase,
     () => {
       if (form.osbase !== 'Microsoft Windows') form.enableVirtioDrivers = false;
       applyOsBaseDefaults();
-    },
+    }
   );
   watch([() => form.ostype, effectiveArch], applyOsDefaults);
   watch(() => form.enableVirtioDrivers, applyVirtioDriverDefaults);
@@ -1637,7 +1660,7 @@ export function useCreateVmWizard(
     () => form.bios,
     (bios, previousBios) => {
       if (bios === 'ovmf' && previousBios !== 'ovmf') form.addEfiDisk = true;
-    },
+    }
   );
   watch(
     () => form.efiStorage,
@@ -1646,7 +1669,7 @@ export function useCreateVmWizard(
         efiFormatOptions.value.find((option) => option.value === 'qcow2')?.value ||
         efiFormatOptions.value[0]?.value ||
         'raw';
-    },
+    }
   );
   watch(
     efiFormatOptions,
@@ -1655,7 +1678,7 @@ export function useCreateVmWizard(
         form.efiFormat = efiFormatOptions.value[0]?.value || 'raw';
       }
     },
-    { immediate: true },
+    { immediate: true }
   );
   watch(
     () => form.tpmStorage,
@@ -1664,7 +1687,7 @@ export function useCreateVmWizard(
         tpmFormatOptions.value.find((option) => option.value === 'qcow2')?.value ||
         tpmFormatOptions.value[0]?.value ||
         'raw';
-    },
+    }
   );
   watch(
     tpmFormatOptions,
@@ -1673,11 +1696,11 @@ export function useCreateVmWizard(
         form.tpmFormat = tpmFormatOptions.value[0]?.value || 'raw';
       }
     },
-    { immediate: true },
+    { immediate: true }
   );
   watch(
     () => form.storage,
-    (storage) => resetDiskFormat(form, storage),
+    (storage) => resetDiskFormat(form, storage)
   );
   watch(
     [() => form.diskBus, () => form.scsihw],
@@ -1694,17 +1717,21 @@ export function useCreateVmWizard(
         form.readOnly = false;
         form.iothread = false;
       }
-    },
+    }
   );
   watch(
-    () => `${form.scsihw}|${extraDisks.map((disk) => `${disk.id}:${disk.bus}:${disk.storage}`).join(',')}`,
+    () =>
+      `${form.scsihw}|${extraDisks.map((disk) => `${disk.id}:${disk.bus}:${disk.storage}`).join(',')}`,
     (_current, previous = '') => {
       const [previousController, previousState = ''] = String(previous).split('|');
       const previousBusById = new Map(
-        previousState.split(',').filter(Boolean).map((entry) => {
-          const [id, bus] = entry.split(':');
-          return [Number(id), bus];
-        }),
+        previousState
+          .split(',')
+          .filter(Boolean)
+          .map((entry) => {
+            const [id, bus] = entry.split(':');
+            return [Number(id), bus];
+          })
       );
       extraDisks.forEach((disk) => {
         if (previousBusById.has(disk.id) && previousBusById.get(disk.id) !== disk.bus) {
@@ -1725,19 +1752,16 @@ export function useCreateVmWizard(
           disk.iothread = false;
         }
       });
-    },
+    }
   );
-  watch(
-    effectiveArch,
-    (arch) => {
-      if (arch === 'aarch64') {
-        if (form.diskBus === 'ide') form.diskBus = 'scsi';
-        extraDisks.forEach((disk) => {
-          if (disk.bus === 'ide') disk.bus = 'scsi';
-        });
-      }
-    },
-  );
+  watch(effectiveArch, (arch) => {
+    if (arch === 'aarch64') {
+      if (form.diskBus === 'ide') form.diskBus = 'scsi';
+      extraDisks.forEach((disk) => {
+        if (disk.bus === 'ide') disk.bus = 'scsi';
+      });
+    }
+  });
   return {
     state: { loading, step, advanced, activeDiskId, activeDiskTab, diskSplitter },
     form,
@@ -1831,6 +1855,7 @@ export function useCreateVmWizard(
       stepContentHeight,
       cpuFlagState,
       isoImageName,
+      requiredLabel,
     },
   };
 }

@@ -37,6 +37,7 @@ const nodes = shallowRef<PveNode[]>([]);
 const target = shallowRef('');
 const nextId = shallowRef<number | string>('');
 const cloneIdAvailable = shallowRef(false);
+const cloneValidationAttempted = shallowRef(false);
 const cloneName = shallowRef('');
 const cloneMode = shallowRef<'copy' | 'clone'>('copy');
 const migrateLocalDisks = shallowRef(false);
@@ -93,7 +94,7 @@ const canSubmit = computed(() => {
     return Boolean(props.vm?.node && props.vm?.vmid && deleteConfirmation.value === String(props.vm.vmid));
   if (props.operation === 'migrate')
     return Boolean(props.vm?.node && props.vm?.vmid && target.value && migrationPossible.value && !checking.value);
-  return Boolean(props.vm?.node && props.vm?.vmid && target.value && nextId.value && cloneIdAvailable.value && cloneNameValid.value && !checking.value);
+  return Boolean(props.vm?.node && props.vm?.vmid && target.value && cloneIdValid.value && cloneIdAvailable.value && cloneNameValid.value && !checking.value);
 });
 const cloneSnapshotVisible = computed(
   () => !props.vm?.template && snapshots.value.some((snapshot) => snapshot !== 'current'),
@@ -102,6 +103,24 @@ const cloneFormatDisabled = computed(
   () => cloneMode.value === 'clone' || !cloneStorage.value || storageFormats.value.length <= 1,
 );
 const cloneNameValid = computed(() => !cloneName.value.trim() || /^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*$/.test(cloneName.value.trim()));
+const cloneIdValid = computed(() => {
+  const value = String(nextId.value).trim();
+  return /^\d+$/.test(value) && Number(value) >= 100 && Number(value) <= 999999999;
+});
+const cloneTargetError = computed(() =>
+  cloneValidationAttempted.value && !target.value ? gettext('This field is required') : ''
+);
+const cloneIdError = computed(() =>
+  !cloneValidationAttempted.value
+    ? ''
+    : !nextId.value
+      ? gettext('This field is required')
+      : !cloneIdValid.value
+        ? gettext('VM ID must be between 100 and 999999999')
+        : !cloneIdAvailable.value && !checking.value
+          ? gettext('This VM ID is already in use')
+          : ''
+);
 const showForceMigration = computed(
   () => props.vm?.status !== 'running' && migrationLocalResources.value && session.userid === 'root@pam',
 );
@@ -115,7 +134,11 @@ const deleteMessage = computed(() =>
 );
 
 function defaultCloneName() {
-  return props.vm?.name ? `${props.vm.name}-clone` : '';
+  return '';
+}
+
+function requiredLabel(label: string) {
+  return `${label} *`;
 }
 
 async function initialize() {
@@ -150,6 +173,7 @@ async function initialize() {
     cloneSnapshot.value = 'current';
     clonePool.value = '';
     cloneFeatureReady.value = false;
+    cloneValidationAttempted.value = false;
     purge.value = false;
     destroyUnreferencedDisks.value = false;
     deleteConfirmation.value = '';
@@ -288,7 +312,9 @@ async function checkMigratePreconditions() {
 
 async function submit() {
   const vm = props.vm;
-  if (!vm?.node || !vm.vmid || !props.operation || !canSubmit.value) return;
+  if (!vm?.node || !vm.vmid || !props.operation) return;
+  if (props.operation === 'clone') cloneValidationAttempted.value = true;
+  if (!canSubmit.value) return;
 
   loading.value = true;
   try {
@@ -381,32 +407,43 @@ watch(nextId, async (vmid) => {
 <template>
   <q-dialog v-model="model" persistent transition-show="scale" transition-hide="scale">
     <UWindow :title="title" width="580px" :loading="loading">
-      <div class="q-pa-md u-hidden-error">
+      <div class="q-pa-md clone-operation-content">
         <template v-if="operation === 'delete' || operation === 'template'">
-          <div class="u-size-12">{{ deleteMessage }}</div>
-          <div v-if="operation === 'delete'" class="q-mt-md column q-gutter-sm">
+          <div
+            :class="[
+              'operation-message u-size-12',
+              { 'operation-message--danger': operation === 'delete' },
+            ]"
+          >
+            <q-icon v-if="operation === 'delete'" name="warning" size="18px" />
+            <span>{{ deleteMessage }}</span>
+          </div>
+          <div v-if="operation === 'delete'" class="delete-operation-content q-mt-md">
             <q-input
               v-model="deleteConfirmation"
               dense
-              outlined
-              square
+              class="q-field--with-bottom"
               :label="gettext('Please enter the VMID to confirm')"
               :hint="String(vm?.vmid || '')"
             />
-            <q-checkbox
-              v-model="purge"
-              dense
-              color="primary"
-              :label="gettext('Purge from job configurations')"
-            />
-            <q-checkbox
-              v-model="destroyUnreferencedDisks"
-              dense
-              color="primary"
-              :label="gettext('Destroy unreferenced disks owned by guest')"
-            />
-            <div class="text-caption text-grey-7">
-              {{ gettext('Referenced disks will always be destroyed.') }}
+            <div class="delete-options">
+              <q-checkbox
+                v-model="purge"
+                dense
+                right-label
+                color="primary"
+                :label="gettext('Purge from job configurations')"
+              />
+              <q-checkbox
+                v-model="destroyUnreferencedDisks"
+                dense
+                right-label
+                color="primary"
+                :label="gettext('Destroy unreferenced disks owned by guest')"
+              />
+              <div class="delete-options__hint text-caption">
+                {{ gettext('Referenced disks will always be destroyed.') }}
+              </div>
             </div>
           </div>
         </template>
@@ -429,15 +466,31 @@ watch(nextId, async (vmid) => {
               map-options
               class="q-field--with-bottom"
               :options="targetNodes.map((node) => ({ label: node.node, value: node.node }))"
-              :label="gettext('Target Node')"
+              :label="operation === 'clone' ? requiredLabel(gettext('Target Node')) : gettext('Target Node')"
+              :error="Boolean(cloneTargetError)"
+              :error-message="cloneTargetError"
             />
           </div>
           <template v-if="operation === 'clone'">
             <div class="col-12 col-sm-6">
-              <q-input v-model="nextId" dense class="q-field--with-bottom" :label="gettext('New VM ID')" />
+              <q-input
+                v-model="nextId"
+                dense
+                class="q-field--with-bottom"
+                :label="requiredLabel(gettext('New VM ID'))"
+                :error="Boolean(cloneIdError)"
+                :error-message="cloneIdError"
+              />
             </div>
             <div class="col-12 col-sm-6">
-              <q-input v-model="cloneName" dense class="q-field--with-bottom" :label="gettext('Name')" :error="!cloneNameValid" :error-message="gettext('Invalid DNS name')" />
+              <q-input
+                v-model="cloneName"
+                dense
+                class="q-field--with-bottom"
+                :label="gettext('Name')"
+                :error="cloneValidationAttempted && !cloneNameValid"
+                :error-message="gettext('Invalid DNS name')"
+              />
             </div>
             <div v-if="canCreateLinkedClone" class="col-12 col-sm-6">
               <q-select
@@ -447,7 +500,7 @@ watch(nextId, async (vmid) => {
                 emit-value
                 map-options
                 class="q-field--with-bottom"
-                :label="gettext('Mode')"
+                :label="requiredLabel(gettext('Mode'))"
                 :options="[
                   { label: gettext('Full Clone'), value: 'copy' },
                   { label: gettext('Linked Clone'), value: 'clone' },
@@ -461,7 +514,7 @@ watch(nextId, async (vmid) => {
                 options-dense
                 class="q-field--with-bottom"
                 :options="snapshots"
-                :label="gettext('Snapshot')"
+                :label="requiredLabel(gettext('Snapshot'))"
               />
             </div>
             <div class="col-12 col-sm-6">
@@ -556,7 +609,7 @@ watch(nextId, async (vmid) => {
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :disable="!canSubmit"
+          :disable="operation === 'clone' ? loading : !canSubmit"
           :loading="loading"
           :label="operation === 'delete' ? gettext('Delete') : operationLabel"
           @click="submit"
@@ -565,3 +618,45 @@ watch(nextId, async (vmid) => {
     </UWindow>
   </q-dialog>
 </template>
+
+<style scoped>
+.operation-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 20px;
+}
+
+.clone-operation-content :deep(.q-field__bottom) {
+  display: block !important;
+}
+
+.operation-message--danger {
+  padding: 8px 10px;
+  color: #7d271d;
+  background: #fff1ef;
+  border-left: 3px solid #cf4c35;
+}
+
+.operation-message--danger .q-icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #cf4c35;
+}
+
+.delete-operation-content {
+  display: grid;
+  gap: 8px;
+}
+
+.delete-options {
+  display: grid;
+  gap: 2px;
+}
+
+.delete-options__hint {
+  padding-left: 28px;
+  color: #666666;
+  line-height: 18px;
+}
+</style>

@@ -27,7 +27,10 @@ export interface AddPciFormModel {
 }
 
 const form = defineModel<AddPciFormModel>('form', { required: true });
-const { pcieSupported } = defineProps<{ pcieSupported: boolean }>();
+const { pcieSupported, validationAttempted } = defineProps<{
+  pcieSupported: boolean;
+  validationAttempted: boolean;
+}>();
 const { node } = useVmHardwareContext();
 
 const pciRows = shallowRef<PveRecord[]>([]);
@@ -222,9 +225,9 @@ onMounted(() => {
             :loading="loading"
             :get-row-value="(row) => textValue(row.id)"
             :disable="form.pciMode !== 'mapped'"
-            :error="form.pciMode === 'mapped' && selectedRequired"
+            :error="validationAttempted && form.pciMode === 'mapped' && selectedRequired"
             :error-message="gettext('This field is required')"
-            :label="gettext('Choose Device')"
+            :label="`${gettext('Choose Device')} *`"
           />
         </div>
 
@@ -243,9 +246,9 @@ onMounted(() => {
             :loading="loading"
             :get-row-value="(row) => textValue(row.id)"
             :disable="form.pciMode !== 'raw'"
-            :error="form.pciMode === 'raw' && selectedRequired"
+            :error="validationAttempted && form.pciMode === 'raw' && selectedRequired"
             :error-message="gettext('This field is required')"
-            :label="gettext('Choose Device')"
+            :label="`${gettext('Choose Device')} *`"
           />
         </div>
 
@@ -319,7 +322,7 @@ onMounted(() => {
             class="q-field--with-bottom"
             label="Vendor ID"
             placeholder="default"
-            :error="!pciIdValid(form.pciVendorId)"
+            :error="validationAttempted && !pciIdValid(form.pciVendorId)"
             :error-message="gettext('Use the format 0x1234')"
           />
           <q-input
@@ -328,7 +331,7 @@ onMounted(() => {
             class="q-field--with-bottom"
             label="Device ID"
             placeholder="default"
-            :error="!pciIdValid(form.pciDeviceId)"
+            :error="validationAttempted && !pciIdValid(form.pciDeviceId)"
             :error-message="gettext('Use the format 0x1234')"
           />
         </div>
@@ -349,7 +352,7 @@ onMounted(() => {
             class="q-field--with-bottom"
             label="Sub-Vendor ID"
             placeholder="default"
-            :error="!pciIdValid(form.pciSubVendorId)"
+            :error="validationAttempted && !pciIdValid(form.pciSubVendorId)"
             :error-message="gettext('Use the format 0x1234')"
           />
           <q-input
@@ -358,7 +361,7 @@ onMounted(() => {
             class="q-field--with-bottom"
             label="Sub-Device ID"
             placeholder="default"
-            :error="!pciIdValid(form.pciSubDeviceId)"
+            :error="validationAttempted && !pciIdValid(form.pciSubDeviceId)"
             :error-message="gettext('Use the format 0x1234')"
           />
         </div>

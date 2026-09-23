@@ -43,8 +43,9 @@ type ContainerTreeNode = QTreeNode & {
 const loading = shallowRef(false);
 const standalone = shallowRef(false);
 const resources = shallowRef<VmResource[]>([]);
+const availableNodes = shallowRef<string[]>([]);
 const selectedRows = shallowRef<VmResource[]>([]);
-const selectedTreeNode = shallowRef('');
+const selectedTreeNode = shallowRef<string | null>('');
 const search = shallowRef('');
 const treeSearch = shallowRef('');
 const treeExpanded = shallowRef<string[]>([]);
@@ -113,6 +114,17 @@ const visibleColumnNames = shallowRef<string[]>(
   })()
 );
 
+const treeNodeNames = computed(() =>
+  [
+    ...new Set([
+      ...availableNodes.value,
+      ...resources.value.map((row) => textValue(row.node) || gettext('Unknown')),
+    ]),
+  ]
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right))
+);
+
 const treeNodes = computed<ContainerTreeNode[]>(() => {
   const nodeGroups = new Map<string, VmResource[]>();
   resources.value.forEach((row) => {
@@ -122,46 +134,45 @@ const treeNodes = computed<ContainerTreeNode[]>(() => {
     nodeGroups.set(node, entries);
   });
 
-  return [...nodeGroups.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([node, rows]) => {
-      const toContainerNode = (row: VmResource): ContainerTreeNode => ({
-        key: containerKey(row),
-        label: `${textValue(row.vmid)} (${containerDisplayName(row) || gettext('No Name')})`,
-        kind: 'container',
-        node: textValue(row.node),
-        vmid: textValue(row.vmid),
-        status: textValue(row.status) || 'unknown',
-        template: Boolean(row.template),
-      });
-      const sortedRows = [...rows].sort((left, right) =>
-        (textValue(left.name) || textValue(left.vmid)).localeCompare(
-          textValue(right.name) || textValue(right.vmid)
-        )
-      );
-      return {
-        key: `node:${node}`,
-        label: node,
-        kind: 'node',
-        node,
-        children: [
-          {
-            key: `node:${node}:containers`,
-            label: gettext('Container'),
-            kind: 'category' as const,
-            node,
-            children: sortedRows.filter((row) => !row.template).map(toContainerNode),
-          },
-          {
-            key: `node:${node}:templates`,
-            label: gettext('Template'),
-            kind: 'category' as const,
-            node,
-            children: sortedRows.filter((row) => Boolean(row.template)).map(toContainerNode),
-          },
-        ],
-      };
+  return treeNodeNames.value.map((node) => {
+    const rows = nodeGroups.get(node) || [];
+    const toContainerNode = (row: VmResource): ContainerTreeNode => ({
+      key: containerKey(row),
+      label: `${textValue(row.vmid)} (${containerDisplayName(row) || gettext('No Name')})`,
+      kind: 'container',
+      node: textValue(row.node),
+      vmid: textValue(row.vmid),
+      status: textValue(row.status) || 'unknown',
+      template: Boolean(row.template),
     });
+    const sortedRows = [...rows].sort((left, right) =>
+      (textValue(left.name) || textValue(left.vmid)).localeCompare(
+        textValue(right.name) || textValue(right.vmid)
+      )
+    );
+    return {
+      key: `node:${node}`,
+      label: node,
+      kind: 'node',
+      node,
+      children: [
+        {
+          key: `node:${node}:containers`,
+          label: gettext('Container'),
+          kind: 'category' as const,
+          node,
+          children: sortedRows.filter((row) => !row.template).map(toContainerNode),
+        },
+        {
+          key: `node:${node}:templates`,
+          label: gettext('Template'),
+          kind: 'category' as const,
+          node,
+          children: sortedRows.filter((row) => Boolean(row.template)).map(toContainerNode),
+        },
+      ],
+    };
+  });
 });
 
 const filteredTreeNodes = computed(() => {
@@ -177,11 +188,12 @@ const filteredTreeNodes = computed(() => {
   return filterNodes(treeNodes.value);
 });
 
-const selectedNode = computed(() => selectedTreeNode.value.match(/^node:([^:]+)/)?.[1] || '');
+const selectedTreeNodeKey = computed(() => selectedTreeNode.value || '');
+const selectedNode = computed(() => selectedTreeNodeKey.value.match(/^node:([^:]+)/)?.[1] || '');
 const selectedCategory = computed(() =>
-  selectedTreeNode.value.endsWith(':containers')
+  selectedTreeNodeKey.value.endsWith(':containers')
     ? 'containers'
-    : selectedTreeNode.value.endsWith(':templates')
+    : selectedTreeNodeKey.value.endsWith(':templates')
       ? 'templates'
       : ''
 );
@@ -440,12 +452,13 @@ function unEscapeNotesTemplate(value: string) {
   return value.replace(/(\\\\|\\n)/g, (match) => (match === '\\\\' ? '\\' : '\n'));
 }
 
-function onTreeSelection(key: string) {
+function onTreeSelection(key: string | null) {
   // v-model:selected has already written the new key when this listener runs.
   // Toggling it here cleared category selections immediately, so their table
   // filters never took effect.
-  selectedTreeNode.value = key;
-  if (!key.startsWith('ct:')) {
+  const selectedKey = key || '';
+  selectedTreeNode.value = selectedKey;
+  if (!selectedKey.startsWith('ct:')) {
     selectedRows.value = [];
   }
 }
@@ -748,15 +761,19 @@ async function reload() {
       getVmResources(),
       getNodes().catch(() => null),
     ]);
+    availableNodes.value = (nodesResponse?.data || [])
+      .map((node) => textValue(node.node))
+      .filter(Boolean);
     standalone.value = (nodesResponse?.data || []).length < 2;
     resources.value = (response.data || [])
       .filter((row) => row.type === 'lxc')
       .map(mergeContainerDisplayName);
     const availableTreeKeys = new Set(
-      resources.value.flatMap((row) => {
-        const node = textValue(row.node) || gettext('Unknown');
-        return [`node:${node}`, `node:${node}:containers`, `node:${node}:templates`];
-      })
+      treeNodeNames.value.flatMap((node) => [
+        `node:${node}`,
+        `node:${node}:containers`,
+        `node:${node}:templates`,
+      ])
     );
     if (!treeExpansionInitialized && availableTreeKeys.size) {
       treeExpanded.value = [...availableTreeKeys];
@@ -785,58 +802,81 @@ onMounted(() => {
       <q-card-section class="q-pa-md">
         <div class="row no-wrap vm-list-layout">
           <aside class="vm-resource-tree">
-            <q-input
-              v-model="treeSearch"
-              dense
-              outlined
-              square
-              clearable
-              debounce="200"
-              class="vm-tree-search"
-              :placeholder="gettext('Search')"
+            <template v-if="treeNodeNames.length">
+              <q-input
+                v-model="treeSearch"
+                dense
+                outlined
+                square
+                clearable
+                debounce="200"
+                class="vm-tree-search"
+                :placeholder="gettext('Search')"
+              >
+                <template #append><q-icon name="search" /></template>
+              </q-input>
+              <q-tree
+                v-if="filteredTreeNodes.length"
+                v-model:selected="selectedTreeNode"
+                v-model:expanded="treeExpanded"
+                :nodes="filteredTreeNodes"
+                node-key="key"
+                label-key="label"
+                selected-color="primary"
+                @update:selected="onTreeSelection"
+              >
+                <template #default-header="{ node }">
+                  <div class="row items-center no-wrap vm-tree-node">
+                    <q-icon
+                      :name="
+                        node.kind === 'node'
+                          ? 'dns'
+                          : node.kind === 'category'
+                            ? 'folder'
+                            : 'inventory_2'
+                      "
+                      size="16px"
+                      class="q-mr-xs"
+                      :color="node.kind === 'container' ? statusColor(node.status) : 'grey-7'"
+                    />
+                    <button
+                      v-if="node.kind === 'container'"
+                      type="button"
+                      class="vm-tree-node__link ellipsis"
+                      @click.stop="openTreeContainer(node)"
+                    >
+                      {{ node.label }}
+                    </button>
+                    <span
+                      v-else
+                      class="ellipsis"
+                    >
+                      {{ node.label }}
+                    </span>
+                  </div>
+                </template>
+              </q-tree>
+              <div
+                v-else
+                class="vm-tree-empty vm-tree-empty--search"
+              >
+                <q-icon
+                  name="search_off"
+                  size="20px"
+                />
+                <span>{{ gettext('No matching nodes') }}</span>
+              </div>
+            </template>
+            <div
+              v-else
+              class="vm-tree-empty"
             >
-              <template #append><q-icon name="search" /></template>
-            </q-input>
-            <q-tree
-              v-model:selected="selectedTreeNode"
-              v-model:expanded="treeExpanded"
-              :nodes="filteredTreeNodes"
-              node-key="key"
-              label-key="label"
-              selected-color="primary"
-              @update:selected="onTreeSelection"
-            >
-              <template #default-header="{ node }">
-                <div class="row items-center no-wrap vm-tree-node">
-                  <q-icon
-                    :name="
-                      node.kind === 'node'
-                        ? 'dns'
-                        : node.kind === 'category'
-                          ? 'folder'
-                          : 'inventory_2'
-                    "
-                    size="16px"
-                    class="q-mr-xs"
-                    :color="node.kind === 'container' ? statusColor(node.status) : 'grey-7'"
-                  />
-                  <button
-                    v-if="node.kind === 'container'"
-                    type="button"
-                    class="vm-tree-node__link ellipsis"
-                    @click.stop="openTreeContainer(node)"
-                  >
-                    {{ node.label }}
-                  </button>
-                  <span
-                    v-else
-                    class="ellipsis"
-                  >
-                    {{ node.label }}
-                  </span>
-                </div>
-              </template>
-            </q-tree>
+              <q-icon
+                name="dns"
+                size="24px"
+              />
+              <span>{{ gettext('No nodes available') }}</span>
+            </div>
           </aside>
 
           <section class="vm-table-panel">
@@ -1469,6 +1509,28 @@ onMounted(() => {
   max-width: var(--vm-resource-tree-width);
   min-width: 0;
   font-size: 12px;
+}
+
+.vm-tree-empty {
+  display: flex;
+  min-height: 108px;
+  padding: 20px 12px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #666666;
+  font-size: 12px;
+  text-align: center;
+}
+
+.vm-tree-empty .q-icon {
+  color: #9aa1ad;
+}
+
+.vm-tree-empty--search {
+  min-height: 72px;
+  padding-top: 16px;
 }
 
 .vm-tree-node__link {

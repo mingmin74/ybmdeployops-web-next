@@ -20,7 +20,10 @@ export interface AddUsbFormModel {
 }
 
 const form = defineModel<AddUsbFormModel>('form', { required: true });
-const { disableUsb3 = false } = defineProps<{ disableUsb3?: boolean }>();
+const { disableUsb3 = false, validationAttempted } = defineProps<{
+  disableUsb3?: boolean;
+  validationAttempted: boolean;
+}>();
 const { node } = useVmHardwareContext();
 
 const usbRows = shallowRef<PveRecord[]>([]);
@@ -144,9 +147,9 @@ onMounted(() => {
             :loading="loading"
             :get-row-value="(row) => textValue(row.id)"
             :disable="form.usbMode !== 'mapped'"
-            :error="form.usbMode === 'mapped' && selectedRequired"
+            :error="validationAttempted && form.usbMode === 'mapped' && selectedRequired"
             :error-message="gettext('This field is required')"
-            :label="gettext('Choose Device')"
+            :label="`${gettext('Choose Device')} *`"
           />
         </div>
         <q-radio
@@ -169,13 +172,17 @@ onMounted(() => {
             :loading="loading"
             :get-row-value="(row) => textValue(row.deviceKey)"
             :disable="form.usbMode !== 'hostdevice'"
-            :error="form.usbMode === 'hostdevice' && (selectedRequired || !hostDeviceValid)"
+            :error="
+              validationAttempted &&
+              form.usbMode === 'hostdevice' &&
+              (selectedRequired || !hostDeviceValid)
+            "
             :error-message="
               selectedRequired
                 ? gettext('This field is required')
                 : gettext('Use the format 1234:5678')
             "
-            :label="gettext('Choose Device')"
+            :label="`${gettext('Choose Device')} *`"
           />
         </div>
         <q-radio v-model="form.usbMode" dense val="port" :label="gettext('Use USB Port')" />
@@ -193,11 +200,13 @@ onMounted(() => {
             :loading="loading"
             :get-row-value="(row) => textValue(row.portKey)"
             :disable="form.usbMode !== 'port'"
-            :error="form.usbMode === 'port' && (selectedRequired || !portValid)"
+            :error="
+              validationAttempted && form.usbMode === 'port' && (selectedRequired || !portValid)
+            "
             :error-message="
               selectedRequired ? gettext('This field is required') : gettext('Use the format 1-2.3')
             "
-            :label="gettext('Choose Port')"
+            :label="`${gettext('Choose Port')} *`"
           />
         </div>
         <q-checkbox

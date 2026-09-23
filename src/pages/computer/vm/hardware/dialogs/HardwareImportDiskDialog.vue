@@ -10,7 +10,7 @@ import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
-import { allowedDiskBusses, nextFreeDiskSlot, nextFreeDiskSlotForBus, sortedDiskBusses, storageFormats, validDiskBandwidth, validDiskDeviceId, type DiskBus } from '../utils/diskController';
+import { allowedDiskBusses, nextFreeDiskSlot, nextFreeDiskSlotForBus, sortedDiskBusses, storageFormats, validBandwidth, validDiskBandwidth, validDiskDeviceId, type DiskBus } from '../utils/diskController';
 
 type ImportDiskForm = {
   sourceStorage: string;
@@ -53,6 +53,7 @@ let sourceFileRequest = 0;
 let existingVolumeRequest = 0;
 const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
 const advanced = shallowRef(false);
+const validationAttempted = shallowRef(false);
 const form = reactive<ImportDiskForm>({
   sourceStorage: '',
   sourceVolume: '',
@@ -130,6 +131,19 @@ const canImport = computed(() =>
     (!selectExisting.value || existingVolumes.value.some((item) => textValue(item.volid || item.text) === form.existingVolume)),
   ),
 );
+const sourceStorageValid = computed(() =>
+  sourceStorages.value.some((item) => textValue(item.storage) === form.sourceStorage),
+);
+const sourceVolumeValid = computed(() =>
+  files.value.some((item) => textValue(item.volid || item.text) === form.sourceVolume),
+);
+const targetStorageValid = computed(() => Boolean(targetStorageRecord.value));
+const existingVolumeValid = computed(() =>
+  existingVolumes.value.some((item) => textValue(item.volid || item.text) === form.existingVolume),
+);
+const diskDeviceValid = computed(() => diskKeyAvailable.value);
+const mbpsValid = (value: string) => validBandwidth(value, 1);
+const iopsValid = (value: string) => validBandwidth(value, 10, true);
 
 function resetForm() {
   const slot = nextFreeDiskSlot(diskConfig.value, sortedDiskBusses(diskConfig.value, hostArch.value));
@@ -188,6 +202,7 @@ async function initialize() {
   targetLoaded.value = false;
   openedConfig.value = null;
   openedDigest.value = '';
+  validationAttempted.value = false;
   resetForm();
   loading.value = true;
   try {
@@ -278,6 +293,7 @@ function diskValue() {
 }
 
 async function importDisk() {
+  validationAttempted.value = true;
   if (!canImport.value) return;
   loading.value = true;
   try {
@@ -318,7 +334,9 @@ async function importDisk() {
                 :columns="storageColumns"
                 :display-value="form.sourceStorage"
                 :get-row-value="(row) => textValue(row.storage)"
-                :label="gettext('Import Storage')"
+                :label="`${gettext('Import Storage')} *`"
+                :error="validationAttempted && !sourceStorageValid"
+                :error-message="gettext('This field is required')"
                 @update:model-value="loadFiles"
               />
               <SelectTable
@@ -333,7 +351,9 @@ async function importDisk() {
                 :display-value="form.sourceVolume"
                 :get-row-value="(row) => textValue(row.volid || row.text)"
                 :disable="!form.sourceStorage"
-                :label="gettext('Select Image')"
+                :label="`${gettext('Select Image')} *`"
+                :error="validationAttempted && !sourceVolumeValid"
+                :error-message="gettext('This field is required')"
               />
               <SelectTable
                 v-model="form.targetStorage"
@@ -345,7 +365,9 @@ async function importDisk() {
                 :columns="storageColumns"
                 :display-value="form.targetStorage"
                 :get-row-value="(row) => textValue(row.storage)"
-                :label="gettext('Target Storage')"
+                :label="`${gettext('Target Storage')} *`"
+                :error="validationAttempted && !targetStorageValid"
+                :error-message="gettext('This field is required')"
               />
               <SelectTable
                 v-if="selectExisting"
@@ -359,7 +381,9 @@ async function importDisk() {
                 :columns="imageColumns"
                 :display-value="form.existingVolume"
                 :get-row-value="(row) => textValue(row.volid || row.text)"
-                :label="gettext('Disk image')"
+                :label="`${gettext('Disk image')} *`"
+                :error="validationAttempted && !existingVolumeValid"
+                :error-message="gettext('This field is required')"
               />
               <div class="row q-gutter-sm">
                 <q-select
@@ -369,7 +393,7 @@ async function importDisk() {
                   options-dense
                   emit-value
                   map-options
-                  :label="gettext('Bus')"
+                  :label="`${gettext('Bus')} *`"
                   :options="busOptions"
                 />
                 <q-input
@@ -379,7 +403,9 @@ async function importDisk() {
                   type="number"
                   min="0"
                   style="width: 100px"
-                  :label="gettext('Device ID')"
+                  :label="`${gettext('Device ID')} *`"
+                  :error="validationAttempted && !diskDeviceValid"
+                  :error-message="gettext('This device is already in use')"
                 />
               </div>
               <q-input
@@ -521,6 +547,8 @@ async function importDisk() {
                 type="number"
                 min="1"
                 :label="`${gettext('Read limit')} (MB/s)`"
+                :error="validationAttempted && !mbpsValid(form.mbps_rd)"
+                :error-message="gettext('Invalid Value')"
               />
             </div>
             <div class="col-6">
@@ -531,6 +559,8 @@ async function importDisk() {
                 type="number"
                 min="1"
                 :label="`${gettext('Write limit')} (MB/s)`"
+                :error="validationAttempted && !mbpsValid(form.mbps_wr)"
+                :error-message="gettext('Invalid Value')"
               />
             </div>
             <div class="col-6">
@@ -542,6 +572,8 @@ async function importDisk() {
                 min="10"
                 step="10"
                 :label="`${gettext('Read limit')} (ops/s)`"
+                :error="validationAttempted && !iopsValid(form.iops_rd)"
+                :error-message="gettext('Invalid Value')"
               />
             </div>
             <div class="col-6">
@@ -553,6 +585,8 @@ async function importDisk() {
                 min="10"
                 step="10"
                 :label="`${gettext('Write limit')} (ops/s)`"
+                :error="validationAttempted && !iopsValid(form.iops_wr)"
+                :error-message="gettext('Invalid Value')"
               />
             </div>
             <div class="col-6">
@@ -563,6 +597,8 @@ async function importDisk() {
                 type="number"
                 min="1"
                 :label="`${gettext('Read max burst')} (MB)`"
+                :error="validationAttempted && !mbpsValid(form.mbps_rd_max)"
+                :error-message="gettext('Invalid Value')"
               />
             </div>
             <div class="col-6">
@@ -573,6 +609,8 @@ async function importDisk() {
                 type="number"
                 min="1"
                 :label="`${gettext('Write max burst')} (MB)`"
+                :error="validationAttempted && !mbpsValid(form.mbps_wr_max)"
+                :error-message="gettext('Invalid Value')"
               />
             </div>
             <div class="col-6">
@@ -584,6 +622,8 @@ async function importDisk() {
                 min="10"
                 step="10"
                 :label="`${gettext('Read max burst')} (ops)`"
+                :error="validationAttempted && !iopsValid(form.iops_rd_max)"
+                :error-message="gettext('Invalid Value')"
               />
             </div>
             <div class="col-6">
@@ -595,6 +635,8 @@ async function importDisk() {
                 min="10"
                 step="10"
                 :label="`${gettext('Write max burst')} (ops)`"
+                :error="validationAttempted && !iopsValid(form.iops_wr_max)"
+                :error-message="gettext('Invalid Value')"
               />
             </div>
           </div>
@@ -617,7 +659,7 @@ async function importDisk() {
               flat
               size="12px"
               class="bg-primary text-grey-1 u-button"
-              :disable="!canImport"
+              :disable="loading"
               :label="gettext('Import')"
               @click="importDisk"
             />
@@ -635,6 +677,10 @@ async function importDisk() {
   background: #f5f7fa;
   border: 1px solid #d8e0ea;
   border-radius: 3px 3px 0 0;
+}
+
+.import-disk-form :deep(.q-field__bottom) {
+  display: block !important;
 }
 
 .hardware-nav-tabs :deep(.q-tabs__content) {

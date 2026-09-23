@@ -30,12 +30,19 @@ const {
   diskFormatOptions,
   diskFormatDisabled,
 } = disks;
-const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
+const { diskStorageRows, scsiControllerLabel, stepContentHeight, requiredLabel } = derived;
 </script>
 
 <template>
-  <q-scroll-area class="q-pa-sm" :style="{ height: stepContentHeight('disks') }">
-    <q-splitter v-model="diskSplitter" unit="%" class="u-border-dotted-blue bg-white vm-disk-panel">
+  <q-scroll-area
+    class="q-pa-sm"
+    :style="{ height: stepContentHeight('disks') }"
+  >
+    <q-splitter
+      v-model="diskSplitter"
+      unit="%"
+      class="u-border-dotted-blue bg-white vm-disk-panel"
+    >
       <template #before>
         <div class="q-pa-sm vm-disk-nav">
           <div class="q-mb-sm vm-disk-actions">
@@ -47,9 +54,11 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
               class="bg-primary text-grey-1 u-button vm-disk-action"
               @click="addExtraDisk"
             >
-              <q-icon name="add_circle" size="14px" /><span class="q-ml-xs">{{
-                gettext('Add')
-              }}</span>
+              <q-icon
+                name="add_circle"
+                size="14px"
+              />
+              <span class="q-ml-xs">{{ gettext('Add') }}</span>
             </q-btn>
             <q-btn
               no-caps
@@ -59,12 +68,19 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
               class="bg-primary text-grey-1 u-button vm-disk-action"
               @click="addImportDisk"
             >
-              <q-icon name="cloud_upload" size="14px" /><span class="q-ml-xs">{{
-                gettext('Import')
-              }}</span>
+              <q-icon
+                name="cloud_upload"
+                size="14px"
+              />
+              <span class="q-ml-xs">{{ gettext('Import') }}</span>
             </q-btn>
           </div>
-          <q-list dense bordered separator class="vm-disk-list">
+          <q-list
+            dense
+            bordered
+            separator
+            class="vm-disk-list"
+          >
             <q-item
               dense
               clickable
@@ -75,10 +91,18 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
               <q-item-section>
                 <div class="flex items-center">
                   {{ primaryDiskKey }}
-                  <q-icon v-if="!diskValidation.primary" name="warning" class="warning q-ml-xs" />
+                  <q-icon
+                    v-if="!diskValidation.primary"
+                    name="warning"
+                    class="warning q-ml-xs"
+                  />
                 </div>
               </q-item-section>
-              <q-item-section v-if="diskCount > 1" side avatar>
+              <q-item-section
+                v-if="diskCount > 1"
+                side
+                avatar
+              >
                 <q-icon
                   name="remove_circle"
                   class="text-grey-8 vm-disk-remove"
@@ -104,7 +128,11 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                   />
                 </div>
               </q-item-section>
-              <q-item-section v-if="diskCount > 1" side avatar>
+              <q-item-section
+                v-if="diskCount > 1"
+                side
+                avatar
+              >
                 <q-icon
                   name="remove_circle"
                   class="text-grey-8 vm-disk-remove"
@@ -125,13 +153,22 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
             indicator-color="primary"
             class="text-grey-7"
           >
-            <q-tab name="disk" :label="gettext('Hard Disk')" />
-            <q-tab name="bandwidth" :label="gettext('Bandwidth')" />
+            <q-tab
+              name="disk"
+              :label="gettext('Hard Disk')"
+            />
+            <q-tab
+              name="bandwidth"
+              :label="gettext('Bandwidth')"
+            />
           </q-tabs>
           <q-separator />
           <div class="q-pa-md bg-white vm-disk-editor">
             <template v-if="activeDiskId === 'primary'">
-              <div v-show="activeDiskTab === 'disk'" class="row q-gutter-lg vm-disk-editor-fields">
+              <div
+                v-show="activeDiskTab === 'disk'"
+                class="row q-gutter-lg vm-disk-editor-fields"
+              >
                 <div class="col">
                   <div class="row q-gutter-sm">
                     <q-select
@@ -154,7 +191,7 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                       min="0"
                       style="width: 100px"
                       :max="diskBusSlotLimits[form.diskBus] - 1"
-                      :label="gettext('Device ID')"
+                      :label="requiredLabel(gettext('Device ID'))"
                     />
                   </div>
                   <q-input
@@ -176,7 +213,7 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                     :columns="isoStorageColumns"
                     :display-value="form.storage"
                     :get-row-value="(row) => textValue(row.storage)"
-                    :label="gettext('Storage')"
+                    :label="requiredLabel(gettext('Storage'))"
                     class="q-field--with-bottom"
                   />
                   <q-input
@@ -187,7 +224,7 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                     type="number"
                     min="1"
                     class="q-field--with-bottom"
-                    :label="`${gettext('Disk size')} (${gettext('GiB')})`"
+                    :label="requiredLabel(`${gettext('Disk size')} (${gettext('GiB')})`)"
                   />
                   <q-select
                     v-model="form.format"
@@ -200,7 +237,7 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                     class="q-field--with-bottom"
                     :disable="diskFormatDisabled(form.storage)"
                     :options="diskFormatOptions(form.storage)"
-                    :label="gettext('Format')"
+                    :label="requiredLabel(gettext('Format'))"
                   />
                 </div>
                 <div class="col">
@@ -244,7 +281,10 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
               >
                 <div class="row q-gutter-lg">
                   <div class="col">
-                    <q-field borderless dense>
+                    <q-field
+                      borderless
+                      dense
+                    >
                       <q-checkbox
                         v-model="form.ssd"
                         dense
@@ -255,7 +295,10 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                         class="checkboxClass"
                       />
                     </q-field>
-                    <q-field borderless dense>
+                    <q-field
+                      borderless
+                      dense
+                    >
                       <q-checkbox
                         v-model="form.readOnly"
                         dense
@@ -268,7 +311,10 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                     </q-field>
                   </div>
                   <div class="col">
-                    <q-field borderless dense>
+                    <q-field
+                      borderless
+                      dense
+                    >
                       <q-checkbox
                         v-model="form.backup"
                         dense
@@ -278,7 +324,10 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                         class="checkboxClass"
                       />
                     </q-field>
-                    <q-field borderless dense>
+                    <q-field
+                      borderless
+                      dense
+                    >
                       <q-checkbox
                         v-model="form.skipReplication"
                         dense
@@ -301,7 +350,10 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                   </div>
                 </div>
               </div>
-              <div v-show="activeDiskTab === 'bandwidth'" class="q-pt-sm vm-disk-bandwidth">
+              <div
+                v-show="activeDiskTab === 'bandwidth'"
+                class="q-pt-sm vm-disk-bandwidth"
+              >
                 <div class="row q-col-gutter-sm">
                   <div class="col-6">
                     <q-input
@@ -386,9 +438,15 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                 </div>
               </div>
             </template>
-            <template v-for="disk in extraDisks" :key="disk.id"
-              ><template v-if="activeDiskId === disk.id"
-                ><div v-show="activeDiskTab === 'disk'" class="row q-col-gutter-lg">
+            <template
+              v-for="disk in extraDisks"
+              :key="disk.id"
+            >
+              <template v-if="activeDiskId === disk.id">
+                <div
+                  v-show="activeDiskTab === 'disk'"
+                  class="row q-col-gutter-lg"
+                >
                   <template v-if="disk.isImport">
                     <div class="col-12 col-sm-6">
                       <SelectTable
@@ -402,7 +460,7 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                         :get-row-value="(row) => textValue(row.storage)"
                         :error="Boolean(validationErrors[`disk-${disk.id}-import-storage`])"
                         :error-message="validationErrors[`disk-${disk.id}-import-storage`] || ''"
-                        :label="gettext('Import Storage')"
+                        :label="requiredLabel(gettext('Import Storage'))"
                         @update:model-value="
                           (storage) => {
                             disk.importFrom = '';
@@ -425,7 +483,7 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                         :disable="!disk.importSourceStorage"
                         :error="Boolean(validationErrors[`disk-${disk.id}-import-from`])"
                         :error-message="validationErrors[`disk-${disk.id}-import-from`] || ''"
-                        :label="gettext('Select Image')"
+                        :label="requiredLabel(gettext('Select Image'))"
                       />
                     </div>
                   </template>
@@ -452,7 +510,7 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                             min="0"
                             style="width: 100px"
                             :max="diskBusSlotLimits[disk.bus] - 1"
-                            :label="gettext('Device ID')"
+                            :label="requiredLabel(gettext('Device ID'))"
                           />
                         </div>
                         <q-input
@@ -475,7 +533,7 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                           :columns="isoStorageColumns"
                           :display-value="disk.storage"
                           :get-row-value="(row) => textValue(row.storage)"
-                          :label="gettext('Storage')"
+                          :label="requiredLabel(gettext('Storage'))"
                         />
                         <q-input
                           v-if="!disk.isImport"
@@ -486,7 +544,7 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                           type="number"
                           min="1"
                           class="q-field--with-bottom"
-                          :label="`${gettext('Disk size')} (${gettext('GiB')})`"
+                          :label="requiredLabel(`${gettext('Disk size')} (${gettext('GiB')})`)"
                         />
                         <q-select
                           v-model="disk.format"
@@ -499,7 +557,7 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                           class="q-field--with-bottom"
                           :disable="diskFormatDisabled(disk.storage)"
                           :options="diskFormatOptions(disk.storage)"
-                          :label="gettext('Format')"
+                          :label="requiredLabel(gettext('Format'))"
                         />
                       </div>
                       <div class="col">
@@ -545,7 +603,10 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                 >
                   <div class="row q-gutter-lg">
                     <div class="col">
-                      <q-field borderless dense>
+                      <q-field
+                        borderless
+                        dense
+                      >
                         <q-checkbox
                           v-model="disk.ssd"
                           dense
@@ -556,7 +617,10 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                           class="checkboxClass"
                         />
                       </q-field>
-                      <q-field borderless dense>
+                      <q-field
+                        borderless
+                        dense
+                      >
                         <q-checkbox
                           v-model="disk.readOnly"
                           dense
@@ -569,7 +633,10 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                       </q-field>
                     </div>
                     <div class="col">
-                      <q-field borderless dense>
+                      <q-field
+                        borderless
+                        dense
+                      >
                         <q-checkbox
                           v-model="disk.backup"
                           dense
@@ -579,7 +646,10 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                           class="checkboxClass"
                         />
                       </q-field>
-                      <q-field borderless dense>
+                      <q-field
+                        borderless
+                        dense
+                      >
                         <q-checkbox
                           v-model="disk.skipReplication"
                           dense
@@ -602,7 +672,10 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight } = derived;
                     </div>
                   </div>
                 </div>
-                <div v-show="activeDiskTab === 'bandwidth'" class="q-pt-sm vm-disk-bandwidth">
+                <div
+                  v-show="activeDiskTab === 'bandwidth'"
+                  class="q-pt-sm vm-disk-bandwidth"
+                >
                   <div class="row q-col-gutter-sm">
                     <div class="col-6">
                       <q-input

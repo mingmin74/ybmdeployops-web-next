@@ -56,8 +56,6 @@ async function submit() {
   loading.value = true;
   try {
     const data = {
-      sid: id,
-      type: props.resourceType,
       state: state.value,
       max_restart: maxRestart.value,
       max_relocate: maxRelocate.value,
@@ -66,7 +64,7 @@ async function submit() {
       comment: comment.value,
     };
     if (resourceExists.value) await updateHaResource(id, data);
-    else await createHaResource(data);
+    else await createHaResource({ ...data, sid: id });
     visible.value = false;
     emit('completed');
   } finally {

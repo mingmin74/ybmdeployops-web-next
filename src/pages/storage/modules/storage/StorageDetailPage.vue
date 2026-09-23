@@ -5,7 +5,7 @@ import StorageContentTable from '@/components/StorageContentTable.vue';
 import StorageBackupView from './StorageBackupView.vue';
 import StorageImageView from './StorageImageView.vue';
 import StorageTemplateView from './StorageTemplateView.vue';
-import UsageProgress from '@/components/UsageProgress.vue';
+import storageIllustration from '@/assets/overview/storage.png';
 import type { PveRecord } from '@/api/resources';
 import { getStorageRrd } from '@/api/overview';
 import { getStorageStatus } from '@/api/storageContent';
@@ -46,7 +46,7 @@ const rrdConsolidationOptions = computed(() => [
 ]);
 
 const contentTabs = computed(() => {
-  const content = textValue(props.storage.content);
+  const content = textValue(props.storage.content || status.value.content);
   const tokens = content
     .split(',')
     .map((item) => item.trim())
@@ -60,8 +60,19 @@ const contentTabs = computed(() => {
     snippets: 'Snippets',
     import: 'Import',
   };
+  const icons: Record<string, string> = {
+    backup: 'backup',
+    images: 'storage',
+    rootdir: 'inventory_2',
+    iso: 'album',
+    vztmpl: 'layers',
+    snippets: 'code',
+    import: 'download',
+  };
 
-  return tokens.filter((item) => map[item]).map((item) => ({ name: item, label: map[item] }));
+  return tokens
+    .filter((item) => map[item])
+    .map((item) => ({ name: item, label: map[item], icon: icons[item] }));
 });
 
 const chartXAxis = computed(() =>
@@ -80,6 +91,19 @@ const storageUsageSeries = computed(() => [
     color: '#26a69a',
   },
 ]);
+
+const storageUsagePercent = computed(() => {
+  const total = Number(status.value.total);
+  const used = Number(status.value.used);
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(used)) return 0;
+  return Math.min(Math.max((used / total) * 100, 0), 100);
+});
+
+function usageColor(percent: number) {
+  if (percent >= 90) return 'negative';
+  if (percent >= 80) return 'warning';
+  return 'primary';
+}
 
 function boolLabel(value: unknown) {
   return value ? gettext('Yes') : gettext('No');
@@ -166,6 +190,7 @@ onBeforeUnmount(() => {
       <q-tab
         no-caps
         name="summary"
+        icon="summarize"
         :label="gettext('Summary')"
       />
       <q-tab
@@ -173,6 +198,7 @@ onBeforeUnmount(() => {
         :key="item.name"
         no-caps
         :name="item.name"
+        :icon="item.icon"
         :label="gettext(item.label || '')"
       />
     </q-tabs>
@@ -186,127 +212,129 @@ onBeforeUnmount(() => {
         name="summary"
         class="q-pa-md"
       >
-        <section class="summary-strip">
-          <header class="summary-header">
-            <div class="summary-identity">
-              <div class="summary-icon">
-                <q-icon
-                  name="storage"
-                  size="24px"
-                />
+        <div class="storage-overview-grid">
+          <q-card class="overview-panel no-shadow no-border-radius no-margin">
+            <q-card-section class="panel-section">
+              <div class="panel-header">
+                <span>{{ gettext('Storage Summary') }}</span>
+                <span class="panel-subtitle">{{ textValue(storage.storage, '-') }}</span>
               </div>
-              <div class="summary-heading">
-                <div class="summary-eyebrow">
-                  {{ `${gettext('Storage')} ${gettext('Summary')}` }}
+              <div class="storage-summary-content">
+                <div class="storage-summary-illustration">
+                  <img
+                    :src="storageIllustration"
+                    alt=""
+                  />
                 </div>
-                <h2 class="summary-title">{{ textValue(storage.storage, '-') }}</h2>
+                <div class="info-list">
+                  <div class="info-row">
+                    <span>{{ gettext('Node') }}</span>
+                    <strong>{{ textValue(node, '-') }}</strong>
+                  </div>
+                  <div class="info-row">
+                    <span>{{ gettext('Type') }}</span>
+                    <strong>{{ formatStorageType(status.type, status.monhost, true) }}</strong>
+                  </div>
+                  <div class="info-row">
+                    <span>{{ gettext('Content') }}</span>
+                    <strong>{{ formatContent(status.content) || '-' }}</strong>
+                  </div>
+                  <div class="info-row">
+                    <span>{{ gettext('Enabled') }}</span>
+                    <q-badge
+                      :color="Number(status.disabled || 0) === 0 ? 'positive' : 'grey'"
+                      class="info-badge"
+                      :label="boolLabel(Number(status.disabled || 0) === 0)"
+                    />
+                  </div>
+                  <div class="info-row">
+                    <span>{{ gettext('Active') }}</span>
+                    <q-badge
+                      :color="
+                        status.active == null ? 'grey' : status.active ? 'positive' : 'negative'
+                      "
+                      class="info-badge"
+                      :label="status.active == null ? '-' : boolLabel(status.active)"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="summary-statuses">
-              <span class="summary-status">
-                <span>{{ gettext('Enabled') }}</span>
-                <strong>{{ boolLabel(Number(status.disabled || 0) === 0) }}</strong>
-              </span>
-              <span class="summary-status">
-                <q-icon
-                  name="circle"
-                  size="8px"
-                  :class="
-                    status.active == null
-                      ? 'status-unknown'
-                      : status.active
-                        ? 'status-active'
-                        : 'status-inactive'
-                  "
-                />
-                <span>{{ gettext('Active') }}</span>
-                <strong>{{ status.active == null ? '-' : boolLabel(status.active) }}</strong>
-              </span>
-            </div>
-          </header>
-          <div class="summary-body">
-            <dl class="summary-fields">
-              <div class="summary-field">
-                <dt>{{ gettext('Node') }}</dt>
-                <dd>{{ textValue(node, '-') }}</dd>
+            </q-card-section>
+          </q-card>
+
+          <q-card class="overview-panel no-shadow no-border-radius no-margin">
+            <q-card-section class="panel-section">
+              <div class="panel-header">
+                <span>{{ gettext('Usage') }}</span>
               </div>
-              <div class="summary-field">
-                <dt>{{ gettext('Type') }}</dt>
-                <dd>{{ formatStorageType(status.type, status.monhost, true) }}</dd>
-              </div>
-              <div class="summary-field summary-content">
-                <dt>{{ gettext('Content') }}</dt>
-                <dd>{{ formatContent(status.content) || '-' }}</dd>
-              </div>
-            </dl>
-            <div class="summary-capacity">
-              <div class="capacity-heading">{{ gettext('Usage') }}</div>
-              <div class="capacity-values">
-                <div>
-                  <span class="capacity-label">{{ gettext('Used Size') }}</span>
-                  <strong class="capacity-used">
+              <div class="resource-card-grid">
+                <section class="resource-card resource-card-compare">
+                  <div class="resource-card-title">{{ gettext('Storage Usage') }}</div>
+                  <strong>
                     {{ status.used == null ? '-' : formatBytes(Number(status.used)) }}
                   </strong>
-                </div>
-                <div class="capacity-total">
-                  <span class="capacity-label">{{ gettext('Total Size') }}</span>
-                  <strong>
-                    {{ status.total == null ? '-' : formatBytes(Number(status.total)) }}
-                  </strong>
-                </div>
+                  <div class="resource-card-meta">
+                    <span>{{ gettext('Total Size') }}</span>
+                    <span>
+                      {{ status.total == null ? '-' : formatBytes(Number(status.total)) }}
+                    </span>
+                  </div>
+                  <q-circular-progress
+                    show-value
+                    class="resource-card-progress"
+                    size="80px"
+                    :thickness="0.18"
+                    :value="storageUsagePercent"
+                    :color="usageColor(storageUsagePercent)"
+                    track-color="blue-grey-1"
+                  >
+                    {{ storageUsagePercent.toFixed(0) }}%
+                  </q-circular-progress>
+                </section>
               </div>
-              <UsageProgress
-                v-if="Number(status.total) > 0 && status.used != null"
-                :percent="(Number(status.used) / Number(status.total)) * 100"
-                width="100%"
-              />
-              <div
-                v-else
-                class="capacity-empty"
-              >
-                —
-              </div>
-            </div>
-          </div>
-        </section>
+            </q-card-section>
+          </q-card>
+        </div>
 
-        <section class="usage-section q-mt-md">
-          <div class="usage-toolbar">
-            <div class="text-subtitle2">{{ gettext('Usage') }}</div>
-            <q-space />
-            <q-select
-              v-model="timeType"
-              square
-              dense
-              outlined
-              emit-value
-              map-options
-              options-dense
-              class="u-dense u-size-12 storage-time-select"
-              :aria-label="gettext('Select Timespan')"
-              :options="timeOptions"
+        <q-card class="chart-panel no-shadow no-border-radius q-mt-sm">
+          <q-card-section class="chart-card-section">
+            <div class="chart-header">
+              <strong>{{ gettext('Usage') }}</strong>
+              <q-space />
+              <q-select
+                v-model="timeType"
+                square
+                dense
+                outlined
+                emit-value
+                map-options
+                options-dense
+                class="u-dense u-size-12 storage-time-select"
+                :aria-label="gettext('Select Timespan')"
+                :options="timeOptions"
+              />
+              <q-select
+                v-model="rrdConsolidation"
+                square
+                dense
+                outlined
+                emit-value
+                map-options
+                options-dense
+                class="u-dense u-size-12 storage-aggregation-select"
+                :aria-label="gettext('Aggregation')"
+                :options="rrdConsolidationOptions"
+              />
+            </div>
+            <LineMetricChart
+              :x-data="chartXAxis"
+              :series="storageUsageSeries"
+              unit-type="bytes"
+              power-of-two
+              :height="400"
             />
-            <q-select
-              v-model="rrdConsolidation"
-              square
-              dense
-              outlined
-              emit-value
-              map-options
-              options-dense
-              class="u-dense u-size-12 storage-aggregation-select"
-              :aria-label="gettext('Aggregation')"
-              :options="rrdConsolidationOptions"
-            />
-          </div>
-          <LineMetricChart
-            :x-data="chartXAxis"
-            :series="storageUsageSeries"
-            unit-type="bytes"
-            power-of-two
-            :height="400"
-          />
-        </section>
+          </q-card-section>
+        </q-card>
       </q-tab-panel>
 
       <q-tab-panel
@@ -361,181 +389,165 @@ onBeforeUnmount(() => {
   padding: 0 16px;
 }
 
-.summary-strip {
-  border: 1px solid #dfe1e6;
-  background: #fff;
+.storage-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.1fr) minmax(300px, 0.9fr);
+  gap: 10px;
 }
 
-.summary-header {
+.overview-panel,
+.chart-panel {
+  background: #ffffff;
+  border: 1px solid #dfe1e6;
+}
+
+.overview-panel {
+  min-height: 216px;
+}
+
+.panel-section,
+.chart-card-section {
+  padding: 0;
+}
+
+.panel-header,
+.chart-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 16px;
-  padding: 16px 20px;
+  min-height: 38px;
+  padding: 0 14px;
+  color: #174f86;
+  background: #f2f5fc;
   border-bottom: 1px solid #dfe1e6;
 }
 
-.summary-identity {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.summary-icon {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  background: #e6f1fc;
-  color: #1976d2;
-}
-
-.summary-heading {
-  min-width: 0;
-}
-
-.summary-eyebrow,
-.capacity-label {
-  color: #666;
-  font-size: 12px;
-}
-
-.summary-title {
-  margin: 3px 0 0;
-  color: #333;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.summary-statuses {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-}
-
-.summary-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #666;
-  font-size: 12px;
-}
-
-.summary-status strong {
-  color: #333;
-  font-weight: 500;
-}
-
-.status-active {
-  color: #21bf4b;
-}
-.status-inactive {
-  color: #ff6c59;
-}
-.status-unknown {
-  color: #999;
-}
-
-.summary-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-}
-
-.summary-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px 24px;
-  margin: 0;
-  padding: 20px;
-}
-
-.summary-field {
-  min-width: 0;
-}
-.summary-content {
-  grid-column: 1 / -1;
-}
-
-.summary-field dt {
-  margin-bottom: 6px;
-  color: #666;
-  font-size: 12px;
-}
-
-.summary-field dd {
-  margin: 0;
-  color: #333;
+.panel-header span:first-child,
+.chart-header strong {
   font-size: 13px;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
+  font-weight: 600;
 }
 
-.summary-capacity {
+.panel-subtitle {
+  margin-left: auto;
+  color: #666666;
+  font-size: 12px;
+  font-weight: normal;
+}
+
+.info-list {
+  padding: 10px 14px 12px;
+}
+
+.storage-summary-content {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.65fr) minmax(240px, 1.35fr);
+  align-items: center;
+  min-height: 176px;
+  gap: 14px;
+  padding: 10px 14px;
+}
+
+.storage-summary-content .info-list {
+  padding: 0;
+}
+
+.storage-summary-illustration {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  padding: 20px 24px;
-  border-left: 1px solid #dfe1e6;
-  background: #f7f9fc;
   min-width: 0;
 }
 
-.capacity-heading {
-  margin-bottom: 12px;
-  color: #333;
+.storage-summary-illustration img {
+  display: block;
+  width: min(100%, 144px);
+  height: auto;
+  max-height: 150px;
+  object-fit: contain;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 30px;
+  border-bottom: 1px solid #eef1f6;
+}
+
+.info-row:last-child {
+  border-bottom: 0;
+}
+
+.info-row > span {
+  color: #666666;
+  font-size: 12px;
+}
+
+.info-row strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #333333;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.info-badge {
+  border-radius: 0;
+}
+
+.resource-card-grid {
+  padding: 10px;
+}
+
+.resource-card {
+  position: relative;
+  min-height: 124px;
+  padding: 12px 96px 12px 14px;
+  background: #fbfcfe;
+  border: 1px solid #e1e6ee;
+  border-radius: 4px;
+}
+
+.resource-card-title {
+  color: #475b73;
   font-size: 13px;
   font-weight: 600;
 }
 
-.capacity-values {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 14px;
-  font-variant-numeric: tabular-nums;
-}
-
-.capacity-label {
+.resource-card strong {
   display: block;
-  margin-bottom: 4px;
-}
-.capacity-values strong {
-  color: #333;
-  font-weight: 500;
-}
-.capacity-values .capacity-used {
-  color: #1976d2;
-  font-size: 26px;
-  line-height: 1.2;
-}
-.capacity-total {
-  text-align: right;
-}
-.capacity-total strong {
-  font-size: 16px;
-}
-.capacity-empty {
-  height: 20px;
-  color: #999;
+  margin: 8px 0 5px;
+  color: #27384d;
+  font-size: 22px;
+  line-height: 1.35;
 }
 
-.usage-section {
-  border: 1px solid #dfe1e6;
-  padding: 12px 16px 4px;
-}
-
-.usage-toolbar {
+.resource-card-meta {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  color: #718096;
+  font-size: 12px;
+}
+
+.resource-card-meta span:last-child {
+  padding-left: 8px;
+  overflow: hidden;
+  color: #52657d;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-card-progress {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  color: #52657d;
+  font-size: 11px;
+  font-weight: 600;
+  transform: translateY(-50%);
 }
 
 .storage-time-select,
@@ -562,27 +574,25 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 900px) {
-  .summary-body {
+  .storage-overview-grid {
     grid-template-columns: 1fr;
-  }
-
-  .summary-capacity {
-    border-left: 0;
-    border-top: 1px solid #dfe1e6;
   }
 }
 
 @media (max-width: 600px) {
-  .summary-fields {
+  .storage-summary-content {
     grid-template-columns: 1fr;
   }
 
-  .usage-toolbar {
-    flex-wrap: wrap;
+  .storage-summary-illustration {
+    display: none;
   }
 
-  .usage-toolbar :deep(.q-space) {
-    display: none;
+  .chart-header {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 8px;
+    padding-bottom: 8px;
   }
 }
 </style>

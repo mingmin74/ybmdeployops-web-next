@@ -4,6 +4,7 @@ import type { QTableColumn } from 'quasar';
 import type { PveRecord } from '@/api/resources';
 import SelectTable from '@/components/SelectTable.vue';
 import { gettext } from '@/locale';
+import { validBandwidth, validDiskSize } from '../../utils/diskController';
 
 export interface AddDiskFormModel {
   diskBus: 'scsi' | 'virtio' | 'sata' | 'ide';
@@ -32,13 +33,15 @@ export interface AddDiskFormModel {
 
 const form = defineModel<AddDiskFormModel>('form', { required: true });
 const advanced = defineModel<boolean>('advanced', { default: false });
-const { scsiControllerLabel, storageRows, storageFormats, selectExisting, existingVolumes, busOptions } = defineProps<{
+const { scsiControllerLabel, storageRows, storageFormats, selectExisting, existingVolumes, busOptions, deviceValid, validationAttempted } = defineProps<{
   scsiControllerLabel: string;
   storageRows: PveRecord[];
   storageFormats: string[];
   selectExisting: boolean;
   existingVolumes: PveRecord[];
   busOptions: { label: string; value: AddDiskFormModel['diskBus'] }[];
+  deviceValid: boolean;
+  validationAttempted: boolean;
 }>();
 const storageColumns: QTableColumn<PveRecord>[] = [
   { name: 'storage', label: gettext('Storage'), field: 'storage', align: 'left' },
@@ -51,6 +54,14 @@ const imageColumns: QTableColumn<PveRecord>[] = [
 const supportsIoThread = computed(
   () => form.value.diskBus === 'scsi' || form.value.diskBus === 'virtio',
 );
+const storageValid = computed(() =>
+  storageRows.some((item) => String(item.storage || '') === form.value.storage),
+);
+const existingVolumeValid = computed(() =>
+  existingVolumes.some((item) => String(item.volid || item.text || '') === form.value.existingVolume),
+);
+const mbpsValid = (value: string) => validBandwidth(value, 1);
+const iopsValid = (value: string) => validBandwidth(value, 10, true);
 const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
 </script>
 
@@ -78,7 +89,7 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
               options-dense
               emit-value
               map-options
-              :label="gettext('Bus')"
+              :label="`${gettext('Bus')} *`"
               :options="busOptions"
             />
             <q-input
@@ -88,7 +99,9 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
               type="number"
               min="0"
               style="width: 100px"
-              :label="gettext('Device ID')"
+              :label="`${gettext('Device ID')} *`"
+              :error="validationAttempted && !deviceValid"
+              :error-message="gettext('This device is already in use')"
             />
           </div>
           <q-input
@@ -109,7 +122,9 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
             :columns="storageColumns"
             :display-value="form.storage"
             :get-row-value="(row) => String(row.storage || '')"
-            :label="gettext('Storage')"
+            :label="`${gettext('Storage')} *`"
+            :error="validationAttempted && !storageValid"
+            :error-message="gettext('This field is required')"
           />
           <SelectTable
             v-if="selectExisting"
@@ -122,7 +137,9 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
             :columns="imageColumns"
             :display-value="form.existingVolume"
             :get-row-value="(row) => String(row.volid || row.text || '')"
-            :label="gettext('Disk image')"
+            :label="`${gettext('Disk image')} *`"
+            :error="validationAttempted && !existingVolumeValid"
+            :error-message="gettext('This field is required')"
           />
           <q-input
             v-else
@@ -132,7 +149,9 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
             type="number"
             min="0"
             step="1"
-            :label="gettext('Disk Size (GiB)')"
+            :label="`${gettext('Disk Size (GiB)')} *`"
+            :error="validationAttempted && !validDiskSize(form.size)"
+            :error-message="gettext('Invalid Value')"
           />
           <q-select
             v-model="form.diskFormat"
@@ -265,6 +284,8 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
             type="number"
             min="1"
             :label="`${gettext('Read limit')} (MB/s)`"
+            :error="validationAttempted && !mbpsValid(form.mbps_rd)"
+            :error-message="gettext('Invalid Value')"
           />
         </div>
         <div class="col-6">
@@ -275,6 +296,8 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
             type="number"
             min="1"
             :label="`${gettext('Write limit')} (MB/s)`"
+            :error="validationAttempted && !mbpsValid(form.mbps_wr)"
+            :error-message="gettext('Invalid Value')"
           />
         </div>
         <div class="col-6">
@@ -286,6 +309,8 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
             min="10"
             step="10"
             :label="`${gettext('Read limit')} (ops/s)`"
+            :error="validationAttempted && !iopsValid(form.iops_rd)"
+            :error-message="gettext('Invalid Value')"
           />
         </div>
         <div class="col-6">
@@ -297,6 +322,8 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
             min="10"
             step="10"
             :label="`${gettext('Write limit')} (ops/s)`"
+            :error="validationAttempted && !iopsValid(form.iops_wr)"
+            :error-message="gettext('Invalid Value')"
           />
         </div>
         <div class="col-6">
@@ -307,6 +334,8 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
             type="number"
             min="1"
             :label="`${gettext('Read max burst')} (MB)`"
+            :error="validationAttempted && !mbpsValid(form.mbps_rd_max)"
+            :error-message="gettext('Invalid Value')"
           />
         </div>
         <div class="col-6">
@@ -317,6 +346,8 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
             type="number"
             min="1"
             :label="`${gettext('Write max burst')} (MB)`"
+            :error="validationAttempted && !mbpsValid(form.mbps_wr_max)"
+            :error-message="gettext('Invalid Value')"
           />
         </div>
         <div class="col-6">
@@ -328,6 +359,8 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
             min="10"
             step="10"
             :label="`${gettext('Read max burst')} (ops)`"
+            :error="validationAttempted && !iopsValid(form.iops_rd_max)"
+            :error-message="gettext('Invalid Value')"
           />
         </div>
         <div class="col-6">
@@ -339,6 +372,8 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
             min="10"
             step="10"
             :label="`${gettext('Write max burst')} (ops)`"
+            :error="validationAttempted && !iopsValid(form.iops_wr_max)"
+            :error-message="gettext('Invalid Value')"
           />
         </div>
       </div>

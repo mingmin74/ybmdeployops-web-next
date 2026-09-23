@@ -27,6 +27,7 @@ import VmFirewallTab from '@/pages/computer/vm/VmFirewallTab.vue';
 import VmPermissionsTab from '@/pages/computer/vm/VmPermissionsTab.vue';
 import VmCloudInitTab from '@/pages/computer/vm/VmCloudInitTab.vue';
 import VmResourceOperationDialog from '@/pages/computer/vm/VmResourceOperationDialog.vue';
+import VmTagControl from '@/pages/computer/vm/VmTagControl.vue';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
@@ -89,6 +90,7 @@ const backupPruneEnabled = shallowRef(false);
 const backupRetention = shallowRef<Array<{ key: string; value: string }>>([]);
 const operationDialogVisible = shallowRef(false);
 const operation = shallowRef<'migrate' | 'clone' | 'delete' | 'template'>();
+const deleted = shallowRef(false);
 const consoleKey = shallowRef(0);
 const configIdPattern = /^[a-z][a-z0-9_-]+$/i;
 
@@ -134,6 +136,7 @@ const canViewSnapshots = computed(
     )
 );
 const canViewFirewall = computed(() => Boolean(vmCaps.value['VM.Audit']));
+const canEditTags = computed(() => Boolean(vmCaps.value['VM.Config.Options']));
 const canManagePermissions = computed(() => Boolean(vmCaps.value['Permissions.Modify']));
 const canPowerManage = computed(() => Boolean(vmCaps.value['VM.PowerMgmt']) && !isTemplate.value);
 const resumeState = computed(
@@ -185,24 +188,32 @@ function decodeVmName(value: unknown) {
 }
 
 async function reload() {
-  if (!node.value || !vmid.value) return;
+  if (deleted.value || !node.value || !vmid.value) return;
   loading.value = true;
   try {
     const [currentResponse, configResponse] = await Promise.all([
       getVmCurrent(node.value, vmid.value),
       getVmConfig(node.value, vmid.value),
     ]);
-    current.value = currentResponse.data || {};
-    config.value = configResponse.data || {};
+    if (!deleted.value) {
+      current.value = currentResponse.data || {};
+      config.value = configResponse.data || {};
+    }
+  } catch (error) {
+    if (!deleted.value) throw error;
   } finally {
     loading.value = false;
   }
 }
 
 async function reloadCurrent() {
-  if (!node.value || !vmid.value) return;
-  const response = await getVmCurrent(node.value, vmid.value);
-  current.value = response.data || {};
+  if (deleted.value || !node.value || !vmid.value) return;
+  try {
+    const response = await getVmCurrent(node.value, vmid.value);
+    if (!deleted.value) current.value = response.data || {};
+  } catch (error) {
+    if (!deleted.value) throw error;
+  }
 }
 
 async function runPowerCommand(command: VmPowerCommand, data?: Record<string, unknown>) {
@@ -386,6 +397,17 @@ function openOperation(nextOperation: 'migrate' | 'clone' | 'delete' | 'template
   operationDialogVisible.value = true;
 }
 
+function handleOperationCompleted() {
+  if (operation.value !== 'delete') {
+    void reload();
+    return;
+  }
+
+  deleted.value = true;
+  if (refreshTimer.value) window.clearInterval(refreshTimer.value);
+  void router.replace('/computer/list');
+}
+
 function openTask(taskNodeValue: string, upid: string, title: string) {
   taskNode.value = taskNodeValue;
   taskUpid.value = upid;
@@ -486,6 +508,14 @@ onUnmounted(() => {
           class="q-ml-sm"
           :color="statusColor(status)"
           :label="statusText(status)"
+        />
+        <VmTagControl
+          :node="node"
+          :vmid="vmid"
+          :tags="textValue(config.tags)"
+          :digest="textValue(config.digest)"
+          :can-edit="canEditTags"
+          @updated="reload"
         />
         <q-space />
         <div class="row q-gutter-sm no-wrap">
@@ -1162,7 +1192,7 @@ onUnmounted(() => {
       v-model="operationDialogVisible"
       :operation="operation"
       :vm="detailVm"
-      @completed="reload"
+      @completed="handleOperationCompleted"
       @task="({ node: taskNodeValue, upid, title }) => openTask(taskNodeValue, upid, title)"
     />
     <TaskOutputDialog

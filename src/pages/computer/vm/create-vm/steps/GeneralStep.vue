@@ -8,7 +8,7 @@ const { advanced } = state;
 const { vmidError, tagInput, tagError, validationErrors } = errors;
 const { pools } = resources;
 const { validateVmid, addTag, removeTag } = actions;
-const { tags, stepContentHeight } = derived;
+const { tags, stepContentHeight, requiredLabel } = derived;
 </script>
 
 <template>
@@ -23,7 +23,9 @@ const { tags, stepContentHeight } = derived;
             v-model="form.node"
             disable-offline
             width="500px"
-            :label="gettext('Node')"
+            :label="requiredLabel(gettext('Node'))"
+            :error="Boolean(validationErrors.node)"
+            :error-message="validationErrors.node || ''"
             class="q-field--with-bottom"
             field-style="standard"
           />
@@ -36,7 +38,7 @@ const { tags, stepContentHeight } = derived;
             min="100"
             max="999999999"
             class="q-field--with-bottom"
-            :label="gettext('VM ID')"
+            :label="requiredLabel(gettext('VM ID'))"
             @blur="void validateVmid()"
           />
           <q-checkbox
@@ -75,7 +77,10 @@ const { tags, stepContentHeight } = derived;
         </div>
       </div>
     </div>
-    <div v-if="advanced" class="q-mt-sm u-border-dotted-blue q-px-md q-py-sm bg-white">
+    <div
+      v-if="advanced"
+      class="q-mt-sm u-border-dotted-blue q-px-md q-py-sm bg-white"
+    >
       <div class="row q-gutter-lg">
         <div class="col column">
           <q-checkbox
@@ -141,7 +146,11 @@ const { tags, stepContentHeight } = derived;
           @blur="addTag"
         >
           <template #append>
-            <q-icon name="add" class="cursor-pointer" @click="addTag" />
+            <q-icon
+              name="add"
+              class="cursor-pointer"
+              @click="addTag"
+            />
           </template>
         </q-input>
         <div class="row q-gutter-sm q-col-gutter-sm">

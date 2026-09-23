@@ -136,6 +136,7 @@ const addDiskFormKey = shallowRef(0);
 const addCdromFormKey = shallowRef(0);
 const addDiskAdvanced = shallowRef(false);
 const addNetworkAdvanced = shallowRef(false);
+const validationAttempted = shallowRef(false);
 const form = reactive<AddHardwareForm>({
   kind: 'disk',
   storage: '',
@@ -467,6 +468,7 @@ function resetAudioDefaults() {
 
 watch(visible, (isVisible) => {
   if (!isVisible) return;
+  validationAttempted.value = false;
   void initializeDisk();
   form.kind = initialKind;
   if (initialKind === 'disk') {
@@ -822,6 +824,7 @@ async function addDevice() {
   };
   const capability = requiredCapability[form.kind];
   if (!hasVmCapability(capability)) return;
+  validationAttempted.value = true;
   if (!canAdd.value) return;
 
   const networkOptions = [
@@ -929,7 +932,7 @@ async function addDevice() {
       width="600px"
       :loading="loading"
     >
-      <div class="q-pa-md q-gutter-md">
+      <div class="q-pa-md q-gutter-md hardware-add-content">
         <AddDiskForm
           v-if="form.kind === 'disk'"
           :key="addDiskFormKey"
@@ -941,11 +944,14 @@ async function addDevice() {
           :select-existing="selectExisting"
           :existing-volumes="existingVolumes"
           :bus-options="diskBusOptions"
+          :device-valid="diskKeyAvailable"
+          :validation-attempted="validationAttempted"
         />
         <AddNetworkForm
           v-else-if="form.kind === 'net'"
           v-model:form="form"
           v-model:advanced="addNetworkAdvanced"
+          :validation-attempted="validationAttempted"
         />
         <AddCdromForm
           v-else-if="form.kind === 'cdrom'"
@@ -953,16 +959,19 @@ async function addDevice() {
           v-model:form="form"
           :device-in-use="!cdromKeyAvailable"
           :bus-options="cdromBusOptions"
+          :validation-attempted="validationAttempted"
         />
         <AddUsbForm
           v-else-if="form.kind === 'usb'"
           v-model:form="form"
           :disable-usb3="usb3Disabled"
+          :validation-attempted="validationAttempted"
         />
         <AddPciForm
           v-else-if="form.kind === 'pci'"
           v-model:form="form"
           :pcie-supported="pcieSupported"
+          :validation-attempted="validationAttempted"
         />
         <AddSerialForm
           v-else-if="form.kind === 'serial'"
@@ -1006,7 +1015,7 @@ async function addDevice() {
               flat
               size="12px"
               class="bg-primary text-grey-1 u-button"
-              :disable="!canAdd"
+              :disable="loading"
               :label="gettext('Add')"
               @click="addDevice"
             />
@@ -1016,3 +1025,9 @@ async function addDevice() {
     </UWindow>
   </q-dialog>
 </template>
+
+<style scoped>
+.hardware-add-content :deep(.q-field__bottom) {
+  display: block !important;
+}
+</style>
