@@ -311,6 +311,22 @@ body {
   border-radius: 0 !important;
 }
 
+// Dialog footer dismiss buttons share the same compact secondary treatment as
+// the firewall rule editor, including older dialogs that still use `outline`.
+.q-dialog .q-card__actions > .q-btn:not(.bg-primary):not(.bg-negative) {
+  min-height: 28px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  font-size: 12px;
+  font-weight: normal;
+}
+
+.q-dialog .q-card__actions > .q-btn.bg-primary:only-child {
+  background: transparent !important;
+  color: inherit !important;
+}
+
 .q-btn {
   font-weight: normal;
 }

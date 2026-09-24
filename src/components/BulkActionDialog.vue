@@ -294,7 +294,7 @@ watch(
         </section>
       </div>
       <template #foot>
-        <q-btn v-close-popup no-caps flat size="12px" :label="gettext('Cancel')" />
+        <q-btn v-close-popup no-caps flat size="12px" class="u-button" :label="gettext('Cancel')" />
         <q-btn no-caps flat size="12px" class="bg-primary text-grey-1 u-button" :loading="submitting" :disable="!canSubmit" :label="actionButtonLabels[action]" @click="submit" />
       </template>
     </UWindow>

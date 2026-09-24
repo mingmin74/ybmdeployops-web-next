@@ -510,7 +510,7 @@ onMounted(async () => {
               dense
               :label="gettext('Public Key')" /></q-tab-panel></q-tab-panels></q-form
       ><template #foot
-        ><q-btn v-close-popup no-caps flat size="12px" :label="gettext('Cancel')" /><q-btn
+        ><q-btn v-close-popup no-caps flat size="12px" class="u-button" :label="gettext('Cancel')" /><q-btn
           no-caps
           flat
           size="12px"

@@ -1415,8 +1415,12 @@ watch(listStorage, () => {
         :title="gettext('Show Configuration')"
         width="640px"
       >
-        <div class="q-pa-sm">
-          <div class="backup-configuration u-border q-pa-sm">
+        <div class="backup-configuration-dialog q-pa-md">
+          <div class="backup-configuration__context">
+            <span class="backup-configuration__context-label">{{ gettext('Backup File') }}</span>
+            <span class="backup-configuration__context-value">{{ selectedBackupVolid }}</span>
+          </div>
+          <div class="backup-configuration">
             <pre
               v-if="configuration"
               class="backup-configuration__content"
@@ -1433,7 +1437,7 @@ watch(listStorage, () => {
           <q-btn
             v-close-popup
             no-caps
-            outline
+            flat
             size="12px"
             class="u-button"
             :label="gettext('Close')"
@@ -1495,14 +1499,46 @@ watch(listStorage, () => {
   min-height: 40px;
   font-size: 12px;
 }
+.backup-configuration-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.backup-configuration__context {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  border: 1px solid #dfe1e6;
+  background: #f2f5fc;
+  color: #333333;
+  font-size: 12px;
+  line-height: 28px;
+}
+.backup-configuration__context-label {
+  flex: 0 0 auto;
+  padding: 0 10px;
+  border-right: 1px solid #dfe1e6;
+  color: #666666;
+}
+.backup-configuration__context-value {
+  min-width: 0;
+  padding: 0 10px;
+  overflow: hidden;
+  font-family: Consolas, 'Courier New', monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .backup-configuration {
   height: 260px;
   overflow: auto;
+  border: 1px solid #cccccc;
   background: #fbfbfb;
 }
 .backup-configuration__content {
+  box-sizing: border-box;
   min-height: 100%;
   margin: 0;
+  padding: 8px 10px;
   color: #333333;
   font-family: Consolas, 'Courier New', monospace;
   font-size: 12px;

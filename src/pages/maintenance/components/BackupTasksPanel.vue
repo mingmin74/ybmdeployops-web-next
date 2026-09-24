@@ -972,7 +972,7 @@ onMounted(() => void reload());
           no-caps
           flat
           size="12px"
-          class="bg-primary text-grey-1 u-button"
+          class="u-button"
           :label="gettext('Close')"
         />
       </template>
@@ -1497,6 +1497,7 @@ onMounted(() => void reload());
       </q-form>
       <template #foot>
         <q-btn
+          class="u-button"
           v-close-popup
           no-caps
           flat
@@ -1572,7 +1573,7 @@ onMounted(() => void reload());
           no-caps
           flat
           size="12px"
-          class="bg-primary text-grey-1 u-button"
+          class="u-button"
           :label="gettext('Close')"
         />
       </template>

@@ -310,6 +310,8 @@ export default {
   Value: '值',
   Flag: '标志',
   'Log rate limit': '日志速率限制',
+  'Add Rule': '新增规则',
+  'Insert Security Group': '插入安全组',
   'Input Policy': '输入策略',
   'Output Policy': '输出策略',
   'IP Version': 'IP 版本',
