@@ -540,7 +540,7 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
           <q-btn
             v-close-popup
             no-caps
-            outline
+            flat
             size="12px"
             class="u-button"
             :label="gettext('Cancel')"
@@ -607,7 +607,7 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
           <q-btn
             v-close-popup
             no-caps
-            outline
+            flat
             size="12px"
             class="u-button"
             :label="canSnapshot ? gettext('Cancel') : gettext('Close')"
@@ -658,7 +658,7 @@ onBeforeUnmount(() => window.clearInterval(autoReloadTimer.value));
           <q-btn
             v-close-popup
             no-caps
-            outline
+            flat
             size="12px"
             class="u-button"
             :label="gettext('Cancel')"

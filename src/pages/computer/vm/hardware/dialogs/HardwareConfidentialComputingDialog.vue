@@ -156,7 +156,7 @@ async function saveConfidentialComputing() {
         <q-btn
           v-close-popup
           no-caps
-          outline
+          flat
           size="12px"
           class="u-button"
           :label="gettext('Cancel')"

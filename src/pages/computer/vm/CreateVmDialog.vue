@@ -86,7 +86,7 @@ const { canCreate } = derived;
           no-caps
           flat
           size="12px"
-          class="bg-grey-8 text-grey-1 u-button"
+          class="u-button"
           :disable="loading"
           :label="gettext('Back')"
           @click="moveStep(-1)"

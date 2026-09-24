@@ -1064,7 +1064,7 @@ watch(listStorage, () => {
           <q-btn
             v-close-popup
             no-caps
-            outline
+            flat
             size="12px"
             class="u-button"
             :label="gettext('Cancel')"
@@ -1101,7 +1101,7 @@ watch(listStorage, () => {
           <q-btn
             v-close-popup
             no-caps
-            outline
+            flat
             size="12px"
             class="u-button"
             :label="gettext('Cancel')"
@@ -1306,7 +1306,7 @@ watch(listStorage, () => {
           <q-btn
             v-close-popup
             no-caps
-            outline
+            flat
             size="12px"
             class="u-button"
             :label="gettext('Cancel')"
@@ -1402,7 +1402,7 @@ watch(listStorage, () => {
           <q-btn
             v-close-popup
             no-caps
-            outline
+            flat
             size="12px"
             class="u-button"
             :label="gettext('Close')"
@@ -1471,7 +1471,7 @@ watch(listStorage, () => {
           <q-btn
             v-close-popup
             no-caps
-            outline
+            flat
             size="12px"
             class="u-button"
             :label="gettext('Cancel')"
