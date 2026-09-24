@@ -188,6 +188,8 @@ export type CreateVmWizardContext = {
     addTag: () => void;
     removeTag: (tag: string) => void;
     setCpuFlagState: (name: string, state: string | number | null) => void;
+    validatePrimaryDiskSize: () => void;
+    validatePrimaryDiskSlot: () => void;
   };
   derived: {
     tags: ComputedRef<string[]>;

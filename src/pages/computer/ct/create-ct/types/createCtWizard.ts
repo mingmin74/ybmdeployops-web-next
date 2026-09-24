@@ -133,6 +133,7 @@ export type CreateCtWizardContext = {
     cpuUnitsDefault: ComputedRef<number>;
     cpuUnitsMaximum: ComputedRef<number>;
     quotaAllowed: (storage: string) => boolean;
+    requiredLabel: (label: string) => string;
     summaryRows: ComputedRef<[string, string][]>;
   };
 };

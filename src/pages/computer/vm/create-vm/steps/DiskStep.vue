@@ -4,7 +4,7 @@ import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 import { useCreateVmWizardContext } from '../context/createVmWizardContext';
 
-const { form, state, resources, errors, options, disks, derived } = useCreateVmWizardContext();
+const { form, state, resources, errors, options, disks, actions, derived } = useCreateVmWizardContext();
 const { advanced, activeDiskId, activeDiskTab, diskSplitter } = state;
 const { importStorageRows, importImageRows } = resources;
 const { validationErrors } = errors;
@@ -30,6 +30,7 @@ const {
   diskFormatOptions,
   diskFormatDisabled,
 } = disks;
+const { validatePrimaryDiskSize, validatePrimaryDiskSlot } = actions;
 const { diskStorageRows, scsiControllerLabel, stepContentHeight, requiredLabel } = derived;
 </script>
 
@@ -192,6 +193,7 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight, requiredLabel }
                       style="width: 100px"
                       :max="diskBusSlotLimits[form.diskBus] - 1"
                       :label="requiredLabel(gettext('Device ID'))"
+                      @blur="validatePrimaryDiskSlot"
                     />
                   </div>
                   <q-input
@@ -225,6 +227,7 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight, requiredLabel }
                     min="1"
                     class="q-field--with-bottom"
                     :label="requiredLabel(`${gettext('Disk size')} (${gettext('GiB')})`)"
+                    @blur="validatePrimaryDiskSize"
                   />
                   <q-select
                     v-model="form.format"
@@ -814,6 +817,10 @@ const { diskStorageRows, scsiControllerLabel, stepContentHeight, requiredLabel }
 
 .vm-disk-detail {
   min-width: 0;
+}
+
+.vm-disk-detail :deep(.q-field__bottom) {
+  display: block !important;
 }
 
 .vm-disk-editor {

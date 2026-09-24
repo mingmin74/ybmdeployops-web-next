@@ -9,8 +9,9 @@ import { textValue } from '@/utils/pveFormat';
 
 defineOptions({ name: 'CtTemplateStep' });
 
-const { form, resources, errors } = useCreateCtWizardContext();
+const { form, resources, errors, derived } = useCreateCtWizardContext();
 const { validationErrors } = errors;
+const { requiredLabel } = derived;
 
 const storageRows = computed<PveRecord[]>(() => resources.storageOptions.value);
 const templateRows = computed<PveRecord[]>(() => resources.templateRows.value);
@@ -101,7 +102,7 @@ const templateColumns: QTableColumn<PveRecord>[] = [
             :get-row-value="(row) => String(row.storage || '')"
             :error="Boolean(validationErrors.templateStorage)"
             :error-message="validationErrors.templateStorage || ''"
-            :label="gettext('Storage')"
+            :label="requiredLabel(gettext('Storage'))"
           />
         </div>
         <div class="col">
@@ -119,12 +120,12 @@ const templateColumns: QTableColumn<PveRecord>[] = [
             :disable="!form.templateStorage"
             :error="Boolean(validationErrors.ostemplate)"
             :error-message="validationErrors.ostemplate || ''"
-            :label="gettext('Template')"
+            :label="requiredLabel(gettext('Template'))"
           />
           <q-checkbox
             v-model="resources.showAllTemplateArchitectures.value"
             dense
-            class="q-mt-sm"
+            class="q-mt-sm q-mb-md"
             :label="gettext('Show all architectures')"
           />
         </div>

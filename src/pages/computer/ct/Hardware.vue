@@ -10,9 +10,10 @@ defineOptions({ name: 'CtHardwareStep' });
 
 const { form, resources, errors, state, derived } = useCreateCtWizardContext();
 const { validationErrors } = errors;
+const { requiredLabel } = derived;
 const { advanced } = state;
 const { quotaAllowed } = derived;
-const diskSplitter = shallowRef(28);
+const diskSplitter = shallowRef(20);
 const activeDiskId = shallowRef('rootfs');
 const activeManagedMount = computed(() =>
   form.managedMounts.find((mount) => mount.id === activeDiskId.value)
@@ -147,38 +148,41 @@ function idMapError(value: string, minimum: number) {
         <div class="q-pa-sm ct-disk-detail">
           <div class="q-pa-md bg-white ct-disk-editor">
             <template v-if="activeDiskId === 'rootfs'">
-              <div class="row q-gutter-lg">
-                <q-select
-                  v-model="form.rootfsStorage"
-                  :options="storageOptions()"
-                  :error="Boolean(validationErrors.rootfsStorage)"
-                  :error-message="validationErrors.rootfsStorage"
-                  dense
-                  options-dense
-                  emit-value
-                  map-options
-                  class="col q-field--with-bottom"
-                  :label="gettext('Storage')"
-                />
-                <q-input
-                  v-model.number="form.rootfsSize"
-                  :error="Boolean(validationErrors.rootfsSize)"
-                  :error-message="validationErrors.rootfsSize"
-                  dense
-                  type="number"
-                  min="0.001"
-                  max="131072"
-                  step="0.001"
-                  class="col q-field--with-bottom"
-                  :label="`${gettext('Disk size')} (GiB)`"
-                />
+              <div class="row q-col-gutter-lg ct-disk-editor-fields">
+                <div class="col-12 col-sm-6">
+                  <q-select
+                    v-model="form.rootfsStorage"
+                    :options="storageOptions()"
+                    :error="Boolean(validationErrors.rootfsStorage)"
+                    :error-message="validationErrors.rootfsStorage"
+                    dense
+                    options-dense
+                    emit-value
+                    map-options
+                    class="q-field--with-bottom"
+                    :label="requiredLabel(gettext('Storage'))"
+                  />
+                </div>
+                <div class="col-12 col-sm-6">
+                  <q-input
+                    v-model.number="form.rootfsSize"
+                    :error="Boolean(validationErrors.rootfsSize)"
+                    :error-message="validationErrors.rootfsSize"
+                    dense
+                    type="number"
+                    min="0.001"
+                    max="131072"
+                    step="0.001"
+                    class="q-field--with-bottom"
+                    :label="requiredLabel(`${gettext('Disk size')} (GiB)`)"
+                  />
+                </div>
               </div>
               <div
                 v-if="advanced"
-                class="q-mt-md u-border-dotted-blue q-px-md q-py-sm bg-white"
+                class="ct-disk-advanced u-border-dotted-blue bg-white"
               >
-                <q-separator class="q-my-md" />
-                <div class="row q-gutter-lg">
+                <div class="row q-gutter-lg ct-disk-advanced-row">
                   <q-checkbox
                     v-model="form.rootfsQuota"
                     :disable="!quotaAllowed(form.rootfsStorage)"
@@ -199,7 +203,7 @@ function idMapError(value: string, minimum: number) {
                     label="ACLs"
                   />
                 </div>
-                <div class="row q-gutter-lg">
+                <div class="row q-gutter-lg ct-disk-advanced-row">
                   <q-checkbox
                     v-model="form.rootfsSkipReplication"
                     dense
@@ -219,8 +223,8 @@ function idMapError(value: string, minimum: number) {
                     :label="gettext('Mount options')"
                   />
                 </div>
-                <div class="q-mt-md">
-                  <div class="text-body2 q-mb-sm">{{ gettext('ID Mapping') }}</div>
+                <div class="ct-disk-idmap">
+                  <div class="ct-disk-idmap__title">{{ gettext('ID Mapping') }}</div>
                   <q-checkbox
                     v-model="form.rootfsIdMapPassthrough"
                     dense
@@ -324,31 +328,35 @@ function idMapError(value: string, minimum: number) {
               </div>
             </template>
             <template v-else-if="activeManagedMount">
-              <div class="row q-gutter-lg">
-                <q-select
-                  v-model="activeManagedMount.storage"
-                  :options="storageOptions()"
-                  :error="Boolean(validationErrors[`${activeManagedMount.id}Storage`])"
-                  :error-message="validationErrors[`${activeManagedMount.id}Storage`]"
-                  dense
-                  options-dense
-                  emit-value
-                  map-options
-                  class="col q-field--with-bottom"
-                  :label="gettext('Storage')"
-                />
-                <q-input
-                  v-model.number="activeManagedMount.size"
-                  dense
-                  type="number"
-                  min="0.001"
-                  max="131072"
-                  step="0.001"
-                  :error="Boolean(validationErrors[`${activeManagedMount.id}Size`])"
-                  :error-message="validationErrors[`${activeManagedMount.id}Size`]"
-                  class="col q-field--with-bottom"
-                  :label="`${gettext('Disk size')} (GiB)`"
-                />
+              <div class="row q-col-gutter-lg ct-disk-editor-fields">
+                <div class="col-12 col-sm-6">
+                  <q-select
+                    v-model="activeManagedMount.storage"
+                    :options="storageOptions()"
+                    :error="Boolean(validationErrors[`${activeManagedMount.id}Storage`])"
+                    :error-message="validationErrors[`${activeManagedMount.id}Storage`]"
+                    dense
+                    options-dense
+                    emit-value
+                    map-options
+                    class="q-field--with-bottom"
+                    :label="requiredLabel(gettext('Storage'))"
+                  />
+                </div>
+                <div class="col-12 col-sm-6">
+                  <q-input
+                    v-model.number="activeManagedMount.size"
+                    dense
+                    type="number"
+                    min="0.001"
+                    max="131072"
+                    step="0.001"
+                    :error="Boolean(validationErrors[`${activeManagedMount.id}Size`])"
+                    :error-message="validationErrors[`${activeManagedMount.id}Size`]"
+                    class="q-field--with-bottom"
+                    :label="requiredLabel(`${gettext('Disk size')} (GiB)`)"
+                  />
+                </div>
               </div>
               <q-input
                 v-model="activeManagedMount.mountPoint"
@@ -356,7 +364,7 @@ function idMapError(value: string, minimum: number) {
                 :error="Boolean(validationErrors[`${activeManagedMount.id}Path`])"
                 :error-message="validationErrors[`${activeManagedMount.id}Path`]"
                 class="q-field--with-bottom"
-                :label="gettext('Mount Point')"
+                :label="requiredLabel(gettext('Mount Point'))"
                 placeholder="/mnt/data"
               />
               <q-checkbox
@@ -369,10 +377,9 @@ function idMapError(value: string, minimum: number) {
               />
               <div
                 v-if="advanced"
-                class="q-mt-md u-border-dotted-blue q-px-md q-py-sm bg-white"
+                class="ct-disk-advanced u-border-dotted-blue bg-white"
               >
-                <q-separator class="q-my-md" />
-                <div class="row q-gutter-lg">
+                <div class="row q-gutter-lg ct-disk-advanced-row">
                   <q-checkbox
                     v-model="activeManagedMount.quota"
                     :disable="!quotaAllowed(activeManagedMount.storage)"
@@ -393,7 +400,7 @@ function idMapError(value: string, minimum: number) {
                     label="ACLs"
                   />
                 </div>
-                <div class="row q-gutter-lg">
+                <div class="row q-gutter-lg ct-disk-advanced-row">
                   <q-checkbox
                     v-model="activeManagedMount.readOnly"
                     dense
@@ -411,7 +418,7 @@ function idMapError(value: string, minimum: number) {
                     :label="gettext('Keep Attributes')"
                   />
                 </div>
-                <div class="row q-gutter-lg">
+                <div class="row q-gutter-lg ct-disk-advanced-row">
                   <q-checkbox
                     v-model="activeManagedMount.skipReplication"
                     dense
@@ -431,8 +438,8 @@ function idMapError(value: string, minimum: number) {
                     :label="gettext('Mount options')"
                   />
                 </div>
-                <div class="q-mt-md">
-                  <div class="text-body2 q-mb-sm">{{ gettext('ID Mapping') }}</div>
+                <div class="ct-disk-idmap">
+                  <div class="ct-disk-idmap__title">{{ gettext('ID Mapping') }}</div>
                   <q-checkbox
                     v-model="activeManagedMount.idMapPassthrough"
                     dense
@@ -549,6 +556,42 @@ function idMapError(value: string, minimum: number) {
 .ct-disk-nav,
 .ct-disk-detail {
   min-width: 0;
+}
+.ct-disk-detail :deep(.q-field__bottom) {
+  display: block !important;
+}
+.ct-disk-editor {
+  margin-top: 8px;
+}
+.ct-disk-editor-fields {
+  align-items: flex-start;
+}
+.ct-disk-editor :deep(.q-checkbox--dense .q-checkbox__label) {
+  color: #333;
+}
+.ct-disk-advanced {
+  margin-top: 12px;
+  padding: 12px 16px 16px;
+}
+.ct-disk-advanced-row {
+  align-items: center;
+}
+.ct-disk-advanced-row + .ct-disk-advanced-row {
+  margin-top: 4px;
+}
+.ct-disk-advanced :deep(.q-checkbox) {
+  min-height: 28px;
+}
+.ct-disk-idmap {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #dfe1e6;
+}
+.ct-disk-idmap__title {
+  margin-bottom: 8px;
+  color: #333;
+  font-size: 13px;
+  font-weight: 500;
 }
 .ct-disk-list :deep(.q-item) {
   min-height: 30px;

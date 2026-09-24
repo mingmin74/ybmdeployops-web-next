@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { QTableColumn } from 'quasar';
 import { Dialog } from 'quasar';
-import { onMounted, ref, shallowRef } from 'vue';
+import { onMounted, reactive, ref, shallowRef } from 'vue';
 import UWindow from '@/components/UWindow.vue';
 import type { PveRecord } from '@/api/resources';
 import {
@@ -22,8 +22,11 @@ const filter = ref('');
 const selected = ref<PveRecord[]>([]);
 const rows = shallowRef<PveRecord[]>([]);
 const form = ref<Record<string, string | number | null | undefined>>({});
-const editorForm = ref<{ validate: () => Promise<boolean> }>();
 const originalName = ref('');
+const formErrors = reactive({
+  name: '',
+  cidr: '',
+});
 
 const columns: QTableColumn<PveRecord>[] = [
   {
@@ -34,7 +37,13 @@ const columns: QTableColumn<PveRecord>[] = [
     field: (row) => row.name || '-',
     sortable: true,
   },
-  { name: 'cidr', label: 'CIDR', align: 'left', field: (row) => row.cidr || '-', sortable: true },
+  {
+    name: 'cidr',
+    label: gettext('IP/CIDR'),
+    align: 'left',
+    field: (row) => row.cidr || '-',
+    sortable: true,
+  },
   {
     name: 'ipversion',
     label: gettext('IP Version'),
@@ -77,6 +86,7 @@ function openDialog(mode: 'add' | 'edit') {
       )
     : {};
   originalName.value = textValue(form.value.name);
+  Object.assign(formErrors, { name: '', cidr: '' });
   dialog.value = true;
 }
 
@@ -99,8 +109,64 @@ async function submitForm() {
   }
 }
 
+function isValidIpv4(address: string) {
+  const segments = address.split('.');
+  return (
+    segments.length === 4 &&
+    segments.every((segment) => /^\d+$/.test(segment) && Number(segment) >= 0 && Number(segment) <= 255)
+  );
+}
+
+function isValidIpv6(address: string) {
+  if (address.includes(':::') || address.indexOf('::') !== address.lastIndexOf('::')) return false;
+
+  const hasCompression = address.includes('::');
+  const segments = address.split(':');
+  let groups = 0;
+
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    if (!segment) continue;
+    if (segment.includes('.')) {
+      if (index !== segments.length - 1 || !isValidIpv4(segment)) return false;
+      groups += 2;
+      continue;
+    }
+    if (!/^[0-9a-fA-F]{1,4}$/.test(segment)) return false;
+    groups += 1;
+  }
+
+  return hasCompression ? groups < 8 : groups === 8;
+}
+
+function isValidIpOrCidr(value: string) {
+  const [address, prefix, ...rest] = value.split('/');
+  if (!address || rest.length) return false;
+
+  const isIpv4 = isValidIpv4(address);
+  const isIp = isIpv4 || isValidIpv6(address);
+  if (!isIp) return false;
+  if (prefix === undefined) return true;
+  if (!/^\d+$/.test(prefix)) return false;
+
+  const prefixLength = Number(prefix);
+  return prefixLength >= 0 && prefixLength <= (isIpv4 ? 32 : 128);
+}
+
 async function validateAndSubmit() {
-  if (!(await editorForm.value?.validate())) return;
+  const name = textValue(form.value.name).trim();
+  const cidr = textValue(form.value.cidr).trim();
+  form.value.name = name;
+  form.value.cidr = cidr;
+  Object.assign(formErrors, {
+    name: name ? '' : gettext('This field is required'),
+    cidr: !cidr
+      ? gettext('This field is required')
+      : isValidIpOrCidr(cidr)
+      ? ''
+      : gettext('IP 地址或 CIDR 网络格式不正确'),
+  });
+  if (formErrors.name || formErrors.cidr) return;
   await submitForm();
 }
 
@@ -209,7 +275,6 @@ onMounted(refreshData);
         :loading="loading"
       >
         <q-form
-          ref="editorForm"
           class="u-border q-ma-sm q-pa-md u-dense"
           @submit.prevent="validateAndSubmit"
         >
@@ -218,14 +283,18 @@ onMounted(refreshData);
             dense
             class="q-field--with-bottom"
             :label="`${gettext('Name')} *`"
-            :rules="[(value) => !!value || gettext('This field is required')]"
+            :error="Boolean(formErrors.name)"
+            :error-message="formErrors.name"
+            @update:model-value="formErrors.name = ''"
           />
           <q-input
             v-model="form.cidr"
             dense
             class="q-field--with-bottom"
-            label="CIDR *"
-            :rules="[(value) => !!value || gettext('This field is required')]"
+            :label="`${gettext('IP/CIDR')} *`"
+            :error="Boolean(formErrors.cidr)"
+            :error-message="formErrors.cidr"
+            @update:model-value="formErrors.cidr = ''"
           />
           <q-input
             v-model="form.comment"

@@ -7,9 +7,10 @@ import { useCreateCtWizardContext } from './create-ct/context/createCtWizardCont
 
 defineOptions({ name: 'CtGeneralStep' });
 
-const { form, state, resources, errors } = useCreateCtWizardContext();
+const { form, state, resources, errors, derived } = useCreateCtWizardContext();
 const { advanced } = state;
 const { generalFieldErrors } = errors;
+const { requiredLabel } = derived;
 const tagInput = shallowRef('');
 const tagError = shallowRef('');
 const sshKeyFileError = shallowRef('');
@@ -95,7 +96,7 @@ async function loadSshKey(event: Event) {
             width="500px"
             field-style="standard"
             class="q-field--with-bottom"
-            :label="gettext('Node')"
+            :label="requiredLabel(gettext('Node'))"
             :error="Boolean(generalFieldErrors.node)"
             :error-message="generalFieldErrors.node || ''"
           />
@@ -107,7 +108,7 @@ async function loadSshKey(event: Event) {
             max="999999999"
             step="1"
             class="q-field--with-bottom"
-            :label="gettext('VM ID')"
+            :label="requiredLabel(gettext('VM ID'))"
             :error="Boolean(generalFieldErrors.vmid)"
             :error-message="generalFieldErrors.vmid || ''"
           />
@@ -119,29 +120,34 @@ async function loadSshKey(event: Event) {
             :error="Boolean(generalFieldErrors.hostname)"
             :error-message="generalFieldErrors.hostname || ''"
           />
-          <q-checkbox
-            v-model="form.unprivileged"
-            dense
-            right-label
-            color="primary"
-            :label="gettext('Unprivileged container')"
-          />
-          <q-checkbox
-            v-model="form.featuresChecked"
-            val="nesting"
-            dense
-            right-label
-            color="primary"
-            :disable="!form.unprivileged"
-            :label="gettext('Nesting')"
-          />
-          <q-checkbox
-            v-model="form.haManaged"
-            dense
-            right-label
-            color="primary"
-            :label="gettext('Add to HA')"
-          />
+          <div class="column q-gutter-y-md q-mt-sm">
+            <q-checkbox
+              v-model="form.unprivileged"
+              dense
+              right-label
+              color="primary"
+              class="full-width"
+              :label="gettext('Unprivileged container')"
+            />
+            <q-checkbox
+              v-model="form.featuresChecked"
+              val="nesting"
+              dense
+              right-label
+              color="primary"
+              class="full-width"
+              :disable="!form.unprivileged"
+              :label="gettext('Nesting')"
+            />
+            <q-checkbox
+              v-model="form.haManaged"
+              dense
+              right-label
+              color="primary"
+              class="full-width"
+              :label="gettext('Add to HA')"
+            />
+          </div>
         </div>
         <div class="col">
           <q-select
@@ -164,7 +170,7 @@ async function loadSshKey(event: Event) {
             class="q-field--with-bottom"
             :error="Boolean(passwordError)"
             :error-message="passwordError"
-            :label="gettext('Password')"
+            :label="requiredLabel(gettext('Password'))"
           />
           <q-input
             v-model="form.confirmPassword"

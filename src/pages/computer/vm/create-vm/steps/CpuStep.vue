@@ -65,6 +65,8 @@ const {
             :display-value="cpuModelDisplayValue"
             :get-row-value="(row) => textValue(row.name)"
             :label="gettext('Type')"
+            :error="Boolean(validationErrors.cpu)"
+            :error-message="validationErrors.cpu || ''"
             class="q-field--with-bottom"
           />
           <q-input

@@ -12,7 +12,6 @@ import CreateCtMounts from './Mounts.vue';
 import CreateCtBindMounts from './BindMounts.vue';
 import CreateCtLimits from './Limits.vue';
 import CreateCtDns from './Dns.vue';
-import CreateCtValidationBanner from './CreateCtValidationBanner.vue';
 
 const model = defineModel<boolean>({ required: true });
 const props = defineProps<{ preferredNode?: string }>();
@@ -27,14 +26,7 @@ const { state, errors, actions, derived } = wizard;
 const { loading, step, advanced, networkAdvanced } = state;
 const { validationError } = errors;
 const { moveStep, submit } = actions;
-const { canSubmit, canProceedGeneral, canProceedTemplate, canProceedHardware } = derived;
-const nextDisabled = computed(
-  () =>
-    loading.value ||
-    (step.value === 'general' && !canProceedGeneral.value) ||
-    (step.value === 'template' && !canProceedTemplate.value) ||
-    (step.value === 'hardware' && !canProceedHardware.value)
-);
+const { canSubmit } = derived;
 
 async function next() {
   await moveStep(1);
@@ -77,7 +69,6 @@ const currentAdvanced = computed({
           active-icon="settings"
           done-icon="check"
         >
-          <CreateCtValidationBanner />
           <CreateCtGeneral />
         </q-step>
         <q-step
@@ -87,7 +78,6 @@ const currentAdvanced = computed({
           active-icon="inventory_2"
           done-icon="check"
         >
-          <CreateCtValidationBanner />
           <CreateCtTemplate />
         </q-step>
         <q-step
@@ -97,7 +87,6 @@ const currentAdvanced = computed({
           active-icon="storage"
           done-icon="check"
         >
-          <CreateCtValidationBanner />
           <CreateCtHardware />
         </q-step>
         <q-step
@@ -107,7 +96,6 @@ const currentAdvanced = computed({
           active-icon="memory"
           done-icon="check"
         >
-          <CreateCtValidationBanner />
           <CreateCtMounts />
         </q-step>
         <q-step
@@ -117,7 +105,6 @@ const currentAdvanced = computed({
           active-icon="developer_board"
           done-icon="check"
         >
-          <CreateCtValidationBanner />
           <CreateCtBindMounts />
         </q-step>
         <q-step
@@ -127,7 +114,6 @@ const currentAdvanced = computed({
           active-icon="settings_ethernet"
           done-icon="check"
         >
-          <CreateCtValidationBanner />
           <CreateCtLimits />
         </q-step>
         <q-step
@@ -137,7 +123,6 @@ const currentAdvanced = computed({
           active-icon="dns"
           done-icon="check"
         >
-          <CreateCtValidationBanner />
           <CreateCtDns />
         </q-step>
         <q-step
@@ -147,7 +132,6 @@ const currentAdvanced = computed({
           active-icon="check"
           done-icon="check"
         >
-          <CreateCtValidationBanner />
           <CreateCtConfirm />
           <div
             v-if="validationError"
@@ -183,7 +167,7 @@ const currentAdvanced = computed({
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button q-ml-sm"
-          :disable="nextDisabled"
+          :disable="loading"
           :label="gettext('Next')"
           @click="next"
         />
@@ -215,5 +199,9 @@ const currentAdvanced = computed({
 
 .ct-create-stepper :deep(.q-stepper__dot) {
   font-size: 18px;
+}
+
+.ct-create-stepper :deep(.q-field__bottom) {
+  display: block !important;
 }
 </style>

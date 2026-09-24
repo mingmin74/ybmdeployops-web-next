@@ -1064,7 +1064,7 @@ export function useCreateVmWizard(
   ) {
     const raw = String(value ?? '').trim();
     if (!raw) {
-      if (!optional) requireValue(field, label, value);
+      if (!optional) requireValue(field, _label, value);
       return;
     }
     const numericValue = Number(raw);
@@ -1079,6 +1079,28 @@ export function useCreateVmWizard(
         max === undefined
           ? `${gettext('Value must be at least')} ${min}`
           : `${gettext('Value must be between')} ${min} and ${max}`
+      );
+    }
+  }
+
+  function validatePrimaryDiskSize() {
+    delete validationErrors.diskSize;
+    validateNumber('diskSize', gettext('Disk size'), form.diskSize, 0.001, 131072, false, false);
+  }
+
+  function validatePrimaryDiskSlot() {
+    delete validationErrors.diskSlot;
+    validateNumber(
+      'diskSlot',
+      gettext('Device ID'),
+      form.diskSlot,
+      0,
+      diskBusSlotLimits[form.diskBus] - 1
+    );
+    if (!validationErrors.diskSlot && reservedDeviceKeys().has(primaryDiskKey.value)) {
+      addValidationError(
+        'diskSlot',
+        `${gettext('Device ID')}: ${gettext('This value is already in use')}`
       );
     }
   }
@@ -1831,6 +1853,8 @@ export function useCreateVmWizard(
       addTag,
       removeTag,
       setCpuFlagState,
+      validatePrimaryDiskSize,
+      validatePrimaryDiskSlot,
     },
     derived: {
       tags,

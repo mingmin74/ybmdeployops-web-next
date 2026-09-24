@@ -90,7 +90,7 @@ function selectRow(_: Event, row: PveRecord) {
   <div
     class="select-table"
     :class="{
-      'u-hidden-error': !showError,
+      'u-hidden-error': !showError && !error,
       'select-table--outlined': fieldStyle === 'outlined',
       'select-table--fixed': fixedLayout,
     }"

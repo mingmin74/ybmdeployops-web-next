@@ -14,6 +14,7 @@ const basePath = computed(
 
 <template>
   <FirewallResourcePanel
+    class="vm-firewall-tab"
     :base-path="basePath"
     firewall-type="vm"
     show-aliases
@@ -21,3 +22,9 @@ const basePath = computed(
     left-navigation
   />
 </template>
+
+<style scoped>
+.vm-firewall-tab :deep(.q-field__bottom) {
+  display: block !important;
+}
+</style>

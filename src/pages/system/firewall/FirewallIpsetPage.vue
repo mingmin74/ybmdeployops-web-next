@@ -481,7 +481,7 @@ onMounted(() => {
           />
           <q-checkbox
             v-model="entryForm.nomatch"
-            class="q-field--with-bottom"
+            class="q-field--with-bottom q-mt-md"
             dense
             right-label
             color="primary"

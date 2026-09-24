@@ -331,6 +331,9 @@ export function useCreateCtWizard(
     );
     return !form.unprivileged && type !== 'zfs' && type !== 'zfspool';
   };
+  function requiredLabel(label: string) {
+    return `${label} *`;
+  }
   const canProceedHardware = computed(
     () =>
       Boolean(form.rootfsStorage) &&
@@ -486,7 +489,7 @@ export function useCreateCtWizard(
           'cpuUnits',
           gettext('CPU units') +
             ': ' +
-            gettext(`Value must be between 8 and ${cpuUnitsMaximum.value}.`)
+            `${gettext('Value must be between 8 and')} ${cpuUnitsMaximum.value}.`
         );
       }
     }
@@ -1061,6 +1064,7 @@ export function useCreateCtWizard(
       cpuUnitsDefault,
       cpuUnitsMaximum,
       quotaAllowed,
+      requiredLabel,
       summaryRows,
     },
   };

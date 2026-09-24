@@ -8,10 +8,11 @@ import { useCreateCtWizardContext } from './create-ct/context/createCtWizardCont
 
 defineOptions({ name: 'CtLimitsStep' });
 
-const { form, state, resources, errors } = useCreateCtWizardContext();
+const { form, state, resources, errors, derived } = useCreateCtWizardContext();
 const { networkAdvanced } = state;
 const { bridgeRows } = resources;
 const { validationErrors } = errors;
+const { requiredLabel } = derived;
 const bridgeColumns: QTableColumn<PveRecord>[] = [
   { name: 'iface', label: gettext('Bridge'), field: (row) => textValue(row.iface), align: 'left' },
   {
@@ -52,7 +53,7 @@ const ipv6ModeOptions = [
             class="q-field--with-bottom"
             :error="Boolean(validationErrors.netName)"
             :error-message="validationErrors.netName"
-            :label="gettext('Name')"
+            :label="requiredLabel(gettext('Name'))"
             placeholder="eth0"
           />
           <q-input
@@ -76,7 +77,7 @@ const ipv6ModeOptions = [
             :get-row-value="(row) => textValue(row.iface)"
             :error="Boolean(validationErrors.netBridge)"
             :error-message="validationErrors.netBridge || ''"
-            :label="gettext('Bridge')"
+            :label="requiredLabel(gettext('Bridge'))"
           />
           <q-input
             v-model.number="form.netVlanTag"

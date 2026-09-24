@@ -388,7 +388,7 @@ watch(
 
 <style scoped lang="scss">
 .vm-config-legacy {
-  padding: 8px;
+  // padding: 8px;
   font-size: 13px;
 }
 .hardware-scroll {

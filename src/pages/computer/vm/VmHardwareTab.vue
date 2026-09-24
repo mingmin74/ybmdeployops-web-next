@@ -296,7 +296,10 @@ const rows = computed<HardwareRow[]>(() => {
       editable: true,
     },
   ];
-  const deviceKeys = new Set([...Object.keys(config), ...pendingRows.value.map((row) => textValue(row.key))]);
+  const deviceKeys = new Set([
+    ...Object.keys(config),
+    ...pendingRows.value.map((row) => textValue(row.key)),
+  ]);
   const devices = [...deviceKeys]
     .filter(
       (key) =>
@@ -358,14 +361,13 @@ const selectedCanSave = computed(() =>
   Boolean(selectedDevice.value?.editable && canEditRow(selectedDevice.value))
 );
 const isDisk = computed(() => selectedDevice.value?.type === 'disk');
-const canResizeDisk = computed(
-  () =>
-    Boolean(
-      selectedDevice.value?.type === 'disk' &&
-        hasVmCapability('VM.Config.Disk') &&
-        !selectedPending.value &&
-        !isPendingDelete(selectedDevice.value.key)
-    )
+const canResizeDisk = computed(() =>
+  Boolean(
+    selectedDevice.value?.type === 'disk' &&
+      hasVmCapability('VM.Config.Disk') &&
+      !selectedPending.value &&
+      !isPendingDelete(selectedDevice.value.key)
+  )
 );
 const canMoveDisk = computed(() => {
   const device = selectedDevice.value;
@@ -425,10 +427,14 @@ function hasVmCapability(capability: string) {
   return Boolean((session.caps as unknown as { vms?: Record<string, unknown> }).vms?.[capability]);
 }
 function hasNodeCapability(capability: string) {
-  return Boolean((session.caps as unknown as { nodes?: Record<string, unknown> }).nodes?.[capability]);
+  return Boolean(
+    (session.caps as unknown as { nodes?: Record<string, unknown> }).nodes?.[capability]
+  );
 }
 function hasMappingCapability(capability: string) {
-  return Boolean((session.caps as unknown as { mapping?: Record<string, unknown> }).mapping?.[capability]);
+  return Boolean(
+    (session.caps as unknown as { mapping?: Record<string, unknown> }).mapping?.[capability]
+  );
 }
 function hasNodeOrMappingCapability() {
   return hasNodeCapability('Sys.Console') || hasMappingCapability('Mapping.Use');
@@ -564,11 +570,16 @@ function removeDevice() {
   const device = selectedDevice.value;
   if (!device || !canRemoveRow(device)) return;
   const isUnusedDisk = device.type === 'unused-disk';
-  const useTask = isUnusedDisk || ((device.type === 'disk' || device.type === 'cloudinit') && props.running);
+  const useTask =
+    isUnusedDisk || ((device.type === 'disk' || device.type === 'cloudinit') && props.running);
   Dialog.create({
     title: removeLabel.value,
     message: [
-      gettext(device.type === 'disk' ? 'Are you sure you want to detach entry %s?' : 'Are you sure you want to remove entry %s?').replace('%s', device.name),
+      gettext(
+        device.type === 'disk'
+          ? 'Are you sure you want to detach entry %s?'
+          : 'Are you sure you want to remove entry %s?'
+      ).replace('%s', device.name),
       ...(isUnusedDisk ? [gettext('This will permanently erase all data.')] : []),
       ...(device.type === 'vmstate'
         ? [gettext('The saved VM state will be permanently lost.')]
@@ -646,10 +657,10 @@ function hardwareDeviceCount(prefix: 'usb' | 'hostpci' | 'serial' | 'virtiofs') 
     prefix === 'usb'
       ? /^usb\d+$/
       : prefix === 'hostpci'
-        ? /^hostpci\d+$/
-        : prefix === 'serial'
-          ? /^serial\d+$/
-          : /^virtiofs\d+$/;
+      ? /^hostpci\d+$/
+      : prefix === 'serial'
+      ? /^serial\d+$/
+      : /^virtiofs\d+$/;
   return new Set(
     [...Object.keys(currentConfig.value), ...pendingHardwareKeys.value].filter((key) =>
       pattern.test(key)

@@ -2,8 +2,9 @@
 import { gettext } from '@/locale';
 import { useCreateCtWizardContext } from './create-ct/context/createCtWizardContext';
 
-const { form, errors } = useCreateCtWizardContext();
+const { form, errors, derived } = useCreateCtWizardContext();
 const { validationErrors } = errors;
+const { requiredLabel } = derived;
 </script>
 
 <template>
@@ -19,7 +20,7 @@ const { validationErrors } = errors;
           class="col q-field--with-bottom"
           :error="Boolean(validationErrors.memory)"
           :error-message="validationErrors.memory"
-          :label="`${gettext('Memory')} (MiB)`"
+          :label="requiredLabel(`${gettext('Memory')} (MiB)`)"
         />
         <q-input
           v-model.number="form.swap"
@@ -30,7 +31,7 @@ const { validationErrors } = errors;
           class="col q-field--with-bottom"
           :error="Boolean(validationErrors.swap)"
           :error-message="validationErrors.swap"
-          :label="`${gettext('Swap')} (MiB)`"
+          :label="requiredLabel(`${gettext('Swap')} (MiB)`)"
         />
       </div>
     </div>

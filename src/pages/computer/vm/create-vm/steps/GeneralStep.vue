@@ -137,9 +137,9 @@ const { tags, stepContentHeight, requiredLabel } = derived;
         <q-input
           v-model="tagInput"
           dense
-          class="q-mb-md"
-          :error="Boolean(tagError)"
-          :error-message="tagError"
+          class="q-field--with-bottom"
+          :error="Boolean(tagError || validationErrors.tags)"
+          :error-message="tagError || validationErrors.tags || ''"
           :placeholder="gettext('Enter to add tag...')"
           @keyup.enter="addTag"
           @keyup.space="addTag"

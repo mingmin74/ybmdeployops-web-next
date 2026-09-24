@@ -40,8 +40,12 @@ const tokenOptions = shallowRef<{ value: string; comment: string }[]>([]);
 const filteredTokenOptions = shallowRef<{ value: string; comment: string }[]>([]);
 const roleOptions = shallowRef<PveRole[]>([]);
 const roleError = shallowRef('');
-const pathRef = ref();
-const tokenRef = ref();
+const formErrors = reactive({
+  path: '',
+  user: '',
+  group: '',
+  token: '',
+});
 const form = reactive({
   path: '',
   type: 'user',
@@ -113,9 +117,6 @@ const formTitle = computed(() => {
 function requiredLabel(label: string) {
   return `${label} *`;
 }
-function requiredFieldRule(value: string | null | undefined) {
-  return value ? true : gettext('This field is required');
-}
 const columns = computed<QTableColumn<RuleRow>[]>(() => {
   const aclColumns: QTableColumn<RuleRow>[] = [
     {
@@ -169,6 +170,7 @@ function ruleVlan(rule: AccessRule) {
 }
 function resetForm(type: AclType = 'user') {
   roleError.value = '';
+  Object.assign(formErrors, { path: '', user: '', group: '', token: '' });
   Object.assign(form, {
     path: props.resourcePath,
     type,
@@ -328,19 +330,17 @@ async function openForm(type: AclType = 'user') {
   }
 }
 async function saveRule() {
-  if (
-    dialogLoading.value ||
-    (!isFixedPath.value && pathRef.value?.validate?.() === false) ||
-    tokenRef.value?.validate?.() === false ||
-    (form.type === 'user' && !form.user) ||
-    (form.type === 'group' && !form.group)
-  ) {
-    return;
-  }
-  if (!form.role) {
-    roleError.value = gettext('This field is required');
-    return;
-  }
+  if (dialogLoading.value) return;
+
+  Object.assign(formErrors, {
+    path:
+      !isFixedPath.value && !form.path.trim() ? gettext('This field is required') : '',
+    user: form.type === 'user' && !form.user ? gettext('This field is required') : '',
+    group: form.type === 'group' && !form.group ? gettext('This field is required') : '',
+    token: form.type === 'apitoken' && !form.token ? gettext('This field is required') : '',
+  });
+  roleError.value = form.role ? '' : gettext('This field is required');
+  if (Object.values(formErrors).some(Boolean) || roleError.value) return;
   dialogLoading.value = true;
   try {
     const data: Record<string, unknown> = {
@@ -384,6 +384,7 @@ watch(
     form.user = '';
     form.group = '';
     form.token = '';
+    Object.assign(formErrors, { user: '', group: '', token: '' });
   }
 );
 watch(
@@ -493,16 +494,20 @@ defineExpose({ reload });
       width="400px"
       :loading="dialogLoading"
     >
-      <div class="u-border q-ma-sm q-pa-md u-dense permission-rule-form">
+      <q-form
+        class="u-border q-ma-sm q-pa-md u-dense permission-rule-form"
+        @submit.prevent="saveRule"
+      >
         <q-select
           v-if="!isFixedPath"
-          ref="pathRef"
           v-model="form.path"
           dense
           options-dense
           :label="requiredLabel(gettext('Path'))"
-          :rules="[requiredFieldRule]"
           class="q-field--with-bottom"
+          :error="Boolean(formErrors.path)"
+          :error-message="formErrors.path"
+          @update:model-value="formErrors.path = ''"
           use-input
           input-debounce="0"
           new-value-mode="add-unique"
@@ -520,7 +525,11 @@ defineExpose({ reload });
           :rows="groupRows"
           :columns="groupColumns"
           :display-value="form.group"
+          show-error
+          :error="Boolean(formErrors.group)"
+          :error-message="formErrors.group"
           :get-row-value="(row) => textValue(row.groupid)"
+          @update:model-value="formErrors.group = ''"
         />
         <SelectTable
           v-if="form.type === 'user'"
@@ -532,11 +541,14 @@ defineExpose({ reload });
           :rows="userRows"
           :columns="userColumns"
           :display-value="form.user"
+          show-error
+          :error="Boolean(formErrors.user)"
+          :error-message="formErrors.user"
           :get-row-value="(row) => textValue(row.userid)"
+          @update:model-value="formErrors.user = ''"
         />
         <q-select
           v-if="form.type === 'apitoken'"
-          ref="tokenRef"
           v-model="form.token"
           dense
           options-dense
@@ -545,11 +557,14 @@ defineExpose({ reload });
           option-value="value"
           option-label="value"
           :label="requiredLabel(gettext('API Token'))"
+          class="q-field--with-bottom"
           use-input
           input-debounce="0"
+          :error="Boolean(formErrors.token)"
+          :error-message="formErrors.token"
+          @update:model-value="formErrors.token = ''"
           @filter="filterTokens"
           :options="filteredTokenOptions"
-          :rules="[requiredFieldRule]"
         >
           <template #option="scope">
             <q-item v-bind="scope.itemProps">
@@ -594,7 +609,7 @@ defineExpose({ reload });
           color="primary"
           :label="gettext('Propagate')"
         />
-      </div>
+      </q-form>
       <template #foot>
         <q-btn
           no-caps

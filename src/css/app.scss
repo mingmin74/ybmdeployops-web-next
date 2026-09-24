@@ -348,6 +348,11 @@ body {
   display: none !important;
 }
 
+// UWindow hides field messages by default. Dialog forms opt in to Quasar's native validation text.
+.q-dialog .u-hidden-error > .q-form .q-field__bottom {
+  display: block !important;
+}
+
 .q-field--standard .q-field__control::after {
   height: 1px !important;
 }

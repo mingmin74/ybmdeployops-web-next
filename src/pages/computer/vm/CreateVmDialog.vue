@@ -132,4 +132,7 @@ const { canCreate } = derived;
   margin-left: -4px;
   padding: 18px 0 17px;
 }
+.vm-create-stepper :deep(.q-field__bottom) {
+  display: block !important;
+}
 </style>
