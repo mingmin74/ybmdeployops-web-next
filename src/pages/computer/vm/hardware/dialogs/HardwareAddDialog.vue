@@ -136,6 +136,7 @@ const addDiskFormKey = shallowRef(0);
 const addCdromFormKey = shallowRef(0);
 const addDiskAdvanced = shallowRef(false);
 const addNetworkAdvanced = shallowRef(false);
+const addPciAdvanced = shallowRef(false);
 const validationAttempted = shallowRef(false);
 const form = reactive<AddHardwareForm>({
   kind: 'disk',
@@ -257,24 +258,24 @@ const canAdd = computed(() => {
   if (form.kind === 'disk')
     return Boolean(
       storageLoaded.value &&
-      selectedStorage.value &&
-      diskFormatOptions.value.includes(form.diskFormat) &&
-      diskKeyAvailable.value &&
-      validDiskBandwidth(form) &&
-      (selectExisting.value
-        ? form.existingVolume.trim() &&
-          existingVolumes.value.some(
-            (item) => textValue(item.volid || item.text) === form.existingVolume
-          )
-        : validDiskSize(form.size))
+        selectedStorage.value &&
+        diskFormatOptions.value.includes(form.diskFormat) &&
+        diskKeyAvailable.value &&
+        validDiskBandwidth(form) &&
+        (selectExisting.value
+          ? form.existingVolume.trim() &&
+            existingVolumes.value.some(
+              (item) => textValue(item.volid || item.text) === form.existingVolume
+            )
+          : validDiskSize(form.size))
     );
   if (form.kind === 'cdrom') {
     return Boolean(
       cdromConfigLoaded.value &&
-      cdromKeyAvailable.value &&
-      form.cdromDeviceId >= 0 &&
-      form.cdromDeviceId < cdromBusLimits[form.cdromBus] &&
-      (form.cdromMediaType !== 'iso' || form.cdromVolid.trim())
+        cdromKeyAvailable.value &&
+        form.cdromDeviceId >= 0 &&
+        form.cdromDeviceId < cdromBusLimits[form.cdromBus] &&
+        (form.cdromMediaType !== 'iso' || form.cdromVolid.trim())
     );
   }
   if (form.kind === 'net')
@@ -288,16 +289,16 @@ const canAdd = computed(() => {
   if (form.kind === 'serial')
     return Boolean(
       hasVmCapability('VM.Config.HWType') &&
-      serialConfigLoaded.value &&
-      serialIdValid.value &&
-      serialKeyAvailable.value
+        serialConfigLoaded.value &&
+        serialIdValid.value &&
+        serialKeyAvailable.value
     );
   if (form.kind === 'audio')
     return Boolean(
       hasVmCapability('VM.Config.HWType') &&
-      audioConfigLoaded.value &&
-      audioKeyAvailable.value &&
-      audioValue()
+        audioConfigLoaded.value &&
+        audioKeyAvailable.value &&
+        audioValue()
     );
   return true;
 });
@@ -406,8 +407,8 @@ function resetNetworkDefaults() {
     model: ['wxp', 'w2k'].includes(textValue(activeNetworkConfig.value.ostype))
       ? 'rtl8139'
       : textValue(activeNetworkConfig.value.ostype) === 'l26'
-        ? 'virtio'
-        : 'e1000',
+      ? 'virtio'
+      : 'e1000',
     vlanTag: '',
     firewall: true,
     macaddr: '',
@@ -490,6 +491,7 @@ watch(visible, (isVisible) => {
   }
   if (initialKind === 'pci') {
     resetPciDefaults();
+    addPciAdvanced.value = false;
     void initializePci();
   }
   if (initialKind === 'serial') void initializeSerial();
@@ -606,7 +608,8 @@ async function initializeCdrom() {
     openedConfig.value = configResponse.data || null;
     openedDigest.value = textValue(configResponse.data?.digest);
     const selectedNode = nodesResponse.data?.find((item) => item.node === node.value) as
-      PveRecord | undefined;
+      | PveRecord
+      | undefined;
     hostArch.value = textValue(selectedNode?.['host-arch']) || 'x86_64';
     resetCdromDefaults();
     cdromConfigLoaded.value = true;
@@ -663,7 +666,8 @@ async function initializeDisk() {
     openedConfig.value = configResponse.data || null;
     openedDigest.value = textValue(configResponse.data?.digest);
     const selectedNode = nodesResponse.data?.find((item) => item.node === node.value) as
-      PveRecord | undefined;
+      | PveRecord
+      | undefined;
     hostArch.value = textValue(selectedNode?.['host-arch']) || 'x86_64';
     storages.value = storageResponse.data || [];
     storageLoaded.value = true;
@@ -731,13 +735,13 @@ function networkFormValid() {
   const mtu = Number(form.mtu);
   return Boolean(
     form.bridge.trim() &&
-    (!form.vlanTag.trim() || (Number.isInteger(tag) && tag >= 1 && tag <= 4094)) &&
-    (!form.macaddr.trim() || /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(form.macaddr.trim())) &&
-    (!form.rate.trim() || (Number.isFinite(rate) && rate >= 0 && rate <= 10240)) &&
-    (!form.queues.trim() || (Number.isInteger(queues) && queues >= 1 && queues <= 64)) &&
-    (!form.mtu.trim() ||
-      form.model !== 'virtio' ||
-      (Number.isInteger(mtu) && mtu >= 1 && mtu <= 65520 && (mtu === 1 || mtu >= 576)))
+      (!form.vlanTag.trim() || (Number.isInteger(tag) && tag >= 1 && tag <= 4094)) &&
+      (!form.macaddr.trim() || /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(form.macaddr.trim())) &&
+      (!form.rate.trim() || (Number.isFinite(rate) && rate >= 0 && rate <= 10240)) &&
+      (!form.queues.trim() || (Number.isInteger(queues) && queues >= 1 && queues <= 64)) &&
+      (!form.mtu.trim() ||
+        form.model !== 'virtio' ||
+        (Number.isInteger(mtu) && mtu >= 1 && mtu <= 65520 && (mtu === 1 || mtu >= 576)))
   );
 }
 
@@ -788,10 +792,12 @@ function normalizePciHost(host: string) {
 }
 
 function pciValue() {
-  const parts =
+  const mapping = form.pciMapping.trim();
+  const parts = [
     form.pciMode === 'mapped'
-      ? [`mapping=${form.pciMapping.trim()}`]
-      : [normalizePciHost(form.pciAddress)];
+      ? (mapping ? `mapping=${mapping}` : '')
+      : normalizePciHost(form.pciAddress),
+  ];
 
   if (!parts[0]) return '';
   pushOptional(parts, 'mdev', form.pciMdev);
@@ -932,7 +938,7 @@ async function addDevice() {
       width="600px"
       :loading="loading"
     >
-      <div class="q-pa-md q-gutter-md hardware-add-content">
+      <div class="q-pa-sm q-gutter-md hardware-add-content">
         <AddDiskForm
           v-if="form.kind === 'disk'"
           :key="addDiskFormKey"
@@ -970,6 +976,7 @@ async function addDevice() {
         <AddPciForm
           v-else-if="form.kind === 'pci'"
           v-model:form="form"
+          v-model:advanced="addPciAdvanced"
           :pcie-supported="pcieSupported"
           :validation-attempted="validationAttempted"
         />
@@ -977,11 +984,13 @@ async function addDevice() {
           v-else-if="form.kind === 'serial'"
           v-model:form="form"
           :device-in-use="serialIdValid && !serialKeyAvailable"
+          :validation-attempted="validationAttempted"
         />
         <AddAudioForm
           v-else-if="form.kind === 'audio'"
           v-model:form="form"
           :device-in-use="!audioKeyAvailable"
+          :validation-attempted="validationAttempted"
         />
       </div>
       <template #foot>
@@ -996,6 +1005,13 @@ async function addDevice() {
           <q-checkbox
             v-else-if="form.kind === 'net'"
             v-model="addNetworkAdvanced"
+            dense
+            color="primary"
+            :label="gettext('Advanced')"
+          />
+          <q-checkbox
+            v-else-if="form.kind === 'pci'"
+            v-model="addPciAdvanced"
             dense
             color="primary"
             :label="gettext('Advanced')"

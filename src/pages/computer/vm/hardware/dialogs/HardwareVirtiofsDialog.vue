@@ -19,6 +19,7 @@ const form = reactive({
   directIo: false,
 });
 const advanced = shallowRef(false);
+const validationAttempted = shallowRef(false);
 const dirMappingRows = shallowRef<PveRecord[]>([]);
 const mappingLoading = shallowRef(false);
 const virtiofsConfig = shallowRef<PveRecord | null>(null);
@@ -81,6 +82,7 @@ function resetForm() {
 
 watch(visible, (isVisible) => {
   if (!isVisible) return;
+  validationAttempted.value = false;
   resetForm();
   void initializeVirtiofs();
   void loadDirectoryMappings();
@@ -140,6 +142,7 @@ function virtiofsValue() {
 
 async function addVirtiofs() {
   const key = virtiofsKey.value;
+  validationAttempted.value = true;
   if (!canAdd.value || !key) return;
   loading.value = true;
   try {
@@ -165,7 +168,7 @@ async function addVirtiofs() {
       width="450px"
       :loading="loading"
     >
-      <div class="q-pa-md u-dense">
+      <div class="q-pa-sm u-dense virtiofs-dialog-content">
         <div class="u-border q-pa-md">
           <SelectTable
             v-model="form.directoryId"
@@ -177,8 +180,8 @@ async function addVirtiofs() {
             :columns="dirMappingColumns"
             :display-value="form.directoryId"
             :loading="mappingLoading"
-            :label="gettext('Directory ID')"
-            :error="!form.directoryId.trim()"
+            :label="`${gettext('Directory ID')} *`"
+            :error="validationAttempted && !form.directoryId.trim()"
             :error-message="gettext('This field is required')"
             :get-row-value="getDirectoryId"
           />
@@ -230,32 +233,35 @@ async function addVirtiofs() {
             :label="gettext('Allow Direct IO')"
           />
         </div>
-
-        <q-checkbox
-          v-model="advanced"
-          class="q-mt-sm"
-          dense
-          :label="gettext('Advanced')"
-        />
       </div>
       <template #foot>
-        <q-btn
-          v-close-popup
-          no-caps
-          outline
-          size="12px"
-          class="u-button"
-          :label="gettext('Cancel')"
-        />
-        <q-btn
-          no-caps
-          flat
-          size="12px"
-          class="bg-primary text-grey-1 u-button"
-          :disable="!canAdd"
-          :label="gettext('Add')"
-          @click="addVirtiofs"
-        />
+        <div class="full-width row items-center justify-between">
+          <q-checkbox
+            v-model="advanced"
+            dense
+            color="primary"
+            :label="gettext('Advanced')"
+          />
+          <div class="row items-center q-gutter-sm">
+            <q-btn
+              v-close-popup
+              no-caps
+              outline
+              size="12px"
+              class="u-button"
+              :label="gettext('Cancel')"
+            />
+            <q-btn
+              no-caps
+              flat
+              size="12px"
+              class="bg-primary text-grey-1 u-button"
+              :disable="loading"
+              :label="gettext('Add')"
+              @click="addVirtiofs"
+            />
+          </div>
+        </div>
       </template>
     </UWindow>
   </q-dialog>
@@ -277,5 +283,9 @@ async function addVirtiofs() {
 .virtiofs-checkbox {
   display: flex;
   margin-top: 6px;
+}
+
+.virtiofs-dialog-content :deep(.q-field__bottom) {
+  display: block !important;
 }
 </style>

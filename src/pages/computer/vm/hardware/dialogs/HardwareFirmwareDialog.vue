@@ -10,7 +10,11 @@ import { formatBytes, textValue } from '@/utils/pveFormat';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
 
 const visible = defineModel<boolean>({ default: false });
-const { kind = 'efi', canAddFirmware = false, usesEfiBios = false } = defineProps<{
+const {
+  kind = 'efi',
+  canAddFirmware = false,
+  usesEfiBios = false,
+} = defineProps<{
   kind?: 'efi' | 'tpm';
   canAddFirmware?: boolean;
   usesEfiBios?: boolean;
@@ -58,7 +62,12 @@ const existingVolumeColumns: QTableColumn<PveRecord>[] = [
     field: (row) => textValue(row.volid || row.text),
     align: 'left',
   },
-  { name: 'format', label: gettext('Format'), field: (row) => textValue(row.format), align: 'left' },
+  {
+    name: 'format',
+    label: gettext('Format'),
+    field: (row) => textValue(row.format),
+    align: 'left',
+  },
   {
     name: 'size',
     label: gettext('Size'),
@@ -68,9 +77,11 @@ const existingVolumeColumns: QTableColumn<PveRecord>[] = [
 ];
 
 const dialogTitle = computed(
-  () => `${gettext('Add')}:${gettext(kind === 'efi' ? 'EFI Disk' : 'TPM State')}`,
+  () => `${gettext('Add')}:${gettext(kind === 'efi' ? 'EFI Disk' : 'TPM State')}`
 );
-const dialogLoading = computed(() => loading.value || storageLoading.value || existingVolumeLoading.value);
+const dialogLoading = computed(
+  () => loading.value || storageLoading.value || existingVolumeLoading.value
+);
 const storageLabel = computed(() => gettext(kind === 'efi' ? 'EFI Storage' : 'TPM Storage'));
 const diskFormatOptions = computed(() =>
   ['raw', 'qcow2', 'vmdk']
@@ -80,20 +91,20 @@ const diskFormatOptions = computed(() =>
         value === 'raw'
           ? `${gettext('Raw disk image')} (raw)`
           : value === 'qcow2'
-            ? `${gettext('QEMU image format')} (qcow2)`
-            : `${gettext('VMware image format')} (vmdk)`,
+          ? `${gettext('QEMU image format')} (qcow2)`
+          : `${gettext('VMware image format')} (vmdk)`,
       value,
-    })),
+    }))
 );
 const storageFormats = computed(() => storageFormatInfo(form.storage));
 const selectedStorage = computed(() =>
-  imageStorageRows.value.find((row) => textValue(row.storage) === form.storage),
+  imageStorageRows.value.find((row) => textValue(row.storage) === form.storage)
 );
 const selectExisting = computed(() => Boolean(selectedStorage.value?.select_existing));
 const hasSelectedExistingVolume = computed(() =>
   existingVolumes.value.some(
-    (row) => textValue(row.volid || row.text) === textValue(form.existingVolume),
-  ),
+    (row) => textValue(row.volid || row.text) === textValue(form.existingVolume)
+  )
 );
 const diskFormatDisabled = computed(() => diskFormatOptions.value.length <= 1);
 const canAdd = computed(() => {
@@ -102,7 +113,7 @@ const canAdd = computed(() => {
       form.storage &&
       selectedStorage.value &&
       canSelectStorage(selectedStorage.value) &&
-      (!selectExisting.value || hasSelectedExistingVolume.value),
+      (!selectExisting.value || hasSelectedExistingVolume.value)
   );
 });
 
@@ -139,10 +150,10 @@ function resetDiskFormat() {
   form.format = supported.includes('qcow2')
     ? 'qcow2'
     : supported.includes('raw')
-      ? 'raw'
-      : supported.includes(defaultFormat)
-        ? defaultFormat
-        : supported[0] || 'raw';
+    ? 'raw'
+    : supported.includes(defaultFormat)
+    ? defaultFormat
+    : supported[0] || 'raw';
 }
 
 function canSelectStorage(row: PveRecord) {
@@ -154,7 +165,7 @@ async function loadImageStorages() {
   try {
     const response = await getNodeStorage(node.value, 'images');
     imageStorageRows.value = [...(response.data || [])].sort((left, right) =>
-      textValue(left.storage).localeCompare(textValue(right.storage)),
+      textValue(left.storage).localeCompare(textValue(right.storage))
     );
     resetDiskFormat();
   } finally {
@@ -181,7 +192,7 @@ watch(
   () => {
     resetDiskFormat();
     void loadExistingVolumes();
-  },
+  }
 );
 
 async function loadExistingVolumes() {
@@ -210,21 +221,30 @@ async function addFirmware() {
       ...(kind === 'efi' ? { background_delay: 5 } : {}),
       [key]:
         kind === 'efi'
-          ? `${volume},efitype=4m,format=${form.format},pre-enrolled-keys=${form.preEnrolledKeys ? 1 : 0}`
+          ? `${volume},efitype=4m,format=${form.format},pre-enrolled-keys=${
+              form.preEnrolledKeys ? 1 : 0
+            }`
           : `${volume},format=${form.format},version=${form.tpmVersion}`,
     },
     kind === 'efi' ? 'POST' : 'PUT',
     gettext(kind === 'efi' ? 'Add EFI Disk' : 'Add TPM State'),
-    false,
+    false
   );
   visible.value = false;
 }
 </script>
 
 <template>
-  <q-dialog v-model="visible" persistent>
-    <UWindow :title="dialogTitle" width="450px" :loading="dialogLoading">
-      <div class="q-pa-md u-dense firmware-dialog-content">
+  <q-dialog
+    v-model="visible"
+    persistent
+  >
+    <UWindow
+      :title="dialogTitle"
+      width="450px"
+      :loading="dialogLoading"
+    >
+      <div class="q-pa-sm u-dense firmware-dialog-content">
         <template v-if="kind === 'efi'">
           <div class="u-border q-pa-md">
             <SelectTable
@@ -278,7 +298,10 @@ async function addFirmware() {
               :label="gettext('Pre-Enroll keys')"
             />
           </div>
-          <div v-if="!usesEfiBios" class="efi-warning q-mt-sm">
+          <div
+            v-if="!usesEfiBios"
+            class="efi-warning q-mt-sm"
+          >
             {{ gettext("Warning: The VM currently does not use 'OVMF (UEFI)' as BIOS.") }}
           </div>
         </template>

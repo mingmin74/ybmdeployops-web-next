@@ -28,6 +28,7 @@ const form = reactive<{
 });
 const imageStorageRows = shallowRef<PveRecord[]>([]);
 const storageLoading = shallowRef(false);
+const validationAttempted = shallowRef(false);
 const cloudInitConfig = shallowRef<PveRecord | null>(null);
 const cloudInitDigest = shallowRef('');
 const cloudInitConfigLoaded = shallowRef(false);
@@ -209,6 +210,7 @@ async function loadImageStorages() {
 
 watch(visible, (isVisible) => {
   if (!isVisible) return;
+  validationAttempted.value = false;
   Object.assign(form, { storage: '', format: 'raw' });
   void initializeCloudInit();
   void loadImageStorages();
@@ -230,6 +232,7 @@ watch(
 );
 
 async function addCloudInitDrive() {
+  validationAttempted.value = true;
   if (!canAdd.value) return;
   const parts = [`${form.storage.trim()}:cloudinit`];
   if (!diskFormatDisabled.value && form.format) parts.push(`format=${form.format}`);
@@ -281,9 +284,9 @@ async function initializeCloudInit() {
       width="430px"
       :loading="dialogLoading"
     >
-      <div class="q-pa-md u-dense">
+      <div class="q-pa-sm u-dense cloud-init-dialog-content">
         <div class="u-border q-pa-md">
-          <div class="row q-col-gutter-lg">
+          <div class="row q-col-gutter-x-lg q-col-gutter-y-sm">
             <div class="col-8">
               <q-select
                 v-model="form.bus"
@@ -293,7 +296,7 @@ async function initializeCloudInit() {
                 map-options
                 class="q-field--with-bottom"
                 :options="busOptions"
-                :label="gettext('Bus/Device')"
+                :label="`${gettext('Bus/Device')} *`"
               />
             </div>
             <div class="col-4">
@@ -304,8 +307,8 @@ async function initializeCloudInit() {
                 min="0"
                 :max="deviceMax"
                 class="q-field--with-bottom"
-                :label="gettext('Device')"
-                :error="!deviceIdValid || deviceInUse"
+                :label="`${gettext('Device')} *`"
+                :error="validationAttempted && (!deviceIdValid || deviceInUse)"
                 :error-message="
                   deviceInUse ? gettext('This device is already in use') : `[0-${deviceMax}]`
                 "
@@ -327,9 +330,9 @@ async function initializeCloudInit() {
                 :loading="storageLoading"
                 :get-row-value="(row) => textValue(row.storage)"
                 :can-select="canSelectStorage"
-                :error="!form.storage"
+                :error="validationAttempted && !form.storage"
                 :error-message="gettext('This field is required')"
-                :label="gettext('Storage')"
+                :label="`${gettext('Storage')} *`"
               />
               <q-select
                 v-model="form.format"
@@ -363,7 +366,7 @@ async function initializeCloudInit() {
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :disable="!canAdd"
+          :disable="dialogLoading"
           :label="gettext('Add')"
           @click="addCloudInitDrive"
         />
@@ -380,5 +383,9 @@ async function initializeCloudInit() {
   color: #8a5a00;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.cloud-init-dialog-content :deep(.q-field__bottom) {
+  display: block !important;
 }
 </style>

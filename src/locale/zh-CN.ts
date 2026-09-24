@@ -603,6 +603,7 @@ export default {
   'Cloud-Init': 'Cloud-Init',
   'QEMU Guest Agent': 'QEMU Guest Agent',
   'KVM hardware virtualization': 'KVM 硬件虚拟化',
+  'VM configuration saved successfully': '虚拟机配置保存成功',
   'USB Tablet': 'USB 平板指针',
   Hotplug: '热插拔',
   'Startup/Shutdown order': '启动/关机顺序',

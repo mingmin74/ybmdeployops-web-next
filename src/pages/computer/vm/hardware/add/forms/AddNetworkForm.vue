@@ -108,6 +108,7 @@ onMounted(() => {
             v-model="form.bridge"
             row-key="iface"
             field-style="standard"
+            class="q-field--with-bottom"
             width="500px"
             style="width: 100%"
             :rows="bridgeRows"
@@ -228,10 +229,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.add-network-form__checkbox {
-  margin-left: -10px;
-}
-
 .add-network-form__hint {
   padding: 8px 10px;
   border: 1px solid #b8d9ff;

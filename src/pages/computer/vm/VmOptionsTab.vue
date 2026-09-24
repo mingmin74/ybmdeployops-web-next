@@ -1460,22 +1460,11 @@ void loadEditSnapshot();
       </div>
       <div class="col-5 options-editor-column">
         <div class="u-border u-hidden-error options-scroll options-editor">
-          <div class="q-pa-sm">
+          <div class="q-pa-sm options-editor__content">
             <div class="row items-center no-wrap editor-titlebar">
               <div class="editor-title text-grey-10">
                 {{ optionRows.find((row) => row.key === selectedOption)?.label }}
               </div>
-              <q-space />
-              <q-btn
-                no-caps
-                flat
-                size="12px"
-                class="bg-primary text-grey-1 u-button"
-                type="submit"
-                :disable="!canSave"
-                :loading="loading"
-                :label="gettext('Save')"
-              />
             </div>
             <div
               v-if="isReadOnlyOption"
@@ -2330,6 +2319,17 @@ void loadEditSnapshot();
               </div>
             </div>
           </div>
+          <div class="options-editor__footer row items-center justify-end">
+            <q-btn
+              no-caps
+              size="12px"
+              class="bg-primary text-grey-1 u-button"
+              type="submit"
+              :disable="!canSave"
+              :loading="loading"
+              :label="gettext('Save')"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -2370,6 +2370,20 @@ void loadEditSnapshot();
   flex-direction: column;
   min-height: 100%;
   border-left: 1px solid #d7dce2;
+}
+.options-editor__content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+.options-editor__footer {
+  flex: 0 0 auto;
+  min-height: 52px;
+  margin-top: auto;
+  padding: 8px 12px;
+  border-top: 1px solid #d7dce2;
+  background: #f5f7fa;
 }
 .options-list-row {
   min-height: 30px;

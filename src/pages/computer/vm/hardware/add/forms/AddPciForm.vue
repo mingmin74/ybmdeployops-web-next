@@ -38,7 +38,7 @@ const mappingRows = shallowRef<PveRecord[]>([]);
 const mdevRows = shallowRef<PveRecord[]>([]);
 const loading = shallowRef(false);
 const mdevLoading = shallowRef(false);
-const advanced = shallowRef(false);
+const advanced = defineModel<boolean>('advanced', { default: false });
 
 const selectedPci = computed(() =>
   pciRows.value.find((row) => textValue(row.id) === form.value.pciAddress),
@@ -307,7 +307,7 @@ onMounted(() => {
     <div v-if="advanced" class="u-border q-pa-md q-mt-sm">
       <div class="row q-col-gutter-lg">
         <div class="col">
-          <div class="q-field--with-bottom add-pci-form__checkbox">
+          <div class="q-field--with-bottom">
             <q-checkbox
               v-model="form.pciRomBar"
               dense
@@ -336,7 +336,7 @@ onMounted(() => {
           />
         </div>
         <div class="col">
-          <div class="q-field--with-bottom add-pci-form__checkbox">
+          <div class="q-field--with-bottom">
             <q-checkbox
               v-model="form.pcie"
               dense
@@ -367,20 +367,12 @@ onMounted(() => {
         </div>
       </div>
     </div>
-
-    <div class="row items-center q-mt-xs">
-      <q-checkbox v-model="advanced" dense color="primary" :label="gettext('Advanced')" />
-    </div>
   </div>
 </template>
 
 <style scoped>
 .add-pci-form__nested {
   padding-left: 36px;
-}
-
-.add-pci-form__checkbox {
-  margin-left: -10px;
 }
 
 .add-pci-form__hint {

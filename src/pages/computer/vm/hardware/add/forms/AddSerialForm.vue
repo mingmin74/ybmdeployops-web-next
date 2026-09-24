@@ -7,7 +7,10 @@ export interface AddSerialFormModel {
 }
 
 const form = defineModel<AddSerialFormModel>('form', { required: true });
-const { deviceInUse = false } = defineProps<{ deviceInUse?: boolean }>();
+const { deviceInUse = false, validationAttempted } = defineProps<{
+  deviceInUse?: boolean;
+  validationAttempted: boolean;
+}>();
 
 const serialValid = computed(
   () =>
@@ -36,8 +39,8 @@ function clampSerialId() {
             min="0"
             max="3"
             class="q-field--with-bottom"
-            :label="gettext('Serial Port')"
-            :error="!serialValid || deviceInUse"
+            :label="`${gettext('Serial Port')} *`"
+            :error="validationAttempted && (!serialValid || deviceInUse)"
             :error-message="deviceInUse ? gettext('This device is already in use') : '[0-3]'"
             @blur="clampSerialId"
             @update:model-value="clampSerialId"

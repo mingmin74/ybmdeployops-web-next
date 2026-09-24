@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue';
+import { computed, reactive, shallowRef, watch } from 'vue';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
@@ -10,6 +10,7 @@ const form = reactive({
   maxBytes: '1024',
   period: '',
 });
+const validationAttempted = shallowRef(false);
 const { config, hasVmCapability, loading, pendingByKey, updateConfig } = useVmHardwareContext();
 
 const entropySourceOptions = ['/dev/urandom', '/dev/random', '/dev/hwrng'];
@@ -38,6 +39,7 @@ const showLimiterWarning = computed(() => form.maxBytes.trim() === '');
 
 watch(visible, (open) => {
   if (!open) return;
+  validationAttempted.value = false;
   Object.assign(form, {
     source: '/dev/urandom',
     maxBytes: '1024',
@@ -60,6 +62,7 @@ function rngValue() {
 }
 
 async function save() {
+  validationAttempted.value = true;
   if (!canAdd.value) return;
   await updateConfig({ rng0: rngValue() }, 'PUT', '', false);
   visible.value = false;
@@ -76,7 +79,7 @@ async function save() {
       width="440px"
       :loading="loading"
     >
-      <div class="q-pa-md u-dense">
+      <div class="q-pa-sm u-dense rng-dialog-content">
         <div class="u-border q-pa-md">
           <q-select
             v-model="form.source"
@@ -86,7 +89,7 @@ async function save() {
             map-options
             class="q-field--with-bottom"
             :options="entropySourceOptions"
-            :label="gettext('Entropy source')"
+            :label="`${gettext('Entropy source')} *`"
           />
           <q-input
             v-model="form.maxBytes"
@@ -97,7 +100,7 @@ async function save() {
             class="q-field--with-bottom"
             :placeholder="gettext('unlimited')"
             :label="gettext('Limit (Bytes/Period)')"
-            :error="!maxBytesValid"
+            :error="validationAttempted && !maxBytesValid"
             error-message="[0-]"
           />
           <q-input
@@ -109,7 +112,7 @@ async function save() {
             class="q-field--with-bottom"
             placeholder="1000"
             :label="`${gettext('Period')} (ms)`"
-            :error="!periodValid"
+            :error="validationAttempted && !periodValid"
             error-message="[1-]"
           />
         </div>
@@ -144,7 +147,7 @@ async function save() {
           flat
           size="12px"
           class="bg-primary text-grey-1 u-button"
-          :disable="!canAdd"
+          :disable="loading"
           :label="gettext('Add')"
           @click="save"
         />
@@ -161,5 +164,9 @@ async function save() {
   color: #8a5a00;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.rng-dialog-content :deep(.q-field__bottom) {
+  display: block !important;
 }
 </style>

@@ -822,7 +822,7 @@ watch(listStorage, () => {
           <q-tooltip>{{ gettext('Refresh') }}</q-tooltip>
         </q-icon>
       </div>
-      <div class="col-auto">
+      <div class="col-auto q-ml-auto">
         <q-checkbox
           v-model="filterVmid"
           dense

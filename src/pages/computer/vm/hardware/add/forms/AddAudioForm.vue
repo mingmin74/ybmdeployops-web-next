@@ -8,7 +8,10 @@ export interface AddAudioFormModel {
 }
 
 const form = defineModel<AddAudioFormModel>('form', { required: true });
-const { deviceInUse = false } = defineProps<{ deviceInUse?: boolean }>();
+const { deviceInUse = false, validationAttempted } = defineProps<{
+  deviceInUse?: boolean;
+  validationAttempted: boolean;
+}>();
 
 const audioDeviceOptions = [
   { label: 'ich9-intel-hda', value: 'ich9-intel-hda' },
@@ -37,8 +40,8 @@ const deviceValid = computed(() => Boolean(form.value.audioDevice.trim()));
             map-options
             class="q-field--with-bottom"
             :options="audioDeviceOptions"
-            :label="gettext('Audio Device')"
-            :error="!deviceValid || deviceInUse"
+            :label="`${gettext('Audio Device')} *`"
+            :error="validationAttempted && (!deviceValid || deviceInUse)"
             :error-message="
               deviceInUse
                 ? gettext('This device is already in use')

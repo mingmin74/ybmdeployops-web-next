@@ -37,7 +37,7 @@ const usbDeviceRows = computed(() =>
       ...row,
       deviceKey: `${textValue(row.vendid)}:${textValue(row.prodid)}`,
       portKey: `${textValue(row.busnum)}-${textValue(row.usbpath)}`,
-    })),
+    }))
 );
 
 const mappingColumns: QTableColumn<PveRecord>[] = [
@@ -103,10 +103,10 @@ const selectedRequired = computed(() => {
 const hostDeviceValid = computed(
   () =>
     !form.value.usbHostDevice.trim() ||
-    /^[a-f0-9]{4}:[a-f0-9]{4}$/i.test(form.value.usbHostDevice.trim()),
+    /^[a-f0-9]{4}:[a-f0-9]{4}$/i.test(form.value.usbHostDevice.trim())
 );
 const portValid = computed(
-  () => !form.value.usbPort.trim() || /^[0-9]+-[0-9]+(\.[0-9]+)*$/.test(form.value.usbPort.trim()),
+  () => !form.value.usbPort.trim() || /^[0-9]+-[0-9]+(\.[0-9]+)*$/.test(form.value.usbPort.trim())
 );
 
 async function loadUsbOptions() {
@@ -132,8 +132,19 @@ onMounted(() => {
   <div class="add-usb-form u-dense">
     <div class="u-border q-pa-md">
       <div class="column">
-        <q-radio v-model="form.usbMode" dense val="spice" :label="gettext('Spice Port')" />
-        <q-radio v-model="form.usbMode" dense val="mapped" :label="gettext('Use mapped Device')" />
+        <q-radio
+          v-model="form.usbMode"
+          dense
+          class="q-mb-md"
+          val="spice"
+          :label="gettext('Spice Port')"
+        />
+        <q-radio
+          v-model="form.usbMode"
+          dense
+          val="mapped"
+          :label="gettext('Use mapped Device')"
+        />
         <div class="add-usb-form__nested">
           <SelectTable
             v-model="form.usbMapping"
@@ -185,7 +196,12 @@ onMounted(() => {
             :label="`${gettext('Choose Device')} *`"
           />
         </div>
-        <q-radio v-model="form.usbMode" dense val="port" :label="gettext('Use USB Port')" />
+        <q-radio
+          v-model="form.usbMode"
+          dense
+          val="port"
+          :label="gettext('Use USB Port')"
+        />
         <div class="add-usb-form__nested">
           <SelectTable
             v-model="form.usbPort"
