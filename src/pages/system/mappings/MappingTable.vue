@@ -500,8 +500,8 @@ function validateResourceMap(row: PveRecord, hardware: PveRecord[]) {
     row.errmsg = row.valid
       ? ''
       : device
-      ? gettext("Configuration for 'id' not correct")
-      : gettext('Cannot find USB device %s').replace('%s', textValue(row.id));
+        ? gettext("Configuration for 'id' not correct")
+        : gettext('Cannot find USB device %s').replace('%s', textValue(row.id));
     return;
   }
   const path = textValue(row.path).match(/\.\d$/)
@@ -686,8 +686,8 @@ onMounted(() => {
             slotProps.row.type === 'node'
               ? 'q-pl-md'
               : slotProps.row.type === 'map'
-              ? 'q-pl-xl'
-              : ''
+                ? 'q-pl-xl'
+                : ''
           "
         >
           <q-icon
@@ -695,8 +695,8 @@ onMounted(() => {
               slotProps.row.type === 'entry'
                 ? 'folder_open'
                 : slotProps.row.type === 'node'
-                ? 'dns'
-                : 'folder'
+                  ? 'dns'
+                  : 'folder'
             "
             size="16px"
             class="q-mr-sm"
@@ -715,8 +715,8 @@ onMounted(() => {
             slotProps.row.type === 'node'
               ? 'q-pl-md'
               : slotProps.row.type === 'map'
-              ? 'q-pl-xl'
-              : ''
+                ? 'q-pl-xl'
+                : ''
           "
         >
           <q-icon
@@ -724,10 +724,10 @@ onMounted(() => {
               slotProps.row.type === 'entry'
                 ? 'folder_open'
                 : slotProps.row.type === 'node'
-                ? 'dns'
-                : kind === 'pci'
-                ? 'memory'
-                : 'usb'
+                  ? 'dns'
+                  : kind === 'pci'
+                    ? 'memory'
+                    : 'usb'
             "
             size="16px"
             class="q-mr-sm"
@@ -793,7 +793,8 @@ onMounted(() => {
       :title="`${resourceEditMode === 'create' ? gettext('Add') : gettext('Edit')}: ${gettext(
         title
       )}`"
-      width="800px"
+      :width="kind === 'pci' ? '960px' : '800px'"
+      :icon="kind === 'pci' ? 'device_hub' : ''"
       :loading="saving"
     >
       <PciMappingEditor
@@ -866,8 +867,8 @@ onMounted(() => {
             ? gettext('Add')
             : gettext('Edit')
           : !editingId
-          ? gettext('Add')
-          : gettext('Edit')
+            ? gettext('Add')
+            : gettext('Edit')
       }: ${gettext(title)}`"
       width="500px"
       :loading="saving"
@@ -968,8 +969,8 @@ onMounted(() => {
                 ? gettext('Create')
                 : gettext('OK')
               : !editingId
-              ? gettext('Create')
-              : gettext('OK')
+                ? gettext('Create')
+                : gettext('OK')
           "
           @click="() => void save()"
         />

@@ -154,6 +154,7 @@ export type CreateVmWizardContext = {
     scsiControllerOptions: ComputedRef<WizardOption[]>;
     efiFormatOptions: ComputedRef<WizardOption[]>;
     tpmFormatOptions: ComputedRef<WizardOption[]>;
+    tpmVersionOptions: ComputedRef<string[]>;
     cpuFlagStateOptions: WizardOption[];
     isoStorageColumns: QTableColumn<PveRecord>[];
     isoImageColumns: QTableColumn<PveRecord>[];

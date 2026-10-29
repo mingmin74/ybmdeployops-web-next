@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { gettext } from '@/locale';
+import { getNoVncScaling } from '@/utils/consolePreferences';
 
 const props = defineProps<{ node: string; vmid: string; name: string }>();
 const consoleUrl = computed(() => {
@@ -9,7 +10,7 @@ const consoleUrl = computed(() => {
     novnc: '1',
     node: props.node,
     vmid: props.vmid,
-    resize: 'scale',
+    resize: getNoVncScaling('scale'),
     autoconnect: '1',
     reconnect: '1',
   });
@@ -18,7 +19,11 @@ const consoleUrl = computed(() => {
 </script>
 
 <template>
-  <iframe class="ct-console-tab" :src="consoleUrl" :title="`${name} ${gettext('Console')}`" />
+  <iframe
+    class="ct-console-tab"
+    :src="consoleUrl"
+    :title="`${name} ${gettext('Console')}`"
+  />
 </template>
 
 <style scoped>

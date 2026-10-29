@@ -14,6 +14,7 @@ const {
   scsiControllerOptions,
   efiFormatOptions,
   tpmFormatOptions,
+  tpmVersionOptions,
   isoStorageColumns,
 } = options;
 const { efiFormatDisabled, tpmFormatDisabled } = disks;
@@ -161,7 +162,7 @@ const { stepContentHeight, requiredLabel } = derived;
               v-model="form.tpmVersion"
               dense
               options-dense
-              :options="['v1.2', 'v2.0']"
+              :options="tpmVersionOptions"
               :label="gettext('Version')"
             />
           </template>

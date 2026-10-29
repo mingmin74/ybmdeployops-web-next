@@ -11,6 +11,9 @@
     ".quasar/": true,
     "/quasar.config.js.temporary.*": true
   },
+  "vetur.validation.script": false,
+  "vetur.validation.template": false,
+  "vetur.validation.style": false,
   "[vue]": {
     "editor.defaultFormatter": "octref.vetur"
   }

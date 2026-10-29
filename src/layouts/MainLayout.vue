@@ -129,6 +129,15 @@
               clickable
               v-close-popup
               class="user-menu__item"
+              @click="mySettingsVisible = true"
+            >
+              <q-item-section avatar><q-icon name="settings" /></q-item-section>
+              <q-item-section>{{ gettext('My Settings') }}</q-item-section>
+            </q-item>
+            <q-item
+              clickable
+              v-close-popup
+              class="user-menu__item"
               @click="passwordDialogVisible = true"
             >
               <q-item-section avatar><q-icon name="vpn_key" /></q-item-section>
@@ -267,6 +276,7 @@
       :userid="session.userid"
       :realm-type="session.userid.endsWith('@pam') ? 'pam' : undefined"
     />
+    <MySettingsDialog v-model="mySettingsVisible" />
   </q-layout>
 </template>
 
@@ -276,6 +286,7 @@ import { computed, onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch
 import { useRoute, useRouter } from 'vue-router';
 import AppTagView from '@/components/AppTagView.vue';
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue';
+import MySettingsDialog from '@/components/MySettingsDialog.vue';
 import { getClusterResources, type PveRecord } from '@/api/resources';
 import { appConfig } from '@/config/app';
 import { menuItems, type MenuItem } from '@/config/menu';
@@ -296,6 +307,7 @@ const resourceSearchOpen = shallowRef(false);
 const selectedResourceRows = shallowRef<PveRecord[]>([]);
 const logsPanelOpen = shallowRef(false);
 const passwordDialogVisible = shallowRef(false);
+const mySettingsVisible = shallowRef(false);
 const logsPanelHeight = shallowRef(320);
 const resourceSearchInput = useTemplateRef<{ focus: () => void; blur: () => void }>(
   'resourceSearchInput'
@@ -526,7 +538,9 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.14);
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 18px;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .page-container {

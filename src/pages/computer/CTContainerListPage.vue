@@ -21,6 +21,7 @@ import BulkActionDialog, { type ClusterBulkAction } from '@/components/BulkActio
 import UsageProgress from '@/components/UsageProgress.vue';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 import { gettext } from '@/locale';
+import { getNoVncScaling } from '@/utils/consolePreferences';
 import { useSessionStore } from '@/stores/session';
 import { usagePercent } from '@/utils/format';
 import { textValue } from '@/utils/pveFormat';
@@ -651,7 +652,7 @@ function openConsole() {
     novnc: '1',
     node: vm.node,
     vmid: String(vm.vmid),
-    resize: 'scale',
+    resize: getNoVncScaling('off'),
     autoconnect: '1',
     reconnect: '1',
   });

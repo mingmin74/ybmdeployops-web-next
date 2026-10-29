@@ -25,7 +25,7 @@ const emit = defineEmits<{
       description: string;
       mdev: boolean;
       liveMigration: boolean;
-    }
+    },
   ];
 }>();
 
@@ -139,8 +139,8 @@ if (selectedNode.value) void loadDevices();
 </script>
 
 <template>
-  <div class="q-pa-sm u-dense mapping-editor">
-    <div class="u-border q-pa-md">
+  <div class="u-dense mapping-editor">
+    <div class="mapping-editor__content">
       <div class="mapping-editor__form-grid">
         <div class="mapping-editor__form-cell">
           <q-input
@@ -218,22 +218,40 @@ if (selectedNode.value) void loadDevices();
       </div>
       <section
         v-if="!entryOnly"
-        class="mapping-editor__device-section q-mt-sm"
+        class="mapping-editor__device-section"
       >
-        <div class="mapping-editor__required-label">{{ gettext('PCI Device') }} *</div>
+        <div class="mapping-editor__section-heading">
+          <span class="mapping-editor__section-title">{{ gettext('PCI Device') }}</span>
+          <span class="mapping-editor__section-description">
+            {{ gettext('Select devices to map') }}
+          </span>
+        </div>
         <q-table
           flat
           dense
           bordered
+          hide-bottom
           row-key="id"
           selection="multiple"
+          table-header-class="u-table-header"
+          class="mapping-editor__devices-table"
           :rows="visibleDevices"
           :columns="columns"
           :selected="selected"
           :loading="loading"
-          :pagination="{ rowsPerPage: 8 }"
+          :pagination="{ rowsPerPage: 0 }"
           @update:selected="selected = [...$event]"
         />
+        <div
+          v-if="!loading && visibleDevices.length === 0"
+          class="mapping-editor__empty"
+        >
+          <q-icon
+            name="inbox"
+            size="32px"
+          />
+          <span>{{ gettext('No PCI devices available') }}</span>
+        </div>
         <div
           v-if="noIommu || multipleWarning || groupWarning"
           class="mapping-editor__hint"
@@ -272,6 +290,10 @@ if (selectedNode.value) void loadDevices();
 </template>
 
 <style scoped>
+.mapping-editor {
+  padding: 20px 24px 24px;
+}
+
 .mapping-editor__hint {
   padding: 8px 10px;
   border: 1px solid #f3d29a;
@@ -280,8 +302,7 @@ if (selectedNode.value) void loadDevices();
   font-size: 12px;
 }
 
-.mapping-editor__form-grid,
-.mapping-editor__options {
+.mapping-editor__form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: 24px;
@@ -293,18 +314,77 @@ if (selectedNode.value) void loadDevices();
 }
 
 .mapping-editor__options {
-  margin-top: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  margin-top: 8px;
+}
+
+.mapping-editor__options :deep(.q-checkbox) {
+  padding-bottom: 0;
 }
 
 .mapping-editor__device-section {
-  padding-top: 8px;
+  margin-top: 24px;
+  padding-top: 20px;
   border-top: 1px solid #dfe1e6;
 }
 
-.mapping-editor__required-label {
-  margin-bottom: 4px;
-  color: #333;
-  font-size: 12px;
+.mapping-editor__section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+}
+
+.mapping-editor__section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #333333;
+  font-weight: 600;
+}
+
+.mapping-editor__section-title::before {
+  content: '';
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
+  background: #1976d2;
+}
+
+.mapping-editor__section-description {
+  color: #666666;
+}
+
+.mapping-editor__devices-table :deep(.q-table__middle) {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.mapping-editor__devices-table :deep(.q-table) {
+  min-width: 680px;
+}
+
+.mapping-editor__devices-table :deep(thead tr th) {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f2f5fc;
+}
+
+.mapping-editor__empty {
+  display: flex;
+  min-height: 160px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: -1px;
+  border: 1px solid #dfe1e6;
+  color: #667085;
 }
 
 .mapping-editor__validation-error {
@@ -314,8 +394,11 @@ if (selectedNode.value) void loadDevices();
 }
 
 @media (max-width: 599px) {
-  .mapping-editor__form-grid,
-  .mapping-editor__options {
+  .mapping-editor {
+    padding: 12px;
+  }
+
+  .mapping-editor__form-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 

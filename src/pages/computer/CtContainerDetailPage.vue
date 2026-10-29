@@ -6,6 +6,7 @@ import { runCtPowerCommand, type VmPowerCommand } from '@/api/vm';
 import type { PveRecord } from '@/api/resources';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 import { gettext } from '@/locale';
+import { getNoVncScaling } from '@/utils/consolePreferences';
 import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
 import { toChineseStr } from '@/utils/unicode';
@@ -55,12 +56,12 @@ const powerCommandLoading = shallowRef(false);
 const name = computed(
   () =>
     decodeContainerName(current.value.name || config.value.hostname || config.value.name) ||
-    vmid.value,
+    vmid.value
 );
 const status = computed(() => textValue(current.value.status) || 'unknown');
 const isTemplate = computed(() => Boolean(config.value.template));
 const vmCaps = computed(
-  () => (session.caps as unknown as { vms?: Record<string, unknown> }).vms || {},
+  () => (session.caps as unknown as { vms?: Record<string, unknown> }).vms || {}
 );
 const canViewConsole = computed(() => Boolean(vmCaps.value['VM.Console']) && !isTemplate.value);
 const canViewBackup = computed(() => Boolean(vmCaps.value['VM.Backup']));
@@ -70,8 +71,8 @@ const canViewSnapshots = computed(
     Boolean(
       vmCaps.value['VM.Snapshot'] ||
       vmCaps.value['VM.Snapshot.Rollback'] ||
-      vmCaps.value['VM.Audit'],
-    ),
+      vmCaps.value['VM.Audit']
+    )
 );
 const canViewFirewall = computed(() => Boolean(vmCaps.value['VM.Audit']));
 const canManagePermissions = computed(() => Boolean(vmCaps.value['Permissions.Modify']));
@@ -203,13 +204,13 @@ function openConsole(type: 'noVNC' | 'xterm.js') {
   });
   if (type === 'noVNC') {
     params.set('novnc', '1');
-    params.set('resize', 'scale');
+    params.set('resize', getNoVncScaling('off'));
     params.set('autoconnect', '1');
     params.set('reconnect', '1');
     window.open(
       `/?${params.toString()}`,
       `ct-console-${vmid.value}`,
-      'innerWidth=745,innerHeight=427',
+      'innerWidth=745,innerHeight=427'
     );
     return;
   }
@@ -217,7 +218,7 @@ function openConsole(type: 'noVNC' | 'xterm.js') {
   window.open(
     `/?${params.toString()}`,
     '_blank',
-    'toolbar=no,location=no,status=no,menubar=no,resizable=yes,width=1024,height=600',
+    'toolbar=no,location=no,status=no,menubar=no,resizable=yes,width=1024,height=600'
   );
 }
 
@@ -257,7 +258,11 @@ onUnmounted(() => {
         <div class="ct-detail__title">
           <span class="ct-detail__title-name">{{ `${name} · ${vmid}` }}</span>
         </div>
-        <q-badge class="q-ml-sm" :color="statusColor(status)" :label="statusText(status)" />
+        <q-badge
+          class="q-ml-sm"
+          :color="statusColor(status)"
+          :label="statusText(status)"
+        />
         <q-space />
         <div class="row q-gutter-sm no-wrap">
           <q-btn-dropdown
@@ -286,7 +291,12 @@ onUnmounted(() => {
               >
                 <q-item-section>{{ gettext('Shutdown') }}</q-item-section>
               </q-item>
-              <q-item v-close-popup clickable :disable="!canStop" @click="runPowerCommand('stop')">
+              <q-item
+                v-close-popup
+                clickable
+                :disable="!canStop"
+                @click="runPowerCommand('stop')"
+              >
                 <q-item-section class="text-red">{{ gettext('Stop') }}</q-item-section>
               </q-item>
               <q-item
@@ -325,10 +335,18 @@ onUnmounted(() => {
             :disable="!canViewConsole || powerCommandLoading"
           >
             <q-list dense>
-              <q-item v-close-popup clickable @click="openConsole('noVNC')">
+              <q-item
+                v-close-popup
+                clickable
+                @click="openConsole('noVNC')"
+              >
                 <q-item-section>noVNC</q-item-section>
               </q-item>
-              <q-item v-close-popup clickable @click="openConsole('xterm.js')">
+              <q-item
+                v-close-popup
+                clickable
+                @click="openConsole('xterm.js')"
+              >
                 <q-item-section>xterm.js</q-item-section>
               </q-item>
             </q-list>
@@ -365,7 +383,10 @@ onUnmounted(() => {
       </q-tabs>
       <q-separator />
 
-      <q-tab-panels v-model="tab" animated>
+      <q-tab-panels
+        v-model="tab"
+        animated
+      >
         <q-tab-panel
           v-for="item in visibleTabs"
           :key="item.name"

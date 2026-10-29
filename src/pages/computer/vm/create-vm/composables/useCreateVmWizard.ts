@@ -14,6 +14,7 @@ import { getNodeNetwork } from '@/api/host';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
+import { allowedTpmVersions } from '../../tpmVersions';
 import type {
   CreateVmForm,
   CreateVmStepName,
@@ -169,6 +170,7 @@ export function useCreateVmWizard(
   const effectiveArch = computed(() =>
     form.arch === '__default__' ? hostArchitecture.value : form.arch
   );
+  const tpmVersionOptions = computed(() => allowedTpmVersions(effectiveArch.value));
   const crossArchitecture = computed(
     () => form.arch !== '__default__' && form.arch !== hostArchitecture.value
   );
@@ -1778,6 +1780,7 @@ export function useCreateVmWizard(
     }
   );
   watch(effectiveArch, (arch) => {
+    if (!allowedTpmVersions(arch).includes(form.tpmVersion)) form.tpmVersion = 'v2.0';
     if (arch === 'aarch64') {
       if (form.diskBus === 'ide') form.diskBus = 'scsi';
       extraDisks.forEach((disk) => {
@@ -1820,6 +1823,7 @@ export function useCreateVmWizard(
       scsiControllerOptions,
       efiFormatOptions,
       tpmFormatOptions,
+      tpmVersionOptions,
       cpuFlagStateOptions,
       isoStorageColumns,
       isoImageColumns,

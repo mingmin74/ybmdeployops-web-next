@@ -8,6 +8,7 @@ import type { PveNode } from '@/api/resources';
 import UsageProgress from '@/components/UsageProgress.vue';
 import BulkActionDialog, { type NodeBulkAction } from '@/components/BulkActionDialog.vue';
 import { gettext } from '@/locale';
+import { getNoVncScaling } from '@/utils/consolePreferences';
 import { useSessionStore } from '@/stores/session';
 import { usagePercent } from '@/utils/format';
 
@@ -35,8 +36,12 @@ const vmCaps = computed(
 const canPowerManage = computed(() => Boolean(nodeCaps.value['Sys.PowerMgmt']));
 const canConsole = computed(() => Boolean(nodeCaps.value['Sys.Console']));
 const canBulkPowerManage = computed(() => Boolean(vmCaps.value['VM.PowerMgmt']));
-const canBulkMigrate = computed(() => Boolean(vmCaps.value['VM.Migrate']) && nodes.value.length > 1);
-const canBulkAction = computed(() => canUseSelectedNode.value && (canBulkPowerManage.value || canBulkMigrate.value));
+const canBulkMigrate = computed(
+  () => Boolean(vmCaps.value['VM.Migrate']) && nodes.value.length > 1
+);
+const canBulkAction = computed(
+  () => canUseSelectedNode.value && (canBulkPowerManage.value || canBulkMigrate.value)
+);
 const canUseSelectedNode = computed(() => selectedNode.value?.status === 'online');
 const nodeColumns: QTableColumn<NodeRow>[] = [
   {
@@ -140,7 +145,7 @@ function openShell(consoleType: 'noVNC' | 'xterm.js') {
 
   if (consoleType === 'noVNC') {
     params.set('novnc', '1');
-    params.set('resize', '2ff');
+    params.set('resize', getNoVncScaling('off'));
     window.open(`?${params.toString()}`, '_blank', 'innerWidth=745,innerheight=427');
     return;
   }

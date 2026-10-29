@@ -7,6 +7,7 @@ const props = withDefaults(
     width?: string;
     height?: string;
     loading?: boolean;
+    icon?: string;
   }>(),
   {
     width: '600px',
@@ -22,7 +23,13 @@ const props = withDefaults(
     :style="{ maxWidth: props.width, width: props.width, height: props.height }"
   >
     <q-card-section class="row no-wrap items-center bg-blue-8 text-grey-1 shadow-down-10 q-pa-sm">
+      <q-icon
+        v-if="props.icon"
+        :name="props.icon"
+        size="18px"
+      />
       <q-spinner-bars
+        v-else
         size="14px"
         color="white"
       />

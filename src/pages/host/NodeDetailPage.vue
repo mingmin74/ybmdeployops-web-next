@@ -12,6 +12,7 @@ import {
   type PveNodePackageVersion,
 } from '@/api/host';
 import { gettext } from '@/locale';
+import { getNoVncScaling } from '@/utils/consolePreferences';
 import { useSessionStore } from '@/stores/session';
 import NodeDetailSkeleton from './components/NodeDetailSkeleton.vue';
 
@@ -85,7 +86,7 @@ function openShell(consoleType: 'noVNC' | 'xterm.js') {
   });
   if (consoleType === 'noVNC') {
     params.set('novnc', '1');
-    params.set('resize', '2ff');
+    params.set('resize', getNoVncScaling('off'));
     window.open(`?${params.toString()}`, '_blank', 'innerWidth=745,innerheight=427');
     return;
   }
@@ -164,21 +165,34 @@ watch(
       @shell="openShell"
       @spice="downloadSpiceShell"
     />
-    <q-dialog v-model="packageVersionsVisible" transition-show="scale" transition-hide="scale">
+    <q-dialog
+      v-model="packageVersionsVisible"
+      transition-show="scale"
+      transition-hide="scale"
+    >
       <q-card class="package-versions-dialog no-shadow no-border-radius">
         <q-card-section class="package-versions-dialog__header">
           <strong>{{ gettext('Package versions') }}</strong>
         </q-card-section>
         <q-separator />
         <q-card-section class="package-versions-dialog__content">
-          <q-inner-loading :showing="packageVersionsLoading" color="primary" />
+          <q-inner-loading
+            :showing="packageVersionsLoading"
+            color="primary"
+          />
           <pre v-if="!packageVersionsLoading">{{
             packageVersions.map(packageVersionText).join('\n') || gettext('No Data')
           }}</pre>
         </q-card-section>
         <q-separator />
         <q-card-actions align="right">
-          <q-btn v-close-popup no-caps flat color="primary" :label="gettext('OK')" />
+          <q-btn
+            v-close-popup
+            no-caps
+            flat
+            color="primary"
+            :label="gettext('OK')"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -207,7 +221,10 @@ watch(
 }
 .package-versions-dialog__content pre {
   color: #344054;
-  font: 12px/1.6 Consolas, 'Courier New', monospace;
+  font:
+    12px/1.6 Consolas,
+    'Courier New',
+    monospace;
   margin: 0;
   max-height: 430px;
   min-height: 280px;

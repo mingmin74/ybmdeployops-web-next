@@ -22,6 +22,7 @@ import VmResourceOperationDialog from '@/pages/computer/vm/VmResourceOperationDi
 import CreateVmDialog from '@/pages/computer/vm/CreateVmDialog.vue';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 import { gettext } from '@/locale';
+import { getNoVncScaling } from '@/utils/consolePreferences';
 import { useSessionStore } from '@/stores/session';
 import { usagePercent } from '@/utils/format';
 import { textValue } from '@/utils/pveFormat';
@@ -753,7 +754,7 @@ async function openConsole(type: 'noVNC' | 'xterm.js' = 'noVNC') {
   });
   if (type === 'noVNC') {
     params.set('novnc', '1');
-    params.set('resize', 'scale');
+    params.set('resize', getNoVncScaling('off'));
     params.set('autoconnect', '1');
     params.set('reconnect', '1');
     window.open(

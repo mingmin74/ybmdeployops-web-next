@@ -71,8 +71,8 @@ const columns: QTableColumn<PveRecord>[] = [
   { name: 'flags', label: gettext('Flags'), align: 'left', field: (row) => textValue(row.flags) },
 ];
 const flagColumns: QTableColumn<CpuFlagRow>[] = [
-  { name: 'state', label: gettext('Value'), field: 'state', align: 'left' },
   { name: 'name', label: gettext('Flag'), field: 'name', align: 'left' },
+  { name: 'state', label: gettext('Value'), field: 'state', align: 'left' },
   { name: 'description', label: gettext('Description'), field: 'description', align: 'left' },
   {
     name: 'supported-on',
@@ -80,6 +80,11 @@ const flagColumns: QTableColumn<CpuFlagRow>[] = [
     field: (row) => (Array.isArray(row['supported-on']) ? row['supported-on'].join(', ') : ''),
     align: 'left',
   },
+];
+const flagStateOptions = [
+  { label: gettext('Off'), value: '-' as const },
+  { label: gettext('Default'), value: '=' as const },
+  { label: gettext('On'), value: '+' as const },
 ];
 const configIdValid = computed(() => /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(form.cputype.trim()));
 const physBitsValid = computed(
@@ -307,14 +312,17 @@ onMounted(() => {
   <q-dialog
     v-model="editorVisible"
     persistent
+    transition-show="scale"
+    transition-hide="scale"
   >
     <UWindow
       :title="`${editingId ? gettext('Edit') : gettext('Add')}: ${gettext('CPU Type')}`"
-      width="800px"
+      width="960px"
       :loading="saving"
     >
-      <div class="q-pa-sm u-dense">
-        <div class="u-border q-pa-md">
+      <div class="cpu-type-editor u-dense">
+        <div class="cpu-type-section-title">{{ gettext('Basic Settings') }}</div>
+        <div class="cpu-type-fields">
           <q-input
             v-model="form.cputype"
             dense
@@ -332,6 +340,7 @@ onMounted(() => {
           <q-select
             v-model="form.reportedModel"
             dense
+            options-dense
             class="q-field--with-bottom"
             use-input
             clearable
@@ -341,7 +350,7 @@ onMounted(() => {
             :loading="selectorLoading"
             :options="baseModelOptions"
             :label="`${gettext('Base Model')} *`"
-            hint="CPU model the rest of the configuration is based on."
+            :hint="gettext('CPU model the rest of the configuration is based on.')"
             :error="submitted && !editingId && !form.reportedModel.trim()"
             :error-message="gettext('This field is required')"
             @filter="filterBaseModels"
@@ -353,8 +362,16 @@ onMounted(() => {
             class="q-field--with-bottom"
             :label="gettext('Hyper-V Vendor')"
           />
+          <q-checkbox
+            v-model="form.hidden"
+            dense
+            right-label
+            color="primary"
+            class="cpu-type-hidden"
+            :label="gettext('Hide Hypervisor')"
+          />
           <div class="q-field--with-bottom cpu-physical-bits">
-            <div class="q-field__label q-mb-sm">{{ gettext('Physical Address Bits') }}</div>
+            <div class="cpu-type-field-label">{{ gettext('Physical Address Bits') }}</div>
             <div class="cpu-physical-bits__options">
               <q-radio
                 v-model="form.physBits"
@@ -385,46 +402,52 @@ onMounted(() => {
               :label="gettext('Custom value')"
               :error="submitted && !physBitsValid"
               :error-message="gettext('Value must be 8-64')"
+              class="q-field--with-bottom cpu-physical-bits__custom"
             />
           </div>
-          <q-checkbox
-            v-model="form.hidden"
+        </div>
+        <div class="cpu-type-flags">
+          <div class="cpu-type-section-title">{{ gettext('Extra CPU flags') }}</div>
+          <q-table
+            flat
             dense
-            class="q-field--with-bottom"
-            :label="gettext('Hide Hypervisor')"
-          />
-          <div class="q-field--with-bottom">
-            <div class="q-field__label q-mb-sm">{{ gettext('Extra CPU flags') }}</div>
-            <q-table
-              flat
-              dense
-              hide-bottom
-              row-key="name"
-              class="vm-cpu-flags-table"
-              :rows="cpuFlags"
-              :columns="flagColumns"
-              :loading="selectorLoading"
-              :pagination="{ rowsPerPage: 0 }"
-            >
-              <template #body-cell-state="props">
-                <q-td :props="props">
-                  <q-btn-toggle
-                    :model-value="props.row.state"
+            bordered
+            hide-bottom
+            row-key="name"
+            class="vm-cpu-flags-table"
+            table-header-class="u-table-header"
+            :rows="cpuFlags"
+            :columns="flagColumns"
+            :loading="selectorLoading"
+            :pagination="{ rowsPerPage: 0 }"
+            :no-data-label="gettext('No CPU flags available')"
+          >
+            <template #body-cell-state="props">
+              <q-td :props="props">
+                <div
+                  class="cpu-flag-state"
+                  role="group"
+                  :aria-label="`${props.row.name}: ${gettext('Value')}`"
+                >
+                  <q-btn
+                    v-for="option in flagStateOptions"
+                    :key="option.value"
+                    flat
                     dense
                     no-caps
-                    unelevated
-                    toggle-color="primary"
-                    :options="[
-                      { label: gettext('Off'), value: '-' },
-                      { label: gettext('Default'), value: '=' },
-                      { label: gettext('On'), value: '+' },
+                    size="12px"
+                    :label="option.label"
+                    :aria-pressed="props.row.state === option.value"
+                    :class="[
+                      'cpu-flag-state__button',
+                      { 'cpu-flag-state__button--active': props.row.state === option.value },
                     ]"
-                    @update:model-value="setCpuFlagState(textValue(props.row.name), $event)"
+                    @click="setCpuFlagState(textValue(props.row.name), option.value)"
                   />
-                </q-td>
-              </template>
-            </q-table>
-          </div>
+                </div>
+              </q-td>
+            </template>
+          </q-table>
         </div>
       </div>
       <template #foot>
@@ -451,21 +474,123 @@ onMounted(() => {
 </template>
 
 <style scoped lang="scss">
+.cpu-type-editor {
+  padding: 16px 20px 20px;
+}
+
+.cpu-type-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  color: #333333;
+  font-weight: 600;
+}
+
+.cpu-type-section-title::before {
+  content: '';
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
+  background: #1976d2;
+}
+
+.cpu-type-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+  row-gap: 8px;
+}
+
+.cpu-type-hidden {
+  align-self: start;
+  margin-top: 6px;
+}
+
+.cpu-physical-bits {
+  grid-column: 1 / -1;
+}
+
+.cpu-type-field-label {
+  margin-bottom: 8px;
+  color: #333333;
+}
+
+.cpu-physical-bits__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.cpu-physical-bits__custom {
+  max-width: 200px;
+  margin-top: 8px;
+}
+
+.cpu-type-flags {
+  margin-top: 12px;
+  padding-top: 20px;
+  border-top: 1px solid #dfe1e6;
+}
+
+.vm-cpu-flags-table {
+  border-color: #dfe1e6;
+}
+
 .vm-cpu-flags-table :deep(.q-table__middle) {
-  max-height: 280px;
-  overflow-y: auto;
+  max-height: min(300px, 38vh);
+  overflow: auto;
+}
+
+.vm-cpu-flags-table :deep(.q-table) {
+  min-width: 760px;
+}
+
+.vm-cpu-flags-table :deep(tbody tr:not(:last-child) td) {
+  border-bottom: 1px solid #edf0f4;
 }
 
 .vm-cpu-flags-table :deep(thead tr th) {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: #f5f7fa;
+  background: #f2f5fc;
 }
 
-.cpu-physical-bits__options {
-  display: grid;
-  gap: 6px;
-  margin: 4px 0 8px;
+.cpu-flag-state {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  background: #f2f5fc;
+  white-space: nowrap;
+}
+
+.cpu-flag-state__button {
+  min-height: 28px;
+  padding: 0 8px;
+  color: #666666;
+  border: 1px solid transparent;
+  border-radius: 2px;
+}
+
+.cpu-flag-state__button--active {
+  color: #1976d2;
+  background: #ffffff;
+  border-color: #9bc4f5;
+}
+
+@media (max-width: 640px) {
+  .cpu-type-editor {
+    padding: 12px;
+  }
+
+  .cpu-type-fields {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0;
+  }
+
+  .cpu-physical-bits {
+    grid-column: auto;
+  }
 }
 </style>

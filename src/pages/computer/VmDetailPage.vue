@@ -29,6 +29,7 @@ import VmCloudInitTab from '@/pages/computer/vm/VmCloudInitTab.vue';
 import VmResourceOperationDialog from '@/pages/computer/vm/VmResourceOperationDialog.vue';
 import VmTagControl from '@/pages/computer/vm/VmTagControl.vue';
 import { gettext } from '@/locale';
+import { getNoVncScaling } from '@/utils/consolePreferences';
 import { useSessionStore } from '@/stores/session';
 import { textValue } from '@/utils/pveFormat';
 import { toChineseStr } from '@/utils/unicode';
@@ -103,7 +104,7 @@ const consoleUrl = computed(() => {
     novnc: '1',
     vmid: vmid.value,
     node: node.value,
-    resize: 'scale',
+    resize: getNoVncScaling('scale'),
     autoconnect: '1',
     reconnect: '1',
   });
@@ -131,8 +132,8 @@ const canViewSnapshots = computed(
     !isTemplate.value &&
     Boolean(
       vmCaps.value['VM.Snapshot'] ||
-        vmCaps.value['VM.Snapshot.Rollback'] ||
-        vmCaps.value['VM.Audit']
+      vmCaps.value['VM.Snapshot.Rollback'] ||
+      vmCaps.value['VM.Audit']
     )
 );
 const canViewFirewall = computed(() => Boolean(vmCaps.value['VM.Audit']));
@@ -425,7 +426,7 @@ function openConsole(type: 'noVNC' | 'xterm.js') {
   });
   if (type === 'noVNC') {
     params.set('novnc', '1');
-    params.set('resize', 'scale');
+    params.set('resize', getNoVncScaling('off'));
     params.set('autoconnect', '1');
     params.set('reconnect', '1');
     window.open(

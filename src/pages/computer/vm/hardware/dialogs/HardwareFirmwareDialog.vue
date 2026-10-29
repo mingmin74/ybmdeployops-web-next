@@ -2,11 +2,12 @@
 import type { QTableColumn } from 'quasar';
 import { computed, reactive, shallowRef, watch } from 'vue';
 import { getNodeStorage, getStorageContent } from '@/api/storageContent';
-import type { PveRecord } from '@/api/resources';
+import { getNodes, type PveRecord } from '@/api/resources';
 import SelectTable from '@/components/SelectTable.vue';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 import { formatBytes, textValue } from '@/utils/pveFormat';
+import { allowedTpmVersions } from '../../tpmVersions';
 import { useVmHardwareContext } from '../context/vmHardwareContext';
 
 const visible = defineModel<boolean>({ default: false });
@@ -30,9 +31,12 @@ const imageStorageRows = shallowRef<PveRecord[]>([]);
 const existingVolumes = shallowRef<PveRecord[]>([]);
 const storageLoading = shallowRef(false);
 const existingVolumeLoading = shallowRef(false);
+const architectureLoading = shallowRef(false);
+const hostArchitecture = shallowRef('');
 const validationAttempted = shallowRef(false);
 let existingVolumeRequest = 0;
-const { loading, node, updateConfig } = useVmHardwareContext();
+let architectureRequest = 0;
+const { loading, node, config, updateConfig } = useVmHardwareContext();
 
 const storageColumns: QTableColumn<PveRecord>[] = [
   {
@@ -80,8 +84,17 @@ const dialogTitle = computed(
   () => `${gettext('Add')}:${gettext(kind === 'efi' ? 'EFI Disk' : 'TPM State')}`
 );
 const dialogLoading = computed(
-  () => loading.value || storageLoading.value || existingVolumeLoading.value
+  () =>
+    loading.value ||
+    storageLoading.value ||
+    existingVolumeLoading.value ||
+    architectureLoading.value
 );
+const guestArchitecture = computed(() => {
+  const configured = textValue(config.value.arch);
+  return configured && configured !== '__default__' ? configured : hostArchitecture.value;
+});
+const tpmVersionOptions = computed(() => allowedTpmVersions(guestArchitecture.value || 'aarch64'));
 const storageLabel = computed(() => gettext(kind === 'efi' ? 'EFI Storage' : 'TPM Storage'));
 const diskFormatOptions = computed(() =>
   ['raw', 'qcow2', 'vmdk']
@@ -91,8 +104,8 @@ const diskFormatOptions = computed(() =>
         value === 'raw'
           ? `${gettext('Raw disk image')} (raw)`
           : value === 'qcow2'
-          ? `${gettext('QEMU image format')} (qcow2)`
-          : `${gettext('VMware image format')} (vmdk)`,
+            ? `${gettext('QEMU image format')} (qcow2)`
+            : `${gettext('VMware image format')} (vmdk)`,
       value,
     }))
 );
@@ -110,10 +123,12 @@ const diskFormatDisabled = computed(() => diskFormatOptions.value.length <= 1);
 const canAdd = computed(() => {
   return Boolean(
     canAddFirmware &&
-      form.storage &&
-      selectedStorage.value &&
-      canSelectStorage(selectedStorage.value) &&
-      (!selectExisting.value || hasSelectedExistingVolume.value)
+    (kind !== 'tpm' ||
+      (!architectureLoading.value && tpmVersionOptions.value.includes(form.tpmVersion))) &&
+    form.storage &&
+    selectedStorage.value &&
+    canSelectStorage(selectedStorage.value) &&
+    (!selectExisting.value || hasSelectedExistingVolume.value)
   );
 });
 
@@ -150,10 +165,10 @@ function resetDiskFormat() {
   form.format = supported.includes('qcow2')
     ? 'qcow2'
     : supported.includes('raw')
-    ? 'raw'
-    : supported.includes(defaultFormat)
-    ? defaultFormat
-    : supported[0] || 'raw';
+      ? 'raw'
+      : supported.includes(defaultFormat)
+        ? defaultFormat
+        : supported[0] || 'raw';
 }
 
 function canSelectStorage(row: PveRecord) {
@@ -173,8 +188,27 @@ async function loadImageStorages() {
   }
 }
 
+async function loadHostArchitecture() {
+  const request = ++architectureRequest;
+  architectureLoading.value = true;
+  try {
+    const response = await getNodes();
+    if (request !== architectureRequest || !visible.value) return;
+    const selectedNode = response.data?.find((item) => item.node === node.value);
+    hostArchitecture.value = textValue(selectedNode?.['host-arch']);
+  } catch {
+    if (request === architectureRequest) hostArchitecture.value = '';
+  } finally {
+    if (request === architectureRequest) architectureLoading.value = false;
+  }
+}
+
 watch(visible, (isVisible) => {
-  if (!isVisible) return;
+  if (!isVisible) {
+    architectureRequest += 1;
+    architectureLoading.value = false;
+    return;
+  }
   validationAttempted.value = false;
   Object.assign(form, {
     storage: '',
@@ -184,6 +218,8 @@ watch(visible, (isVisible) => {
     tpmVersion: 'v2.0',
   });
   existingVolumes.value = [];
+  hostArchitecture.value = '';
+  if (kind === 'tpm') void loadHostArchitecture();
   void loadImageStorages();
 });
 
@@ -356,7 +392,7 @@ async function addFirmware() {
               options-dense
               emit-value
               map-options
-              :options="['v1.2', 'v2.0']"
+              :options="tpmVersionOptions"
               :label="gettext('Version')"
             />
           </div>
