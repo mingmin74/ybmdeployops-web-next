@@ -55,10 +55,13 @@ const supportsIoThread = computed(
   () => form.value.diskBus === 'scsi' || form.value.diskBus === 'virtio',
 );
 const storageValid = computed(() =>
-  storageRows.some((item) => String(item.storage || '') === form.value.storage),
+  storageRows.some((item) => typeof item.storage === 'string' && item.storage === form.value.storage),
 );
 const existingVolumeValid = computed(() =>
-  existingVolumes.some((item) => String(item.volid || item.text || '') === form.value.existingVolume),
+  existingVolumes.some((item) => {
+    const volume = typeof item.volid === 'string' && item.volid ? item.volid : item.text;
+    return typeof volume === 'string' && volume === form.value.existingVolume;
+  }),
 );
 const mbpsValid = (value: string) => validBandwidth(value, 1);
 const iopsValid = (value: string) => validBandwidth(value, 10, true);

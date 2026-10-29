@@ -101,19 +101,17 @@
           dense
           no-caps
           class="header-user-trigger"
+          content-class="user-menu-popup"
           icon="account_circle"
           :label="session.userid || session.username"
         >
-          <q-list
-            dense
-            class="user-menu"
-          >
+          <q-list class="user-menu">
             <q-item class="user-menu__profile">
               <q-item-section avatar>
                 <q-avatar
-                  size="30px"
+                  size="40px"
                   class="user-menu__avatar"
-                  icon="account_circle"
+                  icon="person_outline"
                 />
               </q-item-section>
               <q-item-section>
@@ -122,7 +120,7 @@
                   caption
                   class="user-menu__status"
                 >
-                  {{ gettext('Logged in') }}
+                  {{ gettext('Current login account') }}
                 </q-item-label>
               </q-item-section>
             </q-item>
@@ -133,8 +131,8 @@
               class="user-menu__item"
               @click="passwordDialogVisible = true"
             >
-              <q-item-section avatar><q-icon name="password" /></q-item-section>
-              <q-item-section>{{ gettext('Password') }}</q-item-section>
+              <q-item-section avatar><q-icon name="vpn_key" /></q-item-section>
+              <q-item-section>{{ gettext('Edit Password') }}</q-item-section>
             </q-item>
             <q-item
               clickable

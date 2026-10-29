@@ -308,6 +308,8 @@ export default {
   Realm: 'Realm',
   'Remember me': 'Remember me',
   'Logged in': 'Logged in',
+  'Current login account': 'Current login account',
+  'Edit Password': 'Change password',
   'Enter fields to sign in': 'Enter fields to sign in to the management console',
   'Username is required': 'Username is required',
   'Password is required': 'Password is required',

@@ -214,5 +214,6 @@ export type CreateVmWizardContext = {
     stepContentHeight: (step: CreateVmStepName) => string;
     cpuFlagState: (name: string) => string;
     isoImageName: (value: unknown) => string;
+    requiredLabel: (label: string) => string;
   };
 };

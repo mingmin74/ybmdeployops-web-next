@@ -58,8 +58,12 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'system/standard-styles',
-        name: 'system-standard-styles',
-        component: () => import('@/pages/system/StandardStylesPage.vue'),
+        redirect: { name: 'standard-styles' },
+      },
+      {
+        path: 'standard-styles',
+        name: 'standard-styles',
+        component: () => import('@/pages/standard-styles/StandardStylesPage.vue'),
         meta: { auth: true, title: '标准样式' },
       },
       {

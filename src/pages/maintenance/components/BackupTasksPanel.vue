@@ -19,7 +19,7 @@ import BackupScheduleBuilder from './BackupScheduleBuilder.vue';
 import { getNodeStorages } from '@/api/storage';
 import { getNodes } from '@/api/host';
 import { getClusterResources, getPools, type PveRecord } from '@/api/resources';
-import { gettext } from '@/locale';
+import { getLocale, gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 
 type BackupTaskRow = BackupTask & {
@@ -57,7 +57,7 @@ const guestsFilter = ref('');
 const simulatorVisible = ref(false);
 const simulatorLoading = ref(false);
 const simulationRows = ref<Record<string, unknown>[]>([]);
-const simulatorSplitter = ref(50);
+const simulatorSplitter = ref(42);
 const taskForm = reactive({
   id: '',
   node: '',
@@ -264,20 +264,20 @@ function detailSelectionMode(task: BackupTaskRow) {
   return task.vmid
     ? gettext('Include selected VMs')
     : task.all
-    ? gettext('All')
-    : task.exclude
-    ? gettext('Exclude selected VMs')
-    : task.pool
-    ? gettext('Pool based')
-    : '-';
+      ? gettext('All')
+      : task.exclude
+        ? gettext('Exclude selected VMs')
+        : task.pool
+          ? gettext('Pool based')
+          : '-';
 }
 function detailNotification(task: BackupTaskRow) {
   const mode = task['notification-mode'];
   return mode === 'notification-system' || (mode === 'auto' && !task.mailto)
     ? gettext('Use global notification settings')
     : task.mailnotification === 'failure'
-    ? gettext('Send email on failure')
-    : gettext('Always send email');
+      ? gettext('Send email on failure')
+      : gettext('Always send email');
 }
 function treeLabel(item: PveRecord) {
   const id = textValue(item.id);
@@ -347,6 +347,13 @@ function scheduleDate(value: unknown) {
         day: '2-digit',
       }).format(new Date(raw > 1e12 ? raw : raw * 1000))
     : textValue(value);
+}
+function scheduleWeekday(value: unknown) {
+  const raw = Number(value);
+  if (!Number.isFinite(raw)) return '';
+  return new Intl.DateTimeFormat(getLocale(), { weekday: 'short' }).format(
+    new Date(raw > 1e12 ? raw : raw * 1000)
+  );
 }
 function scheduleTime(value: unknown) {
   const raw = Number(value);
@@ -484,10 +491,10 @@ async function openTaskForm(action: 'add' | 'edit') {
       taskForm.selectionMode = data.exclude
         ? 'exclude'
         : data.all
-        ? 'all'
-        : data.pool
-        ? 'pool'
-        : 'include';
+          ? 'all'
+          : data.pool
+            ? 'pool'
+            : 'include';
       taskForm.pool = textValue(data.pool);
       taskForm.selectedVmids = textValue(data.exclude, textValue(data.vmid))
         .split(',')
@@ -831,67 +838,56 @@ onMounted(() => void reload());
         v-if="selectedTask"
         class="backup-dialog-body q-pa-md"
       >
-        <section class="u-border q-mb-md backup-info-card">
+        <section class="backup-info-card q-mb-md">
           <div class="backup-info-card__header">
-            <div>
-              <div class="backup-info-card__title">{{ selectedTask.id }}</div>
-            </div>
+            <div class="backup-info-card__title">{{ selectedTask.id }}</div>
             <q-badge
-              rounded
               :color="selectedTask.enabledText === gettext('Enabled') ? 'positive' : 'negative'"
               :label="selectedTask.enabledText"
             />
           </div>
           <div class="backup-info-card__content">
-            <div class="row q-col-gutter-md">
-              <div class="col-12 col-md-4 backup-info-column">
-                <div class="backup-info-item">
-                  <span class="backup-info-label">{{ gettext('Node') }}</span>
-                  <span class="backup-info-value">
-                    {{ selectedTask.node || `-- ${gettext('All')} --` }}
-                  </span>
-                </div>
-                <div class="backup-info-item">
-                  <span class="backup-info-label">{{ gettext('Comment') }}</span>
-                  <span class="backup-info-value">{{ selectedTask.comment || '-' }}</span>
-                </div>
-              </div>
-              <div class="col-12 col-md-4 backup-info-column">
-                <div class="backup-info-item">
-                  <span class="backup-info-label">{{ gettext('Schedule') }}</span>
-                  <span class="backup-info-value">{{ selectedTask.schedule || '-' }}</span>
-                </div>
-                <div class="backup-info-item">
-                  <span class="backup-info-label">{{ gettext('Next Run') }}</span>
-                  <span class="backup-info-value backup-info-value--numeric">
-                    {{ nextRunText(selectedTask['next-run']) }}
-                  </span>
-                </div>
-                <div class="backup-info-item">
-                  <span class="backup-info-label">{{ gettext('Mode') }}</span>
-                  <span class="backup-info-value">
-                    {{ gettext(String(selectedTask.mode || '')) || '-' }}
-                  </span>
-                </div>
-              </div>
-              <div class="col-12 col-md-4 backup-info-column">
-                <div class="backup-info-item">
-                  <span class="backup-info-label">{{ gettext('Storage') }}</span>
-                  <span class="backup-info-value">{{ selectedTask.storage || '-' }}</span>
-                </div>
-                <div class="backup-info-item">
-                  <span class="backup-info-label">{{ gettext('Compression') }}</span>
-                  <span class="backup-info-value">{{ selectedTask.compress || '-' }}</span>
-                </div>
-                <div class="backup-info-item">
-                  <span class="backup-info-label">{{ gettext('Selection Mode') }}</span>
-                  <span class="backup-info-value">{{ detailSelectionMode(selectedTask) }}</span>
-                </div>
-                <div class="backup-info-item">
-                  <span class="backup-info-label">{{ gettext('Notice') }}</span>
-                  <span class="backup-info-value">{{ detailNotification(selectedTask) }}</span>
-                </div>
-              </div>
+            <div class="backup-info-item">
+              <span class="backup-info-label">{{ gettext('Node') }}</span>
+              <span class="backup-info-value">
+                {{ selectedTask.node || '-- ' + gettext('All') + ' --' }}
+              </span>
+            </div>
+            <div class="backup-info-item">
+              <span class="backup-info-label">{{ gettext('Storage') }}</span>
+              <span class="backup-info-value">{{ selectedTask.storage || '-' }}</span>
+            </div>
+            <div class="backup-info-item">
+              <span class="backup-info-label">{{ gettext('Schedule') }}</span>
+              <span class="backup-info-value">{{ selectedTask.schedule || '-' }}</span>
+            </div>
+            <div class="backup-info-item">
+              <span class="backup-info-label">{{ gettext('Next Run') }}</span>
+              <span class="backup-info-value backup-info-value--numeric">
+                {{ nextRunText(selectedTask['next-run']) }}
+              </span>
+            </div>
+            <div class="backup-info-item">
+              <span class="backup-info-label">{{ gettext('Mode') }}</span>
+              <span class="backup-info-value">
+                {{ gettext(String(selectedTask.mode || '')) || '-' }}
+              </span>
+            </div>
+            <div class="backup-info-item">
+              <span class="backup-info-label">{{ gettext('Compression') }}</span>
+              <span class="backup-info-value">{{ selectedTask.compress || '-' }}</span>
+            </div>
+            <div class="backup-info-item">
+              <span class="backup-info-label">{{ gettext('Selection Mode') }}</span>
+              <span class="backup-info-value">{{ detailSelectionMode(selectedTask) }}</span>
+            </div>
+            <div class="backup-info-item">
+              <span class="backup-info-label">{{ gettext('Notice') }}</span>
+              <span class="backup-info-value">{{ detailNotification(selectedTask) }}</span>
+            </div>
+            <div class="backup-info-item backup-info-item--full">
+              <span class="backup-info-label">{{ gettext('Comment') }}</span>
+              <span class="backup-info-value">{{ selectedTask.comment || '-' }}</span>
             </div>
           </div>
         </section>
@@ -907,7 +903,6 @@ onMounted(() => void reload());
               outlined
               class="backup-disk-section__filter"
               :placeholder="gettext('Filter')"
-              style="width: 200px"
             >
               <template #prepend><q-icon name="search" /></template>
               <template #append>
@@ -935,8 +930,8 @@ onMounted(() => void reload());
               no-connectors
             >
               <template #default-header="prop">
-                <div class="row full-width items-center backup-tree__row">
-                  <div class="col backup-tree__label">
+                <div class="backup-tree__row">
+                  <div class="backup-tree__label">
                     <q-icon
                       :name="treeIcon(prop.node)"
                       size="16px"
@@ -944,8 +939,8 @@ onMounted(() => void reload());
                     />
                     <span>{{ prop.node.label }}</span>
                   </div>
-                  <div class="col-2 backup-tree__muted">{{ prop.node.type || '-' }}</div>
-                  <div class="col-3 backup-tree__included">
+                  <div class="backup-tree__muted">{{ prop.node.type || '-' }}</div>
+                  <div class="backup-tree__included">
                     <q-icon
                       v-if="includedIcon(prop.node)"
                       :name="includedIcon(prop.node)"
@@ -1000,7 +995,7 @@ onMounted(() => void reload());
           class="text-grey"
           active-color="primary"
           indicator-color="primary"
-          align="justify"
+          align="left"
           narrow-indicator
         >
           <q-tab
@@ -1036,12 +1031,21 @@ onMounted(() => void reload());
         >
           <q-tab-panel
             name="convention"
-            class="q-pa-lg"
+            class="backup-task-form__panel"
           >
             <section class="backup-task-form__section">
-              <div class="backup-task-form__section-title">{{ gettext('Basic Settings') }}</div>
-              <div class="backup-task-form__fields row q-col-gutter-xl">
-                <div class="col-12 col-sm-6">
+              <div class="backup-task-form__section-header">
+                <div class="backup-task-form__section-title">{{ gettext('Basic Settings') }}</div>
+                <q-checkbox
+                  v-model="taskForm.enabled"
+                  size="xs"
+                  right-label
+                  color="primary"
+                  :label="gettext('Enable')"
+                />
+              </div>
+              <div class="backup-task-form__fields">
+                <div class="backup-task-form__field">
                   <SelectTable
                     v-model="taskForm.node"
                     class="q-field--with-bottom"
@@ -1052,9 +1056,10 @@ onMounted(() => void reload());
                     :columns="nodeColumns"
                     :display-value="selectedNodeLabel"
                     width="500px"
-                    style="width: 320px"
                     :get-row-value="(row) => String(row.node || '')"
                   />
+                </div>
+                <div class="backup-task-form__field">
                   <SelectTable
                     v-model="taskForm.storage"
                     class="q-field--with-bottom"
@@ -1065,13 +1070,47 @@ onMounted(() => void reload());
                     :columns="storageColumns"
                     :display-value="selectedStorageLabel"
                     width="500px"
-                    style="width: 320px"
                     show-error
                     :error="Boolean(taskFormErrors.storage)"
                     :error-message="taskFormErrors.storage"
                     @update:model-value="taskFormErrors.storage = ''"
                     :get-row-value="(row) => String(row.storage || '')"
                   />
+                </div>
+                <div class="backup-task-form__field">
+                  <q-select
+                    v-model="taskForm.compress"
+                    class="q-field--with-bottom"
+                    dense
+                    options-dense
+                    emit-value
+                    map-options
+                    :label="gettext('Compressed')"
+                    :options="[
+                      { label: gettext('None'), value: '__default__' },
+                      { label: 'LZO(' + gettext('Fast') + ')', value: 'lzo' },
+                      { label: 'GZIP(' + gettext('Good') + ')', value: 'gzip' },
+                      { label: 'ZSTD(' + gettext('Fast and Good') + ')', value: 'zstd' },
+                    ]"
+                  />
+                </div>
+                <div class="backup-task-form__field">
+                  <q-select
+                    v-model="taskForm.mode"
+                    class="q-field--with-bottom"
+                    dense
+                    options-dense
+                    emit-value
+                    map-options
+                    :label="gettext('Mode')"
+                    :options="[
+                      { label: gettext('Snapshot'), value: 'snapshot' },
+                      { label: gettext('Suspend'), value: 'suspend' },
+                      { label: gettext('Stop'), value: 'stop' },
+                    ]"
+                  />
+                </div>
+                <div class="backup-task-form__field">
                   <q-select
                     v-model="taskForm.schedule"
                     class="q-field--with-bottom"
@@ -1102,6 +1141,8 @@ onMounted(() => void reload());
                       />
                     </template>
                   </q-select>
+                </div>
+                <div class="backup-task-form__field">
                   <q-select
                     v-model="taskForm.selectionMode"
                     class="q-field--with-bottom"
@@ -1121,8 +1162,12 @@ onMounted(() => void reload());
                       taskFormErrors.selectedVmids = '';
                     "
                   />
+                </div>
+                <div
+                  v-if="taskForm.selectionMode === 'pool'"
+                  class="backup-task-form__field"
+                >
                   <q-select
-                    v-if="taskForm.selectionMode === 'pool'"
                     v-model="taskForm.pool"
                     class="q-field--with-bottom"
                     dense
@@ -1138,51 +1183,15 @@ onMounted(() => void reload());
                     @update:model-value="taskFormErrors.pool = ''"
                   />
                 </div>
-                <div class="col-12 col-sm-6">
-                  <q-select
-                    v-model="taskForm.compress"
+                <div class="backup-task-form__field backup-task-form__field--full">
+                  <q-input
+                    v-model="taskForm.comment"
                     class="q-field--with-bottom"
                     dense
-                    options-dense
-                    emit-value
-                    map-options
-                    :label="gettext('Compressed')"
-                    :options="[
-                      { label: gettext('None'), value: '__default__' },
-                      { label: 'LZO(' + gettext('Fast') + ')', value: 'lzo' },
-                      { label: 'GZIP(' + gettext('Good') + ')', value: 'gzip' },
-                      { label: 'ZSTD(' + gettext('Fast and Good') + ')', value: 'zstd' },
-                    ]"
-                  />
-                  <q-select
-                    v-model="taskForm.mode"
-                    class="q-field--with-bottom"
-                    dense
-                    options-dense
-                    emit-value
-                    map-options
-                    :label="gettext('Mode')"
-                    :options="[
-                      { label: gettext('Snapshot'), value: 'snapshot' },
-                      { label: gettext('Suspend'), value: 'suspend' },
-                      { label: gettext('Stop'), value: 'stop' },
-                    ]"
-                  />
-                  <q-checkbox
-                    v-model="taskForm.enabled"
-                    size="xs"
-                    right-label
-                    color="primary"
-                    :label="gettext('Enable')"
+                    :label="gettext('Job Comment')"
                   />
                 </div>
               </div>
-              <q-input
-                v-model="taskForm.comment"
-                class="q-field--with-bottom"
-                dense
-                :label="gettext('Job Comment')"
-              />
             </section>
             <section
               v-if="['include', 'exclude'].includes(taskForm.selectionMode)"
@@ -1383,109 +1392,117 @@ onMounted(() => void reload());
               <span v-pre>{{ vmid }}</span>
             </div>
           </q-tab-panel>
-          <q-tab-panel name="advanced">
-            <div class="advanced-settings-container bg-white q-ma-sm u-border">
-              <div class="advanced-row">
-                <div>
-                  <q-input
-                    v-model="taskForm.id"
-                    class="q-field--with-bottom"
-                    dense
-                    stack-label
-                    :label="gettext('Job ID')"
-                    :disable="formAction === 'edit'"
-                    :placeholder="gettext('Auto generate')"
-                  />
+          <q-tab-panel
+            name="advanced"
+            class="backup-task-form__panel backup-task-form__panel--advanced"
+          >
+            <section class="backup-advanced-section">
+              <div class="backup-task-form__section-title">{{ gettext('Advanced settings') }}</div>
+              <div class="advanced-settings-container">
+                <div class="advanced-row">
+                  <div>
+                    <q-input
+                      v-model="taskForm.id"
+                      class="q-field--with-bottom"
+                      dense
+                      stack-label
+                      :label="gettext('Job ID')"
+                      :disable="formAction === 'edit'"
+                      :placeholder="gettext('Auto generate')"
+                    />
+                  </div>
+                  <p>{{ gettext('Can be used in notification matchers to match this job.') }}</p>
                 </div>
-                <p>{{ gettext('Can be used in notification matchers to match this job.') }}</p>
-              </div>
-              <div class="advanced-row">
-                <div>
-                  <q-input
-                    v-model="taskForm.bwlimit"
-                    class="q-field--with-bottom"
-                    dense
-                    stack-label
-                    type="number"
-                    :label="gettext('Bandwidth Limit')"
-                    :placeholder="gettext('Fallback')"
-                  />
+                <div class="advanced-row">
+                  <div>
+                    <q-input
+                      v-model="taskForm.bwlimit"
+                      class="q-field--with-bottom"
+                      dense
+                      stack-label
+                      type="number"
+                      :label="gettext('Bandwidth Limit')"
+                      :placeholder="gettext('Fallback')"
+                    />
+                  </div>
+                  <p>{{ gettext('Limit I/O bandwidth.') }}</p>
                 </div>
-                <p>{{ gettext('Limit I/O bandwidth.') }}</p>
-              </div>
-              <div class="advanced-row">
-                <div>
-                  <q-input
-                    v-model="taskForm.zstd"
-                    class="q-field--with-bottom"
-                    dense
-                    stack-label
-                    type="number"
-                    :label="gettext('Zstd Threads')"
-                    :placeholder="gettext('Fallback')"
-                  />
+                <div class="advanced-row">
+                  <div>
+                    <q-input
+                      v-model="taskForm.zstd"
+                      class="q-field--with-bottom"
+                      dense
+                      stack-label
+                      type="number"
+                      :label="gettext('Zstd Threads')"
+                      :placeholder="gettext('Fallback')"
+                    />
+                  </div>
+                  <p>{{ gettext('Threads used for zstd compression (non-PBS).') }}</p>
                 </div>
-                <p>{{ gettext('Threads used for zstd compression (non-PBS).') }}</p>
-              </div>
-              <div class="advanced-row">
-                <div>
-                  <q-input
-                    v-model="taskForm.maxWorkers"
-                    class="q-field--with-bottom"
-                    dense
-                    stack-label
-                    type="number"
-                    :label="gettext('IO Workers')"
-                    :placeholder="gettext('Fallback')"
-                  />
+                <div class="advanced-row">
+                  <div>
+                    <q-input
+                      v-model="taskForm.maxWorkers"
+                      class="q-field--with-bottom"
+                      dense
+                      stack-label
+                      type="number"
+                      :label="gettext('IO Workers')"
+                      :placeholder="gettext('Fallback')"
+                    />
+                  </div>
+                  <p>{{ gettext('I/O workers in the QEMU process (VMs only).') }}</p>
                 </div>
-                <p>{{ gettext('I/O workers in the QEMU process (VMs only).') }}</p>
-              </div>
-              <div class="advanced-row">
-                <div>
-                  <q-checkbox
-                    v-model="taskForm.repeatMissed"
-                    size="xs"
-                    color="primary"
-                    :label="gettext('Repeat missed')"
-                  />
+                <div class="advanced-row advanced-row--checkbox">
+                  <div>
+                    <q-checkbox
+                      v-model="taskForm.repeatMissed"
+                      dense
+                      right-label
+                      size="xs"
+                      color="primary"
+                      :label="gettext('Repeat missed')"
+                    />
+                  </div>
+                  <p>
+                    {{
+                      gettext(
+                        "Run jobs as soon as possible if they couldn't start on schedule, for example, due to the node being offline."
+                      )
+                    }}
+                  </p>
                 </div>
-                <p>
-                  {{
-                    gettext(
-                      "Run jobs as soon as possible if they couldn't start on schedule, for example, due to the node being offline."
-                    )
-                  }}
-                </p>
-              </div>
-              <div class="advanced-row">
-                <div>
-                  <q-select
-                    v-model="taskForm.pbsChangeDetectionMode"
-                    class="q-field--with-bottom"
-                    dense
-                    options-dense
-                    emit-value
-                    map-options
-                    :label="gettext('PBS Change Detection Mode')"
-                    :options="[
-                      { label: gettext('Legacy'), value: 'legacy' },
-                      { label: 'Data', value: 'data' },
-                      { label: 'Metadata', value: 'metadata' },
-                    ]"
-                  />
+                <div class="advanced-row">
+                  <div>
+                    <q-select
+                      v-model="taskForm.pbsChangeDetectionMode"
+                      class="q-field--with-bottom"
+                      dense
+                      options-dense
+                      emit-value
+                      map-options
+                      :label="gettext('PBS Change Detection Mode')"
+                      :options="[
+                        { label: gettext('Legacy'), value: 'legacy' },
+                        { label: 'Data', value: 'data' },
+                        { label: 'Metadata', value: 'metadata' },
+                      ]"
+                    />
+                  </div>
+                  <p>
+                    {{
+                      gettext(
+                        'Mode to detect file changes and switch archive encoding format for container backups.'
+                      )
+                    }}
+                  </p>
                 </div>
-                <p>
-                  {{
-                    gettext(
-                      'Mode to detect file changes and switch archive encoding format for container backups.'
-                    )
-                  }}
-                </p>
               </div>
-            </div>
-            <div class="backup-task-form__hint q-mt-md">
-              <span class="text-weight-bold text-amber-9">{{ gettext('Comment') }}:</span>
+            </section>
+            <div class="backup-advanced-note">
+              <span class="text-weight-medium">{{ gettext('Comment') }}:</span>
               {{
                 gettext(
                   "The node-specific 'vzdump.conf' or, if this is not set, the default from the config schema is used to determine fallback values."
@@ -1588,16 +1605,18 @@ onMounted(() => void reload());
   >
     <UWindow
       :title="gettext('Schedule Simulator')"
-      width="800px"
+      width="900px"
       :loading="simulatorLoading"
     >
-      <div class="backup-dialog-body q-ma-sm u-border">
+      <div class="backup-simulator">
         <q-splitter
           v-model="simulatorSplitter"
-          style="height: 400px"
+          class="backup-simulator__splitter"
+          :limits="[35, 60]"
         >
           <template #before>
-            <div class="q-pa-md">
+            <div class="backup-simulator__pane backup-simulator__pane--form">
+              <div class="backup-simulator__title">{{ gettext('Simulation Parameters') }}</div>
               <q-select
                 v-model="simulatorForm.schedule"
                 dense
@@ -1618,11 +1637,12 @@ onMounted(() => void reload());
                 class="q-field--with-bottom"
                 :label="gettext('iterations')"
               />
-              <div class="flex justify-end">
+              <div class="backup-simulator__actions">
                 <q-btn
                   no-caps
                   flat
                   size="12px"
+                  icon="play_circle_outline"
                   class="bg-primary text-grey-1 u-button"
                   :disable="!simulatorForm.schedule || !simulatorForm.iterations"
                   :loading="simulatorLoading"
@@ -1633,27 +1653,52 @@ onMounted(() => void reload());
             </div>
           </template>
           <template #after>
-            <div class="q-pa-md">
-              <q-list
-                v-if="simulationRows.length"
-                bordered
-                separator
-              >
-                <q-item
-                  v-for="(item, index) in simulationRows"
-                  :key="String(item.timestamp || item.utc || index)"
+            <div class="backup-simulator__pane backup-simulator__pane--results">
+              <div class="backup-simulator__heading">
+                <div class="backup-simulator__title">{{ gettext('Simulation Results') }}</div>
+                <span
+                  v-if="simulationRows.length"
+                  class="backup-simulator__count"
                 >
-                  <q-item-section>
-                    <q-item-label>{{ scheduleDate(item.utc) }}</q-item-label>
-                    <q-item-label caption>{{ scheduleTime(item.timestamp) }}</q-item-label>
-                  </q-item-section>
-                </q-item>
-              </q-list>
-              <div
-                v-else
-                class="text-center text-grey"
-              >
-                {{ gettext('No data available') }}
+                  {{
+                    gettext('Simulation total: {0}').replace('{0}', String(simulationRows.length))
+                  }}
+                </span>
+              </div>
+              <div class="backup-simulator__result-box">
+                <div class="backup-simulator__columns">
+                  <span>{{ gettext('Expected execution date') }}</span>
+                  <span>{{ gettext('Execution Time') }}</span>
+                </div>
+                <q-scroll-area class="backup-simulator__scroll">
+                  <div
+                    v-if="simulationRows.length"
+                    class="backup-simulator__rows"
+                  >
+                    <div
+                      v-for="(item, index) in simulationRows"
+                      :key="String(item.timestamp || item.utc || index)"
+                      class="backup-simulator__row"
+                    >
+                      <span class="backup-simulator__index">
+                        {{ String(index + 1).padStart(2, '0') }}
+                      </span>
+                      <span class="backup-simulator__date">
+                        {{ scheduleDate(item.utc) }}
+                        <span class="backup-simulator__weekday">
+                          {{ scheduleWeekday(item.utc) }}
+                        </span>
+                      </span>
+                      <span class="backup-simulator__time">{{ scheduleTime(item.timestamp) }}</span>
+                    </div>
+                  </div>
+                  <div
+                    v-else
+                    class="backup-simulator__empty"
+                  >
+                    {{ gettext('No data available') }}
+                  </div>
+                </q-scroll-area>
               </div>
             </div>
           </template>
@@ -1681,7 +1726,8 @@ onMounted(() => void reload());
 
 .backup-info-card {
   overflow: hidden;
-  border-radius: 8px;
+  border: 1px solid #e3e8f0;
+  border-radius: 6px;
   background: #fff;
 }
 
@@ -1690,45 +1736,45 @@ onMounted(() => void reload());
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 16px;
+  padding: 12px 20px;
   border-bottom: 1px solid #e7ebf1;
   background: #f7f9fc;
 }
 
-.backup-info-card__eyebrow,
-.backup-info-label,
-.backup-disk-section__hint,
-.backup-tree__columns,
-.backup-tree__muted {
-  color: #778196;
-  font-size: 12px;
-}
-
 .backup-info-card__title {
-  margin-top: 2px;
+  min-width: 0;
   color: #202939;
   font-size: 14px;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .backup-info-card__content {
-  padding: 12px 16px;
-}
-
-.backup-info-column + .backup-info-column {
-  border-left: 1px solid #eef1f5;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 28px;
+  row-gap: 16px;
+  padding: 18px 20px 20px;
 }
 
 .backup-info-item {
   display: flex;
-  gap: 12px;
-  min-height: 26px;
-  padding: 3px 0;
-  line-height: 20px;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
 }
 
-.backup-info-label {
-  flex: 0 0 92px;
+.backup-info-item--full {
+  grid-column: 1 / -1;
+  padding-top: 14px;
+  border-top: 1px solid #eef1f5;
+}
+
+.backup-info-label,
+.backup-tree__columns,
+.backup-tree__muted {
+  color: #778196;
+  font-size: 12px;
 }
 
 .backup-info-value {
@@ -1749,6 +1795,10 @@ onMounted(() => void reload());
   margin-bottom: 0;
 }
 
+.backup-disk-section__filter {
+  width: 200px;
+}
+
 .backup-disk-section__filter :deep(.q-field__control),
 .backup-disk-section__filter :deep(.q-field__marginal) {
   align-items: center;
@@ -1758,33 +1808,36 @@ onMounted(() => void reload());
   height: 100%;
 }
 
-.backup-disk-section__hint {
-  margin-top: 2px;
-}
-
 .backup-tree {
   overflow: hidden;
   border: 1px solid #e3e8f0;
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 .backup-tree__columns,
 .backup-tree__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 16.667% 25%;
+  grid-template-columns: minmax(0, 1fr) 130px 190px;
   align-items: center;
 }
 
 .backup-tree__columns {
+  min-height: 40px;
   padding: 8px 16px;
-  border-bottom: 1px solid #e3e8f0;
-  background: #f7f9fc;
+  border-bottom: 1px solid #dfe1e6;
+  background: #f2f5fc;
   font-weight: 600;
 }
 
 .backup-tree :deep(.q-tree__node-header) {
-  min-height: 32px;
+  min-height: 40px;
   padding-right: 16px;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.backup-tree :deep(.q-tree__node-header-content) {
+  flex: 1;
+  min-width: 0;
 }
 
 .backup-tree :deep(.q-tree__node-header:hover) {
@@ -1821,9 +1874,8 @@ onMounted(() => void reload());
 }
 
 @media (max-width: 720px) {
-  .backup-info-column + .backup-info-column {
-    border-top: 1px solid #eef1f5;
-    border-left: 0;
+  .backup-info-card__content {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .backup-tree__columns,
@@ -1832,8 +1884,19 @@ onMounted(() => void reload());
   }
 }
 
+.backup-task-form__panel {
+  padding: 24px;
+}
+
 .backup-task-form__section {
-  padding: 4px 8px 12px;
+  padding: 0 0 28px;
+}
+
+.backup-task-form__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
 }
 
 .backup-task-form__section-title {
@@ -1854,16 +1917,47 @@ onMounted(() => void reload());
   content: '';
 }
 
+.backup-task-form__panel .backup-task-form__section-title::before {
+  height: 16px;
+}
+
 .backup-task-form__fields {
-  margin-bottom: 4px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 30px;
+  row-gap: 8px;
+}
+
+.backup-task-form__field {
+  min-width: 0;
+}
+
+.backup-task-form__field--full {
+  grid-column: 1 / -1;
+}
+
+.backup-task-form__field .select-table,
+.backup-task-form__field .q-field {
+  width: 100%;
 }
 
 .backup-task-form__section--objects {
-  margin-top: 12px;
-  border: 1px solid #e3e7ee;
-  border-radius: 8px;
-  padding: 16px 20px 12px;
-  box-shadow: 0 0 1px #ccc;
+  border-top: 1px solid #e3e7ee;
+  padding-top: 28px;
+}
+
+.backup-task-form__section--objects .backup-task-form__section-title {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 600px) {
+  .backup-task-form__panel {
+    padding: 16px;
+  }
+
+  .backup-task-form__fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .backup-vm-picker__popup {
@@ -1885,28 +1979,52 @@ onMounted(() => void reload());
   max-width: calc(100% - 50px);
 }
 
+.backup-task-form__panel--advanced {
+  padding-bottom: 20px;
+}
+
+.backup-advanced-section .backup-task-form__section-title {
+  margin-bottom: 12px;
+}
+
 .advanced-settings-container {
-  max-height: 56vh;
-  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 28px;
+  row-gap: 4px;
 }
 
 .advanced-row {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) 2fr;
-  border-bottom: 1px solid #e0e0e0;
+  min-width: 0;
+  padding: 8px 0 14px;
+  /* border-bottom: 1px solid #e6ebf2; */
 }
 
-.advanced-row > div {
-  padding: 16px;
+.advanced-row :deep(.q-field--with-bottom) {
+  padding-bottom: 0;
 }
 
 .advanced-row > p {
-  margin: 0;
-  padding: 16px;
-  background: #f5f5f5;
-  color: #666;
+  margin: 4px 0 0;
+  color: #66758b;
   font-size: 12px;
-  line-height: 20px;
+  line-height: 1.5;
+}
+
+.advanced-row--checkbox > div {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+}
+
+.backup-advanced-note {
+  margin-top: 20px;
+  font-size: 12px;
+  padding: 12px 14px;
+  border-left: 3px solid #b9d2ee;
+  background: #f7f9fc;
+  color: #54657d;
+  line-height: 1.6;
 }
 
 .backup-task-form__hint {
@@ -1922,16 +2040,133 @@ onMounted(() => void reload());
   font-size: 18px !important;
 }
 
-.advanced-row:hover {
-  background: rgba(33, 150, 243, 0.04);
-}
-
 @media (max-width: 700px) {
-  .advanced-row {
-    grid-template-columns: 1fr;
+  .advanced-settings-container {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
+.backup-simulator__splitter {
+  height: 480px;
+}
+
+.backup-simulator__splitter :deep(.q-splitter__separator) {
+  background: #e3e8f0;
+}
+
+.backup-simulator__pane {
+  height: 100%;
+  padding: 24px;
+}
+
+.backup-simulator__title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #253248;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.backup-simulator__title::before {
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
+  background: var(--q-primary);
+  content: '';
+}
+
+.backup-simulator__pane--form .backup-simulator__title {
+  margin-bottom: 20px;
+}
+
+.backup-simulator__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.backup-simulator__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.backup-simulator__count {
+  color: #8593a8;
+}
+
+.backup-simulator__result-box {
+  overflow: hidden;
+  border: 1px solid #e3e8f0;
+  border-radius: 6px;
+}
+
+.backup-simulator__columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  background: #f2f5fc;
+  color: #63748d;
+}
+
+.backup-simulator__columns span:last-child {
+  text-align: right;
+}
+
+.backup-simulator__scroll {
+  height: 350px;
+}
+
+.backup-simulator__row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 100px;
+  align-items: center;
+  gap: 8px;
+  min-height: 58px;
+  padding: 0 16px;
+  border-bottom: 1px solid #e9edf3;
+}
+
+.backup-simulator__row:last-child {
+  border-bottom: 0;
+}
+
+.backup-simulator__index {
+  color: #9aa8ba;
+  font-variant-numeric: tabular-nums;
+}
+
+.backup-simulator__date {
+  min-width: 0;
+  color: #33445f;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.backup-simulator__weekday {
+  margin-left: 8px;
+  color: #8896aa;
+  font-weight: normal;
+}
+.backup-simulator__time {
+  color: var(--q-primary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.backup-simulator__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 350px;
+  color: #8993a5;
+}
 .detail-value {
   max-width: 470px;
   overflow-wrap: anywhere;

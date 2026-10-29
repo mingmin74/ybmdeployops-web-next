@@ -1299,6 +1299,7 @@ export function useCreateVmWizard(
   }
 
   function stepContentHeight(_stepName: string) {
+    void _stepName;
     return '466px';
   }
 

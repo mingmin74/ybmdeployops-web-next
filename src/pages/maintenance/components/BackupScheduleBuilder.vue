@@ -97,7 +97,9 @@ const datePreview = computed(() =>
         ? `${weekOptions.find((day) => day.value === form.rangeStart)?.label || ''} ${gettext('to')} ${weekOptions.find((day) => day.value === form.rangeEnd)?.label || ''}`
         : form.dateType === 'monthly'
           ? gettext('Monthly day {0}').replace('{0}', String(form.monthDay))
-          : gettext('Yearly date {0}/{1}').replace('{0}', `${form.yearMonth}/${form.yearDay}`),
+          : gettext('Yearly date {0}/{1}')
+              .replace('{0}', String(form.yearMonth))
+              .replace('{1}', String(form.yearDay)),
 );
 const previewText = computed(() =>
   !generatedValue.value
@@ -361,15 +363,12 @@ watch(
             /></div
         ></template>
         <div v-if="hintText" class="q-mb-sm text-caption text-orange-9">{{ hintText }}</div>
-        <div class="bg-grey-1 q-pa-sm u-border q-mt-sm">
-          <div class="row q-mb-xs">
-            <div class="col-3 text-grey-7">{{ gettext('Plan Preview') }}</div>
-            <div class="col">{{ previewText || '-' }}</div>
-          </div>
-          <div class="row">
-            <div class="col-3 text-grey-7">{{ gettext('Generated Value') }}</div>
-            <div class="col text-primary text-weight-medium">{{ generatedValue || '-' }}</div>
-          </div>
+        <div class="schedule-builder__preview">
+          <div class="schedule-builder__preview-label">{{ gettext('Plan Preview') }}</div>
+          <div class="schedule-builder__preview-description">{{ previewText || '-' }}</div>
+          <div class="schedule-builder__preview-divider"></div>
+          <div class="schedule-builder__preview-label">{{ gettext('Generated Value') }}</div>
+          <code class="schedule-builder__preview-code">{{ generatedValue || '-' }}</code>
         </div>
         <div v-if="errorText" class="text-negative q-mt-sm">{{ errorText }}</div>
       </div>
@@ -394,6 +393,47 @@ watch(
 .schedule-builder :deep(.q-field__bottom) {
   min-height: 0;
   padding: 0;
+}
+
+.schedule-builder__preview {
+  margin-top: 8px;
+  margin-bottom: 4px;
+  padding: 16px;
+  border: 1px solid #e6ebf2;
+  border-radius: 6px;
+  background: #f7f9fc;
+}
+
+.schedule-builder__preview-label {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.schedule-builder__preview-description {
+  margin-top: 6px;
+  color: #253248;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.schedule-builder__preview-divider {
+  margin: 14px 0;
+  border-top: 1px solid #e6ebf2;
+}
+
+.schedule-builder__preview-code {
+  display: inline-block;
+  max-width: 100%;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: #edf2f8;
+  color: #38658c;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 </style>
 <style>
