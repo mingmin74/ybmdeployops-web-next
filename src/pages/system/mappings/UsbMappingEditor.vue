@@ -104,8 +104,8 @@ watch(selectedNode, () => void loadDevices());
 if (selectedNode.value) void loadDevices();
 </script>
 <template>
-  <div class="q-pa-sm u-dense mapping-editor">
-    <div class="u-border q-pa-md">
+  <div class="u-dense mapping-editor">
+    <div class="mapping-editor__content">
       <div class="mapping-editor__form-grid">
         <div class="mapping-editor__form-cell">
           <q-input
@@ -158,64 +158,76 @@ if (selectedNode.value) void loadDevices();
       </div>
       <section
         v-if="!entryOnly"
-        class="mapping-editor__device-section q-mt-sm"
+        class="mapping-editor__device-section"
       >
-        <div class="mapping-editor__choice">
-          <q-radio
-            v-model="mode"
-            val="id"
-            dense
-            color="primary"
-            :label="gettext('Use USB Vendor/Device ID')"
-          />
-          <SelectTable
-            v-model="deviceValue"
-            class="q-field--with-bottom"
-            field-style="standard"
-            row-key="deviceKey"
-            :rows="rows"
-            :columns="columns"
-            :display-value="deviceValue"
-            :loading="loading"
-            :get-row-value="(row) => textValue(row.deviceKey)"
-            :disable="mode !== 'id'"
-            :label="gettext('Choose Device')"
-            @selected="selectedDevice"
-          />
-          <div
-            v-if="submitted && mode === 'id' && !deviceValue"
-            class="mapping-editor__validation-error"
-          >
-            {{ gettext('This field is required') }}
-          </div>
+        <div class="mapping-editor__section-heading">
+          <span class="mapping-editor__section-title">{{ gettext('USB Matching Method') }}</span>
+          <span class="mapping-editor__section-description">{{ gettext('Select a method') }}</span>
         </div>
-        <div class="mapping-editor__choice">
-          <q-radio
-            v-model="mode"
-            val="path"
-            dense
-            color="primary"
-            :label="gettext('Use USB Port')"
-          />
-          <SelectTable
-            v-model="pathValue"
-            class="q-field--with-bottom"
-            field-style="standard"
-            row-key="portKey"
-            :rows="rows"
-            :columns="columns"
-            :display-value="pathValue"
-            :loading="loading"
-            :get-row-value="(row) => textValue(row.portKey)"
-            :disable="mode !== 'path'"
-            :label="gettext('Choose Port')"
-            @selected="selectedDevice"
-          />
+        <div class="mapping-editor__choices">
           <div
-            v-if="submitted && mode === 'path' && !pathValue"
-            class="mapping-editor__validation-error"
+            class="mapping-editor__choice"
+            :class="{ 'mapping-editor__choice--active': mode === 'id' }"
           >
-            {{ gettext('This field is required') }}
+            <q-radio
+              v-model="mode"
+              val="id"
+              dense
+              color="primary"
+              :label="gettext('Use USB Vendor/Device ID')"
+            />
+            <SelectTable
+              v-model="deviceValue"
+              class="q-field--with-bottom"
+              field-style="standard"
+              row-key="deviceKey"
+              :rows="rows"
+              :columns="columns"
+              :display-value="deviceValue"
+              :loading="loading"
+              :get-row-value="(row) => textValue(row.deviceKey)"
+              :disable="mode !== 'id'"
+              :label="gettext('Choose Device')"
+              @selected="selectedDevice"
+            />
+            <div
+              v-if="submitted && mode === 'id' && !deviceValue"
+              class="mapping-editor__validation-error"
+            >
+              {{ gettext('This field is required') }}
+            </div>
+          </div>
+          <div
+            class="mapping-editor__choice"
+            :class="{ 'mapping-editor__choice--active': mode === 'path' }"
+          >
+            <q-radio
+              v-model="mode"
+              val="path"
+              dense
+              color="primary"
+              :label="gettext('Use USB Port')"
+            />
+            <SelectTable
+              v-model="pathValue"
+              class="q-field--with-bottom"
+              field-style="standard"
+              row-key="portKey"
+              :rows="rows"
+              :columns="columns"
+              :display-value="pathValue"
+              :loading="loading"
+              :get-row-value="(row) => textValue(row.portKey)"
+              :disable="mode !== 'path'"
+              :label="gettext('Choose Port')"
+              @selected="selectedDevice"
+            />
+            <div
+              v-if="submitted && mode === 'path' && !pathValue"
+              class="mapping-editor__validation-error"
+            >
+              {{ gettext('This field is required') }}
+            </div>
           </div>
         </div>
       </section>
@@ -224,9 +236,14 @@ if (selectedNode.value) void loadDevices();
 </template>
 
 <style scoped>
+.mapping-editor {
+  padding: 20px 24px 28px;
+}
+
 .mapping-editor__device-section {
-  padding-top: 8px;
-  border-top: 1px solid #dfe1e6;
+  margin-top: 20px;
+  /* padding-top: 24px;
+  border-top: 1px solid #dfe1e6; */
 }
 
 .mapping-editor__form-grid {
@@ -240,12 +257,59 @@ if (selectedNode.value) void loadDevices();
   grid-column: 1 / -1;
 }
 
-.mapping-editor__choice + .mapping-editor__choice {
-  margin-top: 0;
+.mapping-editor__section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 20px;
+}
+
+.mapping-editor__section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #333333;
+  font-weight: 600;
+}
+
+.mapping-editor__section-title::before {
+  content: '';
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
+  background: #1976d2;
+}
+
+.mapping-editor__section-description {
+  color: #666666;
+}
+
+.mapping-editor__choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.mapping-editor__choice {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #dfe1e6;
+  border-radius: 4px;
+}
+
+.mapping-editor__choice--active {
+  border-color: #9bc4f5;
+  background: #f5f8ff;
 }
 
 .mapping-editor__choice :deep(.q-radio) {
-  margin-bottom: 4px;
+  margin-bottom: 12px;
+}
+
+.mapping-editor__choice :deep(.select-table) {
+  width: 100%;
+  min-width: 0;
 }
 
 .mapping-editor__validation-error {
@@ -255,7 +319,12 @@ if (selectedNode.value) void loadDevices();
 }
 
 @media (max-width: 599px) {
-  .mapping-editor__form-grid {
+  .mapping-editor {
+    padding: 12px;
+  }
+
+  .mapping-editor__form-grid,
+  .mapping-editor__choices {
     grid-template-columns: minmax(0, 1fr);
   }
 

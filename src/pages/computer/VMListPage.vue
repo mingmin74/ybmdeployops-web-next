@@ -903,69 +903,72 @@ onBeforeUnmount(() => {
                 v-model="treeSearch"
                 dense
                 outlined
-                square
                 clearable
                 class="vm-tree-search"
                 :placeholder="gettext('Search')"
               >
                 <template #append><q-icon name="search" /></template>
               </q-input>
-              <q-tree
-                v-if="filteredTreeNodes.length"
-                v-model:selected="selectedTreeNode"
-                v-model:expanded="treeExpanded"
-                :nodes="filteredTreeNodes"
-                node-key="key"
-                label-key="label"
-                selected-color="primary"
-                @update:selected="onTreeSelection"
-              >
-                <template #default-header="scope">
-                  <div class="row items-center no-wrap vm-tree-node">
-                    <q-icon
-                      :name="
-                        scope.node.kind === 'node'
-                          ? 'dns'
-                          : scope.node.kind === 'category'
-                            ? 'folder'
-                            : scope.node.template
-                              ? 'article'
-                              : 'desktop_windows'
-                      "
-                      :color="
-                        scope.node.kind === 'node'
-                          ? 'primary'
-                          : scope.node.kind === 'category'
-                            ? 'grey-7'
-                            : statusColor(scope.node.status)
-                      "
-                      size="16px"
-                      class="q-mr-xs"
-                    />
-                    <span class="ellipsis">{{ scope.node.label }}</span>
-                  </div>
-                </template>
-              </q-tree>
-              <div
-                v-else
-                class="vm-tree-empty vm-tree-empty--search"
-              >
-                <q-icon
-                  name="search_off"
-                  size="20px"
-                />
-                <span>{{ gettext('No matching nodes') }}</span>
+              <div class="vm-tree-scroll">
+                <q-tree
+                  v-if="filteredTreeNodes.length"
+                  v-model:selected="selectedTreeNode"
+                  v-model:expanded="treeExpanded"
+                  :nodes="filteredTreeNodes"
+                  node-key="key"
+                  label-key="label"
+                  selected-color="primary"
+                  @update:selected="onTreeSelection"
+                >
+                  <template #default-header="scope">
+                    <div class="row items-center no-wrap vm-tree-node">
+                      <q-icon
+                        :name="
+                          scope.node.kind === 'node'
+                            ? 'dns'
+                            : scope.node.kind === 'category'
+                              ? 'folder'
+                              : scope.node.template
+                                ? 'article'
+                                : 'desktop_windows'
+                        "
+                        :color="
+                          scope.node.kind === 'node'
+                            ? 'primary'
+                            : scope.node.kind === 'category'
+                              ? 'grey-7'
+                              : statusColor(scope.node.status)
+                        "
+                        size="16px"
+                        class="q-mr-xs"
+                      />
+                      <span class="ellipsis">{{ scope.node.label }}</span>
+                    </div>
+                  </template>
+                </q-tree>
+                <div
+                  v-else
+                  class="vm-tree-empty vm-tree-empty--search"
+                >
+                  <q-icon
+                    name="search_off"
+                    size="20px"
+                  />
+                  <span>{{ gettext('No matching nodes') }}</span>
+                </div>
               </div>
             </template>
             <div
               v-else
-              class="vm-tree-empty"
+              class="vm-tree-scroll"
             >
-              <q-icon
-                name="dns"
-                size="24px"
-              />
-              <span>{{ gettext('No nodes available') }}</span>
+              <div class="vm-tree-empty">
+                <q-icon
+                  name="dns"
+                  size="24px"
+                />
+                <span>{{ gettext('No nodes available') }}</span>
+              </div>
             </div>
           </aside>
 
@@ -1730,16 +1733,28 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   width: calc(var(--vm-resource-tree-width) + 13px);
   flex: 0 0 calc(var(--vm-resource-tree-width) + 13px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   max-height: calc(100vh - 152px);
   padding-right: 12px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   border-right: 1px solid #cccccc;
 }
 
 .vm-tree-search,
-.vm-resource-tree :deep(.q-tree) {
+.vm-resource-tree :deep(.q-tree),
+.vm-tree-scroll {
   width: 100%;
+}
+.vm-tree-search {
+  flex: 0 0 auto;
+}
+.vm-tree-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .vm-tree-title {

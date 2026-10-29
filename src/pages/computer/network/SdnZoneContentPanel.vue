@@ -60,10 +60,19 @@ watch(
 </script>
 
 <template>
-  <div class="row q-col-gutter-md">
-    <div class="col-6">
-      <div class="vnet-panel__title text-subtitle2">
-        {{ gettext('VNets') }}
+  <div class="network-panels">
+    <section class="network-panel">
+      <div class="network-panel__heading">
+        <div class="network-panel__title text-subtitle2">{{ gettext('VNets') }}</div>
+        <q-btn
+          no-caps
+          outline
+          size="12px"
+          color="primary"
+          class="u-button"
+          :label="gettext('Refresh')"
+          @click="load"
+        />
       </div>
       <q-table
         v-model:selected="selected"
@@ -77,37 +86,17 @@ watch(
         :rows-per-page-options="[0]"
         hide-pagination
         :no-data-label="gettext('no record can be found')"
-      >
-        <template #top>
-          <q-space />
-          <q-btn
-            no-caps
-            outline
-            size="12px"
-            color="primary"
-            class="u-button"
-            :label="gettext('Refresh')"
-            @click="load"
-          />
-        </template>
-      </q-table>
-    </div>
-    <div class="col-6">
-      <div class="vnet-panel__title text-subtitle2">
-        {{ gettext('VNet Permissions') }}
+      />
+    </section>
+    <section class="network-panel">
+      <div class="network-panel__heading">
+        <div class="network-panel__title text-subtitle2">{{ gettext('VNet Permissions') }}</div>
       </div>
       <RulesPage
         :resource-path="permissionPath"
         vnet-acl
         :inactive="!permissionPath"
       />
-    </div>
+    </section>
   </div>
 </template>
-
-<style scoped>
-.vnet-panel__title {
-  min-height: 40px;
-  padding: 12px 16px;
-}
-</style>

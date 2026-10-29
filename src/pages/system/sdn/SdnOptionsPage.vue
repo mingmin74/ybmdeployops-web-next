@@ -91,8 +91,8 @@ const ipamColumns: QTableColumn<PveRecord>[] = [
     label: gettext('Type'),
     align: 'left',
     field: (row) =>
-      ({ netbox: 'Netbox', phpipam: 'PhpIpam', pve: 'PVE' }[textValue(row.type)] ||
-      displayValue(row.type)),
+      ({ netbox: 'Netbox', phpipam: 'PhpIpam', pve: 'PVE' })[textValue(row.type)] ||
+      displayValue(row.type),
     sortable: true,
   },
   {
@@ -193,8 +193,8 @@ function removeSelected(section: Section) {
     section === 'controllers'
       ? deleteSdnController
       : section === 'ipams'
-      ? deleteSdnIpam
-      : deleteSdnDns;
+        ? deleteSdnIpam
+        : deleteSdnDns;
   Dialog.create({
     title: gettext('Confirm'),
     message: gettext('Are you sure to delete [%s]?').replace('%s', id),
@@ -205,202 +205,210 @@ function removeSelected(section: Section) {
 onMounted(() => void refreshData());
 </script>
 <template>
-  <div class="q-pa-md q-ma-md bg-white">
-    <q-table
-      flat
-      row-key="controller"
-      table-header-class="u-table-header"
-      selection="single"
-      :rows="controllers"
-      :columns="controllerColumns"
-      :selected="selected.controllers"
-      :loading="loading"
-      :pagination="{ page: 1, rowsPerPage: 5 }"
-      :rows-per-page-options="[5]"
-      @row-dblclick="(_, row) => editController(row)"
-      @update:selected="selected.controllers = [...$event]"
-    >
-      <template #top>
-        <div class="text-subtitle2">{{ gettext('Controller') }}</div>
-        <q-space />
-        <q-btn-dropdown
-          no-caps
-          outline
-          size="12px"
-          color="primary"
-          class="u-button"
-          :label="gettext('Add')"
-        >
-          <q-list dense>
-            <q-item
-              v-close-popup
-              clickable
-              @click="addController('evpn')"
-            >
-              <q-item-section>EVPN</q-item-section>
-            </q-item>
-            <q-item
-              v-close-popup
-              clickable
-              @click="addController('bgp')"
-            >
-              <q-item-section>BGP</q-item-section>
-            </q-item>
-            <q-item
-              v-close-popup
-              clickable
-              @click="addController('isis')"
-            >
-              <q-item-section>ISIS</q-item-section>
-            </q-item>
-          </q-list>
-        </q-btn-dropdown>
-        <q-btn
-          no-caps
-          outline
-          size="12px"
-          color="primary"
-          class="u-button q-ml-sm"
-          :disable="selected.controllers.length !== 1"
-          :label="gettext('Edit')"
-          @click="editController()"
-        />
-        <q-btn
-          no-caps
-          outline
-          size="12px"
-          :color="selected.controllers.length !== 1 ? 'grey' : 'red'"
-          class="u-button q-ml-sm"
-          :disable="selected.controllers.length !== 1"
-          :label="gettext('Remove')"
-          @click="removeSelected('controllers')"
-        />
-      </template>
-    </q-table>
-    <q-table
-      flat
-      row-key="ipam"
-      table-header-class="u-table-header"
-      selection="single"
-      :rows="ipams"
-      :columns="ipamColumns"
-      :selected="selected.ipams"
-      :loading="loading"
-      :pagination="{ page: 1, rowsPerPage: 5 }"
-      :rows-per-page-options="[5]"
-      @row-dblclick="(_, row) => editIpam(row)"
-      @update:selected="selected.ipams = [...$event]"
-    >
-      <template #top>
-        <div class="text-subtitle2">IPAM</div>
-        <q-space />
-        <q-btn-dropdown
-          no-caps
-          outline
-          size="12px"
-          color="primary"
-          class="u-button"
-          :label="gettext('Add')"
-        >
-          <q-list dense>
-            <q-item
-              v-close-popup
-              clickable
-              @click="addIpam('netbox')"
-            >
-              <q-item-section>Netbox</q-item-section>
-            </q-item>
-            <q-item
-              v-close-popup
-              clickable
-              @click="addIpam('phpipam')"
-            >
-              <q-item-section>PhpIpam</q-item-section>
-            </q-item>
-          </q-list>
-        </q-btn-dropdown>
-        <q-btn
-          no-caps
-          outline
-          size="12px"
-          color="primary"
-          class="u-button q-ml-sm"
-          :disable="
-            selected.ipams.length !== 1 ||
-            !['netbox', 'phpipam', 'pve'].includes(textValue(selected.ipams[0]?.type).toLowerCase())
-          "
-          :label="gettext('Edit')"
-          @click="editIpam()"
-        />
-        <q-btn
-          no-caps
-          outline
-          size="12px"
-          :color="selected.ipams.length !== 1 ? 'grey' : 'red'"
-          class="u-button q-ml-sm"
-          :disable="selected.ipams.length !== 1"
-          :label="gettext('Remove')"
-          @click="removeSelected('ipams')"
-        />
-      </template>
-    </q-table>
-    <q-table
-      flat
-      row-key="dns"
-      table-header-class="u-table-header"
-      selection="single"
-      :rows="dnsRows"
-      :columns="dnsColumns"
-      :selected="selected.dns"
-      :loading="loading"
-      :pagination="{ page: 1, rowsPerPage: 5 }"
-      :rows-per-page-options="[5]"
-      @row-dblclick="(_, row) => editDns(row)"
-      @update:selected="selected.dns = [...$event]"
-    >
-      <template #top>
-        <div class="text-subtitle2">DNS</div>
-        <q-space />
-        <q-btn-dropdown
-          no-caps
-          outline
-          size="12px"
-          color="primary"
-          class="u-button"
-          :label="gettext('Add')"
-        >
-          <q-list dense>
-            <q-item
-              v-close-popup
-              clickable
-              @click="addDns"
-            >
-              <q-item-section>PowerDNS</q-item-section>
-            </q-item>
-          </q-list>
-        </q-btn-dropdown>
-        <q-btn
-          no-caps
-          outline
-          size="12px"
-          color="primary"
-          class="u-button q-ml-sm"
-          :disable="selected.dns.length !== 1"
-          :label="gettext('Edit')"
-          @click="editDns()"
-        />
-        <q-btn
-          no-caps
-          outline
-          size="12px"
-          :color="selected.dns.length !== 1 ? 'grey' : 'red'"
-          class="u-button q-ml-sm"
-          :disable="selected.dns.length !== 1"
-          :label="gettext('Remove')"
-          @click="removeSelected('dns')"
-        />
-      </template>
-    </q-table>
+  <div class="sdn-options-page">
+    <section class="sdn-options-card">
+      <q-table
+        flat
+        row-key="controller"
+        table-header-class="u-table-header"
+        selection="single"
+        :rows="controllers"
+        :columns="controllerColumns"
+        :selected="selected.controllers"
+        :loading="loading"
+        :pagination="{ page: 1, rowsPerPage: 5 }"
+        :rows-per-page-options="[5]"
+        @row-dblclick="(_, row) => editController(row)"
+        @update:selected="selected.controllers = [...$event]"
+      >
+        <template #top>
+          <div class="sdn-options-card__title text-subtitle2">{{ gettext('Controller') }}</div>
+          <q-space />
+          <q-btn-dropdown
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Add')"
+          >
+            <q-list dense>
+              <q-item
+                v-close-popup
+                clickable
+                @click="addController('evpn')"
+              >
+                <q-item-section>EVPN</q-item-section>
+              </q-item>
+              <q-item
+                v-close-popup
+                clickable
+                @click="addController('bgp')"
+              >
+                <q-item-section>BGP</q-item-section>
+              </q-item>
+              <q-item
+                v-close-popup
+                clickable
+                @click="addController('isis')"
+              >
+                <q-item-section>ISIS</q-item-section>
+              </q-item>
+            </q-list>
+          </q-btn-dropdown>
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button q-ml-sm"
+            :disable="selected.controllers.length !== 1"
+            :label="gettext('Edit')"
+            @click="editController()"
+          />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            :color="selected.controllers.length !== 1 ? 'grey' : 'red'"
+            class="u-button q-ml-sm"
+            :disable="selected.controllers.length !== 1"
+            :label="gettext('Remove')"
+            @click="removeSelected('controllers')"
+          />
+        </template>
+      </q-table>
+    </section>
+    <section class="sdn-options-card">
+      <q-table
+        flat
+        row-key="ipam"
+        table-header-class="u-table-header"
+        selection="single"
+        :rows="ipams"
+        :columns="ipamColumns"
+        :selected="selected.ipams"
+        :loading="loading"
+        :pagination="{ page: 1, rowsPerPage: 5 }"
+        :rows-per-page-options="[5]"
+        @row-dblclick="(_, row) => editIpam(row)"
+        @update:selected="selected.ipams = [...$event]"
+      >
+        <template #top>
+          <div class="sdn-options-card__title text-subtitle2">IPAM</div>
+          <q-space />
+          <q-btn-dropdown
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Add')"
+          >
+            <q-list dense>
+              <q-item
+                v-close-popup
+                clickable
+                @click="addIpam('netbox')"
+              >
+                <q-item-section>Netbox</q-item-section>
+              </q-item>
+              <q-item
+                v-close-popup
+                clickable
+                @click="addIpam('phpipam')"
+              >
+                <q-item-section>PhpIpam</q-item-section>
+              </q-item>
+            </q-list>
+          </q-btn-dropdown>
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button q-ml-sm"
+            :disable="
+              selected.ipams.length !== 1 ||
+              !['netbox', 'phpipam', 'pve'].includes(
+                textValue(selected.ipams[0]?.type).toLowerCase()
+              )
+            "
+            :label="gettext('Edit')"
+            @click="editIpam()"
+          />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            :color="selected.ipams.length !== 1 ? 'grey' : 'red'"
+            class="u-button q-ml-sm"
+            :disable="selected.ipams.length !== 1"
+            :label="gettext('Remove')"
+            @click="removeSelected('ipams')"
+          />
+        </template>
+      </q-table>
+    </section>
+    <section class="sdn-options-card">
+      <q-table
+        flat
+        row-key="dns"
+        table-header-class="u-table-header"
+        selection="single"
+        :rows="dnsRows"
+        :columns="dnsColumns"
+        :selected="selected.dns"
+        :loading="loading"
+        :pagination="{ page: 1, rowsPerPage: 5 }"
+        :rows-per-page-options="[5]"
+        @row-dblclick="(_, row) => editDns(row)"
+        @update:selected="selected.dns = [...$event]"
+      >
+        <template #top>
+          <div class="sdn-options-card__title text-subtitle2">DNS</div>
+          <q-space />
+          <q-btn-dropdown
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button"
+            :label="gettext('Add')"
+          >
+            <q-list dense>
+              <q-item
+                v-close-popup
+                clickable
+                @click="addDns"
+              >
+                <q-item-section>PowerDNS</q-item-section>
+              </q-item>
+            </q-list>
+          </q-btn-dropdown>
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            color="primary"
+            class="u-button q-ml-sm"
+            :disable="selected.dns.length !== 1"
+            :label="gettext('Edit')"
+            @click="editDns()"
+          />
+          <q-btn
+            no-caps
+            outline
+            size="12px"
+            :color="selected.dns.length !== 1 ? 'grey' : 'red'"
+            class="u-button q-ml-sm"
+            :disable="selected.dns.length !== 1"
+            :label="gettext('Remove')"
+            @click="removeSelected('dns')"
+          />
+        </template>
+      </q-table>
+    </section>
 
     <ControllerEditor
       v-model="controllerEditorVisible"
@@ -423,8 +431,37 @@ onMounted(() => void refreshData());
 </template>
 
 <style scoped>
-.sdn-page {
+.sdn-options-page {
+  display: grid;
+  gap: 16px;
   margin: 16px;
-  background: #fff;
+}
+
+.sdn-options-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #dfe1e6;
+  background: #ffffff;
+}
+
+.sdn-options-card__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #333333;
+  font-weight: 600;
+}
+
+.sdn-options-card__title::before {
+  content: '';
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
+  background: #1976d2;
+}
+
+.sdn-options-card :deep(.q-table__top) {
+  flex-wrap: wrap;
+  gap: 8px;
 }
 </style>

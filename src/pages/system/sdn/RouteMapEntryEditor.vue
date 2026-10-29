@@ -31,6 +31,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ saved: [] }>();
 const loading = ref(false);
+const submitted = ref(false);
 const prefixListsLoading = ref(false);
 const prefixListOptions = ref<{ label: string; value: string }[]>([]);
 
@@ -236,6 +237,7 @@ onMounted(() => void loadPrefixLists());
 
 watch(visible, async (open) => {
   if (!open) return;
+  submitted.value = false;
   reset();
   void loadPrefixLists();
   if (!isCreate.value && props.routeMapId !== undefined && props.order !== undefined) {
@@ -297,6 +299,7 @@ function validateActions(kind: 'match' | 'set'): boolean {
 }
 
 async function save() {
+  submitted.value = true;
   if (!form.routeMapId.trim()) return;
   if (!form.order || Number(form.order) < 1 || Number(form.order) > 65535) return;
   if (
@@ -319,16 +322,20 @@ async function save() {
   <q-dialog
     v-model="visible"
     persistent
+    transition-show="scale"
+    transition-hide="scale"
   >
     <UWindow
       :title="`${isCreate ? gettext('Add') : gettext('Edit')}: ${gettext('Route Map Entry')}`"
-      width="820px"
+      width="1000px"
+      icon="route"
       :loading="loading"
     >
-      <div class="q-pa-sm u-dense">
-        <div class="u-border q-pa-md">
-          <div class="row q-col-gutter-lg">
-            <div class="col">
+      <div class="route-map-editor u-dense">
+        <div class="route-map-editor__content">
+          <div class="route-map-editor__section-title">{{ gettext('Basic Settings') }}</div>
+          <div class="route-map-editor__basic-grid">
+            <div class="route-map-editor__basic-group">
               <q-select
                 v-model="form.routeMapId"
                 dense
@@ -339,7 +346,7 @@ async function save() {
                 options-dense
                 class="q-field--with-bottom"
                 :label="isCreate ? `${gettext('Route Map ID')} *` : gettext('Route Map ID')"
-                :error="!form.routeMapId"
+                :error="submitted && !form.routeMapId"
                 :error-message="gettext('This field is required')"
               />
               <q-input
@@ -351,7 +358,9 @@ async function save() {
                 :disable="!isCreate"
                 class="q-field--with-bottom"
                 :label="isCreate ? `${gettext('Order')} *` : gettext('Order')"
-                :error="!form.order || Number(form.order) < 1 || Number(form.order) > 65535"
+                :error="
+                  submitted && (!form.order || Number(form.order) < 1 || Number(form.order) > 65535)
+                "
                 :error-message="gettext('Value must be 1-65535')"
               />
               <q-select
@@ -368,7 +377,7 @@ async function save() {
                 :label="gettext('Action')"
               />
             </div>
-            <div class="col">
+            <div class="route-map-editor__basic-group">
               <q-select
                 v-model="form.call"
                 dense
@@ -388,7 +397,7 @@ async function save() {
                 options-dense
                 class="q-field--with-bottom"
                 :options="[
-                  { label: `${gettext('Default')} (exit)`, value: '__default__' },
+                  { label: gettext('Default (exit)'), value: '__default__' },
                   { label: gettext('On match next'), value: 'on-match-next' },
                   { label: gettext('On match goto'), value: 'on-match-goto' },
                   { label: gettext('Continue'), value: 'continue' },
@@ -405,7 +414,8 @@ async function save() {
                 class="q-field--with-bottom"
                 :label="`${gettext('Target order')} *`"
                 :error="
-                  !form.exitOrder || Number(form.exitOrder) < 1 || Number(form.exitOrder) > 65535
+                  submitted &&
+                  (!form.exitOrder || Number(form.exitOrder) < 1 || Number(form.exitOrder) > 65535)
                 "
                 :error-message="gettext('Value must be 1-65535')"
               />
@@ -414,15 +424,33 @@ async function save() {
           <div
             v-for="kind in ['match', 'set'] as const"
             :key="kind"
-            class="q-mt-md"
+            class="route-map-editor__rule-section"
           >
-            <div class="text-subtitle2 q-mb-sm">
-              {{ gettext(kind === 'match' ? 'Match' : 'Set') }}
+            <div class="route-map-editor__rule-heading">
+              <div class="route-map-editor__rule-title">
+                <span class="route-map-editor__section-title">
+                  {{ gettext(kind === 'match' ? 'Match' : 'Set') }}
+                </span>
+                <span class="route-map-editor__count">
+                  {{ form[kind].length }} {{ gettext('items') }}
+                </span>
+              </div>
+              <q-btn
+                no-caps
+                outline
+                size="12px"
+                color="primary"
+                icon="add"
+                class="u-button"
+                :label="gettext(kind === 'match' ? 'Add match condition' : 'Add set action')"
+                @click="add(kind)"
+              />
             </div>
             <q-markup-table
               flat
               bordered
               dense
+              class="route-map-editor__rule-table"
             >
               <thead>
                 <tr>
@@ -468,11 +496,20 @@ async function save() {
                           map-options
                           clearable
                           :loading="
-                            (matchValueConfig(item.key) as Extract<MatchValueConfig, { kind: 'select' }>).optionsSource === 'prefixLists' &&
-                            prefixListsLoading
+                            (
+                              matchValueConfig(item.key) as Extract<
+                                MatchValueConfig,
+                                { kind: 'select' }
+                              >
+                            ).optionsSource === 'prefixLists' && prefixListsLoading
                           "
                           :options="
-                            (matchValueConfig(item.key) as Extract<MatchValueConfig, { kind: 'select' }>).optionsSource === 'prefixLists'
+                            (
+                              matchValueConfig(item.key) as Extract<
+                                MatchValueConfig,
+                                { kind: 'select' }
+                              >
+                            ).optionsSource === 'prefixLists'
                               ? prefixListOptions
                               : (
                                   matchValueConfig(item.key) as Extract<
@@ -587,28 +624,36 @@ async function save() {
                 <tr v-if="!form[kind].length">
                   <td
                     colspan="3"
-                    class="text-grey-7"
+                    class="route-map-editor__empty-cell"
                   >
-                    {{
-                      gettext(
-                        kind === 'match'
-                          ? 'No match actions configured.'
-                          : 'No set actions configured.'
-                      )
-                    }}
+                    <div class="route-map-editor__empty">
+                      <q-icon
+                        :name="kind === 'match' ? 'filter_alt' : 'format_list_bulleted'"
+                        size="28px"
+                      />
+                      <div>
+                        {{
+                          gettext(
+                            kind === 'match'
+                              ? 'No match actions configured.'
+                              : 'No set actions configured.'
+                          )
+                        }}
+                      </div>
+                      <div class="route-map-editor__empty-hint">
+                        {{
+                          gettext(
+                            kind === 'match'
+                              ? 'Add conditions to define matching rules for this entry.'
+                              : 'Add actions to configure this Route Map entry.'
+                          )
+                        }}
+                      </div>
+                    </div>
                   </td>
                 </tr>
               </tbody>
             </q-markup-table>
-            <q-btn
-              no-caps
-              outline
-              size="12px"
-              color="primary"
-              class="u-button q-mt-sm"
-              :label="gettext('Add')"
-              @click="add(kind)"
-            />
           </div>
         </div>
       </div>
@@ -634,7 +679,115 @@ async function save() {
   </q-dialog>
 </template>
 <style scoped>
+.route-map-editor {
+  padding: 20px 24px 24px;
+}
+
+.route-map-editor__section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #333333;
+  font-weight: 600;
+}
+
+.route-map-editor__section-title::before {
+  content: '';
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
+  background: #1976d2;
+}
+
+.route-map-editor__basic-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 24px;
+  margin-top: 16px;
+}
+
+.route-map-editor__basic-group {
+  display: contents;
+}
+
+.route-map-editor__rule-section {
+  margin-top: 24px;
+}
+
+.route-map-editor__basic-grid + .route-map-editor__rule-section {
+  padding-top: 20px;
+  border-top: 1px solid #dfe1e6;
+}
+
+.route-map-editor__rule-heading,
+.route-map-editor__rule-title {
+  display: flex;
+  align-items: center;
+}
+
+.route-map-editor__rule-heading {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.route-map-editor__rule-title {
+  gap: 12px;
+}
+
+.route-map-editor__count,
+.route-map-editor__empty-hint {
+  color: #77859a;
+}
+
+.route-map-editor__rule-table {
+  max-height: 240px;
+  border-color: #dfe1e6;
+}
+
+.route-map-editor__rule-table :deep(thead th) {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f2f5fc;
+}
+
+.route-map-editor__empty-cell {
+  background: #f8faff;
+}
+
+.route-map-editor__empty {
+  display: flex;
+  min-height: 112px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #667085;
+}
+
 .route-map-actions {
   width: 42px;
+}
+
+@media (max-width: 760px) {
+  .route-map-editor__basic-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 540px) {
+  .route-map-editor {
+    padding: 12px;
+  }
+
+  .route-map-editor__basic-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .route-map-editor__rule-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

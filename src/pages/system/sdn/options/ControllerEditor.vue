@@ -19,7 +19,7 @@ const nodes = shallowRef<{ label: string; value: string }[]>([]);
 const routeMaps = shallowRef<{ label: string; value: string }[]>([]);
 const fabrics = shallowRef<{ label: string; value: string }[]>([]);
 const isCreate = computed(() => !props.controllerId);
-const typeLabel = computed(() => ({ evpn: 'EVPN', bgp: 'BGP', isis: 'ISIS' }[props.type]));
+const typeLabel = computed(() => ({ evpn: 'EVPN', bgp: 'BGP', isis: 'ISIS' })[props.type]);
 const form = reactive({
   controller: '',
   node: '',
@@ -189,8 +189,7 @@ async function save() {
       width="680px"
       :loading="loading"
     >
-      <div class="q-pa-sm
-       u-dense">
+      <div class="q-pa-sm u-dense">
         <div class="u-border q-pa-md">
           <div class="row q-col-gutter-lg">
             <div class="col-6">
@@ -202,7 +201,9 @@ async function save() {
                 :disable="!isCreate"
                 maxlength="8"
                 :label="isCreate ? 'ID *' : 'ID'"
-                :error="submitted && isCreate && (!form.controller.trim() || form.controller.length > 8)"
+                :error="
+                  submitted && isCreate && (!form.controller.trim() || form.controller.length > 8)
+                "
                 :error-message="gettext('This field is required (max 8 characters)')"
               />
               <q-select
@@ -240,7 +241,7 @@ async function save() {
                 map-options
                 class="q-field--with-bottom"
                 :options="fabrics"
-                label="SDN Fabric"
+                :label="gettext('SDN Fabric')"
                 :placeholder="gettext('used as underlay network')"
               />
               <q-input
@@ -257,7 +258,7 @@ async function save() {
                 v-model="form['isis-domain']"
                 dense
                 class="q-field--with-bottom"
-                label="Domain *"
+                :label="`${gettext('Domain')} *`"
                 :error="submitted && !form['isis-domain'].trim()"
                 :error-message="gettext('This field is required')"
               />
@@ -286,7 +287,7 @@ async function save() {
                 v-model="form['isis-net']"
                 dense
                 class="q-field--with-bottom"
-                label="Network entity title *"
+                :label="`${gettext('Network entity title')} *`"
                 :error="submitted && !form['isis-net'].trim()"
                 :error-message="gettext('This field is required')"
               />
@@ -379,7 +380,7 @@ async function save() {
                   v-if="type === 'bgp'"
                   v-model="form['bgp-multipath-as-path-relax']"
                   dense
-                  label="BGP Multipath AS Path Relax"
+                  :label="gettext('BGP Multipath AS Path Relax')"
                 />
               </div>
             </div>

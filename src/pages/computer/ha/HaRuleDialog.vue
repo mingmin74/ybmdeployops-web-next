@@ -232,8 +232,8 @@ watch(
               map-options
               class="col-6 q-field--with-bottom"
               :options="[
-                { label: `${gettext('Prefer Nodes')} (positive)`, value: 'positive' },
-                { label: `${gettext('Avoid Nodes')} (negative)`, value: 'negative' },
+                { label: gettext('Prefer Nodes (positive)'), value: 'positive' },
+                { label: gettext('Avoid Nodes (negative)'), value: 'negative' },
               ]"
               :label="gettext('Affinity')"
             />
@@ -285,8 +285,8 @@ watch(
           map-options
           class="q-field--with-bottom"
           :options="[
-            { label: `${gettext('Keep Together')} (positive)`, value: 'positive' },
-            { label: `${gettext('Keep Separate')} (negative)`, value: 'negative' },
+            { label: gettext('Keep Together (positive)'), value: 'positive' },
+            { label: gettext('Keep Separate (negative)'), value: 'negative' },
           ]"
           :label="gettext('Affinity')"
         />

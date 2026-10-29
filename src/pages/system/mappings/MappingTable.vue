@@ -793,8 +793,8 @@ onMounted(() => {
       :title="`${resourceEditMode === 'create' ? gettext('Add') : gettext('Edit')}: ${gettext(
         title
       )}`"
-      :width="kind === 'pci' ? '960px' : '800px'"
-      :icon="kind === 'pci' ? 'device_hub' : ''"
+      width="960px"
+      :icon="kind === 'pci' ? 'device_hub' : 'usb'"
       :loading="saving"
     >
       <PciMappingEditor

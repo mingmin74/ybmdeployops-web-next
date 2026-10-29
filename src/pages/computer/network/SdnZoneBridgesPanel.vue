@@ -80,13 +80,10 @@ watch(
 </script>
 
 <template>
-  <div class="row q-col-gutter-md">
-    <div class="col-6">
-      <div class="bridge-panel__title text-subtitle2">
-        {{ gettext('Bridges') }}
-      </div>
-      <div class="bridge-panel__toolbar">
-        <q-space />
+  <div class="network-panels">
+    <section class="network-panel">
+      <div class="network-panel__heading">
+        <div class="network-panel__title text-subtitle2">{{ gettext('Bridges') }}</div>
         <q-btn
           no-caps
           outline
@@ -110,12 +107,11 @@ watch(
         hide-pagination
         :no-data-label="gettext('no record can be found')"
       />
-    </div>
-    <div class="col-6">
-      <div class="bridge-panel__title text-subtitle2">
-        {{ gettext('Bridge Ports') }}
+    </section>
+    <section class="network-panel">
+      <div class="network-panel__heading">
+        <div class="network-panel__title text-subtitle2">{{ gettext('Bridge Ports') }}</div>
       </div>
-      <div class="bridge-panel__toolbar" />
       <q-table
         flat
         row-key="index"
@@ -127,23 +123,11 @@ watch(
         hide-pagination
         :no-data-label="gettext('no record can be found')"
       />
-    </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.bridge-panel__title {
-  min-height: 40px;
-  padding: 12px 16px;
-}
-
-.bridge-panel__toolbar {
-  align-items: center;
-  display: flex;
-  min-height: 40px;
-  padding: 6px 0;
-}
-
 .bridge-ports-table :deep(.q-table__middle) {
   height: 360px;
   overflow-y: auto;
