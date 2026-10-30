@@ -69,13 +69,8 @@ const props = withDefaults(
 }
 .u-window-close {
   flex: 0 0 auto;
-  background: transparent !important;
-  color: #ffffff;
-  opacity: 0.92;
-}
-.u-window-close:hover,
-.u-window-close:focus-visible {
   background: rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff;
   opacity: 1;
 }
 </style>

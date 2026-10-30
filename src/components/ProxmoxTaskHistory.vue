@@ -703,12 +703,16 @@ watch(
 }
 
 .task-filter-field {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
   gap: 8px;
 }
 
 .task-filter-label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 28px;
   color: #666;
   flex: 0 0 72px;
   font-size: 12px;

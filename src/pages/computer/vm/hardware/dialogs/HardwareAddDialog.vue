@@ -932,13 +932,18 @@ async function addDevice() {
   <q-dialog
     v-model="visible"
     persistent
+    transition-show="scale"
+    transition-hide="scale"
   >
     <UWindow
       :title="addTitle"
-      width="600px"
+      :width="form.kind === 'disk' ? 'min(920px, calc(100vw - 32px))' : '600px'"
       :loading="loading"
     >
-      <div class="q-pa-sm q-gutter-md hardware-add-content">
+      <div
+        class="hardware-add-content"
+        :class="form.kind === 'disk' ? 'hardware-add-content--disk' : 'q-pa-sm q-gutter-md'"
+      >
         <AddDiskForm
           v-if="form.kind === 'disk'"
           :key="addDiskFormKey"
@@ -1021,7 +1026,8 @@ async function addDevice() {
             <q-btn
               v-close-popup
               no-caps
-              flat
+              :flat="form.kind !== 'disk'"
+              :outline="form.kind === 'disk'"
               size="12px"
               class="u-button"
               :label="gettext('Cancel')"

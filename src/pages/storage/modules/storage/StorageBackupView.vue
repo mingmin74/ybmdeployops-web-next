@@ -641,18 +641,16 @@ watch(
         <div class="row q-col-gutter-md">
           <q-input
             v-model="restoreForm.vmid"
-            class="col-6"
+            class="col-6 q-field--with-bottom"
             dense
-            outlined
             type="number"
             min="100"
             :label="guestType === 'lxc' ? gettext('CT ID') : gettext('VM ID')"
           />
           <q-input
             v-model="restoreForm.name"
-            class="col-6"
+            class="col-6 q-field--with-bottom"
             dense
-            outlined
             :placeholder="restorePlaceholders.name"
             :label="guestType === 'lxc' ? gettext('Hostname') : gettext('Name')"
             :error="!validRestoreName"
@@ -660,9 +658,9 @@ watch(
           />
           <q-select
             v-model="restoreForm.storage"
-            class="col-12"
+            class="col-12 q-field--with-bottom"
             dense
-            outlined
+            options-dense
             emit-value
             map-options
             :clearable="guestType !== 'lxc'"
@@ -676,9 +674,8 @@ watch(
           />
           <q-input
             v-model="restoreForm.cores"
-            class="col-4"
+            class="col-4 q-field--with-bottom"
             dense
-            outlined
             type="number"
             min="1"
             max="128"
@@ -688,9 +685,8 @@ watch(
           <q-input
             v-if="guestType === 'qemu'"
             v-model="restoreForm.sockets"
-            class="col-4"
+            class="col-4 q-field--with-bottom"
             dense
-            outlined
             type="number"
             min="1"
             max="4"
@@ -699,9 +695,9 @@ watch(
           />
           <q-input
             v-model="restoreForm.memory"
+            class="q-field--with-bottom"
             :class="guestType === 'qemu' ? 'col-4' : 'col-8'"
             dense
-            outlined
             type="number"
             min="16"
             :placeholder="restorePlaceholders.memory"
@@ -709,9 +705,8 @@ watch(
           />
           <q-input
             v-model="restoreForm.bwlimit"
-            class="col-6"
+            class="col-6 q-field--with-bottom"
             dense
-            outlined
             type="number"
             min="0"
             :label="gettext('Bandwidth Limit (KiB/s)')"
@@ -719,9 +714,9 @@ watch(
           <q-select
             v-if="guestType === 'lxc'"
             v-model="restoreForm.unprivileged"
-            class="col-6"
+            class="col-6 q-field--with-bottom"
             dense
-            outlined
+            options-dense
             emit-value
             map-options
             :label="gettext('Privilege Level')"
@@ -735,6 +730,8 @@ watch(
             <q-checkbox
               v-model="restoreForm.unique"
               dense
+              right-label
+              color="primary"
               :label="gettext('Unique')"
             />
           </div>
@@ -742,6 +739,8 @@ watch(
             <q-checkbox
               v-model="restoreForm.haManaged"
               dense
+              right-label
+              color="primary"
               :label="gettext('Add to HA')"
             />
           </div>
@@ -749,6 +748,8 @@ watch(
             <q-checkbox
               v-model="restoreForm.start"
               dense
+              right-label
+              color="primary"
               :disable="restoreForm.liveRestore"
               :label="gettext('Start after restore')"
             />
@@ -760,6 +761,8 @@ watch(
             <q-checkbox
               v-model="restoreForm.liveRestore"
               dense
+              right-label
+              color="primary"
               :label="gettext('Live restore')"
             />
           </div>

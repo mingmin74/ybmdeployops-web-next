@@ -601,6 +601,8 @@ export default {
   Edit: '编辑',
   Remove: '移除',
   Search: '搜索',
+  'Search backup files': '搜索备份文件',
+  'Filter VMID': '筛选虚拟机 ID',
   'Search nodes, virtual machines, containers, and more': '搜索节点、虚拟机、容器等',
   Export: '导出',
   Viewer: '查看',

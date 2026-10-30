@@ -78,16 +78,26 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
       indicator-color="primary"
       class="hardware-nav-tabs text-grey-7"
     >
-      <q-tab name="disk" :label="gettext('Hard Disk')" />
-      <q-tab name="bandwidth" :label="gettext('Bandwidth')" />
+      <q-tab
+        name="disk"
+        :label="gettext('Hard Disk')"
+      />
+      <q-tab
+        name="bandwidth"
+        :label="gettext('Bandwidth')"
+      />
     </q-tabs>
-    <div v-show="activeTab === 'disk'" class="q-pa-md bg-white add-disk-editor">
-      <div class="row q-gutter-lg add-disk-editor-fields">
-        <div class="col">
-          <div class="row q-gutter-sm">
+    <div
+      v-show="activeTab === 'disk'"
+      class="add-disk-editor"
+    >
+      <section class="add-disk-section">
+        <h3 class="add-disk-section-title">{{ gettext('Basic Settings') }}</h3>
+        <div class="add-disk-primary-row">
+          <div class="add-disk-device-row">
             <q-select
               v-model="form.diskBus"
-              class="col q-field--with-bottom"
+              class="q-field--with-bottom"
               dense
               options-dense
               emit-value
@@ -101,20 +111,38 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
               dense
               type="number"
               min="0"
-              style="width: 100px"
               :label="`${gettext('Device ID')} *`"
               :error="validationAttempted && !deviceValid"
               :error-message="gettext('This device is already in use')"
             />
           </div>
-          <q-input
-            v-if="form.diskBus === 'scsi'"
-            :model-value="scsiControllerLabel"
+          <q-select
+            v-model="form.diskCache"
             class="q-field--with-bottom"
             dense
-            readonly
-            :label="gettext('SCSI Controller')"
+            options-dense
+            emit-value
+            map-options
+            :label="gettext('Cache')"
+            :options="[
+              { label: `${gettext('Default')} (${gettext('No cache')})`, value: '__default__' },
+              { label: 'No cache', value: 'none' },
+              { label: 'Write through', value: 'writethrough' },
+              { label: 'Write back', value: 'writeback' },
+              { label: 'Direct sync', value: 'directsync' },
+              { label: 'Unsafe', value: 'unsafe' },
+            ]"
           />
+        </div>
+        <q-input
+          v-if="form.diskBus === 'scsi'"
+          :model-value="scsiControllerLabel"
+          class="add-disk-controller q-field--with-bottom"
+          dense
+          readonly
+          :label="gettext('SCSI Controller')"
+        />
+        <div class="add-disk-storage-row">
           <SelectTable
             v-model="form.storage"
             row-key="storage"
@@ -168,116 +196,82 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
             :options="storageFormats"
           />
         </div>
-        <div class="col">
-          <q-select
-            v-model="form.diskCache"
-            class="q-field--with-bottom"
+        <div class="add-disk-options">
+          <q-checkbox
+            v-model="form.diskDiscard"
             dense
-            options-dense
-            emit-value
-            map-options
-            :label="gettext('Cache')"
-            :options="[
-              { label: `${gettext('Default')} (${gettext('No cache')})`, value: '__default__' },
-              { label: 'No cache', value: 'none' },
-              { label: 'Write through', value: 'writethrough' },
-              { label: 'Write back', value: 'writeback' },
-              { label: 'Direct sync', value: 'directsync' },
-              { label: 'Unsafe', value: 'unsafe' },
-            ]"
+            right-label
+            color="primary"
+            :label="gettext('Discard')"
           />
-          <q-field borderless>
-            <q-checkbox
-              v-model="form.diskDiscard"
-              class="checkboxClass"
-              dense
-              right-label
-              color="primary"
-              :label="gettext('Discard')"
-            />
-          </q-field>
-          <q-field borderless>
-            <q-checkbox
-              v-model="form.diskIothread"
-              class="q-field--with-bottom checkboxClass"
-              dense
-              right-label
-              color="primary"
-              :disable="!supportsIoThread"
-              label="IO thread"
-            />
-          </q-field>
+          <q-checkbox
+            v-model="form.diskIothread"
+            dense
+            right-label
+            color="primary"
+            :disable="!supportsIoThread"
+            label="IO thread"
+          />
         </div>
-      </div>
-      <div v-if="advanced" class="u-border-dotted-blue q-px-md q-py-sm bg-white q-mt-sm">
-        <div class="row q-col-gutter-sm">
-          <div class="col-6">
-            <q-field borderless dense>
-              <q-checkbox
-                v-model="form.diskSsd"
-                dense
-                right-label
-                color="primary"
-                :disable="form.diskBus === 'virtio'"
-                :label="gettext('SSD emulation')"
-              />
-            </q-field>
-          </div>
-          <div class="col-6">
-            <q-field borderless dense>
-              <q-checkbox
-                v-model="form.diskReadOnly"
-                dense
-                right-label
-                color="primary"
-                :disable="!supportsIoThread"
-                :label="gettext('Readonly')"
-              />
-            </q-field>
-          </div>
-          <div class="col-6">
-            <q-field borderless dense>
-              <q-checkbox
-                v-model="form.diskBackup"
-                dense
-                right-label
-                color="primary"
-                :label="gettext('Backup')"
-              />
-            </q-field>
-          </div>
-          <div class="col-6">
-            <q-field borderless dense>
-              <q-checkbox
-                v-model="form.diskSkipReplication"
-                dense
-                right-label
-                color="primary"
-                :label="gettext('Skip replication')"
-              />
-            </q-field>
-          </div>
-          <div class="col-12">
-            <q-select
-              v-model="form.diskAio"
-              class="q-field--with-bottom"
-              dense
-              options-dense
-              emit-value
-              map-options
-              :label="gettext('Async IO')"
-              :options="[
-                { label: `${gettext('Default')} (io_uring)`, value: '__default__' },
-                { label: 'io_uring', value: 'io_uring' },
-                { label: 'native', value: 'native' },
-                { label: 'threads', value: 'threads' },
-              ]"
-            />
-          </div>
+      </section>
+      <section
+        v-if="advanced"
+        class="add-disk-section add-disk-section--advanced"
+      >
+        <h3 class="add-disk-section-title">{{ gettext('Advanced settings') }}</h3>
+        <div class="add-disk-advanced-grid">
+          <q-checkbox
+            v-model="form.diskSsd"
+            dense
+            right-label
+            color="primary"
+            :disable="form.diskBus === 'virtio'"
+            :label="gettext('SSD emulation')"
+          />
+          <q-checkbox
+            v-model="form.diskReadOnly"
+            dense
+            right-label
+            color="primary"
+            :disable="!supportsIoThread"
+            :label="gettext('Readonly')"
+          />
+          <q-checkbox
+            v-model="form.diskBackup"
+            dense
+            right-label
+            color="primary"
+            :label="gettext('Backup')"
+          />
+          <q-checkbox
+            v-model="form.diskSkipReplication"
+            dense
+            right-label
+            color="primary"
+            :label="gettext('Skip replication')"
+          />
         </div>
-      </div>
+        <q-select
+          v-model="form.diskAio"
+          class="add-disk-aio q-field--with-bottom"
+          dense
+          options-dense
+          emit-value
+          map-options
+          :label="gettext('Async IO')"
+          :options="[
+            { label: `${gettext('Default')} (io_uring)`, value: '__default__' },
+            { label: 'io_uring', value: 'io_uring' },
+            { label: 'native', value: 'native' },
+            { label: 'threads', value: 'threads' },
+          ]"
+        />
+      </section>
     </div>
-    <div v-show="activeTab === 'bandwidth'" class="q-pt-md">
+    <div
+      v-show="activeTab === 'bandwidth'"
+      class="add-disk-bandwidth"
+    >
       <div class="row q-col-gutter-sm">
         <div class="col-6">
           <q-input
@@ -385,46 +379,144 @@ const activeTab = shallowRef<'disk' | 'bandwidth'>('disk');
 </template>
 
 <style scoped>
-.hardware-nav-tabs {
-  min-height: 34px;
-  /* padding: 0 6px; */
-  background: #f5f7fa;
-  border: 1px solid #d8e0ea;
-  border-radius: 3px 3px 0 0;
+.add-disk-form {
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
 }
 
-.hardware-nav-tabs :deep(.q-tabs__content) {
-  align-items: flex-end;
+.hardware-nav-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  min-height: 40px;
+  background: #f2f5fc;
+  border-bottom: 1px solid #dfe1e6;
 }
 
 .hardware-nav-tabs :deep(.q-tab) {
-  min-height: 34px;
-  padding: 0 14px;
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 18px;
   text-transform: none;
 }
 
-.hardware-nav-tabs :deep(.q-tab__label) {
-  font-size: 12px;
-  line-height: 1.2;
-}
-
-.hardware-nav-tabs :deep(.q-tab--active) {
-  background: #fff;
-}
-
 .hardware-nav-tabs :deep(.q-tab__indicator) {
-  height: 2px;
+  height: 3px;
 }
 
-.add-disk-editor {
+.add-disk-editor,
+.add-disk-bandwidth {
+  padding: 20px 24px 24px;
+}
+
+.add-disk-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  color: #333;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.add-disk-section-title::before {
+  content: '';
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
+  background: #1976d2;
+}
+
+.add-disk-primary-row,
+.add-disk-advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 24px;
+}
+
+.add-disk-advanced-grid {
+  row-gap: 22px;
+}
+
+.add-disk-device-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(90px, 1fr);
+  gap: 16px;
+}
+
+.add-disk-storage-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
+  gap: 16px;
   margin-top: 8px;
+}
+
+.add-disk-primary-row > *,
+.add-disk-device-row > *,
+.add-disk-storage-row > * {
+  min-width: 0;
+}
+
+.add-disk-controller {
+  width: calc(50% - 12px);
+  margin-top: 8px;
+}
+
+.add-disk-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  margin-top: 8px;
+}
+
+.add-disk-section--advanced {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #dfe1e6;
+}
+
+.add-disk-aio {
+  margin-top: 12px;
 }
 
 .add-disk-editor :deep(.q-checkbox--dense .q-checkbox__label) {
   color: #333;
 }
 
-.checkboxClass {
-  color: #333 !important;
+@media (max-width: 700px) {
+  .add-disk-primary-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .add-disk-controller {
+    width: 100%;
+  }
+
+  .add-disk-storage-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .add-disk-storage-row > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 500px) {
+  .add-disk-editor,
+  .add-disk-bandwidth {
+    padding: 16px;
+  }
+
+  .add-disk-storage-row,
+  .add-disk-advanced-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .add-disk-bandwidth .col-6 {
+    width: 100%;
+  }
 }
 </style>

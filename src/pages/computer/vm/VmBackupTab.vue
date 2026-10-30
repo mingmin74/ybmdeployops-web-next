@@ -43,6 +43,7 @@ const storages = shallowRef<PveRecord[]>([]);
 const restoreStorages = shallowRef<PveRecord[]>([]);
 const rows = shallowRef<PveRecord[]>([]);
 const selected = shallowRef<PveRecord[]>([]);
+const backupPagination = shallowRef({ page: 1, rowsPerPage: 25 });
 const listStorage = shallowRef('');
 const filterVmid = shallowRef(true);
 const search = shallowRef('');
@@ -140,6 +141,8 @@ const columns = computed<QTableColumn<PveRecord>[]>(() => [
     field: (row) => textValue(row.volid),
     align: 'left',
     sortable: true,
+    style: 'width: 30%; min-width: 260px; max-width: 360px',
+    headerStyle: 'width: 30%; min-width: 260px; max-width: 360px',
   },
   {
     name: 'notes',
@@ -713,7 +716,7 @@ watch(listStorage, () => {
 
 <template>
   <div class="vm-backup-tab q-pa-md">
-    <div class="row items-center q-col-gutter-sm q-mb-sm">
+    <div class="row items-center q-col-gutter-sm vm-backup-actions">
       <div class="col-auto">
         <q-btn
           no-caps
@@ -822,76 +825,82 @@ watch(listStorage, () => {
           <q-tooltip>{{ gettext('Refresh') }}</q-tooltip>
         </q-icon>
       </div>
-      <div class="col-auto q-ml-auto">
-        <q-checkbox
-          v-model="filterVmid"
-          dense
-          right-label
-          color="primary"
-          :label="gettext('Filter VMID')"
-        />
-      </div>
     </div>
-    <div class="vm-backup-filter q-px-md q-py-lg q-mb-sm">
-      <div class="row q-col-gutter-md">
-        <div class="col-12 col-md-4 vm-backup-filter-field">
-          <span class="vm-backup-filter-label">{{ gettext('Storage') }}</span>
-          <SelectTable
-            v-model="listStorage"
-            row-key="storage"
-            width="560px"
-            field-style="outlined"
-            class="vm-backup-filter-control"
-            :rows="storages"
-            :columns="storageColumns"
-            :display-value="storageDisplayValue"
-            :loading="loading"
-            :get-row-value="(row) => textValue(row.storage)"
-          >
-            <template #body-cell="scope">
-              <UsageProgress
-                v-if="scope.col.name === 'used'"
-                :percent="Number(scope.value)"
-              />
-              <q-badge
-                v-else-if="scope.col.name === 'active'"
-                :color="Number(scope.row.active) ? 'green' : 'red'"
-                :label="scope.value"
-              />
-              <template v-else>{{ scope.value }}</template>
-            </template>
-          </SelectTable>
-        </div>
-        <div class="col-12 col-md-4 vm-backup-filter-field">
-          <span class="vm-backup-filter-label">{{ gettext('Search') }}</span>
-          <q-input
-            v-model="search"
-            square
-            outlined
-            dense
-            clearable
-            class="vm-backup-filter-control"
-          />
-        </div>
+    <div class="vm-backup-filter">
+      <div class="vm-backup-filter-field vm-backup-filter-field--storage">
+        <span class="vm-backup-filter-label">{{ gettext('Storage') }}</span>
+        <SelectTable
+          v-model="listStorage"
+          row-key="storage"
+          width="560px"
+          field-style="outlined"
+          class="vm-backup-filter-control"
+          :rows="storages"
+          :columns="storageColumns"
+          :display-value="storageDisplayValue"
+          :loading="loading"
+          :get-row-value="(row) => textValue(row.storage)"
+        >
+          <template #body-cell="scope">
+            <UsageProgress
+              v-if="scope.col.name === 'used'"
+              :percent="Number(scope.value)"
+            />
+            <q-badge
+              v-else-if="scope.col.name === 'active'"
+              :color="Number(scope.row.active) ? 'green' : 'red'"
+              :label="scope.value"
+            />
+            <template v-else>{{ scope.value }}</template>
+          </template>
+        </SelectTable>
       </div>
+      <div class="vm-backup-filter-field vm-backup-filter-field--search">
+        <span class="vm-backup-filter-label">{{ gettext('Search') }}</span>
+        <q-input
+          v-model="search"
+          square
+          outlined
+          dense
+          clearable
+          class="vm-backup-filter-control"
+          :placeholder="gettext('Search backup files')"
+        >
+          <template #prepend><q-icon name="search" /></template>
+        </q-input>
+      </div>
+      <q-checkbox
+        v-model="filterVmid"
+        dense
+        right-label
+        color="primary"
+        class="vm-backup-filter-vmid"
+        :label="gettext('Filter VMID')"
+      />
     </div>
     <q-table
       v-model:selected="selected"
+      v-model:pagination="backupPagination"
       flat
-      square
-      dense
       row-key="volid"
       selection="single"
+      hide-selected-banner
       table-header-class="u-table-header"
       :rows="displayedRows"
       :columns="columns"
       :loading="loading"
-      :pagination="{ rowsPerPage: 0 }"
-      :rows-per-page-options="[0]"
+      :rows-per-page-options="[25, 50, 100, 500]"
       :no-data-label="gettext('no record can be found')"
-      hide-bottom
-      class="u-compact-table"
+      class="u-compact-table vm-backup-table"
     >
+      <template #body-cell-volid="scope">
+        <q-td :props="scope">
+          <span class="vm-backup-name">
+            {{ scope.value }}
+            <q-tooltip>{{ scope.value }}</q-tooltip>
+          </span>
+        </q-td>
+      </template>
       <template #no-data="{ message }">
         <div class="full-width row flex-center text-accent q-gutter-sm">
           <span class="text-grey-6">{{ message }}</span>
@@ -1492,6 +1501,47 @@ watch(listStorage, () => {
 </template>
 
 <style scoped>
+.vm-backup-actions {
+  margin-bottom: 20px;
+}
+.vm-backup-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin-bottom: 14px;
+}
+.vm-backup-filter-field--storage {
+  width: 250px;
+}
+.vm-backup-filter-field--search {
+  width: 320px;
+}
+.vm-backup-filter-vmid {
+  margin-left: auto;
+}
+.vm-backup-name {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vm-backup-table :deep(tbody td) {
+  border-bottom: 1px solid #dfe1e6;
+}
+.vm-backup-table :deep(.q-table__bottom) {
+  border-top: 0;
+}
+@media (max-width: 700px) {
+  .vm-backup-filter-field--storage,
+  .vm-backup-filter-field--search {
+    width: 100%;
+  }
+  .vm-backup-filter-vmid {
+    margin-left: 0;
+  }
+}
 .u-compact-table :deep(thead tr),
 .u-compact-table :deep(thead th),
 .u-compact-table :deep(tbody td) {
@@ -1568,10 +1618,9 @@ watch(listStorage, () => {
   gap: 8px;
 }
 .vm-backup-filter-label {
-  flex: 0 0 72px;
+  flex: 0 0 auto;
   color: #666;
   font-size: 12px;
-  text-align: right;
 }
 .vm-backup-filter-control {
   flex: 1;

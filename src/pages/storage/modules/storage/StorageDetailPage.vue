@@ -421,6 +421,10 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid #dfe1e6;
 }
 
+.chart-header {
+  gap: 10px;
+}
+
 .panel-header span:first-child,
 .chart-header strong {
   font-size: 13px;
