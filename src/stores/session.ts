@@ -17,7 +17,7 @@ export const useSessionStore = defineStore('session', () => {
   const csrfToken = shallowRef(localStorage.getItem(storageKeys.csrfToken) || '');
   const caps = shallowRef<Record<string, unknown>>({});
 
-  const ticket = computed(() => Cookies.get(appConfig.cookieName) || '');
+  const ticket = shallowRef(Cookies.get(appConfig.cookieName) || '');
   const isAuthenticated = computed(() => Boolean(username.value && realm.value && ticket.value));
   const userid = computed(() =>
     username.value && realm.value ? `${username.value}@${realm.value}` : '',
@@ -38,6 +38,7 @@ export const useSessionStore = defineStore('session', () => {
     localStorage.setItem(storageKeys.realm, realm.value);
     localStorage.setItem(storageKeys.csrfToken, data.csrfToken);
     Cookies.set(appConfig.cookieName, data.ticket, { secure: false, sameSite: 'Lax' });
+    ticket.value = data.ticket;
   }
 
   async function login(payload: LoginPayload & { remember?: boolean }) {
@@ -77,6 +78,7 @@ export const useSessionStore = defineStore('session', () => {
     username.value = '';
     csrfToken.value = '';
     caps.value = {};
+    ticket.value = '';
     Cookies.remove(appConfig.cookieName);
     localStorage.removeItem(storageKeys.username);
     localStorage.removeItem(storageKeys.realm);

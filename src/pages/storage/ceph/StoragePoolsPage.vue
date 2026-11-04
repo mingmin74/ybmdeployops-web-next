@@ -4,6 +4,7 @@ import { computed, shallowRef, watch } from 'vue';
 import { destroyCephPool, getCephPoolDefaults, getCephPools } from '@/api/ceph';
 import type { PveRecord } from '@/api/resources';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
+import TaskProgressDialog from '@/components/TaskProgressDialog.vue';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 import { formatBytes, textValue } from '@/utils/pveFormat';
@@ -17,6 +18,7 @@ const selected = shallowRef<PveRecord[]>([]);
 const editVisible = shallowRef(false);
 const destroyVisible = shallowRef(false);
 const taskVisible = shallowRef(false);
+const progressVisible = shallowRef(false);
 const taskUpid = shallowRef('');
 const taskNode = shallowRef('');
 const taskTitle = shallowRef('');
@@ -132,6 +134,15 @@ function openTask(upid: string, fallbackNode: string, title: string) {
   taskTitle.value = title;
   taskVisible.value = Boolean(upid);
 }
+function openTaskProgress(upid: string, fallbackNode: string, title: string) {
+  taskUpid.value = upid;
+  taskNode.value = upid.split(':')[1] || fallbackNode;
+  taskTitle.value = title;
+  progressVisible.value = Boolean(upid);
+}
+function openTaskDetails() {
+  taskVisible.value = true;
+}
 async function openCreate() {
   actionLoading.value = true;
   try {
@@ -166,7 +177,7 @@ async function destroyPool() {
     const response = await destroyCephPool(node, destroyName.value, true);
     destroyVisible.value = false;
     selected.value = [];
-    openTask(textValue(response.data), node, `${gettext('Destroy')}: ${gettext('Ceph Pool')}`);
+    openTaskProgress(textValue(response.data), node, `${gettext('Destroy')}: ${gettext('Ceph Pool')}`);
   } finally {
     actionLoading.value = false;
   }
@@ -352,6 +363,14 @@ watch(
       </template>
     </UWindow>
   </q-dialog>
+  <TaskProgressDialog
+    v-model="progressVisible"
+    :node="taskNode"
+    :upid="taskUpid"
+    :title="taskTitle"
+    @finished="refreshData"
+    @details="openTaskDetails"
+  />
   <TaskOutputDialog
     v-model="taskVisible"
     :node="taskNode"

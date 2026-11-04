@@ -7,16 +7,6 @@
     <q-card-section class="performance-card__header">
       <div class="row items-center justify-between">
         <div class="performance-card__title">{{ gettext('性能') }}</div>
-
-        <q-btn
-          flat
-          dense
-          no-caps
-          color="primary"
-          :label="gettext('近 24 小时')"
-          icon-right="chevron_right"
-          class="performance-card__action"
-        />
       </div>
     </q-card-section>
 
@@ -48,7 +38,7 @@
               </div>
             </div>
 
-            <div class="usage-section__label">{{ gettext('Ceph 使用率') }}</div>
+            <div class="usage-section__label">{{ gettext('集群存储使用率') }}</div>
 
             <div class="usage-section__caption">
               {{ gettext('已使用') }} {{ formatBytes(pgmap.bytes_used as number) }} /
@@ -260,13 +250,7 @@ onUnmounted(() => {
   line-height: 28px;
 }
 
-.performance-card__action {
-  min-height: 28px;
-  padding: 0 4px;
-  font-size: 12px;
-}
-
-.performance-card__body {
+.performance-card__title {
   min-height: 0;
   flex: 1 1 auto;
   padding: 0;

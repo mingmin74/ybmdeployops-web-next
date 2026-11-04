@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { shallowRef, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import CephAvailability from './ceph/CephAvailability.vue';
 import CephConfigurationPage from './ceph/ConfigurationPage.vue';
 import CephFilesystemPage from './ceph/FilesystemPage.vue';
@@ -10,7 +11,26 @@ import CephStoragePoolsPage from './ceph/StoragePoolsPage.vue';
 import CephSummaryPage from './ceph/SummaryPage.vue';
 import { gettext } from '@/locale';
 
-const tab = ref('summary');
+const route = useRoute();
+const router = useRouter();
+const validTabs = new Set(['summary', 'monitor', 'osd', 'cephfs', 'pools', 'config', 'logs']);
+function resolveTab(tab: unknown) {
+  return typeof tab === 'string' && validTabs.has(tab) ? tab : 'summary';
+}
+const tab = shallowRef(resolveTab(route.query.tab));
+
+watch(tab, (value) => {
+  if (route.query.tab === value) return;
+  void router.replace({ query: { ...route.query, tab: value } });
+});
+
+watch(
+  () => route.query.tab,
+  (value) => {
+    tab.value = resolveTab(value);
+  }
+);
+
 const { node = 'localhost' } = defineProps<{ node?: string }>();
 </script>
 

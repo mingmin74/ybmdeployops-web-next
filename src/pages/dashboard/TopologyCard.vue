@@ -23,7 +23,10 @@
       </div>
 
       <div class="topology-stats">
-        <div class="topology-stat">
+        <div
+          class="topology-stat topology-stat--link"
+          @click="goStat('/computer/list')"
+        >
           <div class="topology-stat__label">
             <q-icon
               name="computer"
@@ -44,7 +47,10 @@
           </div>
         </div>
 
-        <div class="topology-stat">
+        <div
+          class="topology-stat topology-stat--link"
+          @click="goStat('/computer/ct-container')"
+        >
           <div class="topology-stat__label">
             <q-icon
               name="layers"
@@ -65,7 +71,10 @@
           </div>
         </div>
 
-        <div class="topology-stat">
+        <div
+          class="topology-stat topology-stat--link"
+          @click="goStat('/host/nodes')"
+        >
           <div class="topology-stat__label">
             <q-icon
               name="dns"
@@ -86,7 +95,10 @@
           </div>
         </div>
 
-        <div class="topology-stat">
+        <div
+          class="topology-stat topology-stat--link"
+          @click="goStat('/storage/list')"
+        >
           <div class="topology-stat__label">
             <q-icon
               name="storage"
@@ -102,7 +114,10 @@
           </div>
         </div>
 
-        <div class="topology-stat">
+        <div
+          class="topology-stat topology-stat--link"
+          @click="goStat('/computer/network')"
+        >
           <div class="topology-stat__label">
             <q-icon
               name="account_tree"
@@ -122,6 +137,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useRouter } from 'vue-router';
 import type { PveRecord } from '@/api/resources';
 import { useResourcesStore } from '@/stores/resources';
 import { gettext } from '@/locale';
@@ -129,6 +145,12 @@ import { textValue } from '@/utils/pveFormat';
 
 const resources = useResourcesStore();
 resources.usePolling();
+
+const router = useRouter();
+
+function goStat(path: string) {
+  void router.push(path);
+}
 
 function hasStatus(record: PveRecord, ...statuses: string[]) {
   const current = textValue(record.status).toLowerCase();
@@ -163,17 +185,8 @@ const nodeStats = computed(() => {
 });
 
 const storageStats = computed(() => {
-  const seen = new Set<string>();
-  resources.records.forEach((row) => {
-    if (textValue(row.type) !== 'storage') return;
-    const id =
-      row.shared && textValue(row.storage) !== 'local'
-        ? textValue(row.storage) || textValue(row.id)
-        : textValue(row.id);
-    if (!id) return;
-    seen.add(id);
-  });
-  return { total: seen.size };
+  const rows = resources.records.filter((row) => textValue(row.type) === 'storage');
+  return { total: rows.length };
 });
 
 const networkStats = computed(() => {
@@ -253,6 +266,10 @@ const networkStats = computed(() => {
   min-width: 0;
   padding: 0 12px;
   text-align: center;
+}
+
+.topology-stat--link {
+  cursor: pointer;
 }
 
 .topology-stat + .topology-stat::before {

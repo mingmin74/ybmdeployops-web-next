@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, shallowRef, watch } from 'vue';
+import { computed, onBeforeUnmount, shallowRef, watch } from 'vue';
 import { getNodeTime, updateNodeTime, type PveNodeTime } from '@/api/host';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
-const props = defineProps<{ node: string }>();
+const props = defineProps<{ node: string; active: boolean }>();
 const session = useSessionStore();
 const time = shallowRef<PveNodeTime>({});
 const draft = shallowRef('');
@@ -24,11 +24,12 @@ const zones = computed(() => {
     : values;
 });
 let loadId = 0;
-function format(timestamp?: number, timezone?: string) {
+let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+function format(timestamp?: number, timezone = 'UTC') {
   if (!timestamp) return '-';
   try {
-    return new Intl.DateTimeFormat('en-GB', {
-      timeZone: timezone || 'UTC',
+    return new Intl.DateTimeFormat('sv-SE', {
+      timeZone: timezone,
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -36,30 +37,40 @@ function format(timestamp?: number, timezone?: string) {
       minute: '2-digit',
       second: '2-digit',
       hourCycle: 'h23',
-    })
-      .format(new Date(timestamp * 1000))
-      .replace(',', '');
+    }).format(new Date(timestamp * 1000));
   } catch {
     return '-';
   }
 }
 const rows = computed(() => [
-  { label: gettext('Timezone'), value: time.value.timezone || '-', icon: 'public' },
+  { label: gettext('Time zone'), value: time.value.timezone || '-', icon: 'public' },
   {
-    label: gettext('Server Time'),
-    value: format(time.value.time, time.value.timezone),
+    label: gettext('Server time'),
+    value: time.value.localtime
+      ? format(time.value.localtime)
+      : format(time.value.time, time.value.timezone),
     icon: 'schedule',
   },
 ]);
+function stopRefresh() {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = undefined;
+  loadId += 1;
+}
 async function load() {
   const node = props.node,
     id = ++loadId;
-  if (!node || !canAudit.value) {
-    time.value = {};
-    return;
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = undefined;
+  if (!node || !canAudit.value || !props.active) return;
+  try {
+    const response = await getNodeTime(node);
+    if (id !== loadId || node !== props.node || !props.active) return;
+    time.value = response.data || {};
+    refreshTimer = setTimeout(() => void load(), 1000);
+  } catch {
+    // The request helper reports the error; retry when this panel is activated again.
   }
-  const response = await getNodeTime(node);
-  if (id === loadId && node === props.node) time.value = response.data || {};
 }
 function open() {
   draft.value = time.value.timezone || '';
@@ -86,13 +97,16 @@ async function save() {
   }
 }
 watch(
-  [() => props.node, canAudit],
+  [() => props.node, () => props.active, canAudit],
   () => {
+    stopRefresh();
     visible.value = false;
-    void load();
+    time.value = {};
+    if (props.active && canAudit.value) void load();
   },
   { immediate: true }
 );
+onBeforeUnmount(stopRefresh);
 </script>
 <template>
   <section
@@ -166,7 +180,7 @@ watch(
           use-input
           input-debounce="0"
           class="q-field--with-bottom"
-          :label="gettext('Timezone')"
+          :label="gettext('Time zone')"
           :options="filtered"
           @filter="filter"
         />

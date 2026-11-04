@@ -1,0 +1,78 @@
+- generic [ref=f1e1]:
+  - generic [ref=f1e3]:
+    - banner [ref=f1e4]:
+      - generic [ref=f1e5]: 云备姆灾备一体化系统
+      - navigation [ref=f1e8]:
+        - button "产品文档" [ref=f1e9] [cursor=pointer]:
+          - generic [aria-hidden] [ref=f1e10]: menu_book
+        - button "帮助中心" [ref=f1e12] [cursor=pointer]:
+          - generic [aria-hidden] [ref=f1e13]: help_outline
+        - button "简体中文" [ref=f1e15] [cursor=pointer]:
+          - generic [aria-hidden] [ref=f1e16]: language
+          - generic [aria-hidden] [ref=f1e18]: keyboard_arrow_down
+    - main [ref=f1e19]:
+      - generic [ref=f1e20]:
+        - generic [ref=f1e22]:
+          - heading "构建统一、高效、可靠的 数据中心管理平台" [level=1] [ref=f1e23]
+          - paragraph [ref=f1e24]: 计算、存储、网络一体化管理，助力智能运维与资源统一调度
+          - generic [ref=f1e25]:
+            - generic [ref=f1e26]:
+              - generic [ref=f1e27]:
+                - generic [aria-hidden] [ref=f1e28]: hexagon
+                - generic [aria-hidden] [ref=f1e29]: sync_alt
+              - generic [ref=f1e30]: 高可用架构
+            - generic [ref=f1e32]:
+              - generic [aria-hidden] [ref=f1e34]: view_in_ar
+              - generic [ref=f1e35]: 统一资源调度
+            - generic [ref=f1e37]:
+              - generic [aria-hidden] [ref=f1e39]: monitor_heart
+              - generic [ref=f1e40]: 智能运维
+            - generic [ref=f1e42]:
+              - generic [aria-hidden] [ref=f1e44]: verified_user
+              - generic [ref=f1e45]: 数据安全
+        - generic [ref=f1e47]:
+          - generic [ref=f1e50]:
+            - heading "云备姆灾备一体化系统" [level=2] [ref=f1e51]
+            - paragraph [ref=f1e52]: 统一纳管虚拟化、容器、存储与网络资源
+          - generic [ref=f1e53]:
+            - generic [ref=f1e56]:
+              - generic [aria-hidden] [ref=f1e58]: person_outline
+              - textbox [active] [ref=f1e60]:
+                - /placeholder: 用户名
+            - generic [ref=f1e63]:
+              - generic [aria-hidden] [ref=f1e65]: lock_outline
+              - textbox "切换密码可见性" [ref=f1e67]:
+                - /placeholder: 密码
+              - button "切换密码可见性" [ref=f1e69] [cursor=pointer]:
+                - img [aria-hidden] [ref=f1e71]: visibility
+            - generic [ref=f1e72]:
+              - generic [ref=f1e73]:
+                - generic [aria-hidden] [ref=f1e74]: domain
+                - generic [ref=f1e75]: 认证域
+              - generic [ref=f1e78] [cursor=pointer]:
+                - generic [ref=f1e80]:
+                  - generic [ref=f1e81]: Linux PAM
+                  - combobox "Linux PAM" [ref=f1e82]
+                - generic [aria-hidden] [ref=f1e84]: keyboard_arrow_down
+            - checkbox "记住我" [ref=f1e86] [cursor=pointer]
+            - button "登录" [ref=f1e92] [cursor=pointer]
+    - contentinfo [ref=f1e95]:
+      - generic [ref=f1e96]:
+        - generic [ref=f1e97]: © 2024 YBM. All Rights Reserved.
+        - generic [ref=f1e99]: 云备姆灾备一体化系统
+        - generic [ref=f1e101]: V6.0.0
+      - generic [ref=f1e102]:
+        - generic [ref=f1e103]:
+          - generic [aria-hidden] [ref=f1e104]: security
+          - generic [ref=f1e105]: 国密合规支持
+        - generic [ref=f1e107]: 等保合规支持
+      - generic [ref=f1e108]:
+        - generic [ref=f1e109]:
+          - generic [aria-hidden] [ref=f1e110]: headset_mic
+          - generic [ref=f1e111]: 技术支持：400-888-0755
+        - generic [ref=f1e113]:
+          - generic [aria-hidden] [ref=f1e114]: mail_outline
+          - generic [ref=f1e115]: support@ybm.com
+        - button "官方网站" [ref=f1e117] [cursor=pointer]:
+          - generic [aria-hidden] [ref=f1e119]: open_in_new
+  - progressbar [ref=f1e120]

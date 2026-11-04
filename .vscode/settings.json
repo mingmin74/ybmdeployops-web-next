@@ -13,7 +13,10 @@
   },
   "vetur.validation.script": false,
   "vetur.validation.template": false,
+  "vetur.validation.templateProps": false,
+  "vetur.validation.interpolation": false,
   "vetur.validation.style": false,
+  "vetur.format.enable": true,
   "[vue]": {
     "editor.defaultFormatter": "octref.vetur"
   }

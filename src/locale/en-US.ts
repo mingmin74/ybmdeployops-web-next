@@ -47,6 +47,7 @@ export default {
   'Disks Management': 'Disks Management',
   'Disk Usage': 'Disk Usage',
   'Storage Usage': 'Storage Usage',
+  'Local Disk Usage': 'Local Disk Usage',
   'Disk IO': 'Disk IO',
   'Network Traffic': 'Network Traffic',
   'CPU Pressure Stall': 'CPU Pressure Stall',
@@ -232,6 +233,13 @@ export default {
   Manager: 'Manager',
   'Storage Pools': 'Storage Pools',
   'Crush Rule': 'Crush Rule',
+  'This action cannot be undone.': 'This action cannot be undone.',
+  'The Ceph pool and all data stored in it will be permanently destroyed.':
+    'The Ceph pool and all data stored in it will be permanently destroyed.',
+  'Please enter the pool name to confirm destruction.':
+    'Please enter the pool name to confirm destruction.',
+  'Pool Name': 'Pool Name',
+  'The pool name does not match.': 'The pool name does not match.',
   Configuration: 'Configuration',
   'Show Configuration': 'Show Configuration',
   'CD-ROM Drive': 'CD-ROM Drive',

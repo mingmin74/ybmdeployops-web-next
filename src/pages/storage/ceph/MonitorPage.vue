@@ -46,13 +46,6 @@ const nodeOptions = computed(() =>
 );
 const columns: QTableColumn<PveRecord>[] = [
   {
-    name: 'quorum',
-    label: gettext('Quorum'),
-    align: 'center',
-    field: (row) => Boolean(row.quorum),
-    sortable: true,
-  },
-  {
     name: 'name',
     required: true,
     label: gettext('Name'),
@@ -88,6 +81,17 @@ const columns: QTableColumn<PveRecord>[] = [
     field: (row) => row.version || '-',
     sortable: true,
   },
+];
+
+const monColumns: QTableColumn<PveRecord>[] = [
+  {
+    name: 'quorum',
+    label: gettext('Quorum'),
+    align: 'center',
+    field: (row) => Boolean(row.quorum),
+    sortable: true,
+  },
+  ...columns,
 ];
 
 function selectedRow(type: ServiceType) {
@@ -264,7 +268,7 @@ watch(
       table-header-class="u-table-header"
       :title="gettext('Monitor')"
       :rows="mons"
-      :columns="columns"
+      :columns="monColumns"
       :loading="loading"
       :pagination="{ page: 1, rowsPerPage: 5 }"
       :rows-per-page-options="[5]"

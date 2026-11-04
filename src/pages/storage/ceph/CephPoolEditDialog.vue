@@ -167,7 +167,7 @@ function payload(): CephPoolPayload {
   };
   if (isCreate.value) {
     data.name = form.name.trim();
-    data.add_storages = form.addStorages;
+    data.add_storages = form.addStorages ? 1 : 0;
   }
   if (form.targetSize !== null) data.target_size = `${form.targetSize}G`;
   if (form.pgNumMin !== null) data.pg_num_min = form.pgNumMin;

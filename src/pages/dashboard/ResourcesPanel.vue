@@ -8,15 +8,6 @@
     <q-card-section class="resources-card__header">
       <div class="row items-center justify-between">
         <div class="resources-card__title">资源</div>
-
-        <q-btn
-          flat
-          dense
-          round
-          size="sm"
-          icon="chevron_right"
-          color="grey-6"
-        />
       </div>
     </q-card-section>
 

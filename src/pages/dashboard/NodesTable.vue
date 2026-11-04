@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { QTableColumn } from 'quasar';
 import { onBeforeUnmount, onMounted, shallowRef } from 'vue';
+import { useRouter } from 'vue-router';
 import { getNodes } from '@/api/host';
 import type { PveNode } from '@/api/resources';
 import UsageProgress from '@/components/UsageProgress.vue';
@@ -11,8 +12,13 @@ type NodeRow = PveNode & { id?: string; maxcpu?: number; uptime?: number };
 
 const loading = shallowRef(false);
 const nodes = shallowRef<NodeRow[]>([]);
+const router = useRouter();
 let refreshTimer: number | undefined;
 let loadingNodes = false;
+
+function goHostOverview() {
+  void router.push('/host/overview');
+}
 
 const nodeColumns: QTableColumn<NodeRow>[] = [
   {
@@ -99,6 +105,7 @@ onBeforeUnmount(() => {
           size="sm"
           icon="chevron_right"
           color="grey-6"
+          @click="goHostOverview"
         />
       </div>
     </q-card-section>

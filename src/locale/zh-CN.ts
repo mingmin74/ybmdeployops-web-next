@@ -1,4 +1,6 @@
 export default {
+  'Time zone': '时区',
+  'Server time': '服务器时间',
   'My Settings': '我的设置',
   'xterm.js Settings': 'xterm.js 设置',
   'noVNC Settings': 'noVNC 设置',
@@ -215,6 +217,7 @@ export default {
   'Disks Management': '硬盘管理',
   'Disk Usage': '磁盘使用率',
   'Storage Usage': '存储使用率',
+  'Local Disk Usage': '本地磁盘使用率',
   'Disk IO': '磁盘 IO',
   'Network Traffic': '网络流量',
   'CPU Pressure Stall': 'CPU 压力停顿',
@@ -406,6 +409,12 @@ export default {
   Manager: '管理器',
   'Storage Pools': '存储池',
   'Crush Rule': 'Crush 规则',
+  'This action cannot be undone.': '此操作不可撤销。',
+  'The Ceph pool and all data stored in it will be permanently destroyed.':
+    'Ceph 池及其中的所有数据将被永久销毁。',
+  'Please enter the pool name to confirm destruction.': '请输入存储池名称以确认销毁。',
+  'Pool Name': '存储池名称',
+  'The pool name does not match.': '存储池名称不匹配。',
   Configuration: '配置',
   'Show Configuration': '显示配置',
   'CD-ROM Drive': 'CD-ROM 驱动器',

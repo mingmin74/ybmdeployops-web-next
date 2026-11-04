@@ -223,7 +223,7 @@ export type CephPoolPayload = {
   crush_rule?: string;
   target_size_ratio?: number;
   target_size?: string;
-  add_storages?: boolean;
+  add_storages?: 0 | 1;
 };
 
 export function getCephPoolDefaults(node = 'localhost') {
@@ -260,7 +260,7 @@ export function updateCephPool(node: string, name: string, data: CephPoolPayload
 export function destroyCephPool(node: string, name: string, removeStorages = true) {
   return request<string>(`/api2/json/nodes/${node}/ceph/pool/${encodeURIComponent(name)}`, {
     method: 'DELETE',
-    data: { remove_storages: removeStorages },
+    params: { remove_storages: removeStorages ? 1 : 0 },
   });
 }
 

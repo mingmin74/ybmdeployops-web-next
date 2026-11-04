@@ -73,7 +73,6 @@ watch(
         <q-icon name="sticky_note_2" size="22px" color="primary" />
         <div>
           <div class="text-subtitle1 text-weight-medium">{{ gettext('Notes') }}</div>
-          <div class="text-caption text-grey-7">{{ gettext('Node configuration notes') }}</div>
         </div>
       </div>
       <q-space />

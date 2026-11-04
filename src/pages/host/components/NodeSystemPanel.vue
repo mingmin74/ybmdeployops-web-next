@@ -89,7 +89,7 @@ const sections = [
             name="time"
             class="q-pa-none"
           >
-            <NodeSystemTimePanel :node="props.node" />
+            <NodeSystemTimePanel :node="props.node" :active="activeTab === 'time'" />
           </q-tab-panel>
           <q-tab-panel
             name="syslog"

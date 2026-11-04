@@ -36,7 +36,8 @@
       <q-card
         flat
         bordered
-        class="kpi-card"
+        class="kpi-card kpi-card--link"
+        @click="goClusterStorage"
       >
         <q-card-section class="kpi-card__content">
           <div class="row items-center no-wrap">
@@ -48,7 +49,7 @@
             </div>
 
             <div class="kpi-main">
-              <div class="kpi-label">{{ gettext('Ceph 状态') }}</div>
+              <div class="kpi-label">{{ gettext('集群存储状态') }}</div>
               <div class="kpi-value">{{ cephStateCard.value }}</div>
             </div>
           </div>
@@ -68,7 +69,8 @@
       <q-card
         flat
         bordered
-        class="kpi-card"
+        class="kpi-card kpi-card--link"
+        @click="goHostNodes"
       >
         <q-card-section class="kpi-card__content">
           <div class="row items-center no-wrap">
@@ -80,7 +82,7 @@
             </div>
 
             <div class="kpi-main">
-              <div class="kpi-label">{{ gettext('节点在线数') }}</div>
+              <div class="kpi-label">{{ gettext('主机节点') }}</div>
               <div class="kpi-value">{{ nodeStats.online }} / {{ nodeStats.total }}</div>
             </div>
           </div>
@@ -103,7 +105,8 @@
       <q-card
         flat
         bordered
-        class="kpi-card"
+        class="kpi-card kpi-card--link"
+        @click="goVirtualMachines"
       >
         <q-card-section class="kpi-card__content">
           <div class="row items-center no-wrap">
@@ -135,7 +138,8 @@
       <q-card
         flat
         bordered
-        class="kpi-card"
+        class="kpi-card kpi-card--link"
+        @click="goCtContainers"
       >
         <q-card-section class="kpi-card__content">
           <div class="row items-center no-wrap">
@@ -167,7 +171,8 @@
       <q-card
         flat
         bordered
-        class="kpi-card"
+        class="kpi-card kpi-card--link"
+        @click="goCephOsd"
       >
         <q-card-section class="kpi-card__content">
           <div class="row items-center no-wrap">
@@ -200,10 +205,12 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, onBeforeUnmount, shallowRef, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import type { PveRecord } from '@/api/resources';
 import { useResourcesStore } from '@/stores/resources';
 import { getCephMetadata, getCephStatus } from '@/api/ceph';
+import { getClusterJoinInfo } from '@/api/cluster';
 import { gettext } from '@/locale';
 import { textValue } from '@/utils/pveFormat';
 
@@ -214,6 +221,23 @@ const node = props.node || 'localhost';
 const cephAvailable = computed(() => props.cephAvailable ?? true);
 const resources = useResourcesStore();
 resources.usePolling();
+
+const router = useRouter();
+function goClusterStorage() {
+  void router.push('/storage/udos');
+}
+function goHostNodes() {
+  void router.push('/host/nodes');
+}
+function goVirtualMachines() {
+  void router.push('/computer/list');
+}
+function goCtContainers() {
+  void router.push('/computer/ct-container');
+}
+function goCephOsd() {
+  void router.push({ path: '/storage/udos', query: { tab: 'osd' } });
+}
 
 function hasStatus(record: PveRecord, ...statuses: string[]) {
   const current = textValue(record.status).toLowerCase();
@@ -249,6 +273,7 @@ const ctStats = computed(() => {
 
 const status = shallowRef<PveRecord>({});
 const metadata = shallowRef<PveRecord>({});
+const clusterInfo = shallowRef<PveRecord>({});
 
 const health = computed(() =>
   textValue(
@@ -267,24 +292,15 @@ const cephVersion = computed(() => {
   }, '');
 });
 
-const clusterName = computed(() => {
-  const byFsid = textValue(status.value.fsid);
-  const fromConfig =
-    textValue((status.value.config as PveRecord | undefined)?.cluster_name) ||
-    textValue((metadata.value.config as PveRecord | undefined)?.cluster_name) ||
-    textValue((metadata.value.config as PveRecord | undefined)?.fsid_name) ||
-    textValue(status.value.cluster_name) ||
-    textValue(metadata.value.cluster_name);
-  const firstNode = Object.values((metadata.value.node || {}) as PveRecord)[0] as
-    PveRecord | undefined;
-  const fromNode =
-    textValue(firstNode?.cluster) ||
-    textValue(firstNode?.['cluster-name']) ||
-    textValue(
-      ((firstNode?.config as PveRecord | undefined)?.cluster as PveRecord | undefined)?.name
-    );
-  return fromConfig || fromNode || byFsid || gettext('Ceph Cluster');
-});
+const clusterName = computed(
+  () =>
+    textValue((clusterInfo.value.totem as PveRecord | undefined)?.cluster_name) ||
+    gettext('未加入集群')
+);
+
+const clusterNodeCount = computed(() =>
+  Array.isArray(clusterInfo.value.nodelist) ? clusterInfo.value.nodelist.length : 0
+);
 
 const monQuorum = computed(() => {
   const names = status.value.quorum_names;
@@ -326,7 +342,7 @@ const clusterState = computed(() => {
       : badCount > 0
         ? 'status-dot--warning'
         : 'status-dot--success';
-  const footer = `${gettext('集群')} ${clusterName.value} · ${gettext('法定人数')}: ${monQuorum.value.detail}`;
+  const footer = `${gettext('集群')} ${clusterName.value} · ${gettext('节点')} ${clusterNodeCount.value}`;
   return { value, dotClass, footer };
 });
 
@@ -417,6 +433,7 @@ const osdStats = computed(() => {
 
 let statusTimer: ReturnType<typeof setInterval> | undefined;
 let metadataTimer: ReturnType<typeof setInterval> | undefined;
+let clusterInfoTimer: ReturnType<typeof setInterval> | undefined;
 async function refreshStatus() {
   try {
     const response = await getCephStatus(node);
@@ -435,6 +452,15 @@ async function refreshMetadata() {
 }
 async function refreshCeph() {
   await Promise.allSettled([refreshStatus(), refreshMetadata()]);
+}
+
+async function refreshClusterInfo() {
+  try {
+    const response = await getClusterJoinInfo();
+    clusterInfo.value = response.data || {};
+  } catch {
+    // Keep latest snapshot
+  }
 }
 
 function stopCephPolling() {
@@ -460,8 +486,14 @@ watch(
   { immediate: true }
 );
 
+onMounted(() => {
+  void refreshClusterInfo();
+  clusterInfoTimer = setInterval(() => void refreshClusterInfo(), 15000);
+});
+
 onBeforeUnmount(() => {
   stopCephPolling();
+  if (clusterInfoTimer) clearInterval(clusterInfoTimer);
 });
 </script>
 <style scoped>
@@ -476,6 +508,10 @@ onBeforeUnmount(() => {
     border-color 0.2s ease,
     box-shadow 0.2s ease,
     transform 0.2s ease;
+}
+
+.kpi-card--link {
+  cursor: pointer;
 }
 
 .kpi-card:hover {

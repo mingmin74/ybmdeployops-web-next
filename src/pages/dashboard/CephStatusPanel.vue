@@ -5,7 +5,7 @@
     class="ceph-status-card"
   >
     <q-card-section class="ceph-status-card__header">
-      <div class="ceph-status-card__title">{{ gettext('状态') }}</div>
+      <div class="ceph-status-card__title">{{ gettext('集群状态') }}</div>
     </q-card-section>
 
     <q-separator />

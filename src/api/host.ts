@@ -31,7 +31,7 @@ export type PveNodeTask = {
 
 export type PveNodeDns = { search?: string; dns1?: string; dns2?: string; dns3?: string };
 export type PveNodeHosts = { data?: string; digest?: string };
-export type PveNodeTime = { timezone?: string; time?: number };
+export type PveNodeTime = { timezone?: string; time?: number; localtime?: number };
 export type PveNodeNetwork = Record<string, unknown> & {
   iface?: string;
   type?: string;

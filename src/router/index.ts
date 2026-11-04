@@ -35,8 +35,19 @@ export default defineRouter(() => {
     history: createHistory(import.meta.env.QUASAR_VUE_ROUTER_BASE),
   });
 
+  let navigationLoading = false;
+
+  function stopNavigationLoading() {
+    if (!navigationLoading) return;
+    LoadingBar.stop();
+    navigationLoading = false;
+  }
+
   Router.beforeEach(async (to) => {
-    LoadingBar.start();
+    if (!navigationLoading) {
+      LoadingBar.start();
+      navigationLoading = true;
+    }
     const session = useSessionStore();
 
     if (to.meta.public) {
@@ -59,12 +70,10 @@ export default defineRouter(() => {
 
   Router.afterEach((to) => {
     document.title = getDocumentTitle(to);
-    LoadingBar.stop();
+    stopNavigationLoading();
   });
 
-  Router.onError(() => {
-    LoadingBar.stop();
-  });
+  Router.onError(stopNavigationLoading);
 
   return Router;
 });
