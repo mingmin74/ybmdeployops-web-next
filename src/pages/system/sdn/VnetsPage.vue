@@ -76,14 +76,14 @@ const vnetColumns: QTableColumn<PveRecord>[] = [
   },
   {
     name: 'tag',
-    label: 'Tag',
+    label: gettext('Tag'),
     align: 'left',
     field: (row) => displayValue(row, 'tag'),
     sortable: true,
   },
   {
     name: 'vlanaware',
-    label: 'VLAN aware',
+    label: gettext('VLAN aware'),
     align: 'left',
     field: (row) => displayValue(row, 'vlanaware'),
     sortable: true,
@@ -272,6 +272,7 @@ onMounted(refreshVnets);
         :columns="vnetColumns"
         :selected="selectedVnet"
         :loading="loading"
+        :no-data-label="gettext('no record can be found')"
         :pagination="{ page: 1, rowsPerPage: 10 }"
         :rows-per-page-options="[10]"
         @update:selected="selectedVnet = [...$event]"
@@ -343,6 +344,7 @@ onMounted(refreshVnets);
         :columns="subnetColumns"
         :selected="selectedSubnet"
         :loading="subnetLoading"
+        :no-data-label="gettext('no record can be found')"
         :pagination="{ page: 1, rowsPerPage: 10 }"
         :rows-per-page-options="[10]"
         @update:selected="selectedSubnet = [...$event]"

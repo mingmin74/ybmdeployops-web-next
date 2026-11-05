@@ -19,5 +19,6 @@ const selected = defineModel<PveRecord[]>('selected', { required: true });
       { name: 'type', label: gettext('Type'), field: 'type', align: 'left' },
     ]"
     :pagination="{ rowsPerPage: 0 }"
+    :no-data-label="gettext('no record can be found')"
   />
 </template>

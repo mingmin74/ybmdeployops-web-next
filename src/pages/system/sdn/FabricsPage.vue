@@ -163,6 +163,7 @@ onMounted(() => void reload());
       table-header-class="u-table-header"
       :rows="visibleRows"
       :loading="loading"
+      :no-data-label="gettext('no record can be found')"
       :columns="[
         { name: 'name', label: gettext('Name'), field: 'node_id', align: 'left' },
         { name: 'protocol', label: gettext('Protocol'), field: 'protocol', align: 'left' },

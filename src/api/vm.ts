@@ -10,6 +10,7 @@ export type VmResource = {
   node?: string;
   type?: string;
   status?: string;
+  lock?: string;
   cpu?: number;
   mem?: number;
   maxmem?: number;

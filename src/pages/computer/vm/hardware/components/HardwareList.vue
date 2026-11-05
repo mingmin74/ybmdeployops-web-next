@@ -40,7 +40,12 @@ function rowPendingValue(row: HardwareRow) {
       </div>
       <div class="col-8 text-grey-8 hardware-list-value">
         {{ row.value }}
-        <div v-if="hasRowPendingChange(row)" class="text-red">{{ rowPendingValue(row) }}</div>
+        <div
+          v-if="row.pendingValue ?? hasRowPendingChange(row)"
+          class="hardware-list-pending"
+        >
+          {{ row.pendingValue ?? rowPendingValue(row) }}
+        </div>
       </div>
     </div>
   </div>
@@ -77,6 +82,9 @@ function rowPendingValue(row: HardwareRow) {
   overflow-wrap: anywhere;
   word-break: break-word;
   white-space: normal;
+}
+.hardware-list-pending {
+  color: darkorange;
 }
 .hardware-list-row:last-child {
   border-bottom: 0;

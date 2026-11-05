@@ -102,6 +102,7 @@ function selectPeerNode(peer: WireGuardPeer) {
           { name: 'remove', label: '', field: 'name', align: 'right' },
         ]"
         :pagination="{ rowsPerPage: 0 }"
+        :no-data-label="gettext('no record can be found')"
         @row-click="(_, __, index) => (selected = index)"
         ><template #body-cell-remove="scope"
           ><q-td :props="scope"
@@ -183,6 +184,7 @@ function selectPeerNode(peer: WireGuardPeer) {
               { name: 'remove', label: '', field: 'node', align: 'right' },
             ]"
             :pagination="{ rowsPerPage: 0 }"
+            :no-data-label="gettext('no record can be found')"
             ><template #body-cell-node="scope"
               ><q-td :props="scope"
                 ><q-select

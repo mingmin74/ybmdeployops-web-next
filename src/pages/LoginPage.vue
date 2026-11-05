@@ -307,11 +307,15 @@ const loading = shallowRef(false);
 const showPassword = shallowRef(false);
 
 const form = reactive({
-  username: localStorage.getItem('username') || '',
+  username:
+    localStorage.getItem('remember') === 'true' ? localStorage.getItem('username') || '' : '',
 
   password: '',
 
-  realm: localStorage.getItem('realm') || appConfig.defaultRealm,
+  realm:
+    localStorage.getItem('remember') === 'true'
+      ? localStorage.getItem('realm') || appConfig.defaultRealm
+      : appConfig.defaultRealm,
 
   remember: localStorage.getItem('remember') === 'true',
 });
@@ -353,8 +357,6 @@ async function submitLogin() {
 
       localStorage.setItem('remember', 'true');
     } else {
-      localStorage.removeItem('username');
-      localStorage.removeItem('realm');
       localStorage.removeItem('remember');
     }
 

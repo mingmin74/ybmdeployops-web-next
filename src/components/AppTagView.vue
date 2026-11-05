@@ -2,6 +2,8 @@
 import { computed, shallowRef, watch } from 'vue';
 import { useRoute, useRouter, type RouteLocationNormalizedLoaded } from 'vue-router';
 import { gettext } from '@/locale';
+import { useSessionStore } from '@/stores/session';
+import { useUiStore } from '@/stores/ui';
 
 type TagViewItem = {
   path: string;
@@ -23,7 +25,39 @@ const defaultTab = 'permissions';
 
 const route = useRoute();
 const router = useRouter();
-const tagView = shallowRef<TagViewItem[]>([]);
+const session = useSessionStore();
+const ui = useUiStore();
+const storageKey = `page-tabs:${session.userid}`;
+
+function restoreTags(): TagViewItem[] {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    if (!Array.isArray(stored)) return [];
+
+    const seen = new Set<string>();
+    return stored
+      .filter((item): item is TagViewItem => {
+        if (
+          !item ||
+          typeof item.path !== 'string' ||
+          !item.path.startsWith('/') ||
+          typeof item.title !== 'string' ||
+          seen.has(item.path)
+        ) {
+          return false;
+        }
+        const resolved = router.resolve(item.path);
+        if (!resolved.meta.auth || resolved.meta.public) return false;
+        seen.add(item.path);
+        return true;
+      })
+      .slice(-ui.maxOpenTabs);
+  } catch {
+    return [];
+  }
+}
+
+const tagView = shallowRef<TagViewItem[]>(restoreTags());
 
 const isPermissionsRoute = (name: unknown) => name === 'system-permissions';
 
@@ -67,17 +101,14 @@ function routeTitle(nextRoute: RouteLocationNormalizedLoaded) {
 }
 
 function addTag(nextRoute: RouteLocationNormalizedLoaded) {
-  if (nextRoute.meta.public || !nextRoute.meta.auth) return;
+  if (nextRoute.name === 'dashboard' || nextRoute.meta.public || !nextRoute.meta.auth) return;
 
   const key = tagKey(nextRoute);
   const title = routeTitle(nextRoute);
 
   if (tagView.value.some((item) => item.path === key)) return;
 
-  tagView.value = [
-    ...tagView.value,
-    { path: key, title },
-  ];
+  tagView.value = [...tagView.value, { path: key, title }].slice(-ui.maxOpenTabs);
 }
 
 function removeTag(index: number, tag: TagViewItem) {
@@ -90,12 +121,27 @@ function removeTag(index: number, tag: TagViewItem) {
   void router.push(nextRoute?.path || '/dashboard');
 }
 
+watch(tagView, (tags) => {
+  localStorage.setItem(storageKey, JSON.stringify(tags));
+});
+
+watch(
+  () => ui.maxOpenTabs,
+  (limit) => {
+    if (tagView.value.length <= limit) return;
+    tagView.value = tagView.value.slice(-limit);
+    if (!tagView.value.some((tag) => tag.path === tagKey(route))) {
+      void router.push(tagView.value[tagView.value.length - 1]?.path || '/dashboard');
+    }
+  }
+);
+
 watch(
   () => route.fullPath,
   () => {
     addTag(route);
   },
-  { immediate: true },
+  { immediate: true }
 );
 </script>
 
@@ -115,13 +161,16 @@ watch(
     >
       <q-tab
         v-for="(tag, index) in tagView"
-        :key="`${tag.path}-${index}`"
+        :key="tag.path"
         :name="tag.path"
         :class="['tag-item', tag.path === activePath ? 'tag-item--active' : '']"
         no-caps
         @click="router.push(tag.path)"
       >
-        <q-icon name="widgets" size="16px" />
+        <q-icon
+          name="widgets"
+          size="16px"
+        />
         <div class="tag-label">{{ gettext(tag.title) }}</div>
         <q-icon
           v-if="index !== 0"

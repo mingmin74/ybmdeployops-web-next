@@ -13,19 +13,63 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{ updated: [] }>();
+const tagPattern = /^[a-z0-9+_.-]+$/i;
 
 const visible = shallowRef(false);
 const saving = shallowRef(false);
-const draft = shallowRef('');
-const tags = computed(() => String(props.tags || '').split(/[;, ]+/).filter(Boolean));
+const draftTags = shallowRef<string[]>([]);
+const newTag = shallowRef('');
+const tags = computed(() =>
+  String(props.tags || '')
+    .split(/[;, ]+/)
+    .filter(Boolean)
+);
+const changed = computed(() => draftTags.value.join(',') !== tags.value.join(','));
+const hasDraftError = computed(() =>
+  draftTags.value.some((_, index) => Boolean(draftError(index)))
+);
+
+function draftError(index: number) {
+  const value = draftTags.value[index]?.trim() || '';
+  if (!tagPattern.test(value)) return gettext('Invalid tag');
+  if (draftTags.value.some((tag, otherIndex) => otherIndex !== index && tag.trim() === value)) {
+    return gettext('Duplicate tag');
+  }
+  return '';
+}
+const tagError = computed(() => {
+  const value = newTag.value.trim();
+  if (!value) return '';
+  if (!tagPattern.test(value)) return gettext('Invalid tag');
+  if (draftTags.value.includes(value)) return gettext('Duplicate tag');
+  return '';
+});
 
 function openEditor() {
-  draft.value = String(props.tags || '');
+  draftTags.value = [...tags.value];
+  newTag.value = '';
   visible.value = true;
 }
 
+function addTag() {
+  const tag = newTag.value.trim();
+  if (!tag || !tagPattern.test(tag) || draftTags.value.includes(tag)) return;
+  draftTags.value = [...draftTags.value, tag];
+  newTag.value = '';
+}
+
+function editTag(index: number, value: string | number | null) {
+  draftTags.value = draftTags.value.map((tag, itemIndex) =>
+    itemIndex === index ? String(value ?? '') : tag
+  );
+}
+
+function removeTag(index: number) {
+  draftTags.value = draftTags.value.filter((_, itemIndex) => itemIndex !== index);
+}
+
 async function save() {
-  if (!props.node || !props.vmid) return;
+  if (!props.node || !props.vmid || !changed.value || tagError.value || hasDraftError.value) return;
   saving.value = true;
   try {
     await updateVmConfig(
@@ -33,7 +77,7 @@ async function save() {
       props.vmid,
       {
         ...(props.digest ? { digest: props.digest } : {}),
-        tags: draft.value.trim(),
+        tags: draftTags.value.map((tag) => tag.trim()).join(','),
       },
       'qemu',
       'PUT',
@@ -50,23 +94,19 @@ async function save() {
 <template>
   <div
     v-if="tags.length || canEdit"
-    class="vm-tag-control row items-center no-wrap q-ml-sm"
+    class="vm-tag-control row items-center no-wrap"
   >
     <div
       v-if="tags.length"
-      class="row no-wrap q-gutter-xs"
+      class="vm-tag-control__list row items-center no-wrap"
     >
-      <q-chip
+      <q-badge
         v-for="tag in tags"
         :key="tag"
-        dense
-        square
-        size="12px"
+        class="vm-tag-control__tag q-px-sm"
         color="primary"
-        text-color="white"
-      >
-        {{ tag }}
-      </q-chip>
+        :label="tag"
+      />
     </div>
     <span
       v-else
@@ -98,13 +138,65 @@ async function save() {
         :loading="saving"
       >
         <div class="q-pa-md">
-          <q-input
-            v-model="draft"
-            dense
-            class="q-field--with-bottom"
-            :label="gettext('Tags')"
-            hint="tag1;tag2"
-          />
+          <div class="vm-tag-control__section-title q-mb-sm">{{ gettext('Tags') }}</div>
+          <div
+            v-if="draftTags.length"
+            class="vm-tag-control__editor-list column q-mb-sm"
+          >
+            <div
+              v-for="(tag, index) in draftTags"
+              :key="index"
+              class="vm-tag-control__editor-row row items-start q-gutter-sm"
+            >
+              <q-input
+                :model-value="tag"
+                dense
+                class="q-field--with-bottom col"
+                :label="gettext('Tag')"
+                :error="Boolean(draftError(index))"
+                :error-message="draftError(index)"
+                @update:model-value="editTag(index, $event)"
+              />
+              <q-btn
+                flat
+                dense
+                size="12px"
+                color="negative"
+                icon="remove_circle_outline"
+                class="u-button q-mt-sm"
+                :aria-label="`${gettext('Remove')} ${tag}`"
+                @click="removeTag(index)"
+              />
+            </div>
+          </div>
+          <div
+            v-else
+            class="text-grey-6 q-mb-md"
+          >
+            {{ gettext('No Tags') }}
+          </div>
+          <div class="vm-tag-control__new-row row items-start q-gutter-sm">
+            <q-input
+              v-model="newTag"
+              dense
+              class="q-field--with-bottom col"
+              :label="gettext('Tag')"
+              :error="Boolean(tagError)"
+              :error-message="tagError"
+              @keyup.enter="addTag()"
+            />
+            <q-btn
+              flat
+              dense
+              size="12px"
+              color="primary"
+              icon="add_circle_outline"
+              class="u-button q-mt-sm"
+              :aria-label="gettext('Add')"
+              :disable="!newTag.trim() || Boolean(tagError)"
+              @click="addTag()"
+            />
+          </div>
         </div>
         <template #foot>
           <q-btn
@@ -122,6 +214,7 @@ async function save() {
             size="12px"
             class="bg-primary text-grey-1 u-button"
             :loading="saving"
+            :disable="!changed || Boolean(tagError) || hasDraftError"
             :label="gettext('Save')"
             @click="save"
           />
@@ -132,7 +225,19 @@ async function save() {
 </template>
 
 <style scoped>
-.vm-tag-control :deep(.q-chip) {
-  margin: 0;
+.vm-tag-control {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: 16px;
+  gap: 6px;
+}
+.vm-tag-control__list {
+  min-width: 0;
+  gap: 6px;
+  overflow-x: auto;
+}
+.vm-tag-control__tag {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 </style>

@@ -55,6 +55,7 @@ defineExpose({ valid });
       row-key="source"
       :rows="rows"
       :pagination="{ rowsPerPage: 0 }"
+      :no-data-label="gettext('no record can be found')"
       :columns="[
         { name: 'source', label: gettext('Source'), field: 'source', align: 'left' },
         { name: 'route-map', label: gettext('Route Map'), field: 'routeMap', align: 'left' },

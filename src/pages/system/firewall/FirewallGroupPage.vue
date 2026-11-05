@@ -131,6 +131,7 @@ onMounted(() => {
         :columns="columns"
         :selected="selected"
         :loading="loading"
+        :no-data-label="gettext('no record can be found')"
         :pagination="{ page: 1, rowsPerPage: 10 }"
         :rows-per-page-options="[10]"
         @update:selected="selected = [...$event]"

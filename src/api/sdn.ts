@@ -125,10 +125,10 @@ export function deleteSdnZone(zone: string) {
   });
 }
 
-export function getSdnVnets(pending = 1) {
+export function getSdnVnets(params: { pending?: number; running?: number } = { pending: 1 }) {
   return request<PveRecord[]>('/api2/json/cluster/sdn/vnets', {
     method: 'GET',
-    params: { pending },
+    params,
     notifyOnError: true,
   });
 }

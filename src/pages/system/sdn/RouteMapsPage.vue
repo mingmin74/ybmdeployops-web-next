@@ -40,6 +40,15 @@ const setLabels: Record<string, string> = {
   metric: gettext('Metric'),
   src: gettext('Source'),
 };
+const actionLabels: Record<string, string> = {
+  permit: gettext('Permit'),
+  deny: gettext('Deny'),
+};
+const exitLabels: Record<string, string> = {
+  'on-match-next': gettext('On match next'),
+  'on-match-goto': gettext('On match goto'),
+  continue: gettext('Continue'),
+};
 function value(row: PveRecord, key: string) {
   return ((row.pending as PveRecord) || {})[key] ?? row[key];
 }
@@ -75,7 +84,10 @@ const columns: QTableColumn<RouteMapRow>[] = [
   {
     name: 'action',
     label: gettext('Action'),
-    field: (row) => textValue(value(row, 'action')) || '-',
+    field: (row) => {
+      const v = textValue(value(row, 'action'));
+      return actionLabels[v] || v || '-';
+    },
     align: 'left',
   },
   {
@@ -94,7 +106,10 @@ const columns: QTableColumn<RouteMapRow>[] = [
   {
     name: 'exit',
     label: gettext('Exit Policy'),
-    field: (row) => textValue(value(row, 'exit-action')).match(/(?:^|,)key=([^,]*)/)?.[1] || '-',
+    field: (row) => {
+      const key = textValue(value(row, 'exit-action')).match(/(?:^|,)key=([^,]*)/)?.[1] || '';
+      return exitLabels[key] || key || '-';
+    },
     align: 'left',
   },
   {

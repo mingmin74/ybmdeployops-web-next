@@ -32,6 +32,7 @@ export interface HardwareRow {
   type: HardwareType;
   name: string;
   value: string;
+  pendingValue?: string | undefined;
   editable: boolean;
 }
 

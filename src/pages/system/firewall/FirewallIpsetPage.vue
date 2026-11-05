@@ -69,7 +69,7 @@ const entryColumns: QTableColumn<PveRecord>[] = [
   {
     name: 'cidr',
     required: true,
-    label: 'CIDR',
+    label: gettext('CIDR'),
     align: 'left',
     field: (row) => row.cidr || row.name || '-',
     sortable: true,
@@ -260,6 +260,7 @@ onMounted(() => {
         :columns="ipsetColumns"
         :selected="selectedIpset"
         :loading="loading"
+        :no-data-label="gettext('no record can be found')"
         :pagination="{ page: 1, rowsPerPage: 10 }"
         :rows-per-page-options="[10]"
         @update:selected="selectedIpset = [...$event]"
@@ -324,6 +325,7 @@ onMounted(() => {
         :columns="entryColumns"
         :selected="selectedEntry"
         :loading="entryLoading"
+        :no-data-label="gettext('no record can be found')"
         :pagination="{ page: 1, rowsPerPage: 10 }"
         :rows-per-page-options="[10]"
         @update:selected="selectedEntry = [...$event]"
@@ -477,7 +479,7 @@ onMounted(() => {
             dense
             class="q-field--with-bottom"
             readonly
-            label="CIDR *"
+            :label="`${gettext('CIDR')} *`"
           />
           <q-checkbox
             v-model="entryForm.nomatch"

@@ -26,6 +26,7 @@ const selected = defineModel<PveRecord[]>('selected', { required: true });
       },
     ]"
     :pagination="{ rowsPerPage: 0 }"
+    :no-data-label="gettext('no record can be found')"
     ><template #body-cell-ip="scope"
       ><q-td :props="scope"
         ><q-input

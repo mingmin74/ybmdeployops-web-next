@@ -112,7 +112,7 @@ function selectTableNode(_event: Event, row: NodeRow) {
 function confirmPower(command: 'reboot' | 'shutdown') {
   const node = selectedNode.value;
   if (!node || node.status === 'offline') return;
-  const label = command === 'reboot' ? gettext('reboot') : gettext('shutdown');
+  const label = command === 'reboot' ? gettext('Reboot') : gettext('Shutdown');
   $q.dialog({
     title: gettext('Confirm'),
     message: `${gettext('Are you sure you want to')} ${label}: ${node.node} ?`,
@@ -290,7 +290,7 @@ onBeforeUnmount(() => {
               class="u-button"
               :color="canBulkAction ? 'primary' : 'grey'"
               :disable="!canBulkAction"
-              :label="`${gettext('Bulk')} ${gettext('Actions')}`"
+              :label="gettext('Bulk Actions')"
             >
               <q-list>
                 <q-item

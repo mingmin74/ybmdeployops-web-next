@@ -50,8 +50,8 @@ const modeOptions = [
 
 const methodOptions = [
   { label: `${gettext('Default')} (bruteforce)`, value: '__default__' },
-  { label: 'Bruteforce', value: 'bruteforce' },
-  { label: 'TOPSIS', value: 'topsis' },
+  { label: gettext('Bruteforce'), value: 'bruteforce' },
+  { label: gettext('TOPSIS'), value: 'topsis' },
 ];
 
 const canUseAutoRebalancing = computed(() => form.ha === 'static' || form.ha === 'dynamic');

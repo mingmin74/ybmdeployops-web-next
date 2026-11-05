@@ -389,7 +389,7 @@ function printRecoveryKeys() {
     height: '0',
     border: '0',
   });
-  const title = `${gettext('Recovery Keys')} ${gettext('for')} ${recoveryForm.userid}`;
+  const title = `${gettext('Recovery Keys')} - ${recoveryForm.userid}`;
   printFrame.srcdoc = `<title>${title}</title><pre>${recoveryKeysText.value}</pre>`;
   printFrame.onload = () => printFrame.contentWindow?.print();
   document.body.appendChild(printFrame);
@@ -650,7 +650,7 @@ defineExpose({ reload: loadRows });
             type="password"
             :label="`${gettext('Password')} *`"
             class="q-field--with-bottom"
-            hint="verify current password"
+            :hint="gettext('verify current password')"
           />
         </div>
         <template #foot>
@@ -718,7 +718,7 @@ defineExpose({ reload: loadRows });
             type="password"
             :label="`${gettext('Password')} *`"
             class="q-field--with-bottom"
-            :hint="`${gettext('Confirm your')} (${session.userid}) ${gettext('password')}`"
+            :hint="`${gettext('Confirm your password')} (${session.userid})`"
           />
         </div>
         <template #foot>

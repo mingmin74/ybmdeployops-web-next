@@ -239,6 +239,7 @@ if (selectedNode.value) void loadDevices();
           :columns="columns"
           :selected="selected"
           :loading="loading"
+          :no-data-label="gettext('no record can be found')"
           :pagination="{ rowsPerPage: 0 }"
           @update:selected="selected = [...$event]"
         />

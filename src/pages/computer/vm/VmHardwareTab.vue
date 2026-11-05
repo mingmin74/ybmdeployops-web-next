@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { Dialog, Notify } from 'quasar';
-import { computed, provide, reactive, shallowRef, watch } from 'vue';
+import { computed, onMounted, onUnmounted, provide, reactive, shallowRef, watch } from 'vue';
 import { getVmConfig, getVmPendingConfig, revertVmConfig, updateVmConfig } from '@/api/overview';
 import type { PveRecord } from '@/api/resources';
 import { gettext } from '@/locale';
 import { useSessionStore } from '@/stores/session';
-import { textValue } from '@/utils/pveFormat';
+import { formatBytes, textValue } from '@/utils/pveFormat';
 import { vmHardwareKey } from './hardware/context/vmHardwareContext';
 import { useVmHardware } from './hardware/composables/useVmHardware';
 import { hardwareMeta } from './hardware/hardwareRegistry';
@@ -56,6 +56,7 @@ const form = reactive({
   advanced: false,
 });
 const pendingRows = shallowRef<PveRecord[]>([]);
+let pendingRefreshTimer: number | undefined;
 function numberValue(value: unknown, fallback: number) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -93,7 +94,7 @@ function renderMachine(value: unknown) {
   return machine.viommu ? `${displayType}, vIOMMU: ${machine.viommu}` : displayType;
 }
 function deviceRow(key: string, config: PveRecord, pending?: PveRecord): HardwareRow | undefined {
-  const rawValue = config[key] ?? pending?.pending ?? pending?.value;
+  const rawValue = pending?.value ?? pending?.pending ?? config[key];
   if (rawValue === undefined) return undefined;
   const value = textValue(rawValue) || '-';
   if (/^unused\d+$/.test(key)) {
@@ -186,6 +187,55 @@ const pendingByKey = computed<Record<string, PveRecord>>(() =>
   Object.fromEntries(pendingRows.value.map((row) => [textValue(row.key), row]))
 );
 
+// The pending endpoint returns the active value and the next configured value separately.
+function objectValue(key: string, defaultValue: unknown, next = false): unknown {
+  const record = pendingByKey.value[key];
+  if (!record) return currentConfig.value[key] ?? defaultValue;
+  const value =
+    next && record.delete
+      ? defaultValue
+      : next && record.pending !== undefined && record.pending !== ''
+        ? record.pending
+        : record.value;
+  return value === undefined || value === '' ? defaultValue : value;
+}
+
+function renderMemory(next = false) {
+  const memory = numberValue(objectValue('memory', 512, next), 512);
+  const balloon = objectValue('balloon', undefined, next);
+  const shares = objectValue('shares', undefined, next);
+  let result = formatBytes(memory * 1024 * 1024);
+  if (balloon !== undefined && numberValue(balloon, 0) > 0) {
+    result = `${formatBytes(numberValue(balloon, 0) * 1024 * 1024)}/${result}`;
+    if (shares) result += ` [shares=${textValue(shares)}]`;
+  } else if (balloon !== undefined && numberValue(balloon, -1) === 0) {
+    result += ' [balloon=0]';
+  }
+  const allowKsm = objectValue('allow-ksm', undefined, next);
+  if (allowKsm !== undefined) result += ` [allow-ksm=${textValue(allowKsm)}]`;
+  return result;
+}
+
+function renderProcessors(next = false) {
+  const sockets = numberValue(objectValue('sockets', 1, next), 1);
+  const cores = numberValue(objectValue('cores', 1, next), 1);
+  let result = `${sockets * cores} (${sockets} ${gettext('Sockets')}, ${cores} ${gettext('Cores')})`;
+  const model = objectValue('cpu', undefined, next);
+  if (model) result += ` [${textValue(model)}]`;
+  for (const key of ['numa', 'vcpus', 'cpulimit', 'cpuunits', 'affinity']) {
+    const value = objectValue(key, undefined, next);
+    if (value) result += ` [${key === 'affinity' ? 'cpuaffinity' : key}=${textValue(value)}]`;
+  }
+  return result;
+}
+
+function renderedPending(keys: string[], render: (next: boolean) => string) {
+  if (!keys.some(hasPendingChange)) return undefined;
+  const current = render(false);
+  const next = render(true);
+  return next === current ? '' : next;
+}
+
 const rows = computed<HardwareRow[]>(() => {
   const config = currentConfig.value;
   if (props.guestType === 'lxc') {
@@ -257,42 +307,58 @@ const rows = computed<HardwareRow[]>(() => {
       key: 'cpu',
       type: 'cpu',
       name: gettext('Processors'),
-      value: `${numberValue(config.sockets, 1)} × ${numberValue(config.cores, 1)}`,
+      value: renderProcessors(),
+      pendingValue: renderedPending(hardwareMeta.cpu?.pendingKeys || [], renderProcessors),
       editable: true,
     },
     {
       key: 'memory',
       type: 'memory',
       name: gettext('Memory'),
-      value: `${numberValue(config.memory, 512)} MiB`,
+      value: renderMemory(),
+      pendingValue: renderedPending(hardwareMeta.memory?.pendingKeys || [], renderMemory),
       editable: true,
     },
     {
       key: 'bios',
       type: 'bios',
       name: gettext('BIOS'),
-      value: textValue(config.bios) || `${gettext('Default')} (SeaBIOS)`,
+      value: textValue(objectValue('bios', '', false)) || `${gettext('Default')} (SeaBIOS)`,
+      pendingValue: renderedPending(
+        ['bios'],
+        (next) => textValue(objectValue('bios', '', next)) || `${gettext('Default')} (SeaBIOS)`
+      ),
       editable: true,
     },
     {
       key: 'vga',
       type: 'display',
       name: gettext('Display'),
-      value: renderDisplay(config.vga),
+      value: renderDisplay(objectValue('vga', undefined)),
+      pendingValue: renderedPending(['vga'], (next) =>
+        renderDisplay(objectValue('vga', undefined, next))
+      ),
       editable: true,
     },
     {
       key: 'machine',
       type: 'machine',
       name: gettext('Machine'),
-      value: renderMachine(config.machine),
+      value: renderMachine(objectValue('machine', undefined)),
+      pendingValue: renderedPending(['machine'], (next) =>
+        renderMachine(objectValue('machine', undefined, next))
+      ),
       editable: true,
     },
     {
       key: 'scsihw',
       type: 'scsi-controller',
       name: gettext('SCSI Controller'),
-      value: textValue(config.scsihw) || gettext('Default'),
+      value: textValue(objectValue('scsihw', '')) || gettext('Default'),
+      pendingValue: renderedPending(
+        ['scsihw'],
+        (next) => textValue(objectValue('scsihw', '', next)) || gettext('Default')
+      ),
       editable: true,
     },
   ];
@@ -307,7 +373,16 @@ const rows = computed<HardwareRow[]>(() => {
         ['efidisk0', 'tpmstate0', 'audio0', 'rng0', 'vmstate'].includes(key)
     )
     .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
-    .map((key) => deviceRow(key, config, pendingByKey.value[key]))
+    .map((key) => {
+      const record = pendingByKey.value[key];
+      const row = deviceRow(key, config, record);
+      if (!row) return undefined;
+      row.value = textValue(record ? record.value : config[key]) || '-';
+      if (hasPendingChange(key)) {
+        row.pendingValue = record?.delete ? gettext('Deleted') : textValue(record?.pending);
+      }
+      return row;
+    })
     .filter((row): row is HardwareRow => Boolean(row));
   return [...base, ...devices];
 });
@@ -364,9 +439,9 @@ const isDisk = computed(() => selectedDevice.value?.type === 'disk');
 const canResizeDisk = computed(() =>
   Boolean(
     selectedDevice.value?.type === 'disk' &&
-      hasVmCapability('VM.Config.Disk') &&
-      !selectedPending.value &&
-      !isPendingDelete(selectedDevice.value.key)
+    hasVmCapability('VM.Config.Disk') &&
+    !selectedPending.value &&
+    !isPendingDelete(selectedDevice.value.key)
   )
 );
 const canMoveDisk = computed(() => {
@@ -417,8 +492,7 @@ function hasPendingChange(key: string) {
   const pending = pendingByKey.value[key];
   if (!pending) return false;
   if (pending.delete) return true;
-  const nextValue = textValue(pending.pending);
-  return nextValue !== '' && nextValue !== textValue(currentConfig.value[key]);
+  return pending.pending !== undefined && pending.pending !== '';
 }
 function isPendingDelete(key: string) {
   return Boolean(pendingByKey.value[key]?.delete);
@@ -440,8 +514,8 @@ function hasNodeOrMappingCapability() {
   return hasNodeCapability('Sys.Console') || hasMappingCapability('Mapping.Use');
 }
 
-async function loadPending() {
-  const response = await getVmPendingConfig(props.node, props.vmid, props.guestType);
+async function loadPending(silent = false) {
+  const response = await getVmPendingConfig(props.node, props.vmid, props.guestType, silent);
   pendingRows.value = response.data || [];
 }
 
@@ -459,6 +533,16 @@ async function revertSelected() {
     loading.value = false;
   }
 }
+
+onMounted(() => {
+  // Proxmox refreshes the pending hardware grid every five seconds.
+  pendingRefreshTimer = window.setInterval(() => {
+    void loadPending(true).catch(() => undefined);
+  }, 5000);
+});
+onUnmounted(() => {
+  if (pendingRefreshTimer !== undefined) window.clearInterval(pendingRefreshTimer);
+});
 
 watch(
   () => [props.node, props.vmid, textValue(currentConfig.value.digest)],
@@ -657,10 +741,10 @@ function hardwareDeviceCount(prefix: 'usb' | 'hostpci' | 'serial' | 'virtiofs') 
     prefix === 'usb'
       ? /^usb\d+$/
       : prefix === 'hostpci'
-      ? /^hostpci\d+$/
-      : prefix === 'serial'
-      ? /^serial\d+$/
-      : /^virtiofs\d+$/;
+        ? /^hostpci\d+$/
+        : prefix === 'serial'
+          ? /^serial\d+$/
+          : /^virtiofs\d+$/;
   return new Set(
     [...Object.keys(currentConfig.value), ...pendingHardwareKeys.value].filter((key) =>
       pattern.test(key)

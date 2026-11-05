@@ -506,7 +506,7 @@ onUnmounted(() => {
           <span class="vm-detail__title-name">{{ `${name} · ${vmid}` }}</span>
         </div>
         <q-badge
-          class="q-ml-sm"
+          class="q-ml-sm q-px-sm"
           :color="statusColor(status)"
           :label="statusText(status)"
         />

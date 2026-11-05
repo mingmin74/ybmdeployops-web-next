@@ -426,7 +426,7 @@ async function save() {
                 min="1"
                 max="16000000"
                 class="q-field--with-bottom"
-                label="VRF-VXLAN Tag *"
+                :label="`${gettext('VRF-VXLAN Tag')} *`"
                 :error="!vrfVxlanValid"
                 :error-message="gettext('Value must be 1-16000000')"
               />
@@ -477,7 +477,7 @@ async function save() {
                 map-options
                 clearable
                 class="q-field--with-bottom"
-                label="SDN Fabric"
+                :label="gettext('SDN Fabric')"
                 :options="fabricOptions"
                 :option-label="(opt) => (opt.cidr ? `${opt.value} (${opt.cidr})` : opt.value)"
                 :placeholder="gettext('used as underlay network')"

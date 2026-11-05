@@ -2,6 +2,7 @@
 import { computed, reactive, shallowRef, watch } from 'vue';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
+import { useUiStore } from '@/stores/ui';
 import {
   getNoVncScalingPreference,
   setNoVncScalingPreference,
@@ -11,6 +12,13 @@ import {
 type XtermSetting = 'fontFamily' | 'fontSize' | 'letterSpacing' | 'lineHeight';
 
 const visible = defineModel<boolean>({ required: true });
+const ui = useUiStore();
+const maxOpenTabsInput = shallowRef('');
+const savedMaxOpenTabs = shallowRef('');
+const maxOpenTabsValid = computed(() => {
+  const value = Number(maxOpenTabsInput.value);
+  return Number.isSafeInteger(value) && value > 0;
+});
 const xtermSettings: XtermSetting[] = ['fontFamily', 'fontSize', 'letterSpacing', 'lineHeight'];
 const form = reactive<Record<XtermSetting, string>>({
   fontFamily: '',
@@ -53,6 +61,8 @@ function loadSettings() {
     saved[setting] = value;
   });
   scaling.value = getNoVncScalingPreference();
+  maxOpenTabsInput.value = String(ui.maxOpenTabs);
+  savedMaxOpenTabs.value = maxOpenTabsInput.value;
 }
 
 function saveXterm() {
@@ -71,6 +81,13 @@ function resetXterm() {
     saved[setting] = '';
     localStorage.removeItem(`pve-xterm-${setting}`);
   });
+}
+
+function saveMaxOpenTabs() {
+  if (!maxOpenTabsValid.value) return;
+  ui.setMaxOpenTabs(Number(maxOpenTabsInput.value));
+  savedMaxOpenTabs.value = String(ui.maxOpenTabs);
+  maxOpenTabsInput.value = savedMaxOpenTabs.value;
 }
 
 function updateScaling(value: NoVncScalingPreference) {
@@ -158,6 +175,31 @@ watch(visible, (isVisible) => {
               :disable="!dirty || !valid"
               :label="gettext('Save')"
               @click="saveXterm"
+            />
+          </div>
+        </fieldset>
+        <fieldset class="u-border q-pa-md q-mb-sm">
+          <legend>{{ gettext('Page Tabs') }}</legend>
+          <q-input
+            v-model="maxOpenTabsInput"
+            dense
+            type="number"
+            min="1"
+            step="1"
+            class="q-field--with-bottom"
+            :error="!maxOpenTabsValid"
+            :error-message="gettext('Value must be a positive integer')"
+            :label="gettext('Maximum Open Tabs')"
+          />
+          <div class="row justify-end">
+            <q-btn
+              no-caps
+              flat
+              size="12px"
+              class="bg-primary text-grey-1 u-button"
+              :disable="!maxOpenTabsValid || maxOpenTabsInput === savedMaxOpenTabs"
+              :label="gettext('Save')"
+              @click="saveMaxOpenTabs"
             />
           </div>
         </fieldset>

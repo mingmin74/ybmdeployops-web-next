@@ -202,7 +202,13 @@ function resourcePaths(resources: PveRecord[]) {
     '/vms',
   ]);
   resources.forEach((item) => {
-    if (item.type === 'node') paths.add(`/nodes/${String(item.node)}`);
+    if (item.type === 'node') {
+      const node = textValue(item.node);
+      if (node) {
+        paths.add(`/nodes/${node}`);
+        paths.add(`/nodes/${node}/certificates`);
+      }
+    }
     if (item.type === 'qemu' || item.type === 'lxc') paths.add(`/vms/${String(item.vmid)}`);
     if (item.type === 'storage') paths.add(`/storage/${String(item.storage)}`);
     if (item.type === 'pool') paths.add(`/pool/${String(item.pool)}`);

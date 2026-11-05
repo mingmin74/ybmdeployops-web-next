@@ -341,7 +341,7 @@ defineExpose({ reload });
             dense
             :disable="editing"
             :label="`${gettext('Token ID')} *`"
-            hint="minimum 2 characters"
+            :hint="gettext('minimum 2 characters')"
             class="q-field--with-bottom"
           />
           <q-checkbox

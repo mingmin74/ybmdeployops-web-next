@@ -227,7 +227,7 @@ async function save() {
                 min="1"
                 max="4294967295"
                 class="q-field--with-bottom"
-                label="ASN # *"
+                label="ASN *"
                 :error="submitted && !asnValid"
                 :error-message="gettext('Value must be 1-4294967295')"
               />

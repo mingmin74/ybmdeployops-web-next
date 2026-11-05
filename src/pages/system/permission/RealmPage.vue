@@ -444,6 +444,7 @@ defineExpose({ reload });
         :rows="filtered"
         :columns="columns"
         :loading="loading"
+        :no-data-label="gettext('no record can be found')"
         :pagination="{ page: 1, rowsPerPage: 10 }"
         :rows-per-page-options="[10]"
         @row-click="rowClick"
@@ -602,17 +603,17 @@ defineExpose({ reload });
             <q-input
               v-model="form.tfaId"
               dense
-              label="Yubico API Id"
+              :label="gettext('Yubico API Id')"
             />
             <q-input
               v-model="form.tfaKey"
               dense
-              label="Yubico API Key"
+              :label="gettext('Yubico API Key')"
             />
             <q-input
               v-model="form.tfaUrl"
               dense
-              label="Yubico URL"
+              :label="gettext('Yubico URL')"
             />
           </template>
           <template v-if="form.type === 'ldap'">

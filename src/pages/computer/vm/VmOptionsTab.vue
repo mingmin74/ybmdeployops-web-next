@@ -624,7 +624,11 @@ const optionRows = computed(() => {
     { key: 'ostype', label: gettext('OS Type'), value: current('ostype') },
     { key: 'boot', label: gettext('Boot Order'), value: current('boot') },
     { key: 'tablet', label: gettext('USB Tablet'), value: current('tablet', '1') },
-    { key: 'hotplug', label: gettext('Hotplug'), value: current('hotplug') },
+    {
+      key: 'hotplug',
+      label: gettext('Hotplug'),
+      value: current('hotplug', 'disk,network,usb'),
+    },
     { key: 'startup', label: gettext('Startup/Shutdown order'), value: current('startup') },
     { key: 'acpi', label: gettext('ACPI support'), value: current('acpi', '1') },
     { key: 'kvm', label: gettext('KVM hardware virtualization'), value: current('kvm', '1') },

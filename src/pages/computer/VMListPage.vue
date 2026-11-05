@@ -19,6 +19,7 @@ import BulkActionDialog, { type ClusterBulkAction } from '@/components/BulkActio
 import HaResourceDialog from '@/components/HaResourceDialog.vue';
 import UsageProgress from '@/components/UsageProgress.vue';
 import VmResourceOperationDialog from '@/pages/computer/vm/VmResourceOperationDialog.vue';
+import VmResourceStatusIcon from '@/pages/computer/vm/VmResourceStatusIcon.vue';
 import CreateVmDialog from '@/pages/computer/vm/CreateVmDialog.vue';
 import TaskOutputDialog from '@/components/TaskOutputDialog.vue';
 import { gettext } from '@/locale';
@@ -262,6 +263,13 @@ const canSnapshot = computed(
 const canBackup = computed(() => hasSingleSelection.value && hasCapability('VM.Backup'));
 const canTags = computed(() => hasSingleSelection.value && hasCapability('VM.Config.Options'));
 const canManageHa = computed(() => hasSingleSelection.value && hasNodeCapability('Sys.Console'));
+const canOpenDetail = computed(() => hasSingleSelection.value);
+const canUsePowerMenu = computed(() => Boolean(selectedVm.value) && !commandLoading.value);
+const canUseConsoleMenu = computed(() => canUseConsole.value && !commandLoading.value);
+const canUseBulkMenu = computed(
+  () => (canPowerManage.value || hasCapability('VM.Migrate')) && !commandLoading.value
+);
+const canUseMoreMenu = computed(() => Boolean(selectedVm.value) && !commandLoading.value);
 const pendingCommandLabel = computed(
   () => pendingCommandTitle.value || commandLabel(pendingCommand.value)
 );
@@ -724,6 +732,12 @@ function openTask(node: string, upid: string, title: string) {
   taskDialogVisible.value = true;
 }
 
+function openSelectedDetail() {
+  const vm = selectedVm.value;
+  if (!vm) return;
+  openDetail(vm);
+}
+
 function openDetail(row: VmResource) {
   if (!row.node || row.vmid === undefined || row.vmid === null) return;
   void router.push({
@@ -994,20 +1008,30 @@ onBeforeUnmount(() => {
                     no-caps
                     outline
                     size="12px"
-                    color="primary"
+                    :color="canCreate ? 'primary' : 'grey-6'"
                     class="u-button"
                     :label="gettext('Create')"
                     :disable="!canCreate"
                     @click="createDialogVisible = true"
                   />
+                  <q-btn
+                    no-caps
+                    outline
+                    size="12px"
+                    :color="canOpenDetail ? 'primary' : 'grey-6'"
+                    class="u-button"
+                    :label="gettext('Detail')"
+                    :disable="!canOpenDetail"
+                    @click="openSelectedDetail"
+                  />
                   <q-btn-dropdown
                     no-caps
                     outline
                     size="12px"
-                    color="primary"
+                    :color="canUsePowerMenu ? 'primary' : 'grey-6'"
                     class="u-button"
                     :label="gettext('Power')"
-                    :disable="!selectedVm || commandLoading"
+                    :disable="!canUsePowerMenu"
                   >
                     <q-list dense>
                       <q-item
@@ -1080,10 +1104,10 @@ onBeforeUnmount(() => {
                     no-caps
                     outline
                     size="12px"
-                    color="primary"
+                    :color="canUseConsoleMenu ? 'primary' : 'grey-6'"
                     class="u-button"
                     :label="gettext('Console')"
-                    :disable="!canUseConsole || commandLoading"
+                    :disable="!canUseConsoleMenu"
                   >
                     <q-list dense>
                       <q-item
@@ -1115,10 +1139,10 @@ onBeforeUnmount(() => {
                     no-caps
                     outline
                     size="12px"
-                    color="primary"
+                    :color="canUseBulkMenu ? 'primary' : 'grey-6'"
                     class="u-button"
                     :label="`${gettext('Bulk')} ${gettext('Actions')}`"
-                    :disable="(!canPowerManage && !hasCapability('VM.Migrate')) || commandLoading"
+                    :disable="!canUseBulkMenu"
                   >
                     <q-list dense>
                       <q-item
@@ -1159,10 +1183,10 @@ onBeforeUnmount(() => {
                     no-caps
                     outline
                     size="12px"
-                    color="primary"
+                    :color="canUseMoreMenu ? 'primary' : 'grey-6'"
                     class="u-button"
                     :label="gettext('More')"
-                    :disable="!selectedVm || commandLoading"
+                    :disable="!canUseMoreMenu"
                   >
                     <q-list dense>
                       <q-item
@@ -1300,10 +1324,11 @@ onBeforeUnmount(() => {
               </template>
               <template #body-cell-name="scope">
                 <q-td :props="scope">
-                  <q-icon
-                    :name="isVmTemplate(scope.row) ? 'article' : 'desktop_windows'"
-                    :color="isVmTemplate(scope.row) ? 'grey-7' : 'primary'"
-                    size="16px"
+                  <VmResourceStatusIcon
+                    :status="normalizedVmStatus(scope.row.status)"
+                    :lock="scope.row.lock"
+                    :hastate="scope.row.hastate"
+                    :template="isVmTemplate(scope.row)"
                     class="q-mr-xs"
                   />
                   <span>{{ textValue(scope.value) || '-' }}</span>

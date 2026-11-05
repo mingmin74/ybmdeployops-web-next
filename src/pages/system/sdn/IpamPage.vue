@@ -304,7 +304,7 @@ const columns: QTableColumn<IpamTreeRow>[] = [
   },
   {
     name: 'mac',
-    label: 'MAC',
+    label: gettext('MAC'),
     align: 'left',
     field: (row) => displayCell(row, 'mac'),
     sortable: true,

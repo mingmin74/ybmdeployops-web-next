@@ -48,15 +48,14 @@ async function resizeDisk() {
         <q-input
           v-model="size"
           dense
-          square
-          outlined
           type="number"
           min="0"
           max="131072"
           step="0.001"
+          class="q-field--with-bottom"
           :error="Boolean(sizeError)"
           :error-message="sizeError"
-          :label="gettext('Increase size (GiB)')"
+          :label="gettext('Size Increment') + ' (GiB)'"
         />
       </div>
       <template #foot>

@@ -39,12 +39,17 @@ export function updateVmConfig(
   });
 }
 
-export function getVmPendingConfig(node: string, vmid: string | number, type = 'qemu') {
+export function getVmPendingConfig(
+  node: string,
+  vmid: string | number,
+  type = 'qemu',
+  silent = false
+) {
   return request<PveRecord[]>(
     `/api2/json/nodes/${encodeURIComponent(node)}/${type}/${encodeURIComponent(String(vmid))}/pending`,
     {
       method: 'GET',
-      notifyOnError: true,
+      notifyOnError: !silent,
     }
   );
 }

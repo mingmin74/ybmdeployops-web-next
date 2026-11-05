@@ -116,7 +116,7 @@ async function save() {
                 dense
                 disable
                 class="q-field--with-bottom"
-                label="VMID"
+                :label="gettext('VMID')"
               />
               <q-input
                 v-model="form.mac"

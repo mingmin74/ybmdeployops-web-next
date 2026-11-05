@@ -51,7 +51,7 @@ async function refreshVnets() {
   loading.value = true;
   try {
     const previous = selectedVnet.value;
-    vnets.value = [...((await getSdnVnets()).data || [])].sort((a, b) =>
+    vnets.value = [...((await getSdnVnets({ running: 1 })).data || [])].sort((a, b) =>
       `${textValue(a.zone)}\u0000${textValue(a.vnet)}`.localeCompare(
         `${textValue(b.zone)}\u0000${textValue(b.vnet)}`
       )

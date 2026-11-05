@@ -1486,8 +1486,8 @@ onMounted(() => void reload());
                       :label="gettext('PBS Change Detection Mode')"
                       :options="[
                         { label: gettext('Legacy'), value: 'legacy' },
-                        { label: 'Data', value: 'data' },
-                        { label: 'Metadata', value: 'metadata' },
+                        { label: gettext('Data'), value: 'data' },
+                        { label: gettext('Metadata'), value: 'metadata' },
                       ]"
                     />
                   </div>

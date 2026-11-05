@@ -97,7 +97,7 @@ const ipamColumns: QTableColumn<PveRecord>[] = [
   },
   {
     name: 'url',
-    label: 'url',
+    label: gettext('URL'),
     align: 'left',
     field: (row) => displayValue(row.url),
     sortable: true,
@@ -121,7 +121,7 @@ const dnsColumns: QTableColumn<PveRecord>[] = [
   },
   {
     name: 'url',
-    label: 'url',
+    label: gettext('URL'),
     align: 'left',
     field: (row) => displayValue(row.url),
     sortable: true,
@@ -216,6 +216,7 @@ onMounted(() => void refreshData());
         :columns="controllerColumns"
         :selected="selected.controllers"
         :loading="loading"
+        :no-data-label="gettext('no record can be found')"
         :pagination="{ page: 1, rowsPerPage: 5 }"
         :rows-per-page-options="[5]"
         @row-dblclick="(_, row) => editController(row)"
@@ -289,6 +290,7 @@ onMounted(() => void refreshData());
         :columns="ipamColumns"
         :selected="selected.ipams"
         :loading="loading"
+        :no-data-label="gettext('no record can be found')"
         :pagination="{ page: 1, rowsPerPage: 5 }"
         :rows-per-page-options="[5]"
         @row-dblclick="(_, row) => editIpam(row)"
@@ -360,6 +362,7 @@ onMounted(() => void refreshData());
         :columns="dnsColumns"
         :selected="selected.dns"
         :loading="loading"
+        :no-data-label="gettext('no record can be found')"
         :pagination="{ page: 1, rowsPerPage: 5 }"
         :rows-per-page-options="[5]"
         @row-dblclick="(_, row) => editDns(row)"
