@@ -101,11 +101,11 @@ const pgStates = computed<PgState[]>(() => {
 });
 const pgSummary = computed(() =>
   [
-    { label: 'Unknown', color: 'grey-6' },
-    { label: 'Clean', color: 'positive' },
-    { label: 'Busy', color: 'info' },
-    { label: 'Warning', color: 'warning' },
-    { label: 'Critical', color: 'negative' },
+    { label: gettext('Unknown'), color: 'grey-6' },
+    { label: gettext('Clean'), color: 'positive' },
+    { label: gettext('Busy'), color: 'info' },
+    { label: gettext('Warning'), color: 'warning' },
+    { label: gettext('Critical'), color: 'negative' },
   ]
     .map((category) => ({
       ...category,
@@ -400,9 +400,9 @@ function pgCategory(state: string) {
       ].includes(item)
     )
   )
-    return { label: 'Critical', color: 'negative' };
+    return { label: gettext('Critical'), color: 'negative' };
   if (parts.some((item) => ['degraded', 'undersized'].includes(item)))
-    return { label: 'Warning', color: 'warning' };
+    return { label: gettext('Warning'), color: 'warning' };
   if (
     parts.some((item) =>
       [
@@ -425,10 +425,10 @@ function pgCategory(state: string) {
       ].includes(item)
     )
   )
-    return { label: 'Busy', color: 'info' };
+    return { label: gettext('Busy'), color: 'info' };
   if (parts.some((item) => ['clean', 'active'].includes(item)))
-    return { label: 'Clean', color: 'positive' };
-  return { label: 'Unknown', color: 'grey-6' };
+    return { label: gettext('Clean'), color: 'positive' };
+  return { label: gettext('Unknown'), color: 'grey-6' };
 }
 
 async function refreshStatus() {

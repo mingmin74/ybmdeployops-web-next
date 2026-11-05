@@ -23,7 +23,7 @@ const columns: QTableColumn<PveRecord>[] = [
   },
   {
     name: 'rule_id',
-    label: 'ID',
+    label: gettext('ID'),
     align: 'left',
     field: (row) => row.rule_id ?? row.id ?? '-',
     sortable: true,
@@ -104,7 +104,7 @@ watch(
       bordered
     >
       <q-card-section>
-        <div class="text-subtitle2 q-mb-sm">CRUSH</div>
+        <div class="text-subtitle2 q-mb-sm">{{ gettext('CRUSH') }}</div>
         <pre class="ceph-pre">{{ crushText }}</pre>
       </q-card-section>
     </q-card>

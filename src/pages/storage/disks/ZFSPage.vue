@@ -57,8 +57,8 @@ const fields = computed<NodeDiskFormField[]>(() => [
     type: 'select',
     required: true,
     options: [
-      { label: 'Single Disk', value: 'single' },
-      { label: 'Mirror', value: 'mirror' },
+      { label: gettext('Single Disk'), value: 'single' },
+      { label: gettext('Mirror'), value: 'mirror' },
       { label: 'RAID10', value: 'raid10' },
       { label: 'RAIDZ', value: 'raidz' },
       { label: 'RAIDZ2', value: 'raidz2' },

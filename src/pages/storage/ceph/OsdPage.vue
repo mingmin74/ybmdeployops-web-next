@@ -117,11 +117,23 @@ const columns: QTableColumn<PveRecord>[] = [
     sortable: true,
   },
   { name: 'class', label: gettext('Class'), field: 'device_class', align: 'right', sortable: true },
-  { name: 'osdtype', label: 'OSD Type', field: 'osdtype', align: 'right', sortable: true },
+  { name: 'osdtype', label: gettext('OSD Type'), field: 'osdtype', align: 'right', sortable: true },
   { name: 'status', label: gettext('Status'), field: 'status', align: 'right', sortable: true },
   { name: 'version', label: gettext('Version'), field: 'version', align: 'right', sortable: true },
-  { name: 'weight', label: 'weight', field: 'crush_weight', align: 'right', sortable: true },
-  { name: 'reweight', label: 'reweight', field: 'reweight', align: 'right', sortable: true },
+  {
+    name: 'weight',
+    label: gettext('weight'),
+    field: 'crush_weight',
+    align: 'right',
+    sortable: true,
+  },
+  {
+    name: 'reweight',
+    label: gettext('reweight'),
+    field: 'reweight',
+    align: 'right',
+    sortable: true,
+  },
   {
     name: 'used',
     label: `${gettext('Used')} (%)`,
@@ -139,12 +151,12 @@ const columns: QTableColumn<PveRecord>[] = [
   },
   {
     name: 'latency',
-    label: 'Apply/Commit Latency (ms)',
+    label: gettext('Apply/Commit Latency (ms)'),
     field: (row) =>
       `${textValue(row.apply_latency_ms, '-')} / ${textValue(row.commit_latency_ms, '-')}`,
     align: 'right',
   },
-  { name: 'pgs', label: 'PGs', field: 'pgs', align: 'right', sortable: true },
+  { name: 'pgs', label: gettext('PGs'), field: 'pgs', align: 'right', sortable: true },
 ];
 
 function normalizeRows(value: unknown): PveRecord[] {

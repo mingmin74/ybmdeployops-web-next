@@ -101,7 +101,7 @@ function routeTitle(nextRoute: RouteLocationNormalizedLoaded) {
 }
 
 function addTag(nextRoute: RouteLocationNormalizedLoaded) {
-  if (nextRoute.name === 'dashboard' || nextRoute.meta.public || !nextRoute.meta.auth) return;
+  if (nextRoute.meta.public || !nextRoute.meta.auth) return;
 
   const key = tagKey(nextRoute);
   const title = routeTitle(nextRoute);

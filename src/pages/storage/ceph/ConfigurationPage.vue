@@ -138,7 +138,7 @@ watch(
       </template>
       <template #after>
         <section class="configuration-pane crush-pane">
-          <div class="pane-header">Crush Map</div>
+          <div class="pane-header">{{ gettext('Crush Map') }}</div>
           <pre class="ceph-pre">{{ crushText }}</pre>
         </section>
       </template>

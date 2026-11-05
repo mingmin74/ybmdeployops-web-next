@@ -406,6 +406,43 @@ onUnmounted(() => {
 .chart-block + .chart-block {
 }
 
+@media (min-width: 1920px) and (min-height: 1080px) {
+  .performance-card__body {
+    min-height: 0;
+    flex: 1 1 auto;
+  }
+
+  .performance-layout,
+  .performance-charts,
+  .chart-block {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .performance-layout {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .usage-column {
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .usage-section {
+    min-height: 0;
+    padding: 4px 12px;
+  }
+
+  .usage-section__title,
+  .half-gauge {
+    margin: 0;
+  }
+
+  .chart-block :deep(.line-metric-chart) {
+    height: 100% !important;
+  }
+}
+
 @media (max-width: 900px) {
   .performance-layout {
     grid-template-columns: 1fr;

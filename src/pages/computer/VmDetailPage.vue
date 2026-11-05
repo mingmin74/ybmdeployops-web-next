@@ -1127,8 +1127,8 @@ onUnmounted(() => {
             emit-value
             map-options
             :options="[
-              { label: gettext('Notification System'), value: 'notification-system' },
-              { label: gettext('Legacy sendmail'), value: 'legacy-sendmail' },
+              { label: gettext('Use global settings'), value: 'notification-system' },
+              { label: gettext('Use sendmail (legacy)'), value: 'legacy-sendmail' },
             ]"
             :label="gettext('Notification')"
           />

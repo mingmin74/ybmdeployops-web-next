@@ -138,10 +138,36 @@ onMounted(() => {
   }
 }
 
-@media (min-width: 1904px) {
+@media (min-width: 1920px) and (min-height: 1080px) and (max-height: 1320px) {
+  .dashboard-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .dashboard-row__topology {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .dashboard-row__overview {
+    display: contents;
+  }
+
+  .dashboard-row__ceph-status {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .dashboard-row__resources {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}
+
+@media (min-width: 1920px) and (min-height: 1080px) {
   .dashboard-layout {
-    height: calc(100vh - 54px);
-    height: calc(100dvh - 54px);
+    height: calc(100vh - 54px - 40px);
+    height: calc(100dvh - 54px - 40px);
     overflow: hidden;
   }
 

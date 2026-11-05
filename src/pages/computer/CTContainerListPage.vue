@@ -392,7 +392,8 @@ function statusText(status: unknown) {
   const value = textValue(status);
   if (value === 'running') return gettext('Running');
   if (value === 'stopped') return gettext('Stopped');
-  if (value === 'paused' || value === 'suspended') return gettext('Suspended');
+  if (value === 'paused') return gettext('Paused');
+  if (value === 'suspended') return gettext('Suspended');
   return value || gettext('Unknown');
 }
 
@@ -1290,8 +1291,8 @@ onMounted(() => {
             emit-value
             map-options
             :options="[
-              { label: gettext('Notification System'), value: 'notification-system' },
-              { label: gettext('Legacy sendmail'), value: 'legacy-sendmail' },
+              { label: gettext('Use global settings'), value: 'notification-system' },
+              { label: gettext('Use sendmail (legacy)'), value: 'legacy-sendmail' },
             ]"
             :label="gettext('Notification')"
           />
@@ -1308,7 +1309,7 @@ onMounted(() => {
             outlined
             square
             type="textarea"
-            :label="gettext('Notes template')"
+            :label="gettext('Notes')"
           />
           <q-checkbox
             v-if="backupPruneAvailable"
@@ -1336,7 +1337,7 @@ onMounted(() => {
             emit-value
             map-options
             :options="['__default__', 'data', 'metadata']"
-            :label="gettext('Change detection mode')"
+            :label="gettext('PBS Change Detection Mode')"
           />
         </div>
         <template #footer>

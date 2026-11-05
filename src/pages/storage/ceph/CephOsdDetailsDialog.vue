@@ -33,7 +33,7 @@ const deviceColumns: QTableColumn<PveRecord>[] = [
   },
   {
     name: 'support_discard',
-    label: 'Discard',
+    label: gettext('Discard'),
     field: (row) => textValue(row.support_discard) || '-',
     align: 'left',
   },

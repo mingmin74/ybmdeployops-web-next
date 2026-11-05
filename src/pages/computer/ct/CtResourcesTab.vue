@@ -932,7 +932,7 @@ onUnmounted(() => {
                   type="number"
                   min="0"
                   step="32"
-                  :label="gettext('Swap (MiB)')"
+                  :label="gettext('Swap') + ' (MiB)'"
                   :rules="[(value) => isIntegerInRange(value, 0) || gettext('Minimum value is 0')]"
                 />
               </div>
@@ -1104,7 +1104,7 @@ onUnmounted(() => {
                   dense
                   type="number"
                   min="0"
-                  :label="gettext('UID') + ' ' + gettext('in CT')"
+                  :label="gettext('UID in CT')"
                   :rules="[
                     (value) =>
                       isOptionalNumberInRange(value, 0) || gettext('Value must be zero or greater'),
@@ -1115,7 +1115,7 @@ onUnmounted(() => {
                   dense
                   type="number"
                   min="0"
-                  :label="gettext('GID') + ' ' + gettext('in CT')"
+                  :label="gettext('GID in CT')"
                   :rules="[
                     (value) =>
                       isOptionalNumberInRange(value, 0) || gettext('Value must be zero or greater'),
@@ -1378,7 +1378,7 @@ onUnmounted(() => {
                     type="number"
                     min="0"
                     class="q-field--with-bottom"
-                    :label="gettext('UID') + ' ' + gettext('in CT')"
+                    :label="gettext('UID in CT')"
                     :rules="[
                       (value) =>
                         isOptionalNumberInRange(value, 0) ||
@@ -1390,7 +1390,7 @@ onUnmounted(() => {
                     dense
                     type="number"
                     min="0"
-                    :label="gettext('GID') + ' ' + gettext('in CT')"
+                    :label="gettext('GID in CT')"
                     :rules="[
                       (value) =>
                         isOptionalNumberInRange(value, 0) ||

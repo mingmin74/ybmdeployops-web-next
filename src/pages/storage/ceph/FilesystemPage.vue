@@ -299,7 +299,7 @@ watch(
       :rows-per-page-options="[5]"
     >
       <template #top>
-        <div class="text-subtitle2">CephFS</div>
+        <div class="text-subtitle2">{{ gettext('CephFS') }}</div>
         <q-space />
         <q-btn
           no-caps

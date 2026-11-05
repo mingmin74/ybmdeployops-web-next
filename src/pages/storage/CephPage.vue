@@ -55,11 +55,11 @@ const { node = 'localhost' } = defineProps<{ node?: string }>();
         />
         <q-tab
           name="osd"
-          label="OSD"
+          :label="gettext('OSD')"
         />
         <q-tab
           name="cephfs"
-          label="CephFS"
+          :label="gettext('CephFS')"
         />
         <q-tab
           name="pools"

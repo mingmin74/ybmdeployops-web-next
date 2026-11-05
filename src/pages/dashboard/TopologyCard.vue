@@ -375,6 +375,21 @@ const networkStats = computed(() => {
   color: #6b7280;
 }
 
+@media (min-width: 1920px) and (min-height: 1080px) and (max-height: 1320px) {
+  .topology-image__img {
+    height: 170px;
+  }
+
+  .topology-stat {
+    padding: 0 4px;
+  }
+
+  .topology-stat__detail {
+    flex-wrap: wrap;
+    gap: 2px 4px;
+  }
+}
+
 @media (max-width: 767px) {
   .topology-image__img {
     height: 300px;

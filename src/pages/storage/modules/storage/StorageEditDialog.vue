@@ -13,7 +13,7 @@ import { getCephFilesystems, getCephMonitors, getCephPools } from '@/api/ceph';
 import type { PveNode, PveRecord } from '@/api/resources';
 import UWindow from '@/components/UWindow.vue';
 import { gettext } from '@/locale';
-import { textValue } from '@/utils/pveFormat';
+import { formatContent, textValue } from '@/utils/pveFormat';
 
 type StorageType =
   | 'dir'
@@ -98,6 +98,23 @@ const contentOptions = computed(() => {
   if (props.type === 'pbs') return ['backup'];
   return ['images', 'rootdir', 'backup', 'iso', 'vztmpl', 'snippets', 'import'];
 });
+const contentSelectOptions = computed(() =>
+  contentOptions.value.map((value) => ({ label: formatContent(value), value }))
+);
+const nfsVersionOptions = [
+  { label: gettext('Default'), value: '__default__' },
+  { label: '3', value: '3' },
+  { label: '4', value: '4' },
+  { label: '4.1', value: '4.1' },
+  { label: '4.2', value: '4.2' },
+];
+const preallocationOptions = [
+  { label: gettext('Default'), value: '__default__' },
+  { label: 'off', value: 'off' },
+  { label: 'metadata', value: 'metadata' },
+  { label: 'falloc', value: 'falloc' },
+  { label: 'full', value: 'full' },
+];
 const isCephStorage = computed(() => ['rbd', 'cephfs'].includes(props.type));
 const externalCeph = computed(() => isCephStorage.value && !managedCeph.value);
 const requires = computed(() => {
@@ -986,13 +1003,15 @@ watch(encryptionFileRef, (file) => {
                     dense
                     multiple
                     options-dense
-                    :options="contentOptions"
+                    emit-value
+                    map-options
+                    :options="contentSelectOptions"
                     :label="gettext('Content')"
                   />
                   <q-input
                     class="q-field--with-bottom"
                     v-else-if="contentMode === 'fixed'"
-                    :model-value="gettext('backup')"
+                    :model-value="formatContent('backup')"
                     dense
                     readonly
                     :label="gettext('Content')"
@@ -1283,7 +1302,9 @@ watch(encryptionFileRef, (file) => {
                 v-if="fieldVisible('nfsversion')"
                 v-model="form.nfsversion"
                 dense
-                :options="['__default__', '3', '4', '4.1', '4.2']"
+                emit-value
+                map-options
+                :options="nfsVersionOptions"
                 :label="gettext('NFS Version')"
               />
               <q-select
@@ -1292,7 +1313,9 @@ watch(encryptionFileRef, (file) => {
                 v-if="hasPreallocation"
                 v-model="form.preallocation"
                 dense
-                :options="['__default__', 'off', 'metadata', 'falloc', 'full']"
+                emit-value
+                map-options
+                :options="preallocationOptions"
                 :label="gettext('Preallocation')"
               />
               <q-checkbox

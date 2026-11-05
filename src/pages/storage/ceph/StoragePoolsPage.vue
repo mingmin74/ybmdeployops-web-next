@@ -60,7 +60,7 @@ const columns: QTableColumn<PveRecord>[] = [
   },
   {
     name: 'pg_num',
-    label: '# of Placement Groups',
+    label: gettext('# of Placement Groups'),
     align: 'right',
     field: 'pg_num',
     sortable: true,
@@ -102,7 +102,7 @@ const columns: QTableColumn<PveRecord>[] = [
   },
   {
     name: 'crush_rule_name',
-    label: 'CRUSH Rule (ID)',
+    label: gettext('CRUSH Rule (ID)'),
     align: 'right',
     field: (row) => `${textValue(row.crush_rule_name, '-')} (${textValue(row.crush_rule, '-')})`,
     sortable: true,

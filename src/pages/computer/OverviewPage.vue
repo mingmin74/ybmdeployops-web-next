@@ -713,7 +713,7 @@ onUnmounted(clearTimers);
           <div class="resource-card-grid">
             <section class="resource-card resource-card-compare">
               <div class="resource-card-title">{{ gettext('CPU Usage') }}</div>
-              <strong>{{ textValue(current.cpus, '0') }} Core</strong>
+              <strong>{{ textValue(current.cpus, '0') }} {{ gettext('Cores') }}</strong>
               <div class="resource-card-meta">
                 <span>{{ gettext('Used') }}</span>
                 <span>{{ cpuPercent.toFixed(2) }}%</span>

@@ -236,7 +236,7 @@
     </q-drawer>
 
     <q-page-container class="page-container">
-      <AppTagView v-if="route.name !== 'dashboard'" />
+      <AppTagView />
       <router-view />
     </q-page-container>
 
@@ -538,9 +538,7 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.14);
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 18px;
-  transition:
-    background-color 0.2s ease,
-    border-color 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .page-container {

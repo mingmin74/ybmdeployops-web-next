@@ -37,15 +37,16 @@ const props = withDefaults(
     yUnit: '',
     powerOfTwo: false,
     height: 260,
-  },
+  }
 );
 
 const chartRef = useTemplateRef<HTMLDivElement>('chart');
 const chartInstance = shallowRef<ECharts | null>(null);
 let resizeTimer: number | undefined;
+let resizeObserver: ResizeObserver | undefined;
 
 const hasData = computed(() =>
-  props.series.some((item) => item.data.some((value) => Number.isFinite(Number(value)))),
+  props.series.some((item) => item.data.some((value) => Number.isFinite(Number(value))))
 );
 const xAxisData = computed(() => (props.xData.length ? props.xData : ['', '', '', '', '']));
 
@@ -232,15 +233,20 @@ async function updateChart() {
 watch(
   () => [props.xData, props.series, props.yUnit, props.unitType, props.powerOfTwo],
   updateChart,
-  { deep: true },
+  { deep: true }
 );
 
 onMounted(() => {
   void updateChart();
   window.addEventListener('resize', resizeChart);
+  if (chartRef.value) {
+    resizeObserver = new ResizeObserver(resizeChart);
+    resizeObserver.observe(chartRef.value);
+  }
 });
 
 onBeforeUnmount(() => {
+  resizeObserver?.disconnect();
   window.removeEventListener('resize', resizeChart);
   if (resizeTimer) window.clearTimeout(resizeTimer);
   chartInstance.value?.dispose();
@@ -249,7 +255,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="chart" class="line-metric-chart" :style="{ height: `${height}px` }"></div>
+  <div
+    ref="chart"
+    class="line-metric-chart"
+    :style="{ height: `${height}px` }"
+  ></div>
 </template>
 
 <style scoped>

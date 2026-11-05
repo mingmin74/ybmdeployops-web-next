@@ -314,7 +314,7 @@ watch(
                 min="1"
                 max="32768"
                 class="q-field--with-bottom"
-                label="# of PGs *"
+                :label="`${gettext('# of PGs')} *`"
                 :error="submitAttempted && !pgNumValid"
                 :error-message="gettext('Value must be between 1 and 32768.')"
               />
